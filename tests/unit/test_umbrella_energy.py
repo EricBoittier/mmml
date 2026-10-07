@@ -5,8 +5,8 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from mmml.umbrella.config import UmbrellaConfig
-from mmml.umbrella.energy import (
+from karml.umbrella.config import UmbrellaConfig
+from karml.umbrella.energy import (
     bias_energy,
     build_packed_graph,
     cv_distance,
@@ -21,7 +21,7 @@ from mmml.umbrella.energy import (
 def test_cv_and_bias_match_distance_restraint():
     import jax.numpy as jnp
 
-    from mmml.md.restraints import DistanceRestraint
+    from karml.md.restraints import DistanceRestraint
 
     pos = jnp.asarray([[0.0, 0.0, 0.0], [2.0, 0.0, 0.0]], dtype=jnp.float64)
     d = float(cv_distance(pos, 0, 1))
@@ -105,7 +105,7 @@ def test_make_packed_energy_fn_bias_only_with_zero_ml():
 def test_packed_bias_forces_oppose_stretch():
     import jax.numpy as jnp
 
-    from mmml.umbrella.energy import packed_bias_forces
+    from karml.umbrella.energy import packed_bias_forces
 
     # r=2, target=1 → want to pull atoms together: F0 along +x, F1 along -x
     pos = jnp.asarray([[0.0, 0.0, 0.0], [2.0, 0.0, 0.0]], dtype=jnp.float64)
@@ -184,7 +184,7 @@ def test_umbrella_config_2d_product_grid(tmp_path):
 def test_packed_2d_bias_sum():
     import jax.numpy as jnp
 
-    from mmml.umbrella.energy import packed_bias_energies_nd
+    from karml.umbrella.energy import packed_bias_energies_nd
 
     # 3 atoms: hub at 0, others at 1 and 2
     n_atoms, k = 3, 1

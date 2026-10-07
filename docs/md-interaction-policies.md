@@ -36,12 +36,12 @@ Relative paths resolve against the **config file directory** (same rule as
 
 Checked-in examples:
 
-- [`interaction_policy_single_provider.yaml`](https://github.com/EricBoittier/mmml/blob/main/examples/interaction_policy_single_provider.yaml)
+- [`interaction_policy_single_provider.yaml`](https://github.com/EricBoittier/karml/blob/main/examples/interaction_policy_single_provider.yaml)
   — single MM provider (accepted / lowerable today)
-- [`interaction_policy_tria_tip3_mech.yaml`](https://github.com/EricBoittier/mmml/blob/main/examples/interaction_policy_tria_tip3_mech.yaml)
+- [`interaction_policy_tria_tip3_mech.yaml`](https://github.com/EricBoittier/karml/blob/main/examples/interaction_policy_tria_tip3_mech.yaml)
   — mechanical embedding: TRIA→ML, TIP3→MM, all pairs MM (lowered to
   `ml_resnames` on `--jaxmd-unified`; see `examples/tria_md_system/`)
-- [`interaction_policy_peptide_water.yaml`](https://github.com/EricBoittier/mmml/blob/main/examples/interaction_policy_peptide_water.yaml)
+- [`interaction_policy_peptide_water.yaml`](https://github.com/EricBoittier/karml/blob/main/examples/interaction_policy_peptide_water.yaml)
   — multi-provider + near/far (valid schema; **fails closed** until generalized
   lowering lands)
 
@@ -60,8 +60,8 @@ can create gaps or double counting. MM-only salts are ordinary species rules,
 not special-case code. Pure QM monomers are providers of kind `qm`; their pair
 interactions may still use ML nearby and MM far away.
 
-Temperature ramps now live in `mmml.md.temperature`, and restraint
-specifications live in `mmml.md.restraints`. SMD and future enhanced-sampling
+Temperature ramps now live in `karml.md.temperature`, and restraint
+specifications live in `karml.md.restraints`. SMD and future enhanced-sampling
 methods remain protocols and must not be folded into interaction ownership.
 
 LJ / electrostatic toggles (`include_mm`, `learn_mm_lj_scales`,
@@ -76,7 +76,7 @@ Current command-line seams:
 - Single-provider policies are accepted; path + schema + content hash are
   recorded in the run manifest.
 - `--temperature-schedule '200->300:0.25,300:0.75'` uses the shared schedule.
-- `mmml configure --workflow interaction-policy` interactively validates and
+- `karml configure --workflow interaction-policy` interactively validates and
   previews a policy before writing it. It can also emit an `md-system` or
   `dimer-scan` companion configuration referencing the same policy.
 - A valid policy that cannot yet be represented by the current energy terms

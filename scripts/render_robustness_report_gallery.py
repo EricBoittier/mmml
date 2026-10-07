@@ -13,7 +13,7 @@ data only:
 - dimer-separation scan: the existing real xTB/CHARMM/ML dimer campaign
   (results/dimer_scan_campaign/scan_results.csv).
 - structural analysis: internal_coordinate_distributions
-  (mmml.utils.plotting.trajectory_structure) run on the new NVE trajectory,
+  (karml.utils.plotting.trajectory_structure) run on the new NVE trajectory,
   plus the existing real element-pair RDFs from the large-scale sweep's
   periodic bulk trajectories (see the note above `structural_analysis`).
 - large-scale energy conservation: the existing real 12-setting NVE sweep
@@ -33,7 +33,7 @@ from ase import Atoms
 from ase.data import atomic_numbers
 from ase.data.colors import jmol_colors
 
-from mmml.utils.plotting.styles import (
+from karml.utils.plotting.styles import (
     STATUS_HATCHES,
     apply_plot_style,
     comparison_colors,
@@ -43,7 +43,7 @@ from mmml.utils.plotting.styles import (
     status_color,
     timeseries_with_distribution,
 )
-from mmml.utils.plotting.trajectory_structure import internal_coordinate_distributions
+from karml.utils.plotting.trajectory_structure import internal_coordinate_distributions
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 OUT_DIR = REPO_ROOT / "docs" / "robustness-report-assets"
@@ -316,7 +316,7 @@ def trialanine_pes_landscape(out: Path) -> None:
     edge. Real phi/psi PES scan data, real MM (CHARMM) and ML energies."""
     from matplotlib.colors import Normalize
     from matplotlib.cm import ScalarMappable
-    from mmml.utils.plotting.styles import default_cmap
+    from karml.utils.plotting.styles import default_cmap
 
     df = pd.read_csv(DIHEDRAL_CSV)
     phi_deg = df["phi_deg"].to_numpy()

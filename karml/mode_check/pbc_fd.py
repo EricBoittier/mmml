@@ -42,14 +42,14 @@ def run_pbc_cluster_fd(
     mm_charge_mode: str | None = None,
 ) -> dict[str, Any]:
     """Build a PBC residue cluster, attach hybrid calc, run ``force_fd_check``."""
-    from mmml.cli.base import resolve_checkpoint_paths
-    from mmml.cli.run.md_pbc_suite.ase import (
+    from karml.cli.base import resolve_checkpoint_paths
+    from karml.cli.run.md_pbc_suite.ase import (
         _cubic_box_length,
         _enforce_min_com_separation,
-        _factory_mmml,
+        _factory_karml,
         _run_charmm_minimize,
     )
-    from mmml.cli.run.md_pbc_suite.cluster import _build_psf_ordered_cluster
+    from karml.cli.run.md_pbc_suite.cluster import _build_psf_ordered_cluster
 
     if checkpoint is None:
         base_ckpt_dir, _ = resolve_checkpoint_paths(None)
@@ -89,7 +89,7 @@ def run_pbc_cluster_fd(
             timings={},
         )
 
-    calc = _factory_mmml(
+    calc = _factory_karml(
         z=z,
         r=atoms.get_positions(),
         n_mol=int(n_molecules),

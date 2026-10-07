@@ -2,7 +2,7 @@
 
 Example::
 
-    from mmml.interfaces.pycharmmInterface.mm_system_plot import plot_mm_system_diagnostics
+    from karml.interfaces.pycharmmInterface.mm_system_plot import plot_mm_system_diagnostics
 
     fig = plot_mm_system_diagnostics(
         positions,

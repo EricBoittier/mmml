@@ -9,12 +9,12 @@ import sys
 import numpy as np
 
 from _common import print_fail, print_header, print_pass, two_dimer_cluster
-from mmml.interfaces.pycharmmInterface.jax_md_neighbor_list import (
+from karml.interfaces.pycharmmInterface.jax_md_neighbor_list import (
     create_jax_md_neighbor_list,
     have_jax_md,
 )
-from mmml.interfaces.pycharmmInterface.nl_backend import build_mm_pairs_with_backend
-from mmml.interfaces.pycharmmInterface.nl_reference import (
+from karml.interfaces.pycharmmInterface.nl_backend import build_mm_pairs_with_backend
+from karml.interfaces.pycharmmInterface.nl_reference import (
     compare_pair_sets,
     extract_valid_pairs,
     reference_mic_pairs,

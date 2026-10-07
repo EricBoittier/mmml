@@ -5,8 +5,8 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import monomer_offsets
-from mmml.utils.geometry_checks import (
+from karml.interfaces.pycharmmInterface.mlpot.overlap_guard import monomer_offsets
+from karml.utils.geometry_checks import (
     assert_monomer_extent_within_limit,
     find_worst_monomer_extent,
     monomer_axis_extent,

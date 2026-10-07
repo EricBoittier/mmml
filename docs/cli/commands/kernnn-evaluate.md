@@ -1,4 +1,4 @@
-# `mmml kernnn-evaluate`
+# `karml kernnn-evaluate`
 
 Evaluate KerNN checkpoint.
 
@@ -6,13 +6,13 @@ Evaluate KerNN checkpoint.
 ## Usage
 
 ```bash
-mmml kernnn-evaluate --help
+karml kernnn-evaluate --help
 ```
 
 ## Options
 
 ```text
-usage: mmml kernnn-evaluate [-h] [--checkpoint CHECKPOINT] [--data DATA]
+usage: karml kernnn-evaluate [-h] [--checkpoint CHECKPOINT] [--data DATA]
                             [--output-dir OUTPUT_DIR]
                             [--split {train,valid,test,all}] [--seed SEED]
                             [--ntrain NTRAIN] [--nvalid NVALID]

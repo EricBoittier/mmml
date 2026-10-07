@@ -39,13 +39,13 @@ cs = _load_script_module(_CLEANUP_MOD, SCRIPTS / "cleanup_strategy.py")
 
 
 @pytest.fixture(autouse=True)
-def _isolate_mmml_ckpt(monkeypatch) -> None:
-    """``load_config`` copies ``MMML_CKPT`` onto ``cfg["checkpoint"]``.
+def _isolate_karml_ckpt(monkeypatch) -> None:
+    """``load_config`` copies ``KARML_CKPT`` onto ``cfg["checkpoint"]``.
 
     GPU-bench and DCM5 tests can leak that env into this module and turn the
-    documented ``${MMML_CKPT}`` placeholder into a resolved path.
+    documented ``${KARML_CKPT}`` placeholder into a resolved path.
     """
-    monkeypatch.delenv("MMML_CKPT", raising=False)
+    monkeypatch.delenv("KARML_CKPT", raising=False)
 
 
 @pytest.fixture(autouse=True, scope="module")
@@ -181,7 +181,7 @@ def test_equi_jobs_declare_md_stage_equi(cfg: dict, cell: RunCell) -> None:
 
 
 def test_campaign_plan_shows_equi_not_dynamics(cfg: dict, cell: RunCell) -> None:
-    from mmml.cli.run.md_campaign import build_plan_rows
+    from karml.cli.run.md_campaign import build_plan_rows
 
     campaign = build_campaign(cfg, cell)
     rows = build_plan_rows(campaign, ["pycharmm_equi_00"])
@@ -231,7 +231,7 @@ def test_campaign_output_dirs_under_cell_tag(cfg: dict, cell: RunCell) -> None:
     assert campaign["defaults"]["output_root"].endswith("dcm_10")
     init = campaign["runs"]["pycharmm_init"]
     assert init["output_dir"].endswith("dcm_10/pycharmm_init")
-    from mmml.cli.run.md_campaign import _resolve_output_dir, merge_campaign_job_config
+    from karml.cli.run.md_campaign import _resolve_output_dir, merge_campaign_job_config
 
     merged = merge_campaign_job_config(campaign, "pycharmm_init")
     out = _resolve_output_dir(merged, "pycharmm_init")
@@ -252,10 +252,10 @@ def test_jaxmd_burst_quality_gate(cfg: dict, cell: RunCell) -> None:
 
 
 def test_build_md_system_campaign_argv(tmp_path: Path, cfg: dict, monkeypatch) -> None:
-    monkeypatch.setenv("MMML_CKPT", str(tmp_path))
+    monkeypatch.setenv("KARML_CKPT", str(tmp_path))
     (tmp_path / "ckpt.json").write_text("{}", encoding="utf-8")
     cfg = dict(cfg)
-    cfg["checkpoint"] = "${MMML_CKPT}"
+    cfg["checkpoint"] = "${KARML_CKPT}"
     cfg["output_root"] = str(tmp_path / "out")
     cell = RunCell(solvent="DCM", n_monomers=30, temperature=300.0, box_size=32.0)
     argv = build_md_system_campaign_argv(cfg, cell)
@@ -265,7 +265,7 @@ def test_build_md_system_campaign_argv(tmp_path: Path, cfg: dict, monkeypatch) -
 
 
 def test_namespace_from_merged_pycharmm_init_heat_flags(cfg: dict, cell: RunCell) -> None:
-    from mmml.cli.run.md_campaign import namespace_from_merged
+    from karml.cli.run.md_campaign import namespace_from_merged
 
     merged = build_campaign(cfg, cell)["runs"]["pycharmm_init"]
     merged.update(build_campaign(cfg, cell)["defaults"])
@@ -278,7 +278,7 @@ def test_namespace_from_merged_pycharmm_init_heat_flags(cfg: dict, cell: RunCell
 
 
 def test_namespace_from_merged_jaxmd_burst(cfg: dict, cell: RunCell) -> None:
-    from mmml.cli.run.md_campaign import namespace_from_merged
+    from karml.cli.run.md_campaign import namespace_from_merged
 
     merged = build_campaign(cfg, cell)["runs"]["jaxmd_burst_01"]
     merged.update(build_campaign(cfg, cell)["defaults"])
@@ -369,7 +369,7 @@ def test_default_matrix_uses_validated_water_methanol_region() -> None:
     cfg = load_config(WORKFLOW / "config.yaml")
     assert cfg["solvents"] == ["TIP3", "MEOH"]
     assert cfg["temperatures"] == [280.0, 300.0, 320.0]
-    assert cfg["checkpoint"] == "${MMML_CKPT}"
+    assert cfg["checkpoint"] == "${KARML_CKPT}"
     cells = list(iter_matrix_cells(cfg))
     assert {cell.solvent for cell in cells if not cell.is_mixture} == {"TIP3", "MEOH"}
     assert min(cell.temperature for cell in cells) >= 280.0

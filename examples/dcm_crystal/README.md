@@ -33,7 +33,7 @@ Rogoża, *Crystals* **10**, 920 (2020),
 ## The structures, and the one that is missing
 
 These are the only two pure CH₂Cl₂ entries in the Crystallography Open Database,
-both from the paper above, bundled under `mmml/data/structures/`:
+both from the paper above, bundled under `karml/data/structures/`:
 
 | `DCM_PHASE` | COD | Space group | a, b, c (Å) | Conditions | Notes |
 |---|---|---|---|---|---|
@@ -132,5 +132,5 @@ the sublimation enthalpy nor the crystal is in any training set. See
 
 - [`examples/acetone_crystal`](../acetone_crystal) — the same ladder for acetone,
   where five phases are available and all of them are at ambient pressure.
-- `mmml build-crystal --literature dcm` — writes the 1.63 GPa cell as a PDB or
+- `karml build-crystal --literature dcm` — writes the 1.63 GPa cell as a PDB or
   supercell for use elsewhere.

@@ -5,10 +5,10 @@ Compare reference (PySCF/QM) and model NPZ trajectories with metrics and plots.
 Modes
 -----
 1. Two NPZ files (reference labels vs model predictions):
-       mmml compare-npz --reference ref.npz --predictions pred.npz -o out/
+       karml compare-npz --reference ref.npz --predictions pred.npz -o out/
 
 2. Checkpoint inference against labeled NPZ (same file holds R,Z,E,F,...):
-       mmml compare-npz --checkpoint params.json --data test.npz -o out/ --max-frames 200
+       karml compare-npz --checkpoint params.json --data test.npz -o out/ --max-frames 200
 
 Issue #12: per-atom / per-element force analysis and richer validation plots.
 """
@@ -21,13 +21,13 @@ from pathlib import Path
 
 import numpy as np
 
-from mmml.analysis.npz_comparison import (
+from karml.analysis.npz_comparison import (
     align_npz_arrays,
     compare_npz_arrays,
     plot_comparison,
     write_comparison_report,
 )
-from mmml.data.units import infer_reference_energy_unit
+from karml.data.units import infer_reference_energy_unit
 
 
 def _load_npz_dict(path: Path) -> dict[str, np.ndarray]:
@@ -45,17 +45,17 @@ def _run_physnet_checkpoint_inference(
     batch_size: int,
     seed: int,
 ) -> dict[str, Any]:
-    """Batched PhysNet inference (matches ``mmml physnet-evaluate``)."""
+    """Batched PhysNet inference (matches ``karml physnet-evaluate``)."""
     import jax
 
-    from mmml.cli.misc.physnet_evaluate import (
+    from karml.cli.misc.physnet_evaluate import (
         _ensure_npz_with_N,
         _infer_natoms_from_npz,
         _load_physnet_checkpoint,
     )
-    from mmml.models.physnetjax.physnetjax.analysis.analysis import eval as physnet_eval
-    from mmml.models.physnetjax.physnetjax.data.batches import prepare_batches_jit
-    from mmml.models.physnetjax.physnetjax.data.data import prepare_datasets
+    from karml.models.physnetjax.physnetjax.analysis.analysis import eval as physnet_eval
+    from karml.models.physnetjax.physnetjax.data.batches import prepare_batches_jit
+    from karml.models.physnetjax.physnetjax.data.data import prepare_datasets
 
     if "R" not in data or "Z" not in data or "E" not in data:
         raise KeyError("Data NPZ must contain R, Z, and E for checkpoint evaluation.")
@@ -156,7 +156,7 @@ def _run_checkpoint_inference(
 ) -> dict[str, np.ndarray]:
     from ase import Atoms
 
-    from mmml.interfaces.calculators.checkpoint_loading import (
+    from karml.interfaces.calculators.checkpoint_loading import (
         create_calculator_from_checkpoint,
     )
 
@@ -340,7 +340,7 @@ def main() -> int:
         print(f"Running checkpoint inference: {args.checkpoint}")
         data = _load_npz_dict(args.data)
         try:
-            from mmml.cli.misc.physnet_evaluate import _resolve_physnet_json_path
+            from karml.cli.misc.physnet_evaluate import _resolve_physnet_json_path
 
             if _resolve_physnet_json_path(args.checkpoint) is not None:
                 bundle = _run_physnet_checkpoint_inference(

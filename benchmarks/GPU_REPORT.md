@@ -4,7 +4,7 @@
 install packages, stop GPU jobs, or upload data. Use a dedicated **clean,
 committed checkout** containing the existing ASV suite and gate tests. The runner
 can also live outside it via `--repo`; its own hash is recorded separately. The interpreter must
-already have MMML, the benchmark dependencies, ASV and pytest installed.
+already have KARML, the benchmark dependencies, ASV and pytest installed.
 
 ## Run on gpu09 GPU 1
 
@@ -22,14 +22,14 @@ the target checkout. From your laptop:
 scp benchmarks/run_gpu_report.py boittier@gpu09:~/run_gpu_report.py
 ```
 
-Then on gpu09, using the environment that has MMML and its GPU dependencies:
+Then on gpu09, using the environment that has KARML and its GPU dependencies:
 
 ```bash
-python ~/run_gpu_report.py --repo ~/mmml-main-runs --gpu 1 --serve
+python ~/run_gpu_report.py --repo ~/karml-main-runs --gpu 1 --serve
 ```
 
 The target checkout must still be clean. No changes are made to it, except ignored
-report artifacts under `.asv/`. The runtime check rejects an MMML import from a
+report artifacts under `.asv/`. The runtime check rejects an KARML import from a
 different worktree; set up the interpreter for the intended checkout first.
 
 If the activated interpreter is wrong, use `.venv/bin/python` explicitly.

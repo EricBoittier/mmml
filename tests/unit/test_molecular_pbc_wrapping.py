@@ -12,9 +12,9 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from mmml.cli.run.ase_runner import wrap_positions_for_pbc
-from mmml.cli.run.shared import _wrap_frame_by_monomer
-from mmml.interfaces.pycharmmInterface.cell_list import _wrap_groups_np
+from karml.cli.run.ase_runner import wrap_positions_for_pbc
+from karml.cli.run.shared import _wrap_frame_by_monomer
+from karml.interfaces.pycharmmInterface.cell_list import _wrap_groups_np
 
 
 BOX = 10.0
@@ -96,7 +96,7 @@ def test_trajectory_output_wrap_uses_same_molecular_contract() -> None:
 
 def test_jax_pbc_mapper_preserves_internal_geometry_and_is_image_invariant() -> None:
     jnp = pytest.importorskip("jax.numpy")
-    from mmml.interfaces.pycharmmInterface.pbc_prep_factory import make_pbc_mapper
+    from karml.interfaces.pycharmmInterface.pbc_prep_factory import make_pbc_mapper
 
     positions = _boundary_waters()
     mol_id = np.repeat(np.arange(2, dtype=np.int32), 3)

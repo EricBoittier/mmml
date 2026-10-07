@@ -27,7 +27,7 @@ def main() -> int:
         ok = False
 
     try:
-        from mmml.interfaces.pycharmmInterface.jax_md_neighbor_list import have_jax_md
+        from karml.interfaces.pycharmmInterface.jax_md_neighbor_list import have_jax_md
 
         if have_jax_md():
             print_pass("jax-md neighbor lists")
@@ -39,7 +39,7 @@ def main() -> int:
         ok = False
 
     try:
-        from mmml.interfaces.pycharmmInterface.nl_reference import have_vesin
+        from karml.interfaces.pycharmmInterface.nl_reference import have_vesin
 
         if have_vesin():
             print_pass("vesin (reference oracle)")
@@ -51,11 +51,11 @@ def main() -> int:
         ok = False
 
     try:
-        from mmml.interfaces.pycharmmInterface.nl_backend import (
+        from karml.interfaces.pycharmmInterface.nl_backend import (
             CellListBackend,
             VesinBackend,
         )
-        from mmml.interfaces.pycharmmInterface.nl_reference import have_vesin as _have_vesin
+        from karml.interfaces.pycharmmInterface.nl_reference import have_vesin as _have_vesin
 
         print_pass("nl_backend module")
         _ = CellListBackend()

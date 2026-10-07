@@ -65,13 +65,13 @@ def main() -> int:
     import jax
     jax.config.update("jax_enable_x64", True)
 
-    from mmml.data.cgenff_dataset import (
+    from karml.data.cgenff_dataset import (
         DEF_EXTRA_TOPPAR, DEF_PRM_PATH, DEF_RTF_PATH, load_reference,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.scaled_cgenff_prm import (
+    from karml.interfaces.pycharmmInterface.mlpot.scaled_cgenff_prm import (
         write_scaled_cgenff_prm,
     )
-    from mmml.models.mm_lj_scales import apply_mm_lj_scales
+    from karml.models.mm_lj_scales import apply_mm_lj_scales
 
     ref = load_reference(str(DEF_PRM_PATH), str(DEF_RTF_PATH))
     names = [""] * len(ref.nb_map)
@@ -79,7 +79,7 @@ def main() -> int:
         names[int(idx)] = str(name)
 
     rng = np.random.default_rng(args.seed)
-    tmp = Path(tempfile.mkdtemp(prefix="mmml-lj-validate-"))
+    tmp = Path(tempfile.mkdtemp(prefix="karml-lj-validate-"))
 
     if args.sidecar is not None:
         sidecar = args.sidecar

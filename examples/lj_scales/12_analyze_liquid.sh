@@ -22,7 +22,7 @@ _analyze_one() {
   fi
   local out="${campaign_dir}/analysis"
   echo "--- ${label}: ${campaign_dir} → ${out}"
-  uv run mmml analyze-liquid \
+  uv run karml analyze-liquid \
     --campaign-dir "${campaign_dir}" \
     --solvent "${solvent}" \
     --prefer-run "${LJ_ANALYZE_PREFER_RUN:-jaxmd_npt}" \

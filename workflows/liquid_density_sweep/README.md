@@ -13,11 +13,11 @@ actually bite. Running the same settings matrix at all three densities separates
 
 | Script | What it does |
 |--------|--------------|
-| `scripts/01_build_boxes.sh` | Packmol + MC + CHARMM SD/ABNR box build (`mmml liquid-box`, MM only, no GPU/checkpoint) |
+| `scripts/01_build_boxes.sh` | Packmol + MC + CHARMM SD/ABNR box build (`karml liquid-box`, MM only, no GPU/checkpoint) |
 | `scripts/02_backends.sh` | Same cell through `ase`, `jaxmd`, `pycharmm` |
 | `scripts/03_electrostatics.sh` | `mic`, `ewald` (±`--ewald-omit-self`), `jax_pme` × {ewald,pme,p3m}, `nvalchemiops_pme`, `scafacos` |
 | `scripts/04_ml_mm.sh` | ML/MM partitioning, hybrid charge modes, switching, MM pair provider |
-| `scripts/run_all.sh` | All of the above, with an `mmml doctor` preflight |
+| `scripts/run_all.sh` | All of the above, with an `karml doctor` preflight |
 | `scripts/print_density_table.py` | Regenerate the monomer-count table below |
 
 All scripts honour `DRY_RUN=1` (print commands instead of running), plus
@@ -25,7 +25,7 @@ All scripts honour `DRY_RUN=1` (print commands instead of running), plus
 `OUT_ROOT`.
 
 ```bash
-export MMML_CKPT=/path/to/DESdimers_params.json
+export KARML_CKPT=/path/to/DESdimers_params.json
 cd workflows/liquid_density_sweep/scripts
 
 DRY_RUN=1 ./run_all.sh        # inspect the matrix first
@@ -35,7 +35,7 @@ DRY_RUN=1 ./run_all.sh        # inspect the matrix first
 
 ## The matrix
 
-Monomer counts are computed with mmml's own sizing helper
+Monomer counts are computed with karml's own sizing helper
 (`box_sizing.n_molecules_for_target_density_in_fixed_box`), so they match what
 `md-system` / `liquid-box` build. Bulk densities at ~298 K: **DCM 1.326 g/cm³**
 (5 atoms/molecule), **ACO 0.784 g/cm³** (10 atoms/molecule).
@@ -52,13 +52,13 @@ Monomer counts are computed with mmml's own sizing helper
 Counts can also be derived at run time instead of hard-coded:
 
 ```bash
-mmml md-system --composition DCM:1 --box-auto count --box-size 28 \
+karml md-system --composition DCM:1 --box-auto count --box-size 28 \
   --bulk-density-fraction 0.75 ...
 ```
 
 ## ⚠️ Before submitting: MLpot atom limits
 
-`mmml doctor` prints, near the end:
+`karml doctor` prints, near the end:
 
 ```
 CHARMM MLpot limits: max_Nml=..., max_Npr=...
@@ -78,13 +78,13 @@ older than the header. Rebuild once per node:
 
 ```bash
 ./scripts/rebuild_charmm_mlpot.sh --clean
-mmml doctor    # confirm `source: api_func.F90`, not the fallback
+karml doctor    # confirm `source: api_func.F90`, not the fallback
 ```
 
-Two more things `mmml doctor` will tell you:
+Two more things `karml doctor` will tell you:
 
 - **libcharmm is MPI-linked** → launch MLpot runs through
-  `scripts/mmml-charmm-mpirun.sh` (the scripts here already do).
+  `scripts/karml-charmm-mpirun.sh` (the scripts here already do).
 - **cupy ≥ 14 + gpu4pyscf** → DFT Hessians abort with a `c_contiguous`
   assertion; pin `cupy>=13,<14`. Irrelevant unless a job does QM.
 

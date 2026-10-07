@@ -91,8 +91,8 @@ def split_via_fix_and_split(
     train_fraction: float = 0.9,
     seed: int = 0,
 ) -> tuple[Path, Path, Path]:
-    """Split NPZ with ``mmml fix-and-split`` (units manifest + reproducible indices)."""
-    from mmml.cli.misc.fix_and_split import fix_and_split_data
+    """Split NPZ with ``karml fix-and-split`` (units manifest + reproducible indices)."""
+    from karml.cli.misc.fix_and_split import fix_and_split_data
 
     out = Path(out_dir)
     split_root = out / "splits"
@@ -162,8 +162,8 @@ def plot_npz_peptide_frame(
     title: str | None = None,
 ) -> Path:
     """Orthographic ASE figure (bonds) for one peptide NPZ frame."""
-    from mmml.data.external.aaa_ama import atoms_from_npz_frame, inspect_dataset_aaa
-    from mmml.utils.ase_structure_plot import (
+    from karml.data.external.aaa_ama import atoms_from_npz_frame, inspect_dataset_aaa
+    from karml.utils.ase_structure_plot import (
         SCALE_PEPTIDE_ML,
         save_structure_figure,
         use_matplotlib_agg,
@@ -191,16 +191,16 @@ def plot_embedding_box_structures(
     out_dir: Path | str,
 ) -> list[Path]:
     """Write full-box and peptide-zoom PNGs (ASE bonds, docs style)."""
-    from mmml.interfaces.pycharmmInterface.trialanine_water_box import (
+    from karml.interfaces.pycharmmInterface.trialanine_water_box import (
         peptide_atoms_from_trialanine_box,
     )
-    from mmml.utils.ase_structure_plot import (
+    from karml.utils.ase_structure_plot import (
         SCALE_TRIALANINE_BOX,
         SCALE_TRIALANINE_PEPTIDE,
         save_structure_figure,
         use_matplotlib_agg,
     )
-    from mmml.utils.charmm_ase import atoms_from_psf_box
+    from karml.utils.charmm_ase import atoms_from_psf_box
 
     use_matplotlib_agg()
     fig_dir = Path(out_dir) / "figures"
@@ -316,7 +316,7 @@ def run_train_phase(
     write_plots: bool = True,
 ) -> TrainPhaseResult:
     """Download/split NPZ, optional PhysNet train, export JSON checkpoint manifest."""
-    from mmml.data.external.aaa_ama import (
+    from karml.data.external.aaa_ama import (
         AAA_DATASET_URL,
         download_dataset_aaa,
         inspect_dataset_aaa,
@@ -356,7 +356,7 @@ def run_train_phase(
         cmd = [
             sys.executable,
             "-m",
-            "mmml.cli.__main__",
+            "karml.cli.__main__",
             "physnet-train",
             "--config",
             str(train_config),
@@ -370,7 +370,7 @@ def run_train_phase(
                 export_cmd = [
                     sys.executable,
                     "-m",
-                    "mmml.cli.__main__",
+                    "karml.cli.__main__",
                     "orbax-to-json",
                     str(epoch_dir),
                     "-o",
@@ -419,8 +419,8 @@ def build_embedding_box(
     write_bonded_report: bool = False,
 ) -> BuildPhaseResult:
     """Build CGENFF TRIA + TIP3 box; MM-only minimize; write PSF/CRD/box.json."""
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import ensure_pycharmm_loaded
-    from mmml.interfaces.pycharmmInterface.trialanine_water_box import (
+    from karml.interfaces.pycharmmInterface.import_pycharmm import ensure_pycharmm_loaded
+    from karml.interfaces.pycharmmInterface.trialanine_water_box import (
         TRIA_RESI_NAME,
         build_trialanine_water_box_in_charmm,
         n_peptide_atoms_in_trialanine_box,
@@ -431,12 +431,12 @@ def build_embedding_box(
     import pycharmm.minimize as minimize
     import pycharmm.write as write
 
-    from mmml.interfaces.pycharmmInterface.cgenff_bonded_reference import (
+    from karml.interfaces.pycharmmInterface.cgenff_bonded_reference import (
         charmm_bonded_energy_components_kcalmol,
         run_charmm_bonded_ener_force,
         setup_bonded_only_charmm,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.block_terms import apply_charmm_mm_block
+    from karml.interfaces.pycharmmInterface.mlpot.block_terms import apply_charmm_mm_block
 
     out = Path(output_dir)
     out.mkdir(parents=True, exist_ok=True)
@@ -560,11 +560,11 @@ def register_embedding_mlpot(
     """Register partial MLpot on ``ml_seg_id`` using single-monomer PhysNet (``n_monomers=1``)."""
     from ase import Atoms
 
-    from mmml.interfaces.pycharmmInterface.mlpot.partial_mm import (
+    from karml.interfaces.pycharmmInterface.mlpot.partial_mm import (
         PartialMlMmConfig,
         register_mlpot_partial_mm,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+    from karml.interfaces.pycharmmInterface.mlpot.setup import (
         load_physnet_mlpot_bundle,
         select_by_seg_id,
     )
@@ -576,7 +576,7 @@ def register_embedding_mlpot(
 
     import pycharmm.coor as coor
 
-    from mmml.interfaces.pycharmmInterface.utils import get_Z_from_psf
+    from karml.interfaces.pycharmmInterface.utils import get_Z_from_psf
 
     # ``psf.get_atype()`` is the atom *name* array (CAY, HY1, …), not CGenFF
     # chemical types (CG331, HGA3). Map Z from PSF masses like the rest of MLpot;
@@ -633,21 +633,21 @@ def run_embedding_phase(
     mlmm_cuton: float | None = None,
 ) -> RunPhaseResult:
     """Load built box, register partial MLpot, optional MLpot SD minimize."""
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import ensure_pycharmm_loaded
+    from karml.interfaces.pycharmmInterface.import_pycharmm import ensure_pycharmm_loaded
 
     ensure_pycharmm_loaded()
     import pycharmm.coor as coor
     import pycharmm.energy as energy
 
-    from mmml.interfaces.pycharmmInterface.cgenff_bonded_reference import read_psf_card_file
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+    from karml.interfaces.pycharmmInterface.cgenff_bonded_reference import read_psf_card_file
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         apply_crd_file_to_charmm,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+    from karml.interfaces.pycharmmInterface.mlpot.pbc_env import (
         apply_pbc_nbonds,
         prepare_charmm_pbc,
     )
-    from mmml.interfaces.pycharmmInterface.trialanine_water_box import (
+    from karml.interfaces.pycharmmInterface.trialanine_water_box import (
         prepare_charmm_for_trialanine_box_psf,
     )
 
@@ -711,7 +711,7 @@ def run_embedding_phase(
                 f"If USER dominates with H≈0 in ML Z, mass-based Z is missing."
             )
         if mini_nstep > 0:
-            from mmml.interfaces.pycharmmInterface.mlpot import (
+            from karml.interfaces.pycharmmInterface.mlpot import (
                 MinimizeWithMlpotConfig,
                 minimize_with_mlpot,
             )

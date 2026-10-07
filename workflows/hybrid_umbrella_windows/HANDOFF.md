@@ -5,7 +5,7 @@
 **CV:** `ξ = r(C–Cl) − r(C–N)` via YAML `cv_x.pairs` + `coefficients: [1.0, -1.0]`  
 **Engine:** `hybrid_jaxmd` (ML solute AMM1+CH3CL, MM solvent)
 
-Do **not** run full MD / `mmml md-system` / Packmol box builds in the agent sandbox unless the user asks. Prefer unit tests + copy-paste Slurm commands.
+Do **not** run full MD / `karml md-system` / Packmol box builds in the agent sandbox unless the user asks. Prefer unit tests + copy-paste Slurm commands.
 
 ---
 
@@ -22,8 +22,8 @@ Example entrypoint: `examples/m/15_umbrella_snakemake.sh`
 
 ### Per-window resume (library + CLI)
 
-- `mmml/umbrella/hybrid_windows.py` — `windows/wXXX.npz` checkpoints; assemble into `umbrella_snapshots.npz`
-- CLI: `mmml umbrella-sample --resume --windows N` / `--no-resume-failed`
+- `karml/umbrella/hybrid_windows.py` — `windows/wXXX.npz` checkpoints; assemble into `umbrella_snapshots.npz`
+- CLI: `karml umbrella-sample --resume --windows N` / `--no-resume-failed`
 - Shell: `RESUME=1`, `WINDOWS=…` in `examples/m/14_umbrella_sample_sol_prod.sh`
 - Tests: `tests/unit/test_hybrid_windows_resume.py` (run: `uv run pytest tests/unit/test_hybrid_windows_resume.py -q`)
 
@@ -73,7 +73,7 @@ artifacts/nh3_ch3cl/umbrella_nc_acn_prod/
   mbar/status.json
 ```
 
-Cluster path is often `/mmhome/boittier/home/mmml` (same tree as `~/mmml`).
+Cluster path is often `/mmhome/boittier/home/karml` (same tree as `~/karml`).
 
 ### Race fix (required for parallel)
 
@@ -97,7 +97,7 @@ Backend 'cuda' is not in the list of known backends: ['cpu', 'tpu']
 
 Mitigations added (not fully validated in prod yet):
 
-- CUDA preflight + retries in `env_shell.sh` (`MMML_CUDA_INIT_RETRIES`, default 12)
+- CUDA preflight + retries in `env_shell.sh` (`KARML_CUDA_INIT_RETRIES`, default 12)
 - `XLA_PYTHON_CLIENT_PREALLOCATE=false`
 - Explicit `--gres=gpu:1` on GPU rules (see GPU-request section below)
 - Profile `retries: 3`
@@ -223,14 +223,14 @@ scancel 205272 205273 …
 Unlock:
 
 ```bash
-cd ~/mmml/workflows/hybrid_umbrella_windows
+cd ~/karml/workflows/hybrid_umbrella_windows
 uv run --with snakemake snakemake --unlock
 ```
 
 Resubmit (login node):
 
 ```bash
-cd ~/mmml/workflows/hybrid_umbrella_windows
+cd ~/karml/workflows/hybrid_umbrella_windows
 nohup bash scripts/snakemake_slurm.sh 8 > snakemake_gpu.log 2>&1 &
 # or: SOLVENT=acn JOBS=8 bash examples/m/15_umbrella_snakemake.sh
 ```
@@ -265,7 +265,7 @@ with `_establish_config_source`), so run these from the studix login node.
 ### Checked 2026-07-31 (offline, no cluster)
 
 - `uv run pytest tests/unit -k "umbrella or hybrid_windows" -q` → 77 passed
-- `MMML_WORKFLOW_CONFIG=config.smoke.yaml bash scripts/snakemake_local.sh 2 -n` →
+- `KARML_WORKFLOW_CONFIG=config.smoke.yaml bash scripts/snakemake_local.sh 2 -n` →
   DAG resolves to `make_box → window×3 → assemble → mbar`; `window` / `assemble`
   carry `gres=gpu:1` with empty `slurm_extra`, `make_box` / `mbar` carry neither
 - Working tree clean at `828e57422`; all workflow files tracked
@@ -277,14 +277,14 @@ with `_establish_config_source`), so run these from the studix login node.
 ```bash
 uv run pytest tests/unit -k "umbrella or hybrid_windows" -q
 cd workflows/hybrid_umbrella_windows
-MMML_WORKFLOW_CONFIG=config.smoke.yaml bash scripts/snakemake_local.sh 2 -n
+KARML_WORKFLOW_CONFIG=config.smoke.yaml bash scripts/snakemake_local.sh 2 -n
 ```
 
 ---
 
-## Agent workflow rules (mmml)
+## Agent workflow rules (karml)
 
 - No long MD in agent sessions.
 - TDD with mocked PyCHARMM in `tests/unit/`.
 - CI: `.github/workflows/ci.yml` runs `pytest -v tests/`.
-- See `devtools/AGENTS.md` / `.cursor/rules/mmml-agent-workflow.mdc`.
+- See `devtools/AGENTS.md` / `.cursor/rules/karml-agent-workflow.mdc`.

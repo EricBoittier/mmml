@@ -5,7 +5,7 @@
 #   nohup bash scripts/snakemake_slurm.sh 8 > snakemake_gpu.log 2>&1 &
 #
 # Smoke matrix:
-#   MMML_WORKFLOW_CONFIG=config.smoke.yaml bash scripts/snakemake_slurm.sh 4
+#   KARML_WORKFLOW_CONFIG=config.smoke.yaml bash scripts/snakemake_slurm.sh 4
 #
 # Place the checkpoint at examples/m/model_ext.json (or override `checkpoint:`).
 

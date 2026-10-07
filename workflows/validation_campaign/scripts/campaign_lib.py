@@ -1,4 +1,4 @@
-"""Core library for the MMML validation campaign.
+"""Core library for the KARML validation campaign.
 
 Loads ``campaign.yaml`` and ``environments/*.yaml``, owns the on-disk proof
 layout, renders job scripts, and resolves state *only* from proof receipts.
@@ -77,7 +77,7 @@ def environment(name: str) -> dict[str, Any]:
 
 
 def new_run_id() -> str:
-    return os.environ.get("MMML_VALIDATION_RUN_ID") or dt.datetime.now(dt.UTC).strftime(
+    return os.environ.get("KARML_VALIDATION_RUN_ID") or dt.datetime.now(dt.UTC).strftime(
         "%Y%m%dT%H%M%SZ"
     )
 
@@ -105,7 +105,7 @@ def rel_output_dir(cfg: dict[str, Any], run_id: str, task_id: str, env_name: str
 
 
 def repo_root_shell(env: dict[str, Any]) -> str:
-    """The environment's repo root, as a shell word ('~/mmml' -> "$HOME"/mmml)."""
+    """The environment's repo root, as a shell word ('~/karml' -> "$HOME"/karml)."""
     root = str(env.get("repo_root", "."))
     if root in {".", ""}:
         return shlex.quote(str(REPO))
@@ -141,12 +141,12 @@ def charmm_mpi_prefix() -> list[str]:
     library is not MPI-linked (or we are already running under mpirun, in which
     case nesting a second launcher would fail).
 
-    Launching the child under mpirun ourselves also stops the mmml CLI from
-    trying to re-exec itself via ``maybe_rerun_mmml_under_mpirun``: it sees it is
+    Launching the child under mpirun ourselves also stops the karml CLI from
+    trying to re-exec itself via ``maybe_rerun_karml_under_mpirun``: it sees it is
     already under mpirun and proceeds.
     """
     try:
-        from mmml.interfaces.pycharmmInterface.charmm_mpi import (
+        from karml.interfaces.pycharmmInterface.charmm_mpi import (
             _under_mpirun,
             charmm_lib_links_mpi,
             charmm_mpirun_path,

@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domdec_info import survey_domdec_api
-from mmml.interfaces.pycharmmInterface.mlpot.tier3_domdec_validate import (
+from karml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domdec_info import survey_domdec_api
+from karml.interfaces.pycharmmInterface.mlpot.tier3_domdec_validate import (
     render_tier3_report,
     validate_tier3_domdec_env,
 )
@@ -38,28 +38,28 @@ def test_render_tier3_report_mentions_tier2_fallback():
 def test_mpi_check_tier3_flag():
     from unittest import mock
 
-    from mmml.cli.run.mpi_check import main
+    from karml.cli.run.mpi_check import main
 
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.charmm_mpi.charmm_lib_available",
+        "karml.interfaces.pycharmmInterface.charmm_mpi.charmm_lib_available",
         return_value=True,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.charmm_mpi._charmm_lib_path",
+        "karml.interfaces.pycharmmInterface.charmm_mpi._charmm_lib_path",
         return_value=mock.Mock(),
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.charmm_mpi.charmm_lib_links_mpi",
+        "karml.interfaces.pycharmmInterface.charmm_mpi.charmm_lib_links_mpi",
         return_value=False,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.charmm_mpi._under_mpirun",
+        "karml.interfaces.pycharmmInterface.charmm_mpi._under_mpirun",
         return_value=False,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge.mpi_rank_size",
+        "karml.interfaces.pycharmmInterface.mlpot.mpi_bridge.mpi_rank_size",
         return_value=(0, 1),
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.charmm_mpi._mpi4py_available",
+        "karml.interfaces.pycharmmInterface.charmm_mpi._mpi4py_available",
         return_value=False,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.spatial_mpi_policy.spatial_mpi_enabled",
+        "karml.interfaces.pycharmmInterface.mlpot.spatial_mpi_policy.spatial_mpi_enabled",
         return_value=False,
     ):
         assert main(["--tier3"]) == 0

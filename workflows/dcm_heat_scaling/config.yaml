@@ -1,5 +1,5 @@
 # DCM:N heat-only PyCHARMM MLpot scaling (N = 5, 10, …, 90).
-# Checkpoint: export MMML_CKPT before snakemake.
+# Checkpoint: export KARML_CKPT before snakemake.
 #
 # Output layout (repo root):
 #   artifacts/pycharmm_mlpot/dcm{N}_npt_x64_{repeat}/dt_{slug}/
@@ -9,9 +9,9 @@ repeats: [1]
 dt_fs_values: [0.25, 0.125]
 
 composition_prefix: DCM
-checkpoint: "${MMML_CKPT}"
+checkpoint: "${KARML_CKPT}"
 output_root: artifacts/pycharmm_mlpot
-# Plain ``mmml md-system`` (no mmml-charmm-mpirun.sh). Required for Snakemake Slurm jobsteps.
+# Plain ``karml md-system`` (no karml-charmm-mpirun.sh). Required for Snakemake Slurm jobsteps.
 use_mpirun: false
 
 # Per-run seed: seed_base + N*10000 + repeat*100 + dt_offset (0.25→0, 0.125→1).

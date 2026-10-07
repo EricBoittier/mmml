@@ -144,7 +144,7 @@ def analyse(name: str, d: dict, args) -> dict:
 
 
 def main() -> int:
-    from mmml.interfaces.pycharmmInterface.cutoffs import (
+    from karml.interfaces.pycharmmInterface.cutoffs import (
         DEFAULT_ML_SWITCH_WIDTH,
         DEFAULT_MM_SWITCH_ON,
         DEFAULT_MM_SWITCH_WIDTH,

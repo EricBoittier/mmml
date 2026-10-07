@@ -13,7 +13,7 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from mmml.data.units import EV_TO_KCAL_MOL, KCAL_MOL_TO_EV
+from karml.data.units import EV_TO_KCAL_MOL, KCAL_MOL_TO_EV
 
 SIG = jnp.array([3.6527, 2.3876])
 EPS = jnp.array([0.0780, 0.0240])
@@ -22,8 +22,8 @@ KW = dict(mm_switch_on=8.0, mm_switch_width=5.0, ml_switch_width=1.5)
 
 def test_hybrid_e_mm_is_the_kcal_energy_converted_to_ev():
     """e_mm reported by hybrid_forward == cgenff_mm_energy * KCAL_MOL_TO_EV."""
-    from mmml.models.cgenff_mm import cgenff_mm_energy
-    from mmml.models.hybrid_energy import hybrid_forward
+    from karml.models.cgenff_mm import cgenff_mm_energy
+    from karml.models.hybrid_energy import hybrid_forward
     from tests.unit.test_hybrid_energy import _batch, _fake_model_apply
 
     b = _batch(9.0)                      # MM-tail: E_MM is non-zero here

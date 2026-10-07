@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import inspect
 
-from mmml.interfaces.pycharmmInterface.nbonds_config import (
+from karml.interfaces.pycharmmInterface.nbonds_config import (
     CGENFF_PRM_BOMLEV,
     ic_prm_fill,
     read_cgenff_prm,

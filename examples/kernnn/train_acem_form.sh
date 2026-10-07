@@ -22,7 +22,7 @@ mkdir -p "$OUT"
 # 1) Evaluate the existing PhysNet teacher on ACEM test split
 # ---------------------------------------------------------------------------
 echo "=== PhysNet evaluate (ACEM test) ==="
-mmml physnet-evaluate \
+karml physnet-evaluate \
   --checkpoint "$PHYSNET_ACEM" \
   --data "$ACEM_SPLITS/energies_forces_dipoles_test.npz" \
   -o "$OUT/physnet_acem_eval" \
@@ -33,7 +33,7 @@ mmml physnet-evaluate \
 # 2) Train KerNN on ACEM (9 atoms, all-pairs distances) from existing splits
 # ---------------------------------------------------------------------------
 echo "=== KerNN train ACEM (ground truth only) ==="
-mmml kernnn-train \
+karml kernnn-train \
   --distance-scheme acem \
   --architecture ffnet \
   --n-hidden 64 \
@@ -49,7 +49,7 @@ mmml kernnn-train \
   --workdir "$OUT/acem_gt"
 
 echo "=== KerNN evaluate ACEM test ==="
-mmml kernnn-evaluate \
+karml kernnn-evaluate \
   --checkpoint "$OUT/acem_gt/best.json" \
   --data "$ACEM_SPLITS/energies_forces_dipoles_test.npz" \
   --split all \
@@ -61,7 +61,7 @@ mmml kernnn-evaluate \
 #    alpha=0.5 → equal GT / teacher; alpha=0 → pure teacher
 # ---------------------------------------------------------------------------
 echo "=== KerNN train ACEM (PhysNet teacher, distill_alpha=0.5) ==="
-mmml kernnn-train \
+karml kernnn-train \
   --distance-scheme acem \
   --architecture ffnet \
   --n-hidden 64 \
@@ -78,7 +78,7 @@ mmml kernnn-train \
   --distill-alpha 0.5 \
   --workdir "$OUT/acem_distill"
 
-mmml kernnn-evaluate \
+karml kernnn-evaluate \
   --checkpoint "$OUT/acem_distill/best.json" \
   --data "$ACEM_SPLITS/energies_forces_dipoles_test.npz" \
   --split all \
@@ -90,7 +90,7 @@ mmml kernnn-evaluate \
 # ---------------------------------------------------------------------------
 if [[ -f "$FORM_FULL" ]]; then
   echo "=== KerNN train FORM (single NPZ split) ==="
-  mmml kernnn-train \
+  karml kernnn-train \
     --distance-scheme form \
     --data "$FORM_FULL" \
     --ntrain 3200 \
@@ -102,7 +102,7 @@ if [[ -f "$FORM_FULL" ]]; then
     --patience 60 \
     --workdir "$OUT/form_gt"
 
-  mmml kernnn-evaluate \
+  karml kernnn-evaluate \
     --checkpoint "$OUT/form_gt/best.json" \
     --data "$FORM_FULL" \
     --split-json "$OUT/form_gt/data_split.json" \

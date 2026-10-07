@@ -3,11 +3,11 @@
 See `docs/metatomic.md` (PET-MAD teacher → PhysNet student).
 
 ```bash
-uv run mmml pet-physnet-distill \
+uv run karml pet-physnet-distill \
   --checkpoint /path/to/pet-mad-xs-v1.5.0.pt \
   --out-dir ./acetone_pet_distill --preset md
 
-uv run mmml physnet-train --config ./acetone_pet_distill/physnet-train.yaml
+uv run karml physnet-train --config ./acetone_pet_distill/physnet-train.yaml
 ```
 
 The YAML written next to the NPZ warm-starts

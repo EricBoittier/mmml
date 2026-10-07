@@ -1,18 +1,18 @@
 import argparse
 import sys
-import mmml.interfaces.pycharmmInterface.import_pycharmm
+import karml.interfaces.pycharmmInterface.import_pycharmm
 import pycharmm
 from pycharmm.lingo import charmm_script
 
-from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
     build_cluster_from_args
 )
-from mmml.interfaces.pycharmmInterface.cutoffs import add_handoff_cutoff_args
-from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+from karml.interfaces.pycharmmInterface.cutoffs import add_handoff_cutoff_args
+from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
     add_cluster_args,
     add_charmm_output_args,
 )
-from mmml.interfaces.pycharmmInterface.mlpot.charmm_energy_policy import (
+from karml.interfaces.pycharmmInterface.mlpot.charmm_energy_policy import (
     enforce_charmm_energy_term_policies
 )
 
@@ -31,7 +31,7 @@ charmm_script("ENER")
 class MockMLSelection:
     def get_atom_indexes(self): return []
 
-from mmml.interfaces.pycharmmInterface.charmm_image_geometry import run_mlpot_pbc_image_registration_gate
+from karml.interfaces.pycharmmInterface.charmm_image_geometry import run_mlpot_pbc_image_registration_gate
 run_mlpot_pbc_image_registration_gate(20.4, args, "test", True)
 
 enforce_charmm_energy_term_policies(

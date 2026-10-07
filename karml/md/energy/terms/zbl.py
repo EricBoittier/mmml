@@ -11,9 +11,9 @@ from typing import Any
 
 import numpy as np
 
-from mmml.md.energy.capacity import COMPUTE_DTYPE
-from mmml.md.energy.registry import EnergyContext, NeighborRequest, TermFns, register_term
-from mmml.md.system import MolecularSystem
+from karml.md.energy.capacity import COMPUTE_DTYPE
+from karml.md.energy.registry import EnergyContext, NeighborRequest, TermFns, register_term
+from karml.md.system import MolecularSystem
 
 __all__ = ["ZBLTerm", "DEFAULT_ZBL_CUTON_A", "DEFAULT_ZBL_CUTOFF_A"]
 

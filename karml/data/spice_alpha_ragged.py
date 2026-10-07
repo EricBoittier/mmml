@@ -1,6 +1,6 @@
 """Ragged (unpadded) SPICE-α conversion for full-dataset efield training.
 
-The padded converter (:mod:`mmml.data.spice_alpha`) pads every frame to the
+The padded converter (:mod:`karml.data.spice_alpha`) pads every frame to the
 largest system, which for full SPICE-α (3-110 atoms, 1.8M frames) is mostly
 padding. Here atoms are stored concatenated with per-frame offsets:
 
@@ -21,10 +21,10 @@ from typing import Mapping, Sequence
 
 import numpy as np
 
-from mmml.data.spice_alpha import iter_spice_alpha_frames
-from mmml.data.units import polar_e_angstrom2_per_volt_to_bohr3
+from karml.data.spice_alpha import iter_spice_alpha_frames
+from karml.data.units import polar_e_angstrom2_per_volt_to_bohr3
 
-RAGGED_FORMAT = "mmml-spice-alpha-ragged-v1"
+RAGGED_FORMAT = "karml-spice-alpha-ragged-v1"
 PER_FRAME_KEYS = ("N", "E", "D", "Q", "polar", "mol", "subset")
 PER_ATOM_KEYS = ("Z", "R", "F")
 

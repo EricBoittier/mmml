@@ -232,7 +232,7 @@ def resolve_mc_min_intermonomer_distance_A(args: argparse.Namespace) -> float:
     so volume moves do not leave sub-floor contacts that only MD cleanup would fix.
     """
     try:
-        from mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
+        from karml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
             liquid_prep_enabled,
         )
 
@@ -297,10 +297,10 @@ def summarize_worst_intermonomer_contact(
     atomic_numbers: np.ndarray | list[int] | None = None,
     dynamics_reference_A: float = DYNAMICS_OVERLAP_REFERENCE_A,
 ) -> IntermonomerContactSummary:
-    from mmml.interfaces.pycharmmInterface.mlpot.mc_density import (
+    from karml.interfaces.pycharmmInterface.mlpot.mc_density import (
         monomer_offsets_from_atoms_per,
     )
-    from mmml.utils.geometry_checks import find_worst_intermonomer_overlap
+    from karml.utils.geometry_checks import find_worst_intermonomer_overlap
 
     pos = np.asarray(positions, dtype=float)
     offsets = monomer_offsets_from_atoms_per(atoms_per_list)
@@ -381,10 +381,10 @@ def find_worst_pre_mlpot_mic_violation(
     atomic_numbers: np.ndarray | list[int] | None = None,
 ) -> PreMlpotMicViolation | None:
     """Return the tightest MIC contact that violates prep element-pair floors."""
-    from mmml.interfaces.pycharmmInterface.mlpot.mc_density import (
+    from karml.interfaces.pycharmmInterface.mlpot.mc_density import (
         monomer_offsets_from_atoms_per,
     )
-    from mmml.utils.geometry_checks import find_worst_intermonomer_overlap
+    from karml.utils.geometry_checks import find_worst_intermonomer_overlap
 
     pos = np.asarray(positions, dtype=float)
     offsets = monomer_offsets_from_atoms_per(atoms_per_list)
@@ -410,7 +410,7 @@ def find_worst_pre_mlpot_mic_violation(
             sj, ej = int(offsets[mj]), int(offsets[mj + 1])
             for gi in range(si, ei):
                 for gj in range(sj, ej):
-                    from mmml.utils.geometry_checks import _mic_displacement
+                    from karml.utils.geometry_checks import _mic_displacement
 
                     disp = _mic_displacement(pos[gi], pos[gj], cell)
                     dist = float(np.linalg.norm(disp))
@@ -483,7 +483,7 @@ def assert_pre_mlpot_mic_geometry(
             f"{context}: {violation.format_message()}. "
             "Repack at lower density, expand the box, or abort — do not enable MLpot."
         )
-    from mmml.interfaces.pycharmmInterface.mlpot.liquid_box_build import (
+    from karml.interfaces.pycharmmInterface.mlpot.liquid_box_build import (
         measure_worst_intermonomer_A,
     )
 

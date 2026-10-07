@@ -7,7 +7,7 @@ import pytest
 
 
 def _fn():
-    from mmml.interfaces.pycharmmInterface.calculator_utils import ml_switch_scale
+    from karml.interfaces.pycharmmInterface.calculator_utils import ml_switch_scale
 
     return ml_switch_scale
 

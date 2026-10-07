@@ -3,25 +3,25 @@
 Running dynamics — pure MM, pure ML, or hybrid ML/MM — across the ASE, JAX-MD,
 and PyCHARMM backends. `md-system` is the campaign entry point; a *campaign* is
 one YAML describing many runs. CHARMM-free metatomic ASE MD in a cubic liquid
-box is `mmml metatomic-pbc-md` (default: 32 Å ethanol).
+box is `karml metatomic-pbc-md` (default: 32 Å ethanol).
 
 ```bash
-mmml env                                 # resolved checkpoints + CHARMM paths
-mmml configure                           # interactive YAML, or hand-edit
-mmml md-system --setup pbc_npt --composition MEOH:5,TIP3:5 --temperature 300
+karml env                                 # resolved checkpoints + CHARMM paths
+karml configure                           # interactive YAML, or hand-edit
+karml md-system --setup pbc_npt --composition MEOH:5,TIP3:5 --temperature 300
 ```
 
 Scaling the same config out to a sweep:
 
 ```bash
-mmml md-system --config campaign.yaml --run-all
+karml md-system --config campaign.yaml --run-all
 ```
 
 On a GPU node, warm the JIT cache once before the real run:
 
 ```bash
-mmml warmup-mlpot-jax --checkpoint "$MMML_CKPT" --n-monomers 20
-mmml health-check --require-gpu --live
+karml warmup-mlpot-jax --checkpoint "$KARML_CKPT" --n-monomers 20
+karml health-check --require-gpu --live
 ```
 
 ## What's here

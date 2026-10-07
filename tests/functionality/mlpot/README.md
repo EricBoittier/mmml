@@ -2,21 +2,21 @@
 
 Runnable scripts to bring up `pycharmm.MLpot` alongside the existing ASE PhysNet path (`get_ase_calc` / `get_pyc`). Run them **in order** from the repository root.
 
-**Default cluster:** acetone **ACO × N** (10 atoms per monomer). `ic.build()` alone is nearly 1D; builders use bundled `mmml/generate/sample/pdb/aco_monomer.pdb` and place monomers on a grid with `--spacing` (default 2.5 Å). Each CGenFF **resid** = one monomer for constraints.
+**Default cluster:** acetone **ACO × N** (10 atoms per monomer). `ic.build()` alone is nearly 1D; builders use bundled `karml/generate/sample/pdb/aco_monomer.pdb` and place monomers on a grid with `--spacing` (default 2.5 Å). Each CGenFF **resid** = one monomer for constraints.
 
 ## Prerequisites
 
 - A built `libcharmm` (`make install-native`). `CHARMM_HOME` / `CHARMM_LIB_DIR`
   are auto-discovered from `setup/charmm`; set them only to point at an
-  out-of-tree CHARMM. Check with `mmml doctor`.
+  out-of-tree CHARMM. Check with `karml doctor`.
 - PyCHARMM importable (`import_pycharmm` path)
 - JAX, e3x, ASE
-- A PhysNet checkpoint (same as other mmml tests), **or** a metatomic `.pt`
+- A PhysNet checkpoint (same as other karml tests), **or** a metatomic `.pt`
   with `uv sync --extra metatomic` and `--ml-potential-mode metatomic`
   (see `docs/metatomic.md`; CHARMM smoke is local, not the unit suite)
 
 ```bash
-export MMML_CKPT=/path/to/DESdimers   # or examples/ckpts_json/DESdimers_params.json
+export KARML_CKPT=/path/to/DESdimers   # or examples/ckpts_json/DESdimers_params.json
 ```
 
 Optional: install the package editable so imports resolve:
@@ -43,7 +43,7 @@ pip install -e .
 | `run_all.sh` | — | Run 00→03; `RUN_EXTENDED=1` adds 04–05 |
 
 ```bash
-cd /path/to/mmml
+cd /path/to/karml
 ./tests/functionality/mlpot/run_all.sh
 
 # Or individually:
@@ -66,13 +66,13 @@ python tests/functionality/mlpot/03_energy_compare.py --residue ACO --n-molecule
 - `PyCharmm_Calculator` does not yet use ML–MM pair lists (`idxu`/`idxv`) for embedding electrostatics.
 - `get_pyc` uses `pycharmm_conversion` to convert model output from eV → kcal/mol (same factor as `ev2kcalmol` in ASE calculators).
 
-## `mmml md-system` (PyCHARMM backend)
+## `karml md-system` (PyCHARMM backend)
 
 The same minimize / NVE workflows are available via the main CLI (no `--run` stub):
 
 ```bash
 # Packmol sphere + MMFP (30 monomers in R=22 Å, flat-bottom R=20 Å)
-mmml md-system --setup free_nve --backend pycharmm \
+karml md-system --setup free_nve --backend pycharmm \
   --composition ACO:30 \
   --packmol-radius 22 \
   --flat-bottom-radius 20 \
@@ -81,26 +81,26 @@ mmml md-system --setup free_nve --backend pycharmm \
   --ps 0.5 --mini-nstep 20
 
 # Mixed composition in a Packmol sphere (explicit --packmol-sphere)
-mmml md-system --setup free_nve --backend pycharmm \
+karml md-system --setup free_nve --backend pycharmm \
   --composition ACO:15,MEOH:15 \
   --packmol-sphere --packmol-radius 25 \
   --flat-bottom-radius 22 \
   --output-dir artifacts/pycharmm_mlpot/aco15_meoh15
 
 # Two-pass SD + short NVE (acetone tetramer, MMFP sphere R=20 Å)
-mmml md-system --setup free_nve --backend pycharmm --residue ACO --n-molecules 4 \
+karml md-system --setup free_nve --backend pycharmm --residue ACO --n-molecules 4 \
   --flat-bottom-radius 20 --ps 0.5 --mini-nstep 20 --fix-resids 1,3
 
 # SD minimization only
-mmml md-system --setup pycharmm_minimize --composition ACO:2 --mini-nstep 30
+karml md-system --setup pycharmm_minimize --composition ACO:2 --mini-nstep 30
 
 # Direct module entry (same as backend dispatch)
-python -m mmml.cli.run.md_pbc_suite.pycharmm_mlpot --phase full --residue ACO --n-molecules 2 --ps 0.1
+python -m karml.cli.run.md_pbc_suite.pycharmm_mlpot --phase full --residue ACO --n-molecules 2 --ps 0.1
 ```
 
 Outputs default to `artifacts/pycharmm_mlpot/` (`cluster_for_vmd_*.psf`, `nve_*.dcd`). Use `--flat-bottom-radius` (maps to CHARMM MMFP `--fb-rad`) for vacuum droplet restraints.
 
-CHARMM print / heating cadence (`nprint`, `dyn-nprint`, `ihtfrq`): see [`CHARMM_SETTINGS.md`](../../mmml/interfaces/pycharmmInterface/mlpot/CHARMM_SETTINGS.md).
+CHARMM print / heating cadence (`nprint`, `dyn-nprint`, `ihtfrq`): see [`CHARMM_SETTINGS.md`](../../karml/interfaces/pycharmmInterface/mlpot/CHARMM_SETTINGS.md).
 
 ## Steps 4–5 and pytest
 
@@ -153,10 +153,10 @@ pytest tests/functionality/mlpot/test_pycharmm_conversion.py -q
 Reserved GPU node — run in order (fast → thorough):
 
 ```bash
-cd ~/mmml
-mmml doctor          # CHARMM paths auto-discover; no env vars needed
+cd ~/karml
+karml doctor          # CHARMM paths auto-discover; no env vars needed
 export JAX_ENABLE_X64=1
-export MMML_CKPT=/mmhome/boittier/home/mmml_tutorial/acodcm/ckpts/dcm1/dcm1_params.json
+export KARML_CKPT=/mmhome/boittier/home/karml_tutorial/acodcm/ckpts/dcm1/dcm1_params.json
 
 # 0) Environment + symbols
 python tests/functionality/mlpot/00_check_environment.py
@@ -202,7 +202,7 @@ REF=artifacts/dcm_mp2_round2/new-dcm-round-2-only_MP2_41950_dimers_psf_order.npz
 FRAME=16566
 OUT=artifacts/eval_smoke/frame_${FRAME}/dyna_probe
 
-mmml md-system --dyna-probe \
+karml md-system --dyna-probe \
   --evaluate-npz "$REF" --evaluate-frame "$FRAME" \
   --evaluate-reference-npz "$REF" --evaluate-reference-frame "$FRAME" \
   --composition DCM:2 --backend pycharmm --setup free_nve \
@@ -233,13 +233,13 @@ Validates whether serial `python md-system` is safe on your MPI-linked CHARMM st
 ```bash
 python tests/functionality/mlpot/08_serial_vs_mpirun_md_system.py --dry-run
 
-export MMML_CKPT=/path/to/checkpoint.json
+export KARML_CKPT=/path/to/checkpoint.json
 python tests/functionality/mlpot/08_serial_vs_mpirun_md_system.py --run-both \
-  --checkpoint "$MMML_CKPT" \
+  --checkpoint "$KARML_CKPT" \
   --output-dir artifacts/serial_vs_mpirun_$(date +%Y%m%d_%H%M%S)
 ```
 
-Config: `mmml/cli/run/md_system.serial_mpi_probe.example.yaml` (ACO:2 hybrid mini). JSON report
+Config: `karml/cli/run/md_system.serial_mpi_probe.example.yaml` (ACO:2 hybrid mini). JSON report
 includes hostname, UTC timestamp, env snapshot, and per-run `elapsed_s`.
 
 ## CHARMM CPT vs ML virial (no 6 ps NPT)
@@ -275,4 +275,4 @@ python tests/functionality/mlpot/11_cpt_ml_virial.py \
 
 ## Library module
 
-Reusable API: `mmml/interfaces/pycharmmInterface/mlpot/` — see `mlpot/README.md`.
+Reusable API: `karml/interfaces/pycharmmInterface/mlpot/` — see `mlpot/README.md`.

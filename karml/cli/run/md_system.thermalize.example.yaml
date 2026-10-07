@@ -4,7 +4,7 @@
 # free_thermalize: vacuum mini → ramped heat only.
 #
 # Run:
-#   mmml md-system --config mmml/cli/run/md_system.thermalize.example.yaml \
+#   karml md-system --config karml/cli/run/md_system.thermalize.example.yaml \
 #     --checkpoint /path/to/params.json --composition DCM:25 --box-size 43.3
 #
 # Instant assign at target T (skip ramp) for handoff/restart with good geometry:

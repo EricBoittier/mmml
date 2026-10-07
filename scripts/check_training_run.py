@@ -22,7 +22,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from mmml.utils.training_run_check import check_run  # noqa: E402
+from karml.utils.training_run_check import check_run  # noqa: E402
 
 
 def build_parser() -> argparse.ArgumentParser:

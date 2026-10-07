@@ -9,7 +9,7 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from mmml.models.hybrid_energy import hybrid_forward
+from karml.models.hybrid_energy import hybrid_forward
 
 jax.config.update("jax_enable_x64", True)
 
@@ -78,17 +78,17 @@ def test_hybrid_forward_q0_uses_monomer_not_ab_charges():
 
     def _capture_apply(mode, q_c, q_ml, mol_id, **kwargs):
         captured["q_ml"] = np.asarray(q_ml)
-        from mmml.models.mm_charge_mode import apply_mm_charge_mode as real
+        from karml.models.mm_charge_mode import apply_mm_charge_mode as real
 
         return real(mode, q_c, q_ml, mol_id, **kwargs)
 
     with mock.patch(
-        "mmml.models.hybrid_energy.apply_mm_charge_mode", side_effect=_capture_apply
+        "karml.models.hybrid_energy.apply_mm_charge_mode", side_effect=_capture_apply
     ), mock.patch(
-        "mmml.models.hybrid_energy.cgenff_mm_energy",
+        "karml.models.hybrid_energy.cgenff_mm_energy",
         return_value=jnp.array(0.0),
     ), mock.patch(
-        "mmml.models.hybrid_energy.inter_monomer_wall_energy",
+        "karml.models.hybrid_energy.inter_monomer_wall_energy",
         return_value=jnp.array(0.0),
     ):
         hybrid_forward(

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from argparse import Namespace
 
-from mmml.cli.run.md_config import resume_requested
+from karml.cli.run.md_config import resume_requested
 
 
 def test_resume_requested_cli_and_mapping() -> None:

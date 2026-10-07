@@ -6,7 +6,7 @@ from pathlib import Path
 
 
 def test_crystal_free_skips_under_mpi_linked_mpirun():
-    source = Path("mmml/interfaces/pycharmmInterface/import_pycharmm.py").read_text(
+    source = Path("karml/interfaces/pycharmmInterface/import_pycharmm.py").read_text(
         encoding="utf-8"
     )
     assert "def should_skip_vacuum_charmm_init()" in source
@@ -15,7 +15,7 @@ def test_crystal_free_skips_under_mpi_linked_mpirun():
 
 
 def test_crystal_free_for_param_append_bypasses_vacuum_skip():
-    source = Path("mmml/interfaces/pycharmmInterface/import_pycharmm.py").read_text(
+    source = Path("karml/interfaces/pycharmmInterface/import_pycharmm.py").read_text(
         encoding="utf-8"
     )
     fn = source.split("def crystal_free_charmm_for_param_append")[1].split("\ndef ")[0]
@@ -26,7 +26,7 @@ def test_crystal_free_for_param_append_bypasses_vacuum_skip():
 
 
 def test_reset_block_skips_under_mpi_linked_mpirun():
-    source = Path("mmml/interfaces/pycharmmInterface/import_pycharmm.py").read_text(
+    source = Path("karml/interfaces/pycharmmInterface/import_pycharmm.py").read_text(
         encoding="utf-8"
     )
     assert "def should_skip_charmm_reset_block()" in source
@@ -38,7 +38,7 @@ def test_reset_block_skips_under_mpi_linked_mpirun():
 
 
 def test_reset_block_skips_on_empty_psf_at_import():
-    source = Path("mmml/interfaces/pycharmmInterface/import_pycharmm.py").read_text(
+    source = Path("karml/interfaces/pycharmmInterface/import_pycharmm.py").read_text(
         encoding="utf-8"
     )
     maybe = source.split("def _maybe_reset_block_at_import")[1].split("\ndef ")[0]
@@ -47,7 +47,7 @@ def test_reset_block_skips_on_empty_psf_at_import():
 
 
 def test_get_mm_energy_forces_returns_single_fn_for_dynamic_pairs():
-    source = Path("mmml/interfaces/pycharmmInterface/mmml_calculator.py").read_text(
+    source = Path("karml/interfaces/pycharmmInterface/karml_calculator.py").read_text(
         encoding="utf-8"
     )
     block = source.split("def get_MM_energy_forces_fns")[1].split("\n    _cached_mm_fn")[0]
@@ -57,7 +57,7 @@ def test_get_mm_energy_forces_returns_single_fn_for_dynamic_pairs():
 
 
 def test_calculate_mm_contributions_requires_pairs_for_dynamic_nbrs():
-    source = Path("mmml/interfaces/pycharmmInterface/mmml_calculator.py").read_text(
+    source = Path("karml/interfaces/pycharmmInterface/karml_calculator.py").read_text(
         encoding="utf-8"
     )
     block = source.split("def calculate_mm_contributions")[1].split("\n    if _HAVE_ASE")[0]

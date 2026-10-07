@@ -4,7 +4,7 @@ from pathlib import Path
 
 import numpy as np
 
-from mmml.md.restart import (
+from karml.md.restart import (
     ang_ps_from_momenta,
     apply_integrator_restart,
     flatten_restart,
@@ -100,7 +100,7 @@ def test_dcd_header_is_charmm_cord(tmp_path: Path):
 
 
 def test_handoff_npz_round_trips_integrator(tmp_path: Path):
-    from mmml.cli.run.md_handoff import (
+    from karml.cli.run.md_handoff import (
         MdHandoffState,
         handoff_to_npz_dict,
         load_handoff_from_npz,
@@ -130,8 +130,8 @@ def test_handoff_npz_round_trips_integrator(tmp_path: Path):
 
 
 def test_restart_payload_drops_on_pre_minimize_or_fresh_velocities():
-    from mmml.cli.run.md_handoff import MdHandoffState, set_handoff_in
-    from mmml.cli.run.md_system_unified import _restart_payload_from_handoff
+    from karml.cli.run.md_handoff import MdHandoffState, set_handoff_in
+    from karml.cli.run.md_system_unified import _restart_payload_from_handoff
 
     state = MdHandoffState(
         positions=np.zeros((1, 3)),

@@ -1,6 +1,6 @@
-"""CLI: ``mmml label-acquire`` — stages of the structure-selection workflow.
+"""CLI: ``karml label-acquire`` — stages of the structure-selection workflow.
 
-``build_parser`` is argparse-only so ``mmml label-acquire --help`` and docs
+``build_parser`` is argparse-only so ``karml label-acquire --help`` and docs
 generation do not import JAX.
 """
 
@@ -24,7 +24,7 @@ STAGES = (
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        prog="mmml label-acquire",
+        prog="karml label-acquire",
         description=(
             "Compare structure-selection methods for acquiring expensive "
             "reference labels.  Teacher potentials are cheap surrogates, not "
@@ -51,7 +51,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    from mmml.acquisition.pipeline import (
+    from karml.acquisition.pipeline import (
         load_config,
         run_all,
         stage_extract,

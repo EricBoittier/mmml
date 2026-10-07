@@ -10,7 +10,7 @@ CFG="${ROOT}/examples/md_system_from_pdb/yaml/06_from_pdb_nvt_fix_resids.yaml"
 OUT="${ARTIFACTS_DIR}/06_nvt_fix_resids"
 
 echo "=== config $(basename "${CFG}") (fix-resids 1,3) ==="
-uv run mmml md-system \
+uv run karml md-system \
   --config "${CFG}" \
   --composition "${PDB_MONOMER}:4" \
   --checkpoint "${CKPT_JSON}" \

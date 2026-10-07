@@ -21,7 +21,7 @@ Answer: *at 0.25× and 0.5× bulk liquid density (L = 28–32 Å), which prep pa
 ## Prerequisites
 
 ```bash
-export MMML_CKPT=/path/to/DESdimers_params.json
+export KARML_CKPT=/path/to/DESdimers_params.json
 export JAX_ENABLE_X64=1
 ```
 
@@ -51,10 +51,10 @@ Default matrix size: **30 cells** (5 setups × 2 density fractions × 3 boxes).
 
 ### N=100 @ L=30 Å (moderate density, `config.n100_l30.yaml`)
 
-Single-cell matrix: **100 DCM** in a **30 Å** cube (~**0.39× bulk**, ρ ≈ 0.52 g/cm³). Skips the sparse 52@38 anchor; uses the same resilient mini+heat stack. Tags auto-resolve to `config.n100_l30.yaml` (no `MMML_WORKFLOW_CONFIG` needed).
+Single-cell matrix: **100 DCM** in a **30 Å** cube (~**0.39× bulk**, ρ ≈ 0.52 g/cm³). Skips the sparse 52@38 anchor; uses the same resilient mini+heat stack. Tags auto-resolve to `config.n100_l30.yaml` (no `KARML_WORKFLOW_CONFIG` needed).
 
 ```bash
-export MMML_WORKFLOW_CONFIG=config.n100_l30.yaml
+export KARML_WORKFLOW_CONFIG=config.n100_l30.yaml
 TAG=resilient_dcm_100_t50_l30_ht_bussi
 bash scripts/preflight.sh
 srun --partition=gpu --gres=gpu:1 --cpus-per-task=4 --mem=32G \
@@ -82,7 +82,7 @@ artifacts/dcm_density_setup_compare/minimal_dcm_52_t300_l28/
 
 ## JAX warmup (before CHARMM MLpot)
 
-Each cell runs **serial** `mmml warmup-mlpot-jax` in `job_shell.sh` before `md-system`
+Each cell runs **serial** `karml warmup-mlpot-jax` in `job_shell.sh` before `md-system`
 (unless `warmup_mlpot_jax: false`). With `warmup_do_mm: true` (default for PBC
 `jax_mic` + CHARMM VDW off), this JIT-compiles **PhysNet + jax-pme** into
 `JAX_COMPILATION_CACHE_DIR` so MPI-linked MLpot registration skips a silent
@@ -90,8 +90,8 @@ multi-minute compile.
 
 ```bash
 # Manual warmup matching prep_sweep anchor (DCM:52, L=38):
-export MMML_CKPT=...
-mmml warmup-mlpot-jax --checkpoint "$MMML_CKPT" --n-monomers 52 \
+export KARML_CKPT=...
+karml warmup-mlpot-jax --checkpoint "$KARML_CKPT" --n-monomers 52 \
   --atoms-per-monomer 5 --box-side 38 --ml-batch-size 128 \
   --mm-switch-on 12 --mm-switch-width 6 --ml-switch-width 2 --do-mm --verbose
 ```
@@ -114,8 +114,8 @@ snakemake -n
 PyCHARMM needs **OpenCL on GPU compute nodes** — do not run `job_shell.sh` on the login node (`libOpenCL.so.1` missing). Submit via Snakemake + Slurm from the login node:
 
 ```bash
-cd /mmhome/boittier/home/mmml/workflows/dcm_density_setup_compare   # adjust path
-export MMML_CKPT=/mmhome/boittier/home/mmml/examples/ckpts_json/DESdimers_params.json
+cd /mmhome/boittier/home/karml/workflows/dcm_density_setup_compare   # adjust path
+export KARML_CKPT=/mmhome/boittier/home/karml/examples/ckpts_json/DESdimers_params.json
 export JAX_ENABLE_X64=1
 
 bash scripts/preflight.sh
@@ -192,8 +192,8 @@ Common causes:
 |---------|----------------|
 | `Packmol failed` / `failed to converge` | Inner cube too small vs N (fixed: `packmol_box_padding: 1.0` in config) |
 | `libOpenCL.so.1 not found` | Job ran on login node — use Snakemake Slurm profile |
-| `MMML_CKPT is not set` | Export `MMML_CKPT` before `snakemake` (passed via `envvars` in Slurm profile) |
-| `Checkpoint not found` | Wrong path in `MMML_CKPT` |
+| `KARML_CKPT is not set` | Export `KARML_CKPT` before `snakemake` (passed via `envvars` in Slurm profile) |
+| `Checkpoint not found` | Wrong path in `KARML_CKPT` |
 
 Some matrix cells are **expected** to fail mini (overlap / prep stack comparison). That is not a workflow bug — use `campaign_summary.json` per cell to compare which setups reached handoff.
 
@@ -227,18 +227,18 @@ Tags include `_ht_bussi_`, e.g. `resilient_dcm_52_t50_l28_ht_bussi_sw_pmtol50`.
 
 ```bash
 cd workflows/dcm_density_setup_compare
-export MMML_CKPT=/path/to/DESdimers_params.json
-bash scripts/preflight.sh   # uses config.yaml unless MMML_WORKFLOW_CONFIG is set
+export KARML_CKPT=/path/to/DESdimers_params.json
+bash scripts/preflight.sh   # uses config.yaml unless KARML_WORKFLOW_CONFIG is set
 
-# Prep sweep (24 jobs) — must set MMML_WORKFLOW_CONFIG for driver AND Slurm jobs:
-MMML_WORKFLOW_CONFIG=config.prep_sweep.yaml bash scripts/preflight.sh
+# Prep sweep (24 jobs) — must set KARML_WORKFLOW_CONFIG for driver AND Slurm jobs:
+KARML_WORKFLOW_CONFIG=config.prep_sweep.yaml bash scripts/preflight.sh
 snakemake --configfile config.prep_sweep.yaml --profile profiles/slurm -n
 nohup bash scripts/snakemake_prep_sweep.sh > snakemake_prep_sweep.log 2>&1 &
 bash scripts/collect_prep_sweep.sh
 # -> results/prep_sweep_summary.csv
 ```
 
-**Important:** Do not pass only `--configfile` to Snakemake without `MMML_WORKFLOW_CONFIG` — compute jobs would still read `config.yaml` and fail on `_sw_*` tags. Use `snakemake_prep_sweep.sh` or export `MMML_WORKFLOW_CONFIG` before launching.
+**Important:** Do not pass only `--configfile` to Snakemake without `KARML_WORKFLOW_CONFIG` — compute jobs would still read `config.yaml` and fail on `_sw_*` tags. Use `snakemake_prep_sweep.sh` or export `KARML_WORKFLOW_CONFIG` before launching.
 
 Add your own variant under `prep_sweep.variants` (lowercase id, mapping of md-system keys). Set `prep_sweep.stages: mini,heat` and `anchor.heat_thermostat: bussi` to test heat/overlap on the same anchor.
 

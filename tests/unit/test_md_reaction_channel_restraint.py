@@ -21,7 +21,7 @@ import pytest
 
 pytest.importorskip("jax")
 
-from mmml.md.restraints import LinearDistanceCV, ReactionChannelRestraint  # noqa: E402
+from karml.md.restraints import LinearDistanceCV, ReactionChannelRestraint  # noqa: E402
 
 # A V-shaped reference path: the sum contracts toward the transition state.
 XI_GRID = (-2.0, -1.0, 0.0, 1.0, 2.0)
@@ -172,7 +172,7 @@ def test_validate_against_checks_both_cvs():
 
 
 @pytest.mark.parametrize(
-    "module", ["mmml.umbrella.config", "mmml.umbrella.energy"]
+    "module", ["karml.umbrella.config", "karml.umbrella.energy"]
 )
 def test_both_copies_of_resolve_wall_know_the_channel(module):
     """``umbrella.energy._resolve_wall`` duplicates ``umbrella.config``'s.

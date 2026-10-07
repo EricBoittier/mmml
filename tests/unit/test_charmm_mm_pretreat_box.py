@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import argparse
 
-from mmml.interfaces.pycharmmInterface.mlpot.run_workflow import (
+from karml.interfaces.pycharmmInterface.mlpot.run_workflow import (
     _pretreat_use_fixed_box_nvt,
 )
 

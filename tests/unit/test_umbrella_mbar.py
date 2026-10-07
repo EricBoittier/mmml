@@ -5,13 +5,13 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from mmml.umbrella.io import (
+from karml.umbrella.io import (
     SNAPSHOTS_NPZ,
     load_snapshots,
     merge_mbar_into_summary,
     save_snapshots,
 )
-from mmml.umbrella.mbar import fill_u_kln, subsample_u_kln
+from karml.umbrella.mbar import fill_u_kln, subsample_u_kln
 
 
 def test_fill_u_kln_self_term_and_shape():
@@ -53,7 +53,7 @@ def test_fill_u_kln_self_term_and_shape():
 
 def test_fill_u_kln_accepts_linear_distance_cv_with_box():
     """Hybrid MBAR passes LinearDistanceCV + PBC box (regression for unpack bug)."""
-    from mmml.md.restraints import LinearDistanceCV
+    from karml.md.restraints import LinearDistanceCV
 
     k, n_frames, n_atoms = 2, 2, 2
     positions = np.zeros((k, n_frames, n_atoms, 3), dtype=np.float64)

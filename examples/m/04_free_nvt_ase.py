@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Vacuum NVT (ASE Langevin) for NH3–CH3Cl with the examples/m PhysNet ckpt (MMML_CKPT)."""
+"""Vacuum NVT (ASE Langevin) for NH3–CH3Cl with the examples/m PhysNet ckpt (KARML_CKPT)."""
 
 from __future__ import annotations
 
@@ -18,9 +18,9 @@ EXAMPLE_DIR = Path(__file__).resolve().parent
 REPO_ROOT = EXAMPLE_DIR.parent.parent
 
 # Mirror examples/m/_env.sh so a pipeline run and a standalone run agree on
-# which checkpoint is used; a pre-set MMML_CKPT still wins.
+# which checkpoint is used; a pre-set KARML_CKPT still wins.
 DEFAULT_CKPT = Path(
-    os.environ.get("MMML_CKPT") or REPO_ROOT / "examples" / "m" / "model_ext.json"
+    os.environ.get("KARML_CKPT") or REPO_ROOT / "examples" / "m" / "model_ext.json"
 )
 if str(EXAMPLE_DIR) not in sys.path:
     sys.path.insert(0, str(EXAMPLE_DIR))
@@ -51,9 +51,9 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    from mmml.interfaces.pycharmmInterface.calculator_utils import unpack_factory_result
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import resolve_checkpoint
-    from mmml.interfaces.pycharmmInterface.mmml_calculator import setup_calculator
+    from karml.interfaces.pycharmmInterface.calculator_utils import unpack_factory_result
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import resolve_checkpoint
+    from karml.interfaces.pycharmmInterface.karml_calculator import setup_calculator
 
     z, r = load_dimer_frame(args.data, index=args.frame, seed=0)
     ckpt = resolve_checkpoint(args.checkpoint)

@@ -1,29 +1,29 @@
-# `mmml commands`
+# `karml commands`
 
 Browse subcommands (grouped).
 
 
-`mmml commands` lists every subcommand grouped by task area — a browsable
-alternative to the compact top-level `mmml -h`.
+`karml commands` lists every subcommand grouped by task area — a browsable
+alternative to the compact top-level `karml -h`.
 
 ```bash
-mmml commands
-mmml commands --audit    # deprecated/legacy + tab-completion coverage
+karml commands
+karml commands --audit    # deprecated/legacy + tab-completion coverage
 ```
 
-The grouped list is defined in `mmml/cli/help_text.py` and kept in sync with
-`mmml/cli/registry.py`.
+The grouped list is defined in `karml/cli/help_text.py` and kept in sync with
+`karml/cli/registry.py`.
 
 ## Usage
 
 ```bash
-mmml commands --help
+karml commands --help
 ```
 
 !!! note
     No `build_parser()` hook — see module docstring or run the command without arguments for usage.
 
-Implementation: `mmml.cli.commands_help`
+Implementation: `karml.cli.commands_help`
 
 
 ## Related docs

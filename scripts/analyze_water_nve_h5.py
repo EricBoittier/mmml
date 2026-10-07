@@ -25,7 +25,7 @@ import h5py
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.gridspec import GridSpec
-from mmml.spectra.spectra_md import (
+from karml.spectra.spectra_md import (
     FS_INV_TO_CM_INV,
     autocorrelation,
     correlation_to_spectrum,
@@ -1832,7 +1832,7 @@ def main() -> None:
         ],
     }
     (out / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
-    from mmml.utils.rich_report import print_colored_json
+    from karml.utils.rich_report import print_colored_json
 
     print_colored_json(summary)
 

@@ -15,10 +15,10 @@ Keeps only essential training fields:
 
 Usage:
     # Basic cleaning (remove SCF failures only, recommended)
-    python -m mmml.cli.clean_data input.npz -o cleaned.npz --no-check-distances
+    python -m karml.cli.clean_data input.npz -o cleaned.npz --no-check-distances
     
     # With geometric filtering (stricter, removes more data)
-    python -m mmml.cli.clean_data input.npz -o cleaned.npz --max-force 10.0 --min-distance 0.5
+    python -m karml.cli.clean_data input.npz -o cleaned.npz --max-force 10.0 --min-distance 0.5
 """
 
 import argparse
@@ -254,16 +254,16 @@ def main():
         epilog="""
 Examples:
   # Basic cleaning (remove SCF failures and bad geometries)
-  python -m mmml.cli.clean_data input.npz -o cleaned.npz
+  python -m karml.cli.clean_data input.npz -o cleaned.npz
   
   # Custom thresholds
-  python -m mmml.cli.clean_data input.npz -o cleaned.npz --max-force 5.0 --min-distance 0.3
+  python -m karml.cli.clean_data input.npz -o cleaned.npz --max-force 5.0 --min-distance 0.3
   
   # Skip distance checks (faster)
-  python -m mmml.cli.clean_data input.npz -o cleaned.npz --no-check-distances
+  python -m karml.cli.clean_data input.npz -o cleaned.npz --no-check-distances
   
   # Quiet mode
-  python -m mmml.cli.clean_data input.npz -o cleaned.npz --quiet
+  python -m karml.cli.clean_data input.npz -o cleaned.npz --quiet
         """
     )
     

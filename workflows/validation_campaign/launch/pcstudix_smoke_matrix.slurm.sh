@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Submit with: sbatch workflows/validation_campaign/launch/pcstudix_smoke_matrix.slurm.sh
-# Optional runtime filters: MMML_SMOKE_TAG=gpu or MMML_SMOKE_CASE=jaxmd_nve
-#SBATCH --job-name=mmml-smoke-matrix
+# Optional runtime filters: KARML_SMOKE_TAG=gpu or KARML_SMOKE_CASE=jaxmd_nve
+#SBATCH --job-name=karml-smoke-matrix
 #SBATCH --partition=gpu
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
@@ -14,7 +14,7 @@
 
 set -euo pipefail
 
-REPO_ROOT="${MMML_REPO_ROOT:-$HOME/mmml}"
+REPO_ROOT="${KARML_REPO_ROOT:-$HOME/karml}"
 cd "$REPO_ROOT"
 mkdir -p artifacts/validation_campaign
 
@@ -23,24 +23,24 @@ if [[ -f CHARMMSETUP ]]; then
   source CHARMMSETUP
 fi
 
-RUN_ID="${MMML_SMOKE_RUN_ID:-$(date -u +%Y%m%dT%H%M%SZ)-${SLURM_JOB_ID:-local}}"
+RUN_ID="${KARML_SMOKE_RUN_ID:-$(date -u +%Y%m%dT%H%M%SZ)-${SLURM_JOB_ID:-local}}"
 OUTPUT_ROOT="artifacts/validation_campaign/$RUN_ID/pcstudix/calculator_backend_matrix"
 ARGS=()
-if [[ -n "${MMML_SMOKE_TAG:-}" ]]; then
-  ARGS+=(--tag "$MMML_SMOKE_TAG")
+if [[ -n "${KARML_SMOKE_TAG:-}" ]]; then
+  ARGS+=(--tag "$KARML_SMOKE_TAG")
 fi
-if [[ -n "${MMML_SMOKE_CASE:-}" ]]; then
-  ARGS+=(--case "$MMML_SMOKE_CASE")
+if [[ -n "${KARML_SMOKE_CASE:-}" ]]; then
+  ARGS+=(--case "$KARML_SMOKE_CASE")
 fi
-if [[ "${MMML_SMOKE_STRICT_BLOCKED:-0}" == "1" ]]; then
+if [[ "${KARML_SMOKE_STRICT_BLOCKED:-0}" == "1" ]]; then
   ARGS+=(--strict-blocked)
 fi
 
 export JAX_ENABLE_X64="${JAX_ENABLE_X64:-1}"
-export MMML_ML_DTYPE="${MMML_ML_DTYPE:-float64}"
+export KARML_ML_DTYPE="${KARML_ML_DTYPE:-float64}"
 export OMP_NUM_THREADS="${OMP_NUM_THREADS:-1}"
 
-exec .venv/bin/python -m mmml.validation.smoke_matrix \
+exec .venv/bin/python -m karml.validation.smoke_matrix \
   workflows/validation_campaign/pcstudix_smoke_matrix.yaml \
   --output-root "$OUTPUT_ROOT" \
   "${ARGS[@]}"

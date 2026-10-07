@@ -139,12 +139,12 @@ FAILURE_RULES: tuple[FailureRule, ...] = (
     FailureRule(
         "checkpoint_missing",
         re.compile(
-            r"checkpoint not found|MMML_CKPT is not set|warmup-mlpot-jax: checkpoint not found",
+            r"checkpoint not found|KARML_CKPT is not set|warmup-mlpot-jax: checkpoint not found",
             re.I,
         ),
         "skip_manual",
         max_retries=0,
-        note="set MMML_CKPT in cron / job env",
+        note="set KARML_CKPT in cron / job env",
     ),
     FailureRule(
         "echeck_abort",
@@ -291,7 +291,7 @@ def _launcher_script(campaign: str) -> str:
 def _snakemake_driver_running(config_path: Path) -> bool:
     cfg_name = config_path.name
     cfg_resolved = str(config_path.resolve())
-    lock = Path(f"/tmp/mmml_snakemake_locks_{os.environ.get('USER') or os.environ.get('LOGNAME') or 'unknown'}") / f"{cfg_name}.driver.lock"
+    lock = Path(f"/tmp/karml_snakemake_locks_{os.environ.get('USER') or os.environ.get('LOGNAME') or 'unknown'}") / f"{cfg_name}.driver.lock"
     if lock.is_file():
         try:
             with lock.open("rb") as fh:
@@ -331,7 +331,7 @@ def _slurm_jobs_for_user() -> list[str]:
 
 
 def _estimate_n_ml(cell) -> int:
-    from mmml.interfaces.pycharmmInterface.mlpot.mlpot_limits import estimate_ml_atoms
+    from karml.interfaces.pycharmmInterface.mlpot.mlpot_limits import estimate_ml_atoms
 
     return int(estimate_ml_atoms(int(cell.n_monomers), solvent=cell.solvent))
 
@@ -357,11 +357,11 @@ def _submit_snakemake_target(cfg_path: Path, cell, *, campaign: str, dry_run: bo
     paths = paths_for_run(load_config(cfg_path), cell)
     target = f"../../{paths['done'].relative_to(repo_root())}"
     launcher = _launcher_script(campaign)
-    cmd = f"MMML_WORKFLOW_CONFIG={cfg_path.name} bash scripts/{launcher} 1 {target}"
+    cmd = f"KARML_WORKFLOW_CONFIG={cfg_path.name} bash scripts/{launcher} 1 {target}"
     if not dry_run:
         env = _driver_subprocess_env(cfg_path)
         if launcher == "snakemake_local.sh":
-            env["MMML_LOCAL_GPU_PIN"] = "1"
+            env["KARML_LOCAL_GPU_PIN"] = "1"
         subprocess.Popen(  # noqa: S603
             ["bash", f"scripts/{launcher}", "1", target],
             cwd=workflow_root(),
@@ -539,14 +539,14 @@ def _driver_subprocess_env(cfg_path: Path) -> dict[str, str]:
         if bindir.is_dir():
             path_parts.insert(0, str(bindir))
     env["PATH"] = ":".join(p for p in path_parts if p)
-    env["MMML_WORKFLOW_CONFIG"] = str(cfg_path)
+    env["KARML_WORKFLOW_CONFIG"] = str(cfg_path)
     env.setdefault("JAX_ENABLE_X64", "1")
-    if not env.get("MMML_UV"):
+    if not env.get("KARML_UV"):
         import shutil
 
         uv_bin = shutil.which("uv", path=env["PATH"])
         if uv_bin:
-            env["MMML_UV"] = uv_bin
+            env["KARML_UV"] = uv_bin
     return env
 
 
@@ -563,11 +563,11 @@ def _ensure_driver(spec: dict[str, Any], cfg_path: Path, *, incomplete: int, dry
     log = workflow_root() / str(spec["driver_log"])
     launcher = _launcher_script(str(spec["name"]))
     cmd = f"nohup bash scripts/{launcher} {int(spec['max_jobs'])} >> {log.name} 2>&1 &"
-    actions.append(f"start driver: MMML_WORKFLOW_CONFIG={cfg_path.name} {cmd}")
+    actions.append(f"start driver: KARML_WORKFLOW_CONFIG={cfg_path.name} {cmd}")
     if not dry_run:
         env = _driver_subprocess_env(cfg_path)
         if launcher == "snakemake_local.sh":
-            env["MMML_LOCAL_GPU_PIN"] = "1"
+            env["KARML_LOCAL_GPU_PIN"] = "1"
         subprocess.Popen(  # noqa: S603
             ["bash", f"scripts/{launcher}", str(spec["max_jobs"])],
             cwd=workflow_root(),
@@ -691,8 +691,8 @@ def main() -> int:
         help="Show mediations without executing",
     )
     args = parser.parse_args()
-    if not os.environ.get("MMML_CKPT", "").strip():
-        print("WARNING: MMML_CKPT is unset — reruns will fail at runtime", file=sys.stderr)
+    if not os.environ.get("KARML_CKPT", "").strip():
+        print("WARNING: KARML_CKPT is unset — reruns will fail at runtime", file=sys.stderr)
     run_monitor(react=bool(args.react), dry_run=bool(args.dry_run))
     return 0
 

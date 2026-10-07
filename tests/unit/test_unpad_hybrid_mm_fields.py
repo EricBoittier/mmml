@@ -16,7 +16,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from mmml.cli.make.make_training import _maybe_unpad_dataset
+from karml.cli.make.make_training import _maybe_unpad_dataset
 
 PAD = 34
 MAX_N = 29
@@ -35,7 +35,7 @@ def _write_padded_enriched(path) -> None:
         F=rng.normal(size=(N, PAD, 3)),
         N=n_real,
         E=rng.normal(size=N),
-        # hybrid ML/MM fields written by `mmml prepare-mm-dataset`
+        # hybrid ML/MM fields written by `karml prepare-mm-dataset`
         cgenff_type_idx=np.full((N, PAD), -1, dtype=np.int32),
         mol_id=np.full((N, PAD), -1, dtype=np.int32),
         cgenff_charge=np.zeros((N, PAD)),

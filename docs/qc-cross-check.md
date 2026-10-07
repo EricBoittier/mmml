@@ -1,36 +1,36 @@
 # QC supplementary cross-check
 
-MMML provides a unified **cross-check** workflow to evaluate the same structures with multiple quantum-chemistry and ML backends and compare energies and forces against a reference.
+KARML provides a unified **cross-check** workflow to evaluate the same structures with multiple quantum-chemistry and ML backends and compare energies and forces against a reference.
 
 This complements:
 
-- **`mmml compare-npz`** — low-level NPZ-vs-NPZ metrics when you already have labels and predictions
-- **`mmml orca-server` / `orca-client`** — ORCA **drives** MMML ML potentials via ExtOpt (Opt/GOAT). That direction is ORCA → MMML, not ORCA-as-reference.
+- **`karml compare-npz`** — low-level NPZ-vs-NPZ metrics when you already have labels and predictions
+- **`karml orca-server` / `orca-client`** — ORCA **drives** KARML ML potentials via ExtOpt (Opt/GOAT). That direction is ORCA → KARML, not ORCA-as-reference.
 
-Cross-check runs **MMML → backends** (PySCF, ORCA QM, xTB, Molpro, ML checkpoint) and writes per-backend metrics, plots, and an optional summary JSON.
+Cross-check runs **KARML → backends** (PySCF, ORCA QM, xTB, Molpro, ML checkpoint) and writes per-backend metrics, plots, and an optional summary JSON.
 
 ## Quick start
 
 ```bash
 # Precomputed PySCF labels as reference; evaluate ML checkpoint on same geometries
-mmml cross-check \
+karml cross-check \
   -i out/06_sampled.npz \
   --reference-npz out/07_evaluated.npz \
   --checkpoint path/to/epoch.pkl \
   -o validation/
 
 # YAML config (multiple backends)
-mmml cross-check -c examples/cross_check/cross_check.example.yaml
+karml cross-check -c examples/cross_check/cross_check.example.yaml
 ```
 
 ## Backends
 
 | Backend | Role | Dependency |
 |---------|------|------------|
-| **pyscf** | Primary DFT reference (same stack as `pyscf-evaluate`) | `mmml[quantum-gpu]` |
-| **ml** | Checkpoint inference (`SimpleInferenceCalculator`) | core MMML |
+| **pyscf** | Primary DFT reference (same stack as `pyscf-evaluate`) | `karml[quantum-gpu]` |
+| **ml** | Checkpoint inference (`SimpleInferenceCalculator`) | core KARML |
 | **orca** | Independent QM reference (subprocess EnGrad) | ORCA binary on `PATH` or `$ORCA` |
-| **xtb** | Fast GFN-xTB sanity check | `mmml[quantum-crosscheck]` (`tblite`) |
+| **xtb** | Fast GFN-xTB sanity check | `karml[quantum-crosscheck]` (`tblite`) |
 | **molpro** | Live Molpro SP + gradient → XML parse | Molpro binary on `PATH` or `$MOLPRO` |
 
 ### Method matching
@@ -94,13 +94,13 @@ cross_check_out/
 
 | Feature | ExtOpt (`orca-server`) | Cross-check (`orca` backend) |
 |---------|------------------------|------------------------------|
-| Direction | ORCA calls MMML ML PES | MMML calls ORCA QM |
+| Direction | ORCA calls KARML ML PES | KARML calls ORCA QM |
 | Use case | ML-driven Opt/GOAT in ORCA | Validate PySCF/ML against ORCA DFT |
-| Input | ORCA `*.extinp.tmp` | MMML NPZ/XYZ structures |
+| Input | ORCA `*.extinp.tmp` | KARML NPZ/XYZ structures |
 | Output | `*.engrad` callback to ORCA | NPZ + comparison report |
 
 See also the ExtOpt smoke workflow in the repository at
-`tests/functionality/orca_external/README.md` (ORCA 6 + `mmml orca-server` / `orca-client`).
+`tests/functionality/orca_external/README.md` (ORCA 6 + `karml orca-server` / `orca-client`).
 
 ## Tests
 
@@ -111,7 +111,7 @@ pytest tests/unit/test_cross_check.py tests/unit/test_orca_qm.py
 Manual smoke (GPU/QC node with ORCA/Molpro/tblite):
 
 ```bash
-mmml cross-check -i tests/fixtures/cross_check/water_frames.npz \
+karml cross-check -i tests/fixtures/cross_check/water_frames.npz \
   --reference-npz tests/fixtures/cross_check/water_frames.npz \
   --backend xtb --max-frames 1 -o /tmp/xcheck_smoke
 ```

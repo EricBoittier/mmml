@@ -67,7 +67,7 @@ def _random_batch(*, spooky_kwargs, n_real: int = 4, max_atoms: int = 8, key):
     import jax
     import jax.numpy as jnp
 
-    from mmml.models.physnetjax.physnetjax.models.spooky_model import SpookyPhysNet
+    from karml.models.physnetjax.physnetjax.models.spooky_model import SpookyPhysNet
 
     model = SpookyPhysNet(max_padded_atoms=max_atoms, **spooky_kwargs)
     pos = jax.random.normal(key, (max_atoms, 3)) * 0.5 + jnp.array([5.0, 0.0, 0.0])
@@ -98,7 +98,7 @@ def _random_batch(*, spooky_kwargs, n_real: int = 4, max_atoms: int = 8, key):
 
 
 def _load_ckpt(path: Path):
-    from mmml.utils.model_checkpoint import load_model_from_checkpoint
+    from karml.utils.model_checkpoint import load_model_from_checkpoint
 
     model, params, _meta = load_model_from_checkpoint(path)
     return model, {"params": params}

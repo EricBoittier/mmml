@@ -65,7 +65,7 @@ def main() -> int:
                  "cgenff_charge", "res_name"]
     srcs = [dict(np.load(f, allow_pickle=True)) for f in args.data]
     pooled = {k: np.concatenate([s[k] for s in srcs], axis=0) for k in KEEP_KEYS}
-    units = srcs[0]["_mmml_units"]
+    units = srcs[0]["_karml_units"]
     sig = np.asarray(srcs[0]["cgenff_master_sigmas"])
     eps = np.asarray(srcs[0]["cgenff_master_epsilons"])
     n_tot = len(pooled["R"])
@@ -108,7 +108,7 @@ def main() -> int:
         import matplotlib
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
-        from mmml.utils.plotting.styles import apply_plot_style
+        from karml.utils.plotting.styles import apply_plot_style
 
         apply_plot_style("icml")
         out_dir = Path(f"{args.out}_plots")
@@ -166,7 +166,7 @@ def main() -> int:
         atom_ref_energies=refs,
         cgenff_master_sigmas=sig,
         cgenff_master_epsilons=eps,
-        _mmml_units=units,
+        _karml_units=units,
     )
     for tag in ("train", "valid", "test"):
         sel = np.where(split_of == tag)[0]  # index into the kept/idx_keep arrays

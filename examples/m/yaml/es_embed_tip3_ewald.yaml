@@ -1,7 +1,7 @@
 # Electrostatic embedding (q0) + native hybrid Ewald (lr_solver=ewald).
 # Combines es_embed_tip3 with the train-matched Ewald operator.
 #
-#   uv run mmml md-system --config examples/m/yaml/es_embed_tip3_ewald.yaml --run-all
+#   uv run karml md-system --config examples/m/yaml/es_embed_tip3_ewald.yaml --run-all
 
 defaults:
   composition: "AMM1:1,CH3CL:1,TIP3:12"

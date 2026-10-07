@@ -8,10 +8,10 @@ from pathlib import Path
 
 import pytest
 
-from mmml.data import convert_spice_alpha_hdf5, load_npz
-from mmml.data.npz_schema import REQUIRED_KEYS
-from mmml.data.spice_alpha import TRAIN_NPZ_UNITS, assert_train_npz_contract
-from mmml.data.units import HARTREE_TO_EV, units_from_npz
+from karml.data import convert_spice_alpha_hdf5, load_npz
+from karml.data.npz_schema import REQUIRED_KEYS
+from karml.data.spice_alpha import TRAIN_NPZ_UNITS, assert_train_npz_contract
+from karml.data.units import HARTREE_TO_EV, units_from_npz
 from spice_alpha_fixtures import write_spice_h5
 
 pytestmark = pytest.mark.data_loading
@@ -32,7 +32,7 @@ def _http_literals(path: Path) -> list[str]:
 
 
 def test_ingest_schema_labels_are_not_train_units():
-    """``mmml validate`` / npz_schema document PySCF ingest, not physnet-train."""
+    """``karml validate`` / npz_schema document PySCF ingest, not physnet-train."""
     assert "Hartree" in REQUIRED_KEYS["E"]
     assert TRAIN_NPZ_UNITS["E"] == "ev"
     assert TRAIN_NPZ_UNITS["F"] == "ev_angstrom"
@@ -54,7 +54,7 @@ def test_converted_npz_loads_and_embeds_train_units(tmp_path):
 
 
 def test_converter_source_does_not_download_datasets():
-    src = _REPO / "mmml" / "data" / "spice_alpha.py"
+    src = _REPO / "karml" / "data" / "spice_alpha.py"
     text = src.read_text()
     assert "urllib" not in text
     assert "requests" not in text

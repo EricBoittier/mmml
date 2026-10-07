@@ -14,7 +14,7 @@ md_stages: mini
 mini_nstep: REPLACE_MINI_NSTEP
 skip_jit_warmup: false
 
-# Tier 2 spatial ML (np>1 via mmml-charmm-mpirun + --ml-spatial-mpi)
+# Tier 2 spatial ML (np>1 via karml-charmm-mpirun + --ml-spatial-mpi)
 ml_spatial_mpi: true
 ml_gpu_count: 1
 ml_batch_size: REPLACE_ML_BATCH

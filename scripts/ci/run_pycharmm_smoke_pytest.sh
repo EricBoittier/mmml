@@ -3,9 +3,9 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-# shellcheck source=resolve_mmml_env.sh
-source "$ROOT/scripts/resolve_mmml_env.sh"
-mmml_resolve_env "$ROOT"
+# shellcheck source=resolve_karml_env.sh
+source "$ROOT/scripts/resolve_karml_env.sh"
+karml_resolve_env "$ROOT"
 
 if [[ -f "$ROOT/CHARMMSETUP" ]]; then
   # shellcheck disable=SC1090
@@ -17,8 +17,8 @@ if [[ ! -f "${CHARMM_LIB_DIR:-}/libcharmm.so" ]]; then
   exit 1
 fi
 
-MARK_EXPR="${MMML_PYTEST_MARK:-pycharmm and not gpu and not charmm_serial}"
-MPI_NP="${MMML_MPI_NP:-1}"
+MARK_EXPR="${KARML_PYTEST_MARK:-pycharmm and not gpu and not charmm_serial}"
+MPI_NP="${KARML_MPI_NP:-1}"
 PYCHARMM_RES_SMOKE="$ROOT/tests/functionality/pycharmmETC/test_res.py"
 MPI_LIVE_ENERGY_SMOKE="$ROOT/tests/charmm_mpi/test_mpi_live_energy.py"
 COMP_VELOCITIES_SMOKE="$ROOT/tests/functionality/mlpot/test_comp_velocities_integration.py"
@@ -71,13 +71,13 @@ STATEFUL_SMOKE_PATHS=(
 SERIAL_SMOKE_PATHS=(
   "$PARAM_READ_CONTRACT_SMOKE"
 )
-SERIAL_MARK_EXPR="${MMML_PYTEST_SERIAL_MARK:-pycharmm and not gpu}"
+SERIAL_MARK_EXPR="${KARML_PYTEST_SERIAL_MARK:-pycharmm and not gpu}"
 
 # JUnit reports per invocation. pytest exits 0 when every selected test skips,
 # so the exit status below cannot distinguish "the live suite passed" from "the
 # live suite never ran". scripts/ci/check_test_report.py reads these and fails
 # when nothing actually passed.
-REPORT_DIR="${MMML_PYTEST_REPORT_DIR:-$ROOT/.ci-reports/junit-pycharmm}"
+REPORT_DIR="${KARML_PYTEST_REPORT_DIR:-$ROOT/.ci-reports/junit-pycharmm}"
 rm -rf "$REPORT_DIR"
 mkdir -p "$REPORT_DIR"
 
@@ -107,7 +107,7 @@ run_smoke() {  # run_smoke <report-name> <pytest args...>
   local report_name="$1"; shift
   local report="$REPORT_DIR/$report_name.xml"
   local rc=0
-  mpirun -np "$MPI_NP" "$MMML_PYTHON" -m pytest --color=yes \
+  mpirun -np "$MPI_NP" "$KARML_PYTHON" -m pytest --color=yes \
     --junitxml="$report" "$@" || rc=$?
   if [[ "$rc" -eq 5 ]]; then
     echo "::warning::run_pycharmm_smoke_pytest: $report_name selected no tests" \
@@ -129,7 +129,7 @@ run_serial_smoke() {  # run_serial_smoke <report-name> <pytest args...>
   local report_name="$1"; shift
   local report="$REPORT_DIR/$report_name.xml"
   local rc=0
-  "$MMML_PYTHON" -m pytest --color=yes --junitxml="$report" "$@" || rc=$?
+  "$KARML_PYTHON" -m pytest --color=yes --junitxml="$report" "$@" || rc=$?
   if [[ "$rc" -eq 5 ]]; then
     echo "::warning::run_pycharmm_smoke_pytest: $report_name selected no tests" \
          "(pytest exit 5); it contributes nothing to this job" >&2

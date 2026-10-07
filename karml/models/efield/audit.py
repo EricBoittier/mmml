@@ -16,7 +16,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
-from mmml.models.efield.checkpointing import (
+from karml.models.efield.checkpointing import (
     HISTORY_NAME,
     RUN_META_NAME,
     is_orbax_checkpoint,

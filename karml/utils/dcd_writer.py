@@ -60,7 +60,7 @@ class DCDTrajectoryWriter:
 
         handle.write(struct.pack(_FMT_I, 164))
         handle.write(struct.pack(_FMT_I, 2))
-        handle.write(b"Created by mmml streaming DCD writer".ljust(80))
+        handle.write(b"Created by karml streaming DCD writer".ljust(80))
         handle.write(datetime.now().strftime("%d %B, %Y at %H:%M").encode().ljust(80))
         handle.write(struct.pack(_FMT_I, 164))
 
@@ -200,7 +200,7 @@ def save_trajectory_dcd(
         # ----- Title block (164 bytes) -----
         f.write(struct.pack(_FMT_I, 164))
         f.write(struct.pack(_FMT_I, 2))
-        title1 = b"Created by mmml DCD writer".ljust(80)
+        title1 = b"Created by karml DCD writer".ljust(80)
         title2 = datetime.now().strftime("%d %B, %Y at %H:%M").encode().ljust(80)
         f.write(title1)
         f.write(title2)

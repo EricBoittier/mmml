@@ -6,7 +6,7 @@ This CLI tool trains a PhysNet model using memory-mapped data from OpenQDC or si
 It adapts the PackedMemmapLoader format to PhysNet's expected input format.
 
 Usage:
-    python -m mmml.cli.train_memmap \
+    python -m karml.cli.train_memmap \
         --data_path openqdc_packed_memmap \
         --batch_size 32 \
         --num_epochs 100 \
@@ -25,12 +25,12 @@ import jax.numpy as jnp
 import numpy as np
 from flax.training import orbax_utils, train_state
 
-from mmml.models.physnetjax.physnetjax.models.model import EF
-from mmml.models.physnetjax.physnetjax.training.trainstep import train_step
-from mmml.models.physnetjax.physnetjax.training.evalstep import eval_step
-from mmml.models.physnetjax.physnetjax.training.optimizer import get_optimizer
-from mmml.models.physnetjax.physnetjax.restart.restart import orbax_checkpointer
-from mmml.models.physnetjax.physnetjax.directories import BASE_CKPT_DIR
+from karml.models.physnetjax.physnetjax.models.model import EF
+from karml.models.physnetjax.physnetjax.training.trainstep import train_step
+from karml.models.physnetjax.physnetjax.training.evalstep import eval_step
+from karml.models.physnetjax.physnetjax.training.optimizer import get_optimizer
+from karml.models.physnetjax.physnetjax.restart.restart import orbax_checkpointer
+from karml.models.physnetjax.physnetjax.directories import BASE_CKPT_DIR
 
 
 class PackedMemmapLoader:

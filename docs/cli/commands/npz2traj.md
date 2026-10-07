@@ -1,4 +1,4 @@
-# `mmml npz2traj`
+# `karml npz2traj`
 
 NPZ → ASE trajectory (E/F/dipole/charges).
 
@@ -6,20 +6,20 @@ NPZ → ASE trajectory (E/F/dipole/charges).
 ## Usage
 
 ```bash
-mmml npz2traj --help
+karml npz2traj --help
 ```
 
 ## Options
 
 ```text
-usage: mmml npz2traj [-h] -o OUTPUT [--max-structures MAX_STRUCTURES]
+usage: karml npz2traj [-h] -o OUTPUT [--max-structures MAX_STRUCTURES]
                      [--stride STRIDE] [--start START] [--ase-units] [--psf PSF]
                      [--resnames RESNAMES] [--split-resnames SPLIT_RESNAMES]
                      [--dt-ps DT_PS] [--steps-per-frame STEPS_PER_FRAME]
                      [--quiet]
                      input
 
-Convert MMML NPZ datasets to ASE trajectories with energy, forces, dipole,
+Convert KARML NPZ datasets to ASE trajectories with energy, forces, dipole,
 charges, and extra fields attached for GUI inspection.
 
 positional arguments:
@@ -58,10 +58,10 @@ Other options:
                         Also write one trajectory (+PSF for .dcd) per residue
                         name, as {stem}.{RESNAME}{suffix}. Requires --psf.
 
-Examples: mmml npz2traj data.npz -o trajectory.traj mmml npz2traj data.npz -o
-subset.traj --max-structures 100 --stride 10 mmml npz2traj data.npz -o
-frames.extxyz mmml npz2traj data.npz -o ase.traj --ase-units mmml npz2traj
-nvt/trajectory.npz -o nvt/all.dcd --psf model.psf mmml npz2traj
+Examples: karml npz2traj data.npz -o trajectory.traj karml npz2traj data.npz -o
+subset.traj --max-structures 100 --stride 10 karml npz2traj data.npz -o
+frames.extxyz karml npz2traj data.npz -o ase.traj --ase-units karml npz2traj
+nvt/trajectory.npz -o nvt/all.dcd --psf model.psf karml npz2traj
 nvt/trajectory.npz -o nvt/all.dcd --psf model.psf --split-resnames TRIA,TIP3
 Schema keys: R/Z or positions/Z required; E, F, D, cell/boxes optional. Training
 NPZs: default E Hartree / F Hartree/Bohr / D Debye (--ase-units → eV). jaxmd-

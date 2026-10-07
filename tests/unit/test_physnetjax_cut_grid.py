@@ -20,8 +20,8 @@ import ase.data
 import numpy as np
 import pytest
 
-from mmml.models.dcmnet.dcmnet.data import cut_vdw as dcmnet_cut_vdw
-from mmml.models.physnetjax.physnetjax.data.cut_grid import cut_vdw
+from karml.models.dcmnet.dcmnet.data import cut_vdw as dcmnet_cut_vdw
+from karml.models.physnetjax.physnetjax.data.cut_grid import cut_vdw
 
 
 def _one_atom(z: int = 8):
@@ -152,6 +152,6 @@ def test_the_esp_mask_caller_can_reach_cut_vdw():
     the name resolves in that module rather than re-running the whole dataset
     builder.
     """
-    from mmml.models.physnetjax.physnetjax.data import data as physnetjax_data
+    from karml.models.physnetjax.physnetjax.data import data as physnetjax_data
 
     assert physnetjax_data.cut_vdw is cut_vdw

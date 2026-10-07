@@ -7,7 +7,7 @@ prior completed GPU execution, that kernel can time out and log::
     There may be a missing warmup execution
 
 Call :func:`ensure_xla_gpu_warmed` once per process before the first large
-``jax.jit`` evaluation (e.g. hybrid MMML calculator).
+``jax.jit`` evaluation (e.g. hybrid KARML calculator).
 """
 
 from __future__ import annotations
@@ -46,7 +46,7 @@ def _path_looks_mpi_related(path: str) -> bool:
 
 
 def _process_env_needs_ptxas_sanitize() -> bool:
-    if os.environ.get("MMML_NO_PTXAS_LD_SANITIZE", "").strip().lower() in (
+    if os.environ.get("KARML_NO_PTXAS_LD_SANITIZE", "").strip().lower() in (
         "1",
         "yes",
         "true",
@@ -62,7 +62,7 @@ def _process_env_needs_ptxas_sanitize() -> bool:
 def maybe_sanitize_process_env_for_ptxas(*, force: bool = False) -> bool:
     """Drop OpenMPI from child-process env so ``ptxas`` does not load broken ``libopen-pal``.
 
-    Slurm PMI and ``mmml-charmm-mpirun.sh`` prepend OpenMPI to ``LD_LIBRARY_PATH`` /
+    Slurm PMI and ``karml-charmm-mpirun.sh`` prepend OpenMPI to ``LD_LIBRARY_PATH`` /
     ``LD_PRELOAD``. NVIDIA ``ptxas`` then fails with ``pmix_framework_names`` lookup
     errors. MPI/CHARMM libraries are already mapped in the parent after ``mpirun`` start,
     so clearing these for the remainder of the Python process is safe.
@@ -93,7 +93,7 @@ def maybe_sanitize_process_env_for_ptxas(*, force: bool = False) -> bool:
 
     if changed or force:
         _ptxas_env_sanitized = True
-        if not os.environ.get("MMML_QUIET", "").strip().lower() in ("1", "yes", "true"):
+        if not os.environ.get("KARML_QUIET", "").strip().lower() in ("1", "yes", "true"):
             logger.debug("Sanitized process env for JAX/ptxas (removed OpenMPI LD_PRELOAD/LD paths)")
     return changed
 
@@ -151,7 +151,7 @@ class JAXCompileTimerSession:
                     f"  {label}: {passes[0].wall_seconds:.2f}s (single pass)"
                 )
         header = (
-            f"mmml: JAX compile timers — estimated compile={total_compile:.2f}s, "
+            f"karml: JAX compile timers — estimated compile={total_compile:.2f}s, "
             f"run={total_run:.2f}s"
         )
         return [header, *lines]
@@ -200,8 +200,8 @@ def summarize_jax_compile_timers() -> list[dict[str, float | str | None]]:
 
 
 def jax_compile_timers_enabled() -> bool:
-    """Enable with ``MMML_JAX_COMPILE_TIMERS=1`` or ``MMML_MLPOT_PROFILE=1``."""
-    for key in ("MMML_JAX_COMPILE_TIMERS", "MMML_MLPOT_PROFILE"):
+    """Enable with ``KARML_JAX_COMPILE_TIMERS=1`` or ``KARML_MLPOT_PROFILE=1``."""
+    for key in ("KARML_JAX_COMPILE_TIMERS", "KARML_MLPOT_PROFILE"):
         if (os.environ.get(key) or "").strip().lower() in ("1", "yes", "true"):
             return True
     return False
@@ -222,13 +222,13 @@ def maybe_log_jax_compile_timers(*, quiet: bool = False) -> None:
     lines = _COMPILE_TIMER_SESSION.summary_lines()
     if not lines:
         return
-    from mmml.utils.rich_report import emit_jax_compile_session_summary
+    from karml.utils.rich_report import emit_jax_compile_session_summary
 
     emit_jax_compile_session_summary(lines, quiet=quiet)
 
 
 def _log_jax_compile_pass(label: str, pass_index: int, wall_seconds: float) -> None:
-    from mmml.utils.rich_report import emit_jax_compile_pass
+    from karml.utils.rich_report import emit_jax_compile_pass
 
     _COMPILE_TIMER_SESSION.record(label, pass_index, wall_seconds)
     emit_jax_compile_pass(label, pass_index, wall_seconds)
@@ -242,7 +242,7 @@ def run_jax_warmup_passes(
     block: Callable[[Any], None] | None = None,
 ) -> None:
     """Run ``n_passes`` warmup executions; log wall time per pass when timers are on."""
-    from mmml.interfaces.pycharmmInterface.jax_compile_threads import (
+    from karml.interfaces.pycharmmInterface.jax_compile_threads import (
         jax_compile_threads_context,
     )
 
@@ -268,7 +268,7 @@ def run_jax_warmup_passes(
             entries = sorted(entries, key=lambda e: e.pass_index)
             run_s = entries[-1].wall_seconds
             compile_s = max(0.0, entries[0].wall_seconds - run_s)
-            from mmml.utils.rich_report import emit_jax_compile_label_summary
+            from karml.utils.rich_report import emit_jax_compile_label_summary
 
             emit_jax_compile_label_summary(label, compile_s, run_s)
 
@@ -492,7 +492,7 @@ def _ptxas_missing_error() -> RuntimeError:
         "Fix (pick one):\n"
         "  1. In this kernel's env: uv sync --extra gpu  (installs nvidia-cuda-nvcc wheel)\n"
         "  2. module load cuda && export CUDA_HOME=$CUDA_HOME  (system toolkit bin/ptxas)\n"
-        "  3. Notebook first cell: from mmml.utils.jax_gpu_warmup import prepare_jax_gpu_notebook; "
+        "  3. Notebook first cell: from karml.utils.jax_gpu_warmup import prepare_jax_gpu_notebook; "
         "prepare_jax_gpu_notebook()\n"
         "Verify: import shutil; print(shutil.which('ptxas'))"
     )
@@ -510,10 +510,10 @@ def _jax_gpu_env_too_late_error() -> RuntimeError:
         "Fix:\n"
         "  1. Restart the Jupyter kernel.\n"
         "  2. First cell only:\n"
-        "       from mmml.interfaces.pycharmmInterface.mlpot.cli_common import prepare_jax_gpu_notebook\n"
+        "       from karml.interfaces.pycharmmInterface.mlpot.cli_common import prepare_jax_gpu_notebook\n"
         "       prepare_jax_gpu_notebook()\n"
         "  3. Then import jax / setup_calculator in later cells.\n"
-        "  4. In this venv: cd ~/mmml && uv sync --extra gpu  (CUDA 13; RTX 5090)\n"
+        "  4. In this venv: cd ~/karml && uv sync --extra gpu  (CUDA 13; RTX 5090)\n"
         "     Avoid mixing jax-cuda12-plugin with the default gpu extra."
     )
 
@@ -521,7 +521,7 @@ def _jax_gpu_env_too_late_error() -> RuntimeError:
 def prepare_jax_gpu_notebook(*, required: bool = True) -> bool:
     """Prep PATH/LD_LIBRARY_PATH for JAX GPU JIT in Jupyter (call once per kernel).
 
-    Must run in the **first notebook cell**, before ``import jax`` or any mmml import
+    Must run in the **first notebook cell**, before ``import jax`` or any karml import
     that pulls JAX in transitively.
     """
     if _jax_is_imported():
@@ -539,7 +539,7 @@ def prepare_jax_gpu_notebook(*, required: bool = True) -> bool:
     if not bundled and required and _installed_jax_cuda_plugins():
         raise RuntimeError(
             "JAX CUDA plugin(s) are installed but no pip NVIDIA runtime libs were found "
-            f"under {sys.prefix}. Run: cd ~/mmml && uv sync --extra gpu"
+            f"under {sys.prefix}. Run: cd ~/karml && uv sync --extra gpu"
         )
     ok = ensure_jax_cuda_toolchain(required=False)
     if ok:
@@ -549,11 +549,11 @@ def prepare_jax_gpu_notebook(*, required: bool = True) -> bool:
     return False
 
 
-def jax_cuda_runtime_libs_warning(*, prefix: str = "mmml") -> str | None:
+def jax_cuda_runtime_libs_warning(*, prefix: str = "karml") -> str | None:
     """Return a launch hint when JAX CUDA is installed but pip runtime libs are absent.
 
     CPU-only installs (no ``jax-cuda*-plugin``) are intentionally silent — the old
-    unconditional warning fired on every ``mmml-charmm-mpirun`` invocation after a
+    unconditional warning fired on every ``karml-charmm-mpirun`` invocation after a
     dev-only ``uv sync``.
     """
     if find_bundled_nvidia_lib_dirs():
@@ -588,7 +588,7 @@ def ensure_jax_cuda_runtime_libs(*, quiet: bool = False) -> list[str]:
     ]
     os.environ["LD_LIBRARY_PATH"] = os.pathsep.join(bundled + cur_parts)
     _jax_cuda_runtime_libs_configured = True
-    if not quiet and not os.environ.get("MMML_QUIET", "").strip().lower() in (
+    if not quiet and not os.environ.get("KARML_QUIET", "").strip().lower() in (
         "1",
         "yes",
         "true",
@@ -660,10 +660,10 @@ def sync_jax_gpu_before_charmm(*, phase: str = "before CHARMM") -> None:
 def apply_xla_cuda_timer_log_filter() -> None:
     """Suppress XLA ``cuda_timer.cc`` delay-kernel timeout noise (harmless autotuner warnings).
 
-  Set env ``MMML_SUPPRESS_XLA_CUDA_TIMER=1`` (default) to raise ``TF_CPP_MIN_LOG_LEVEL``
-  to 3 when it is unset. Set ``MMML_SUPPRESS_XLA_CUDA_TIMER=0`` to leave logging unchanged.
+  Set env ``KARML_SUPPRESS_XLA_CUDA_TIMER=1`` (default) to raise ``TF_CPP_MIN_LOG_LEVEL``
+  to 3 when it is unset. Set ``KARML_SUPPRESS_XLA_CUDA_TIMER=0`` to leave logging unchanged.
     """
-    if os.environ.get("MMML_SUPPRESS_XLA_CUDA_TIMER", "1").strip().lower() in (
+    if os.environ.get("KARML_SUPPRESS_XLA_CUDA_TIMER", "1").strip().lower() in (
         "0",
         "false",
         "no",
@@ -675,7 +675,7 @@ def apply_xla_cuda_timer_log_filter() -> None:
 
 def _jax_warmup_backend() -> str:
     """``cpu`` or ``gpu`` for JAX compile warmup."""
-    from mmml.interfaces.pycharmmInterface.jax_device_policy import jax_warmup_device_name
+    from karml.interfaces.pycharmmInterface.jax_device_policy import jax_warmup_device_name
 
     return jax_warmup_device_name()
 
@@ -806,7 +806,7 @@ def warmup_hybrid_spherical_cutoff(
     box: Any = None,
     prefer_cpu: bool = False,
 ) -> None:
-    """Compile and run one hybrid MMML eval; block until GPU work completes.
+    """Compile and run one hybrid KARML eval; block until GPU work completes.
 
     Call after PyCHARMM/MM setup (e.g. CGENFF drudes) and before timed JAX-MD compiles.
     Identical repeat calls in one process are skipped (MLpot used to warm twice).
@@ -888,7 +888,7 @@ def warmup_hybrid_spherical_cutoff(
     _hybrid_spherical_warmup_keys.add(key)
 
 
-def warmup_ase_mmml_energy_forces(atoms: Any, *, include_forces: bool = True) -> None:
+def warmup_ase_karml_energy_forces(atoms: Any, *, include_forces: bool = True) -> None:
     """JIT-warm an ASE calculator attached to ``atoms`` (energy, optionally forces)."""
     ensure_xla_gpu_warmed(force=True)
     energy = atoms.get_potential_energy()

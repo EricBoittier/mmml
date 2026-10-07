@@ -1,4 +1,4 @@
-"""Unit tests for mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domdec_atoms.
+"""Unit tests for karml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domdec_atoms.
 
 Three paths are exercised via mocked ctypes:
 
@@ -67,7 +67,7 @@ def _pack_gf1d_descriptor(
 def no_libcharmm():
     """Patch _get_libcharmm to return None (library not loaded)."""
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domdec_atoms._get_libcharmm",
+        "karml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domdec_atoms._get_libcharmm",
         return_value=None,
     ) as m:
         yield m
@@ -86,7 +86,7 @@ def _make_lib_with_scalars(
     iimf_data: Optional[np.ndarray] = None,
 ) -> MagicMock:
     """Build a mock libcharmm handle with configurable symbol responses."""
-    from mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial import domdec_atoms
+    from karml.interfaces.pycharmmInterface.mlpot.mpi_spatial import domdec_atoms
 
     scalar_map = {
         domdec_atoms._SYM_Q_DOMDEC: q_domdec,
@@ -111,35 +111,35 @@ def _make_lib_with_scalars(
 
 class TestNoLibcharmm:
     def test_is_domdec_active_false(self, no_libcharmm):
-        from mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domdec_atoms import (
+        from karml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domdec_atoms import (
             is_domdec_active,
         )
 
         assert is_domdec_active() is False
 
     def test_get_ndir_ones(self, no_libcharmm):
-        from mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domdec_atoms import (
+        from karml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domdec_atoms import (
             get_ndir,
         )
 
         assert get_ndir() == (1, 1, 1)
 
     def test_get_local_atom_count_zero(self, no_libcharmm):
-        from mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domdec_atoms import (
+        from karml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domdec_atoms import (
             get_local_atom_count,
         )
 
         assert get_local_atom_count() == 0
 
     def test_get_ghost_atom_count_zero(self, no_libcharmm):
-        from mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domdec_atoms import (
+        from karml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domdec_atoms import (
             get_ghost_atom_count,
         )
 
         assert get_ghost_atom_count() == 0
 
     def test_get_local_atom_indices_empty(self, no_libcharmm):
-        from mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domdec_atoms import (
+        from karml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domdec_atoms import (
             get_local_atom_indices,
         )
 
@@ -149,7 +149,7 @@ class TestNoLibcharmm:
         assert arr.size == 0
 
     def test_get_ghost_atom_indices_empty(self, no_libcharmm):
-        from mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domdec_atoms import (
+        from karml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domdec_atoms import (
             get_ghost_atom_indices,
         )
 
@@ -157,7 +157,7 @@ class TestNoLibcharmm:
         assert arr.size == 0
 
     def test_discover_symbols_no_lib(self, no_libcharmm):
-        from mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domdec_atoms import (
+        from karml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domdec_atoms import (
             discover_domdec_symbols,
         )
 
@@ -185,7 +185,7 @@ def _mock_in_dll_domdec_off(sym_name: str, scalar_map: dict):
 class TestDomdecCompiledOut:
     @pytest.fixture()
     def lib_domdec_off(self):
-        from mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial import domdec_atoms
+        from karml.interfaces.pycharmmInterface.mlpot.mpi_spatial import domdec_atoms
 
         scalar_map = {
             domdec_atoms._SYM_Q_DOMDEC: 0,  # .FALSE.
@@ -200,7 +200,7 @@ class TestDomdecCompiledOut:
 
         with (
             patch(
-                "mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domdec_atoms._get_libcharmm",
+                "karml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domdec_atoms._get_libcharmm",
                 return_value=fake_lib,
             ),
             patch.object(ctypes.c_int32, "in_dll", staticmethod(_in_dll_scalar)),
@@ -208,21 +208,21 @@ class TestDomdecCompiledOut:
             yield
 
     def test_is_domdec_active_false(self, lib_domdec_off):
-        from mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domdec_atoms import (
+        from karml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domdec_atoms import (
             is_domdec_active,
         )
 
         assert is_domdec_active() is False
 
     def test_get_ndir_fallback(self, lib_domdec_off):
-        from mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domdec_atoms import (
+        from karml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domdec_atoms import (
             get_ndir,
         )
 
         assert get_ndir() == (1, 1, 1)
 
     def test_local_indices_empty(self, lib_domdec_off):
-        from mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domdec_atoms import (
+        from karml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domdec_atoms import (
             get_local_atom_indices,
         )
 
@@ -254,7 +254,7 @@ class TestDomdecActive:
 
     @pytest.fixture()
     def lib_domdec_active(self):
-        from mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial import domdec_atoms
+        from karml.interfaces.pycharmmInterface.mlpot.mpi_spatial import domdec_atoms
 
         scalar_map = {
             domdec_atoms._SYM_Q_DOMDEC:       1,
@@ -299,7 +299,7 @@ class TestDomdecActive:
 
         with (
             patch(
-                "mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domdec_atoms._get_libcharmm",
+                "karml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domdec_atoms._get_libcharmm",
                 return_value=fake_lib,
             ),
             patch.object(ctypes.c_int32, "in_dll", staticmethod(_in_dll_scalar)),
@@ -315,28 +315,28 @@ class TestDomdecActive:
             yield
 
     def test_is_domdec_active(self, lib_domdec_active):
-        from mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domdec_atoms import (
+        from karml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domdec_atoms import (
             is_domdec_active,
         )
 
         assert is_domdec_active() is True
 
     def test_get_ndir(self, lib_domdec_active):
-        from mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domdec_atoms import (
+        from karml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domdec_atoms import (
             get_ndir,
         )
 
         assert get_ndir() == (8, 1, 1)
 
     def test_get_local_atom_count(self, lib_domdec_active):
-        from mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domdec_atoms import (
+        from karml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domdec_atoms import (
             get_local_atom_count,
         )
 
         assert get_local_atom_count() == self.N_LOCAL
 
     def test_get_ghost_atom_count(self, lib_domdec_active):
-        from mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domdec_atoms import (
+        from karml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domdec_atoms import (
             get_ghost_atom_count,
         )
 
@@ -344,7 +344,7 @@ class TestDomdecActive:
         assert get_ghost_atom_count() == self.N_GHOST
 
     def test_local_atom_indices_0based(self, lib_domdec_active):
-        from mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domdec_atoms import (
+        from karml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domdec_atoms import (
             get_local_atom_indices,
         )
 
@@ -353,7 +353,7 @@ class TestDomdecActive:
         np.testing.assert_array_equal(arr, expected)
 
     def test_ghost_atom_indices_0based(self, lib_domdec_active):
-        from mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domdec_atoms import (
+        from karml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domdec_atoms import (
             get_ghost_atom_indices,
         )
 
@@ -377,7 +377,7 @@ def _patch_domdec_atoms(
     """Context manager that patches all domdec_atoms public functions."""
     import contextlib
 
-    from mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial import domdec_atoms
+    from karml.interfaces.pycharmmInterface.mlpot.mpi_spatial import domdec_atoms
 
     @contextlib.contextmanager
     def _ctx():
@@ -403,7 +403,7 @@ def _patch_domdec_atoms(
 class TestDomdecAlignedGridFallback:
     def test_no_domdec_uses_fallback_n_ranks(self):
         with _patch_domdec_atoms(active=False, ndir=(1, 1, 1)):
-            from mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domain import (
+            from karml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domain import (
                 DomdecAlignedGrid,
             )
 
@@ -414,7 +414,7 @@ class TestDomdecAlignedGridFallback:
 
     def test_domdec_active_ndir_8_1_1(self):
         with _patch_domdec_atoms(active=True, ndir=(8, 1, 1)):
-            from mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domain import (
+            from karml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domain import (
                 DomdecAlignedGrid,
             )
 
@@ -425,7 +425,7 @@ class TestDomdecAlignedGridFallback:
 
     def test_ndir_3d_raises_without_allow_nd(self):
         with _patch_domdec_atoms(active=True, ndir=(2, 2, 2)):
-            from mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domain import (
+            from karml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domain import (
                 DomdecAlignedGrid,
             )
 
@@ -434,7 +434,7 @@ class TestDomdecAlignedGridFallback:
 
     def test_ndir_3d_allow_nd_uses_nx(self):
         with _patch_domdec_atoms(active=True, ndir=(2, 2, 2)):
-            from mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domain import (
+            from karml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domain import (
                 DomdecAlignedGrid,
             )
 
@@ -448,7 +448,7 @@ class TestDomdecAlignedGridFallback:
 
     def test_get_local_atom_indices_inactive(self):
         with _patch_domdec_atoms(active=False):
-            from mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domain import (
+            from karml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domain import (
                 DomdecAlignedGrid,
             )
 
@@ -460,7 +460,7 @@ class TestDomdecAlignedGridFallback:
         with _patch_domdec_atoms(
             active=True, ndir=(8, 1, 1), local_indices=local
         ):
-            from mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domain import (
+            from karml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domain import (
                 DomdecAlignedGrid,
             )
 
@@ -478,7 +478,7 @@ class TestMoleculeOwnership:
 
     def test_uniform_apm_owned(self):
         with _patch_domdec_atoms(active=True, ndir=(2, 1, 1)):
-            from mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domain import (
+            from karml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domain import (
                 DomdecAlignedGrid,
             )
 
@@ -491,7 +491,7 @@ class TestMoleculeOwnership:
 
     def test_ghost_halo(self):
         with _patch_domdec_atoms(active=True, ndir=(2, 1, 1)):
-            from mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domain import (
+            from karml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domain import (
                 DomdecAlignedGrid,
             )
 
@@ -505,7 +505,7 @@ class TestMoleculeOwnership:
 
     def test_variable_apm(self):
         with _patch_domdec_atoms(active=True, ndir=(2, 1, 1)):
-            from mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domain import (
+            from karml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domain import (
                 DomdecAlignedGrid,
             )
 

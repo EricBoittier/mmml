@@ -31,7 +31,7 @@ if not can_import_pycharmm():
 import jax
 import jax.numpy as jnp
 
-from mmml.cli.run.lambda_jaxmd import (
+from karml.cli.run.lambda_jaxmd import (
     LambdaJaxMdBundle,
     _dudl_at_position,
     _neighbor_tuple,

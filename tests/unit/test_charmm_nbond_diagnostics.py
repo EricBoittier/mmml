@@ -9,28 +9,28 @@ import pytest
 
 
 def test_nbond_debug_enabled_env(monkeypatch):
-    from mmml.interfaces.pycharmmInterface.mlpot.charmm_nbond_diagnostics import (
+    from karml.interfaces.pycharmmInterface.mlpot.charmm_nbond_diagnostics import (
         nbond_debug_enabled,
     )
 
-    monkeypatch.delenv("MMML_NBOND_DEBUG", raising=False)
-    monkeypatch.delenv("MMML_SAVE_NBOND_SNAPSHOTS", raising=False)
+    monkeypatch.delenv("KARML_NBOND_DEBUG", raising=False)
+    monkeypatch.delenv("KARML_SAVE_NBOND_SNAPSHOTS", raising=False)
     assert nbond_debug_enabled() is False
-    monkeypatch.setenv("MMML_NBOND_DEBUG", "1")
+    monkeypatch.setenv("KARML_NBOND_DEBUG", "1")
     assert nbond_debug_enabled() is True
 
 
 def test_maybe_snapshot_nbond_state_writes_json(tmp_path, monkeypatch):
-    from mmml.interfaces.pycharmmInterface.mlpot.charmm_nbond_diagnostics import (
+    from karml.interfaces.pycharmmInterface.mlpot.charmm_nbond_diagnostics import (
         maybe_snapshot_nbond_state,
     )
 
-    monkeypatch.setenv("MMML_NBOND_DEBUG_DIR", str(tmp_path))
+    monkeypatch.setenv("KARML_NBOND_DEBUG_DIR", str(tmp_path))
     ctx = MagicMock()
     ctx.use_pbc = True
     ctx.cubic_box_side_A = 30.0
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_nbond_diagnostics.collect_nbond_state",
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_nbond_diagnostics.collect_nbond_state",
         return_value={"context": "unit", "timestamp_unix": 1.0, "natom": 3},
     ):
         path = maybe_snapshot_nbond_state(ctx, context="unit", force=True)

@@ -16,14 +16,14 @@ import h5py
 import numpy as np
 import jax
 
-# Add mmml to path if needed
+# Add karml to path if needed
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from mmml.utils.electrostatics import (
+from karml.utils.electrostatics import (
     compute_dipole_from_point_charges,
     compute_esp_from_point_charges,
 )
-from mmml.cli.misc.train_joint import (
+from karml.cli.misc.train_joint import (
     load_combined_data,
     precompute_edge_lists,
     prepare_batch_data,
@@ -44,7 +44,7 @@ except ImportError:
 def _check_pycharmm():
     """Lazy check for PyCHARMM availability (avoids importing CHARMM setup at module load)."""
     try:
-        from mmml.interfaces.pycharmmInterface.setupBox import setup_box_generic
+        from karml.interfaces.pycharmmInterface.setupBox import setup_box_generic
         from pycharmm import psf
         return True, setup_box_generic, psf
     except Exception:

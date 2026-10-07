@@ -168,7 +168,7 @@ def main() -> int:
         else:
             np.savez_compressed(args.npz, n_frames=np.array(0))
 
-    from mmml.utils.rich_report import print_colored_json
+    from karml.utils.rich_report import print_colored_json
 
     print_colored_json({k: v for k, v in summary.items() if k != "notes"})
     print(f"Wrote {args.output}")

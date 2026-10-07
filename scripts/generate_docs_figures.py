@@ -5,7 +5,7 @@ Run from repo root::
 
     uv run python scripts/generate_docs_figures.py
 
-Structure coordinates come from bundled assets under ``mmml/data/`` (CHARMM /
+Structure coordinates come from bundled assets under ``karml/data/`` (CHARMM /
 Packmol). Refresh those first when coordinates change::
 
     uv run python scripts/export_docs_structure_assets.py
@@ -29,8 +29,8 @@ IMG = REPO / "docs" / "images"
 STRUCT = IMG / "structures"
 PLOTS = IMG / "plots"
 
-from mmml.ic_scan.plotting import style_dihedral_scan_axes
-from mmml.utils.ase_structure_plot import (
+from karml.ic_scan.plotting import style_dihedral_scan_axes
+from karml.utils.ase_structure_plot import (
     DOCS_STRUCTURE_STYLE as _STYLE,
     SCALE_BOX as _SCALE_BOX,
     SCALE_CRYSTAL as _SCALE_CRYSTAL,
@@ -41,7 +41,7 @@ from mmml.utils.ase_structure_plot import (
     save_structure_figure as _save_structure_figure,
     use_matplotlib_agg as _use_agg,
 )
-from mmml.utils.plotting.styles import apply_plot_style, OKABE_ITO_PALETTE, comparison_colors
+from karml.utils.plotting.styles import apply_plot_style, OKABE_ITO_PALETTE, comparison_colors
 
 if TYPE_CHECKING:
     from ase import Atoms
@@ -50,7 +50,7 @@ if TYPE_CHECKING:
 def figure_make_res(out: Path) -> None:
     import ase.io
 
-    from mmml.paths import default_aco_template_pdb
+    from karml.paths import default_aco_template_pdb
 
     atoms = ase.io.read(default_aco_template_pdb())
     _save_structure_figure(
@@ -66,13 +66,13 @@ def figure_make_box(out: Path) -> None:
     """Periodic box of acetone monomers from Packmol (``make-box`` workflow)."""
     import ase.io
 
-    from mmml.paths import default_make_box_aco_pdb
+    from karml.paths import default_make_box_aco_pdb
 
     pdb = default_make_box_aco_pdb()
     if not pdb.is_file():
         raise FileNotFoundError(
             f"Missing {pdb}. Run: "
-            "./scripts/mmml-charmm-mpirun.sh python scripts/export_docs_structure_assets.py"
+            "./scripts/karml-charmm-mpirun.sh python scripts/export_docs_structure_assets.py"
         )
     box = ase.io.read(pdb)
     side = float(box.cell.lengths()[0]) if box.cell is not None else 22.0
@@ -90,7 +90,7 @@ def _fallback_crystal_atoms() -> Atoms:
     """Experimental benzene P2₁/c cell (COD 4501704) when DCM CIF / PyXtal unavailable."""
     from ase.io import read
 
-    from mmml.paths import default_benzene_crystal_cif
+    from karml.paths import default_benzene_crystal_cif
 
     cif = default_benzene_crystal_cif()
     if not cif.is_file():
@@ -103,7 +103,7 @@ def figure_build_crystal(out: Path) -> bool:
     try:
         from ase.io import read
 
-        from mmml.paths import default_dcm_crystal_cif
+        from karml.paths import default_dcm_crystal_cif
 
         cif = default_dcm_crystal_cif()
         if cif.is_file():
@@ -115,12 +115,12 @@ def figure_build_crystal(out: Path) -> bool:
     except Exception as exc:
         print(f"build-crystal figure: using PyXtal/ASE fallback ({exc})", file=sys.stderr)
         try:
-            from mmml.interfaces.pyxtal_placement import (
+            from karml.interfaces.pyxtal_placement import (
                 MolecularCrystalBuildRequest,
                 build_molecular_crystal_random,
                 have_pyxtal,
             )
-            from mmml.paths import default_dcm_molecule_xyz
+            from karml.paths import default_dcm_molecule_xyz
 
             if have_pyxtal():
                 result = build_molecular_crystal_random(
@@ -197,7 +197,7 @@ def figure_liquid_box_schematic(out: Path) -> None:
 
 
 def _trialanine_docs_atoms() -> Atoms:
-    from mmml.interfaces.pycharmmInterface.trialanine_water_box import (
+    from karml.interfaces.pycharmmInterface.trialanine_water_box import (
         load_trialanine_water_atoms_for_docs,
     )
 
@@ -216,7 +216,7 @@ def figure_trialanine_water_box(out: Path) -> None:
 
 
 def figure_trialanine_peptide_zoom(out: Path) -> None:
-    from mmml.interfaces.pycharmmInterface.trialanine_water_box import (
+    from karml.interfaces.pycharmmInterface.trialanine_water_box import (
         peptide_atoms_from_trialanine_box,
     )
 
@@ -461,7 +461,7 @@ def figure_acem_methyl_scan(out: Path) -> None:
     from matplotlib.collections import LineCollection
     from matplotlib.lines import Line2D
 
-    from mmml.utils.ase_structure_plot import draw_orthographic_structure
+    from karml.utils.ase_structure_plot import draw_orthographic_structure
 
     _style_matplotlib_rc()
     atoms = ase.io.read(ACEM_XYZ)
@@ -565,8 +565,8 @@ PET_MAD_PES_JSON = REPO / "examples" / "pet_mad_etoh_pbc" / "data" / "interactio
 
 def figure_pet_mad_interaction(out: Path, kind: str) -> None:
     """Replay PET-MAD interaction PES figures from the committed campaign JSON."""
-    from mmml.analysis.interaction_pes import load_interaction_pes_json
-    from mmml.analysis.interaction_pes_plot import (
+    from karml.analysis.interaction_pes import load_interaction_pes_json
+    from karml.analysis.interaction_pes_plot import (
         plot_dimer_angular,
         plot_dimer_slices,
         plot_dimer_surface,

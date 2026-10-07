@@ -17,8 +17,8 @@ import pytest
 jax = pytest.importorskip("jax")
 import jax.numpy as jnp  # noqa: E402
 
-from mmml.md.static_pairs import make_static_pair_fn, static_pair_count  # noqa: E402
-from mmml.md.system import FFParams, MolecularSystem  # noqa: E402
+from karml.md.static_pairs import make_static_pair_fn, static_pair_count  # noqa: E402
+from karml.md.system import FFParams, MolecularSystem  # noqa: E402
 
 CTOFNB = 12.0
 CTONNB = 10.0
@@ -91,9 +91,9 @@ def _water_box(n_mol: int, density_kg_m3: float = 997.0, seed: int = 0):
 
 
 def _mm_energy_and_forces(system, pairs, ctofnb: float = CTOFNB):
-    from mmml.interfaces.pycharmmInterface.mm_system_energy import CharmmNbondSettings
-    from mmml.md.energy import EnergyContext
-    from mmml.md.energy.terms import MMNonbondedTerm
+    from karml.interfaces.pycharmmInterface.mm_system_energy import CharmmNbondSettings
+    from karml.md.energy import EnergyContext
+    from karml.md.energy.terms import MMNonbondedTerm
 
     settings = CharmmNbondSettings(cutnb=ctofnb, ctonnb=CTONNB, ctofnb=ctofnb)
     fn = MMNonbondedTerm(settings).make(system, EnergyContext()).jax_energy_fn
@@ -229,7 +229,7 @@ def test_matches_rebuilt_neighbor_list_at_the_production_cutoff():
     same energy *and* the same forces: the switching function has already
     zeroed everything the cutoff list drops.
     """
-    from mmml.md.neighbors import make_intermolecular_neighbor_fn
+    from karml.md.neighbors import make_intermolecular_neighbor_fn
 
     system, side = _water_box(500)
     assert side > 2 * CTOFNB, "box must exceed twice the cutoff for a fair test"
@@ -254,7 +254,7 @@ def test_a_list_built_below_ctofnb_does_not_match_and_so_the_parity_test_bites()
     If the parity assertion passed for any cutoff, it would be measuring
     nothing. Truncating inside the switching region must change the answer.
     """
-    from mmml.md.neighbors import make_intermolecular_neighbor_fn
+    from karml.md.neighbors import make_intermolecular_neighbor_fn
 
     system, _ = _water_box(500)
     static = make_static_pair_fn(system, verbose=False)(None, None)

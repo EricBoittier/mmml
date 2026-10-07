@@ -2,8 +2,8 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
-from mmml.models.physnetjax.physnetjax.models.model import PhysNet
-from mmml.models.physnetjax.physnetjax.models.spooky_model import SpookyPhysNet
+from karml.models.physnetjax.physnetjax.models.model import PhysNet
+from karml.models.physnetjax.physnetjax.models.spooky_model import SpookyPhysNet
 
 @pytest.mark.parametrize("model_cls", [PhysNet, SpookyPhysNet])
 def test_physnet_electrostatics_damping_default_and_opt_out(model_cls):

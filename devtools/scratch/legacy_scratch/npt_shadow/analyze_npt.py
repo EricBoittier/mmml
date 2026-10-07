@@ -5,7 +5,7 @@ warnings.simplefilter("ignore")
 import matplotlib; matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from pathlib import Path
-from mmml.utils.plotting.styles import apply_plot_style, default_cmap
+from karml.utils.plotting.styles import apply_plot_style, default_cmap
 
 SP = Path(__file__).parent
 apply_plot_style("icml")

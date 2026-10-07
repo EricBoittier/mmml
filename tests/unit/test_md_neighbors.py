@@ -5,9 +5,9 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from mmml.md.energy.capacity import CapacityOverflow
-from mmml.md.neighbors import make_intermolecular_neighbor_fn
-from mmml.md.system import FFParams, MolecularSystem
+from karml.md.energy.capacity import CapacityOverflow
+from karml.md.neighbors import make_intermolecular_neighbor_fn
+from karml.md.system import FFParams, MolecularSystem
 
 
 def _mono_atom_system(n=4, spacing=5.0, box=20.0):
@@ -152,7 +152,7 @@ def test_auto_capacity_holds_a_dense_configuration_without_overflowing():
 def test_end_to_end_mm_nonbonded_nve():
     """Full pipeline: FFParams system → mm_nonbonded → neighbor_fn → JaxmdDriver."""
     pytest.importorskip("jax_md")
-    from mmml.md import EnsembleSpec, RunConfig, SystemSpec, assemble_and_run
+    from karml.md import EnsembleSpec, RunConfig, SystemSpec, assemble_and_run
 
     system = _mono_atom_system(n=4, spacing=5.0, box=30.0)
     neighbor_fn = make_intermolecular_neighbor_fn(system, cutoff_A=12.0, capacity=32)
@@ -177,7 +177,7 @@ def test_end_to_end_mm_nonbonded_nve():
 def test_assemble_auto_wires_neighbor_fn():
     """mm_nonbonded declares an intermolecular NeighborRequest → auto neighbor_fn."""
     pytest.importorskip("jax_md")
-    from mmml.md import EnsembleSpec, RunConfig, SystemSpec, assemble_and_run
+    from karml.md import EnsembleSpec, RunConfig, SystemSpec, assemble_and_run
 
     system = _mono_atom_system(n=4, spacing=5.0, box=30.0)
     cfg = RunConfig(

@@ -13,11 +13,11 @@
 # uses a different Z permutation, retarget ``structure:`` and the dihedral
 # ``atoms:`` indices below.
 #
-#   mmml ic-scan --config examples/ic_scan/acem_dihedrals.yaml \
+#   karml ic-scan --config examples/ic_scan/acem_dihedrals.yaml \
 #     --output artifacts/ic_scan/acem_xtb --overwrite
 #
 # Relaxed methyl scan (FixInternals + FIRE; needed for 3-fold rotor symmetry):
-#   mmml ic-scan --config examples/ic_scan/acem_dihedrals_relaxed.yaml \
+#   karml ic-scan --config examples/ic_scan/acem_dihedrals_relaxed.yaml \
 #     --output artifacts/ic_scan/acem_xtb_relaxed --overwrite
 #
 # Multi-model overlay (PhysNet + KerNN GT + KerNN distill):

@@ -6,13 +6,13 @@ import pytest
 
 
 def _validate(args):
-    from mmml.cli.make.make_training import validate_train_args
+    from karml.cli.make.make_training import validate_train_args
 
     return validate_train_args(args)
 
 
 def _args(tmp_path, **over):
-    from mmml.cli.make.make_training import parse_args
+    from karml.cli.make.make_training import parse_args
 
     data = tmp_path / "train.npz"
     data.write_text("")

@@ -1,6 +1,6 @@
 # Electrostatic embedding (q0) from a make-box TIP3 artifact.
 #   bash examples/m/08_make_boxes.sh
-#   uv run mmml md-system --config examples/m/yaml/es_embed_from_box_tip3.yaml --run-all
+#   uv run karml md-system --config examples/m/yaml/es_embed_from_box_tip3.yaml --run-all
 
 defaults:
   from_pdb: artifacts/nh3_ch3cl/boxes/tip3/model.pdb

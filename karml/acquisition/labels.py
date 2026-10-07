@@ -19,8 +19,8 @@ from typing import Any, Callable, Mapping, Protocol
 
 import numpy as np
 
-from mmml.acquisition.ids import structure_id as make_sid
-from mmml.acquisition.splits import StructureRecord
+from karml.acquisition.ids import structure_id as make_sid
+from karml.acquisition.splits import StructureRecord
 
 
 class ReferenceBackend(Protocol):
@@ -201,7 +201,7 @@ def provider_reference_backend(spec: Mapping[str, Any]) -> ReferenceBackend:
 
     This is the production hook.  It is not used by the smoke workflow.
     """
-    from mmml.interfaces.energy_forces.registry import build_provider, provider_from_dict
+    from karml.interfaces.energy_forces.registry import build_provider, provider_from_dict
 
     provider = build_provider(provider_from_dict(dict(spec)))
 

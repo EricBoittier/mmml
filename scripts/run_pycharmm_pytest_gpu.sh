@@ -2,17 +2,17 @@
 # PyCHARMM pytest selection for GPU nodes (CHARMM + OpenMPI + JAX CUDA).
 #
 # Prerequisites (on the node):
-#   source mmml/CHARMMSETUP   # or export CHARMM_HOME / CHARMM_LIB_DIR
+#   source karml/CHARMMSETUP   # or export CHARMM_HOME / CHARMM_LIB_DIR
 #   uv sync --extra gpu
-#   export MMML_CKPT=examples/ckpts_json/DESdimers_params.json
+#   export KARML_CKPT=examples/ckpts_json/DESdimers_params.json
 #
 # Usage:
 #   ./scripts/run_pycharmm_pytest_gpu.sh              # default: gpu slice
 #   ./scripts/run_pycharmm_pytest_gpu.sh mlpot -q     # selection as 1st arg (see README)
-#   MMML_PYTEST_SELECTION=smoke ./scripts/run_pycharmm_pytest_gpu.sh -q
+#   KARML_PYTEST_SELECTION=smoke ./scripts/run_pycharmm_pytest_gpu.sh -q
 #   ./scripts/run_pycharmm_pytest_gpu.sh tests/functionality/mlpot/test_mlpot_energy_matches_ase.py -q
 #
-# Selections (1st positional arg or MMML_PYTEST_SELECTION):
+# Selections (1st positional arg or KARML_PYTEST_SELECTION):
 #   gpu      — -m "pycharmm and gpu"  (default; ML + CHARMM integration + short NVE/heat smoke)
 #   pycharmm — -m pycharmm            (all live PyCHARMM tests)
 #   smoke    — -m "pycharmm and not gpu" (CHARMM-only, no checkpoint/GPU ML)
@@ -23,15 +23,15 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-# shellcheck source=resolve_mmml_env.sh
-source "$ROOT/scripts/resolve_mmml_env.sh"
-mmml_resolve_env "$ROOT"
+# shellcheck source=resolve_karml_env.sh
+source "$ROOT/scripts/resolve_karml_env.sh"
+karml_resolve_env "$ROOT"
 
 # shellcheck source=setup_jax_cuda_env.sh
 source "$ROOT/scripts/setup_jax_cuda_env.sh"
 
-export MMML_MLPOT_DEVICE="${MMML_MLPOT_DEVICE:-gpu}"
-export MMML_CKPT="${MMML_CKPT:-$ROOT/examples/ckpts_json/DESdimers_params.json}"
+export KARML_MLPOT_DEVICE="${KARML_MLPOT_DEVICE:-gpu}"
+export KARML_CKPT="${KARML_CKPT:-$ROOT/examples/ckpts_json/DESdimers_params.json}"
 export JAX_PLATFORMS="${JAX_PLATFORMS:-cuda,cpu}"
 
 _KNOWN_SELECTIONS=(gpu pycharmm smoke mlpot live quick)
@@ -47,7 +47,7 @@ _is_known_selection() {
   return 1
 }
 
-SELECTION="${MMML_PYTEST_SELECTION:-gpu}"
+SELECTION="${KARML_PYTEST_SELECTION:-gpu}"
 if [[ $# -gt 0 ]] && _is_known_selection "$1"; then
   SELECTION="$1"
   shift
@@ -55,7 +55,7 @@ fi
 
 _run_pytest() {
   local -a pytest_args=(--color=yes "$@")
-  exec "$ROOT/scripts/mmml-charmm-mpirun.sh" python -m pytest "${pytest_args[@]}"
+  exec "$ROOT/scripts/karml-charmm-mpirun.sh" python -m pytest "${pytest_args[@]}"
 }
 
 case "$SELECTION" in

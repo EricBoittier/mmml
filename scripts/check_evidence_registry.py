@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate MMML's scientific-claim evidence registry and inline references."""
+"""Validate KARML's scientific-claim evidence registry and inline references."""
 
 from __future__ import annotations
 

@@ -58,7 +58,7 @@ def _sidecar(tmp_path, names, *, eps_factor=1.0, name="hybrid_mm.json"):
 
 
 def _live_types():
-    from mmml.models.mm_lj_scales import cgenff_type_names_from_prm
+    from karml.models.mm_lj_scales import cgenff_type_names_from_prm
 
     return [n for n in cgenff_type_names_from_prm() if n != "DEFAULT"]
 
@@ -75,12 +75,12 @@ def _build_vdw_probe():
     import pycharmm.read as read
     import pycharmm.settings as settings
 
-    from mmml.analysis.dimer_molecules import make_oriented_scan_geometries
-    from mmml.data.cgenff_dataset import load_reference, reorder_to_cgenff_template
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import (
+    from karml.analysis.dimer_molecules import make_oriented_scan_geometries
+    from karml.data.cgenff_dataset import load_reference, reorder_to_cgenff_template
+    from karml.interfaces.pycharmmInterface.import_pycharmm import (
         CGENFF_PRM, CGENFF_RTF, pycharmm_quiet, reset_block,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+    from karml.interfaces.pycharmmInterface.mlpot.pbc_env import (
         prepare_charmm_pbc,
     )
 
@@ -116,8 +116,8 @@ def _build_vdw_probe():
 def test_scaled_lj_reaches_charmm_and_the_session_contract_holds(
     tmp_path, pycharmm_workdir
 ):
-    from mmml.interfaces.pycharmmInterface.mlpot import scaled_cgenff_prm
-    from mmml.interfaces.pycharmmInterface.mlpot.scaled_cgenff_prm import (
+    from karml.interfaces.pycharmmInterface.mlpot import scaled_cgenff_prm
+    from karml.interfaces.pycharmmInterface.mlpot.scaled_cgenff_prm import (
         deploy_scaled_lj_into_charmm,
     )
 

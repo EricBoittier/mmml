@@ -9,7 +9,7 @@
 # you ask for GPU — do both in one line:
 #
 #   GPU=1 SOLVENT=acn bash examples/m/14_umbrella_sample_sol_prod.sh
-#   # equivalent: MMML_EXAMPLE_DEVICE=gpu CUDA_VISIBLE_DEVICES=1 SOLVENT=acn …
+#   # equivalent: KARML_EXAMPLE_DEVICE=gpu CUDA_VISIBLE_DEVICES=1 SOLVENT=acn …
 #
 # Optional env:
 #   USE_DENSITY=1   rebuild make-box at liquid density if PSF missing
@@ -28,8 +28,8 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if [[ -n "${GPU:-}" ]]; then
   export CUDA_VISIBLE_DEVICES="${GPU}"
 fi
-if [[ -n "${CUDA_VISIBLE_DEVICES:-}" || "${MMML_EXAMPLE_DEVICE:-}" == "gpu" || "${MMML_EXAMPLE_DEVICE:-}" == "cuda" ]]; then
-  export MMML_EXAMPLE_DEVICE="${MMML_EXAMPLE_DEVICE:-gpu}"
+if [[ -n "${CUDA_VISIBLE_DEVICES:-}" || "${KARML_EXAMPLE_DEVICE:-}" == "gpu" || "${KARML_EXAMPLE_DEVICE:-}" == "cuda" ]]; then
+  export KARML_EXAMPLE_DEVICE="${KARML_EXAMPLE_DEVICE:-gpu}"
 fi
 
 # shellcheck source=/dev/null
@@ -37,8 +37,8 @@ source "${ROOT}/examples/m/_env.sh"
 cd "${ROOT}"
 
 export PYTHONUNBUFFERED=1
-if declare -F mmml_example_env_banner >/dev/null 2>&1; then
-  mmml_example_env_banner
+if declare -F karml_example_env_banner >/dev/null 2>&1; then
+  karml_example_env_banner
 fi
 if [[ -n "${CUDA_VISIBLE_DEVICES:-}" ]]; then
   echo "  CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES}  (physical GPU index → sole device cuda:0 for this job)"
@@ -81,7 +81,7 @@ MOVE_WITH="$(
   uv run python - <<'PY'
 from pathlib import Path
 import os
-from mmml.utils.domdec_psf_order import read_psf_atoms_and_bonds
+from karml.utils.domdec_psf_order import read_psf_atoms_and_bonds
 
 psf = Path(os.environ["PSF"])
 atoms, _ = read_psf_atoms_and_bonds(psf)
@@ -125,11 +125,11 @@ fi
 if [[ -n "${TIMESTEP_FS:-}" ]]; then
   echo "  TIMESTEP_FS override=${TIMESTEP_FS}"
 fi
-uv run mmml umbrella-sample \
+uv run karml umbrella-sample \
   --config "${CFG}" \
   --from-pdb "${PDB}" \
   --from-psf "${PSF}" \
-  --checkpoint "${MMML_CKPT}" \
+  --checkpoint "${KARML_CKPT}" \
   --output-dir "${OUT}" \
   --move-with "${MOVE_WITH}" \
   "${EXTRA[@]}"
@@ -162,5 +162,5 @@ PY
 
 if [[ "${SKIP_MBAR:-0}" != "1" ]]; then
   echo "=== umbrella-mbar ==="
-  uv run mmml umbrella-mbar --run-dir "${OUT}"
+  uv run karml umbrella-mbar --run-dir "${OUT}"
 fi

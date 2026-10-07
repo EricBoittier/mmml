@@ -7,7 +7,7 @@ Staged campaign for the charge-less PhysNet portable checkpoint
 ## One-shot on gpu09
 
 ```bash
-export CKPT=/mmhome/boittier/home/mmml/mmml/models/physnetjax/defaults/hf_json/test-f41c04c0-62e3-4785-9018-351ffdc161c4_epoch-251_portable.json
+export CKPT=/mmhome/boittier/home/karml/karml/models/physnetjax/defaults/hf_json/test-f41c04c0-62e3-4785-9018-351ffdc161c4_epoch-251_portable.json
 
 # Preflight only (minutes)
 STAGE=fd ./scripts/run_tip3_physnet_ewald_ir_campaign.sh
@@ -38,7 +38,7 @@ STAGE=prod,analyze PS_PROD=50 ./scripts/run_tip3_physnet_ewald_ir_campaign.sh
 
 Finds a cubic `L` for a target pressure (default 1 atm) before hybrid heat.
 Default NpT path is **PyCHARMM CPT** (not jaxmd). The first slice runs
-`mmml liquid-box`, then live CHARMM virial `PRSI` MC + 1D refine + short CPT
+`karml liquid-box`, then live CHARMM virial `PRSI` MC + 1D refine + short CPT
 (`run_box_pressure_opt_charmm_live`). Writes handoff
 `box_pressure_opt/{box.json,model.psf,model.crd}` for fixed-L hybrid smoke.
 Offline CI: `USE_CHARMM_PRESSURE=0` → synthetic `P∝1/L³`.

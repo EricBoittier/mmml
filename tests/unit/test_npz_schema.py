@@ -1,4 +1,4 @@
-"""Tests for :mod:`mmml.data.npz_schema`.
+"""Tests for :mod:`karml.data.npz_schema`.
 
 The NPZ schema is the contract every dataset in the repo is written and read
 against, and it had no tests: a validator that silently accepts a malformed file
@@ -15,8 +15,8 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from mmml.data import npz_schema
-from mmml.data.npz_schema import (
+from karml.data import npz_schema
+from karml.data.npz_schema import (
     METADATA_KEYS,
     OPTIONAL_KEYS,
     REQUIRED_KEYS,
@@ -383,12 +383,12 @@ def test_cli_exits_nonzero_for_an_invalid_file(tmp_path, monkeypatch):
 
 
 def test_module_can_be_run_as_a_script(tmp_path):
-    """``python -m mmml.data.npz_schema`` must not die on an import error."""
+    """``python -m karml.data.npz_schema`` must not die on an import error."""
     import subprocess
     import sys as _sys
 
     proc = subprocess.run(
-        [_sys.executable, "-m", "mmml.data.npz_schema"],
+        [_sys.executable, "-m", "karml.data.npz_schema"],
         capture_output=True,
         text=True,
         timeout=120,

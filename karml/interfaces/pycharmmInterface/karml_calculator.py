@@ -1,7 +1,7 @@
 """MM/ML calculator helpers (canonical production path).
 
 **Entry point:** :func:`setup_calculator` — use this for MD, MLpot, and PBC workflows.
-Canonical modules are listed in :mod:`mmml.interfaces.pycharmmInterface.canonical_paths`.
+Canonical modules are listed in :mod:`karml.interfaces.pycharmmInterface.canonical_paths`.
 
 This module historically pulled in a large collection of heavy optional
 dependencies (ASE, PyCHARMM, JAX, ...) at import time. That behaviour made the
@@ -32,14 +32,14 @@ import pandas as pd
 # In your module that defines spherical_cutoff_calculator
 import jax
 import jax.numpy as jnp
-from mmml.interfaces.pycharmmInterface.pbc_utils_jax import (
+from karml.interfaces.pycharmmInterface.pbc_utils_jax import (
     _cell_as_matrix,
     cart_coords,
     frac_coords,
     mic_displacement,
     mic_displacement_smooth,
 )
-from mmml.interfaces.pycharmmInterface.calculator_utils import (
+from karml.interfaces.pycharmmInterface.calculator_utils import (
     FLAT_BOTTOM_MODES,
     ModelOutput,
     apply_com_lower_wall,
@@ -51,21 +51,21 @@ from mmml.interfaces.pycharmmInterface.calculator_utils import (
     indices_of_pairs,
     ml_switch_scale,
 )
-from mmml.interfaces.pycharmmInterface.ml_batching import prepare_batches_md, prepare_batch_structure
-from mmml.interfaces.pycharmmInterface.ml_dtypes import (
+from karml.interfaces.pycharmmInterface.ml_batching import prepare_batches_md, prepare_batch_structure
+from karml.interfaces.pycharmmInterface.ml_dtypes import (
     cast_pytree_to_ml_dtype,
     json_tree_to_jax_params,
     ml_numpy_dtype,
     ml_zeros,
     resolve_ml_compute_dtype,
 )
-from mmml.interfaces.pycharmmInterface.mm_energy_forces import (
+from karml.interfaces.pycharmmInterface.mm_energy_forces import (
     DEFAULT_JAX_MD_CAPACITY_MULTIPLIER,
     DEFAULT_JAX_MD_SKIN_DISTANCE_A,
     build_mm_energy_forces_fn,
     mm_pair_update_positions,
 )
-from mmml.utils.jax_gpu_warmup import (
+from karml.utils.jax_gpu_warmup import (
     apply_xla_cuda_timer_log_filter,
     ensure_xla_gpu_warmed,
     warmup_hybrid_spherical_cutoff,
@@ -84,7 +84,7 @@ if not Path(CGENFF_PRM).is_file():
     CGENFF_PRM = None  # type: ignore[assignment]
 
 def _warmup_jax_only() -> bool:
-    return (os.environ.get("MMML_WARMUP_MLPOT_JAX_ONLY") or "").strip().lower() in (
+    return (os.environ.get("KARML_WARMUP_MLPOT_JAX_ONLY") or "").strip().lower() in (
         "1",
         "yes",
         "true",
@@ -92,20 +92,20 @@ def _warmup_jax_only() -> bool:
 
 
 try:
-    from mmml.models.physnetjax.physnetjax.calc.helper_mlp import get_ase_calc
+    from karml.models.physnetjax.physnetjax.calc.helper_mlp import get_ase_calc
 except ModuleNotFoundError:  # pragma: no cover - helper requires ASE
 
     def get_ase_calc(*_args: Any, **_kwargs: Any) -> Any:  # type: ignore[override]
         raise ModuleNotFoundError("ase is required for get_ase_calc")
 try:
-    from mmml.models.physnetjax.physnetjax.data.batches import (
+    from karml.models.physnetjax.physnetjax.data.batches import (
         _prepare_batches as prepare_batches,
     )
-    from mmml.models.physnetjax.physnetjax.data.data import prepare_datasets
-    from mmml.models.physnetjax.physnetjax.models.model import PhysNet
-    from mmml.models.physnetjax.physnetjax.restart.restart import get_files, get_last, get_params_model
+    from karml.models.physnetjax.physnetjax.data.data import prepare_datasets
+    from karml.models.physnetjax.physnetjax.models.model import PhysNet
+    from karml.models.physnetjax.physnetjax.restart.restart import get_files, get_last, get_params_model
     # Skip training import that requires lovely_jax
-    # from mmml.models.physnetjax.physnetjax.training.training import train_model
+    # from karml.models.physnetjax.physnetjax.training.training import train_model
     def train_model(*_args: Any, **_kwargs: Any) -> Any:  # type: ignore[override]
         raise ModuleNotFoundError("lovely_jax is required for train_model")
 except ModuleNotFoundError:  # pragma: no cover - ML stack optional for docs
@@ -122,7 +122,7 @@ except ModuleNotFoundError:  # pragma: no cover - ML stack optional for docs
     # Keep restart helpers available whenever possible, even when model imports
     # fail due to optional extras such as e3x.
     try:
-        from mmml.models.physnetjax.physnetjax.restart.restart import get_files, get_last, get_params_model
+        from karml.models.physnetjax.physnetjax.restart.restart import get_files, get_last, get_params_model
     except ModuleNotFoundError as exc_restart:
         _restart_import_error = exc_restart
 
@@ -159,7 +159,7 @@ except ModuleNotFoundError:  # pragma: no cover - exercised when JAX is absent
     Array = Any  # type: ignore[misc,assignment]
 
     def jit(fn: Callable) -> Callable:  # type: ignore[override]
-        raise ModuleNotFoundError("jax is required for mmml_calculator functionality")
+        raise ModuleNotFoundError("jax is required for karml_calculator functionality")
 
     jnp = None  # type: ignore[assignment]
 
@@ -246,14 +246,14 @@ else:
     ev2kcalmol = 23.060548867
 kcalmol2ev = 1.0 / ev2kcalmol
 
-from mmml.models.dynamic_latent_charges import weighted_scatter_average
-from mmml.models.short_range_wall import pair_wall_energy
+from karml.models.dynamic_latent_charges import weighted_scatter_average
+from karml.models.short_range_wall import pair_wall_energy
 
 
 # Module-level configuration ------------------------------------------------
 
 SPATIAL_DIMS: int = 3  # Number of spatial dimensions (x, y, z)
-from mmml.interfaces.pycharmmInterface.cutoffs import (
+from karml.interfaces.pycharmmInterface.cutoffs import (
     DEFAULT_MM_SWITCH_ON,
     DEFAULT_MM_SWITCH_WIDTH,
     CutoffParameters,
@@ -322,7 +322,7 @@ def get_forces_pycharmm(update: bool = True):
     is the negative gradient. Pass ``update=False`` to read the forces left by a
     previous ``ENER FORCE`` instead of re-evaluating.
     """
-    from mmml.interfaces.pycharmmInterface.charmm_forces import charmm_forces_array
+    from karml.interfaces.pycharmmInterface.charmm_forces import charmm_forces_array
 
     if update:
         pycharmm.lingo.charmm_script("ENER FORCE")
@@ -351,7 +351,7 @@ def build_bonded_intra_evaluator(
     See ``docs/hybrid-bonded-intra.md``. Raises rather than degrading, because
     both degraded paths are silent and wrong.
     """
-    from mmml.interfaces.pycharmmInterface.mlpot.jax_mm_spoof import (
+    from karml.interfaces.pycharmmInterface.mlpot.jax_mm_spoof import (
         resolve_monomer_bonded_evaluator,
     )
 
@@ -398,7 +398,7 @@ def bonded_intra_damping(
     Returns the derivative too because forces in this calculator are assembled by
     hand: dropping ``E_int * ds/dR`` would make them non-conservative.
     """
-    from mmml.interfaces.pycharmmInterface.calculator_utils import _smoothstep01
+    from karml.interfaces.pycharmmInterface.calculator_utils import _smoothstep01
 
     ev_per_kcal = 1.0 / 23.060548
     onset = float(onset_kcal) * ev_per_kcal
@@ -614,14 +614,14 @@ def resolve_hybrid_ml_backend_mode(
     mode = str(ml_potential_mode or "physnet").strip().lower()
     if mode == "physnet" and restart_path is not None:
         try:
-            from mmml.models.kernnn import is_kernnn_checkpoint
+            from karml.models.kernnn import is_kernnn_checkpoint
 
             if is_kernnn_checkpoint(restart_path):
                 mode = "kernnn"
         except Exception:
             pass
         try:
-            from mmml.interfaces.calculators.metatomic import is_metatomic_checkpoint
+            from karml.interfaces.calculators.metatomic import is_metatomic_checkpoint
 
             if is_metatomic_checkpoint(restart_path):
                 mode = "metatomic"
@@ -667,7 +667,7 @@ def hybrid_ml_backend_zbl_map(
     model: Any,
 ) -> dict[str, Any] | None:
     """ZBL dashboard mapping; non-PhysNet backends have no PhysNet ZBL table."""
-    from mmml.utils.rich_report import collect_zbl_cutoff_mapping
+    from karml.utils.rich_report import collect_zbl_cutoff_mapping
 
     zbl_map = None
     if not metatomic and model is not None:
@@ -775,8 +775,8 @@ def _resolve_ml_chunk_layout(ml_sparse_dimers, _max_active_dimers, n_dimers_tota
         and n_monomers + _max_active_dimers > int(ml_batch_size)
         and not (_jax_mm_spoof_mode or _kernnn_mode or _metatomic_mode)
     ):
-        from mmml.interfaces.pycharmmInterface.mlpot.ml_chunk_budget import MlChunkLayout
-        from mmml.interfaces.pycharmmInterface.mlpot_gpu import effective_ml_gpu_count
+        from karml.interfaces.pycharmmInterface.mlpot.ml_chunk_budget import MlChunkLayout
+        from karml.interfaces.pycharmmInterface.mlpot_gpu import effective_ml_gpu_count
 
         _chunked_monomers = 0 if monomers_own_pad else int(n_monomers)
         _layout_n_chunks = -(-(_chunked_monomers + _max_active_dimers) // int(ml_batch_size))
@@ -793,7 +793,7 @@ def _resolve_ml_chunk_layout(ml_sparse_dimers, _max_active_dimers, n_dimers_tota
 
 def _scaled_live_psf_charges(total_atoms, mm_charge_scale):
     """Read live PSF charges and apply the configured MM charge scale."""
-    from mmml.interfaces.pycharmmInterface.mm_energy_forces import (
+    from karml.interfaces.pycharmmInterface.mm_energy_forces import (
         _get_actual_psf_charges,
         apply_mm_charge_scale,
     )
@@ -937,14 +937,14 @@ def setup_calculator(
             extrapolation region MD visits; EMA smooths that out. Falls back
             to live ``params`` when ``ema_params`` is absent.
         ml_gpu_count: Parallel PhysNet chunks across this many local JAX GPUs
-            (default 1). Use with ``CUDA_VISIBLE_DEVICES`` and ``MMML_MLPOT_N_GPUS``.
+            (default 1). Use with ``CUDA_VISIBLE_DEVICES`` and ``KARML_MLPOT_N_GPUS``.
         ml_max_active_dimers: Cap on sparse ML dimer slots per step. Periodic
             default is density-aware when box volume is known, with floor
             ``max(4005, 6*n_monomers)``; free-space default is all
             unique dimers, ``n_monomers*(n_monomers-1)//2``. Lower explicit/env
             caps are promoted in free-space mode to avoid dropping pairs.
         ml_dimer_active_margin: Å beyond ``mm_switch_on`` that sparse ML dimers
-            stay in the active set (default 0; env ``MMML_ML_DIMER_ACTIVE_MARGIN``).
+            stay in the active set (default 0; env ``KARML_ML_DIMER_ACTIVE_MARGIN``).
             ``ml_switch_scale`` is a quintic smoothstep: value, slope and
             curvature are exactly 0 at ``mm_switch_on``, so pairs past it add
             no energy, force or latent-charge weight. The old implicit margin
@@ -955,10 +955,10 @@ def setup_calculator(
             ``mlpot.dimer_centroid_nl``) whose candidates the MLpot callback
             passes as ``ml_dimer_candidates``, replacing the all-pairs
             sparse-dimer selection. Same active set (exact parity) while the
-            list is valid. Default on; env ``MMML_ML_DIMER_CENTROID_NL=0``
+            list is valid. Default on; env ``KARML_ML_DIMER_CENTROID_NL=0``
             (or ``False`` here) keeps the all-pairs path.
         ml_dimer_centroid_nl_skin: Centroid-list skin in Å (default 1.0; env
-            ``MMML_ML_DIMER_CENTROID_NL_SKIN_A``). Rebuilt when a centroid has
+            ``KARML_ML_DIMER_CENTROID_NL_SKIN_A``). Rebuilt when a centroid has
             moved more than skin/2 or the box changed.
         mm_r_min: Optional inner cutoff (Å) for MM neighbor list. Pairs with dimer
             COM distance < mm_r_min are excluded. Defaults: complementary_handoff=False
@@ -982,7 +982,7 @@ def setup_calculator(
             in eV/Å².
         ml_compute_dtype: ``float32`` (default) or ``float64`` for JAX ML/MM interior.
             float64 also requires ``JAX_ENABLE_X64=1`` before Python starts. Overridden by
-            ``MMML_ML_DTYPE`` when unset.
+            ``KARML_ML_DTYPE`` when unset.
     """
     # Retained through the 2026-09 compatibility window; capacity is now
     # derived from the actual monomer topology rather than this fixed hint.
@@ -1000,7 +1000,7 @@ def setup_calculator(
 
     ml_jnp_dtype = resolve_ml_compute_dtype(ml_compute_dtype)
     ml_np_dtype = ml_numpy_dtype(ml_jnp_dtype)
-    from mmml.interfaces.pycharmmInterface.long_range_backend import pick_lr_solver
+    from karml.interfaces.pycharmmInterface.long_range_backend import pick_lr_solver
 
     _use_jax_pme_lr = pick_lr_solver(lr_solver) == "jax_pme"
 
@@ -1242,14 +1242,14 @@ def setup_calculator(
             or ((restart_path / "params.json").exists())
         )
         try:
-            from mmml.interfaces.calculators.checkpoint_loading import detect_checkpoint_format
+            from karml.interfaces.calculators.checkpoint_loading import detect_checkpoint_format
 
             is_joint_checkpoint = detect_checkpoint_format(restart_path) == "pickle_joint"
         except FileNotFoundError:
             pass
 
     from contextlib import ExitStack
-    from mmml.interfaces.pycharmmInterface.jax_device_policy import jax_cpu_until_mlpot_registered
+    from karml.interfaces.pycharmmInterface.jax_device_policy import jax_cpu_until_mlpot_registered
 
     _mlpot_jax_defer_stack = ExitStack()
     if defer_xla_gpu_warmup:
@@ -1262,7 +1262,7 @@ def setup_calculator(
     _jax_mm_spoof_batch_apply = None
     _kernnn_batch_apply = None
     if _jax_mm_spoof_mode:
-        from mmml.interfaces.pycharmmInterface.mlpot.jax_mm_spoof import (
+        from karml.interfaces.pycharmmInterface.mlpot.jax_mm_spoof import (
             build_jax_mm_spoof_batch_apply,
             resolve_monomer_bonded_evaluators,
         )
@@ -1289,7 +1289,7 @@ def setup_calculator(
         is_json_checkpoint = False
         is_joint_checkpoint = False
     elif _kernnn_mode:
-        from mmml.models.kernnn import build_kernnn_batch_apply, load_checkpoint
+        from karml.models.kernnn import build_kernnn_batch_apply, load_checkpoint
 
         if restart_path is None:
             raise ValueError("KerNN hybrid backend requires model_restart_path")
@@ -1330,7 +1330,7 @@ def setup_calculator(
             checkpoint_meta,
         ) = metatomic_mm_only_model_bundle(max_atoms, restart_path)
     elif is_joint_checkpoint:
-        from mmml.interfaces.calculators.checkpoint_loading import load_physnet_for_hybrid_mlpot
+        from karml.interfaces.calculators.checkpoint_loading import load_physnet_for_hybrid_mlpot
 
         try:
             MODEL, params, config = load_physnet_for_hybrid_mlpot(
@@ -1361,7 +1361,7 @@ def setup_calculator(
         restart = restart_path
         # Load using JSON loader
         try:
-            from mmml.utils.model_checkpoint import (
+            from karml.utils.model_checkpoint import (
                 load_model_checkpoint,
                 normalize_physnet_config,
                 physnet_constructor_kwargs,
@@ -1379,13 +1379,13 @@ def setup_calculator(
             config = checkpoint.get('config', {})
             config = normalize_physnet_config(config) if config else {}
 
-            from mmml.interfaces.calculators.checkpoint_loading import (
+            from karml.interfaces.calculators.checkpoint_loading import (
                 extract_physnet_params_for_hybrid,
                 is_joint_checkpoint_config,
             )
-            from mmml.models.physnetjax.physnetjax.models.model import PhysNet
-            from mmml.models.physnetjax.physnetjax.models.spooky_model import SpookyPhysNet
-            from mmml.utils.model_checkpoint import infer_trainable_zbl_config
+            from karml.models.physnetjax.physnetjax.models.model import PhysNet
+            from karml.models.physnetjax.physnetjax.models.spooky_model import SpookyPhysNet
+            from karml.utils.model_checkpoint import infer_trainable_zbl_config
 
             def json_to_jax_config(obj):
                 if isinstance(obj, dict):
@@ -1494,14 +1494,14 @@ def setup_calculator(
     if not _non_physnet_ml:
         MODEL.max_padded_atoms = max_atoms
 
-    from mmml.interfaces.pycharmmInterface.mm_charge_correction import (
+    from karml.interfaces.pycharmmInterface.mm_charge_correction import (
         assert_mm_charge_mode_dimer_supported,
         load_hybrid_mm_metadata,
         map_padded_fragment_charges_to_global,
         resolve_mm_charge_mode_arg,
         warn_mm_charge_mode_mismatch,
     )
-    from mmml.models.mm_charge_mode import (
+    from karml.models.mm_charge_mode import (
         MMChargeMode,
         apply_mm_charge_mode,
         mm_charge_mode_is_q0,
@@ -1531,7 +1531,7 @@ def setup_calculator(
     _needs_ml_mm_charges = mm_charge_mode_needs_q_ml(_mm_charge_mode)
     _latent_mean_charges_static: Optional[Array] = None
     if mm_charge_mode_is_static_template(_mm_charge_mode):
-        from mmml.models.latent_charge_template import (
+        from karml.models.latent_charge_template import (
             load_latent_charge_template,
             tile_latent_charge_template,
         )
@@ -1590,13 +1590,13 @@ def setup_calculator(
             )
         )
 
-    from mmml.utils.rich_report import (
+    from karml.utils.rich_report import (
         collect_ml_energy_terms_mapping,
         emit_md_system_calculator_report,
         emit_tagged,
     )
-    from mmml.data.units import HARTREE_TO_EV, calculator_results_units
-    from mmml.models.mbd.calculator import resolve_companion_mbd
+    from karml.data.units import HARTREE_TO_EV, calculator_results_units
+    from karml.models.mbd.calculator import resolve_companion_mbd
 
     _resolved_mbd_path, _resolved_mbd_weight, _mbd_missing_path = resolve_companion_mbd(
         mbd_checkpoint,
@@ -1645,7 +1645,7 @@ def setup_calculator(
         _ckpt_hybrid_mm = config.get("hybrid_mm") or checkpoint.get("hybrid_mm")
     else:
         try:
-            from mmml.models.physnetjax.physnetjax.restart.restart import orbax_checkpointer
+            from karml.models.physnetjax.physnetjax.restart.restart import orbax_checkpointer
 
             restored = orbax_checkpointer.restore(restart)
             checkpoint_training_units = restored.get("training_units")
@@ -1702,11 +1702,11 @@ def setup_calculator(
         ml_force_conversion_factor = float(HARTREE_TO_EV)
     _calculator_unit_metadata = calculator_results_units()
     apply_xla_cuda_timer_log_filter()
-    from mmml.interfaces.pycharmmInterface.jax_device_policy import mlpot_jax_device_name
+    from karml.interfaces.pycharmmInterface.jax_device_policy import mlpot_jax_device_name
 
     mlpot_device = mlpot_jax_device_name()
     if not defer_xla_gpu_warmup and ensure_xla_gpu_warmed():
-        from mmml.utils.rich_report import get_reporter
+        from karml.utils.rich_report import get_reporter
 
         get_reporter().status(
             "info", "JAX warmup", detail="generic GPU kernels; hybrid compile follows setup"
@@ -1732,7 +1732,7 @@ def setup_calculator(
     except Exception:
         pass
 
-    from mmml.interfaces.pycharmmInterface.mlpot.mlpot_sparse_dimer_policy import (
+    from karml.interfaces.pycharmmInterface.mlpot.mlpot_sparse_dimer_policy import (
         SparseDimerCapOverflow,
         resolve_max_active_dimers,
         sparse_dimer_active_radius,
@@ -1792,7 +1792,7 @@ def setup_calculator(
     # known (PBC), since a fixed per-monomer heuristic badly undersizes
     # dense periodic liquids (see mlpot_sparse_dimer_policy.resolve_max_active_dimers).
     if ml_dimer_active_margin is None:
-        ml_dimer_active_margin = float(os.environ.get("MMML_ML_DIMER_ACTIVE_MARGIN") or 0.0)
+        ml_dimer_active_margin = float(os.environ.get("KARML_ML_DIMER_ACTIVE_MARGIN") or 0.0)
     if ml_dimer_active_margin < 0:
         raise ValueError(f"ml_dimer_active_margin must be >= 0, got {ml_dimer_active_margin}")
     _dimer_active_radius = sparse_dimer_active_radius(
@@ -1821,16 +1821,16 @@ def setup_calculator(
             pass
     # Skip PhysNet chunks that hold only unused sparse-dimer padding (the cap is
     # sized for the densest case; ETOH:181 uses ~1.8k of 4.2k slots). Set
-    # MMML_MLPOT_SKIP_PADDING_CHUNKS=0 to evaluate every slot (A/B parity checks).
+    # KARML_MLPOT_SKIP_PADDING_CHUNKS=0 to evaluate every slot (A/B parity checks).
     _skip_padding_chunks = (
-        os.environ.get("MMML_MLPOT_SKIP_PADDING_CHUNKS") or "1"
+        os.environ.get("KARML_MLPOT_SKIP_PADDING_CHUNKS") or "1"
     ).strip().lower() not in ("0", "false", "no", "off")
     # Monomers padded to max_atoms (= dimer size) carry ~4x the all-pairs edge
     # work they need; evaluate them in one call padded to the largest monomer
-    # instead (sparse chunked path, plain PhysNet). MMML_ML_MONOMER_OWN_PAD=0
+    # instead (sparse chunked path, plain PhysNet). KARML_ML_MONOMER_OWN_PAD=0
     # restores the shared padded batch (A/B parity checks).
     _monomers_own_pad = (
-        (os.environ.get("MMML_ML_MONOMER_OWN_PAD") or "1").strip().lower() not in ("0", "false", "no", "off")
+        (os.environ.get("KARML_ML_MONOMER_OWN_PAD") or "1").strip().lower() not in ("0", "false", "no", "off")
         and bool(ml_sparse_dimers)
         and _max_active_dimers < n_dimers_total
         and bool(ml_batch_size)
@@ -1845,7 +1845,7 @@ def setup_calculator(
 
     _jax_md_skin_distance = float(jax_md_skin_distance)
 
-    from mmml.interfaces.pycharmmInterface.mlpot.dimer_centroid_nl import (
+    from karml.interfaces.pycharmmInterface.mlpot.dimer_centroid_nl import (
         CentroidDimerNeighborList,
         resolve_centroid_nl_enabled,
         resolve_centroid_nl_skin_A,
@@ -1873,7 +1873,7 @@ def setup_calculator(
         )
 
     _density_est = cell_list_density_estimate if cell_list_density_estimate is not None else 0.03
-    from mmml.interfaces.pycharmmInterface.long_range_backend import collect_lr_solver_mapping
+    from karml.interfaces.pycharmmInterface.long_range_backend import collect_lr_solver_mapping
 
     _checkpoint_dir = (
         "(jax_mm_clone spoof)"
@@ -1936,15 +1936,15 @@ def setup_calculator(
         checkpoint=checkpoint_meta,
         runtime={
             "OMP_NUM_THREADS": os.environ.get("OMP_NUM_THREADS", "unset"),
-            "MMML_CHARMM_OMP_THREADS": os.environ.get("MMML_CHARMM_OMP_THREADS", "unset"),
+            "KARML_CHARMM_OMP_THREADS": os.environ.get("KARML_CHARMM_OMP_THREADS", "unset"),
             "MKL_NUM_THREADS": os.environ.get("MKL_NUM_THREADS", "unset"),
             "OPENBLAS_NUM_THREADS": os.environ.get("OPENBLAS_NUM_THREADS", "unset"),
             "NUMEXPR_NUM_THREADS": os.environ.get("NUMEXPR_NUM_THREADS", "unset"),
-            "MMML_JAX_COMPILE_THREADS": os.environ.get("MMML_JAX_COMPILE_THREADS", "unset"),
-            "MMML_NO_JAX_COMPILE_THREADS": os.environ.get("MMML_NO_JAX_COMPILE_THREADS", "unset"),
+            "KARML_JAX_COMPILE_THREADS": os.environ.get("KARML_JAX_COMPILE_THREADS", "unset"),
+            "KARML_NO_JAX_COMPILE_THREADS": os.environ.get("KARML_NO_JAX_COMPILE_THREADS", "unset"),
             "XLA_FLAGS": os.environ.get("XLA_FLAGS", "unset"),
             "JAX_PLATFORMS": os.environ.get("JAX_PLATFORMS", "unset"),
-            "MMML_MLPOT_DEVICE": os.environ.get("MMML_MLPOT_DEVICE", "unset"),
+            "KARML_MLPOT_DEVICE": os.environ.get("KARML_MLPOT_DEVICE", "unset"),
         },
         ml_flags={
             "doML": doML,
@@ -2143,10 +2143,10 @@ def setup_calculator(
             prefer_cpu=_use_jax_pme_lr,
         )
         _hybrid_jit_warmed[0] = True
-        from mmml.utils.rich_report import emit_tagged
+        from karml.utils.rich_report import emit_tagged
 
         emit_tagged(
-            "mmml",
+            "karml",
             "hybrid JIT warmup complete (post-PyCHARMM delay-kernel calibration)",
             tag_style="bold magenta",
         )
@@ -2160,10 +2160,10 @@ def setup_calculator(
         if cell_for_build is None:
             cell_key = None
         elif pick_lr_solver(lr_solver) == "ewald":
-            from mmml.interfaces.pycharmmInterface.ewald_native import (
+            from karml.interfaces.pycharmmInterface.ewald_native import (
                 ewald_npt_kgrid_cache_bin,
             )
-            from mmml.interfaces.pycharmmInterface.long_range_backend import (
+            from karml.interfaces.pycharmmInterface.long_range_backend import (
                 box_length_from_cell,
             )
 
@@ -2203,7 +2203,7 @@ def setup_calculator(
             # Always cache PSF charges (+ monomer ids): Mode A reporting, and
             # Mode B/C/Q⁰ assembly of q_MM for E_MM Coulomb.
             if _q_cgenff_for_ml_mm[0] is None:
-                from mmml.interfaces.pycharmmInterface.long_range_backend import (
+                from karml.interfaces.pycharmmInterface.long_range_backend import (
                     per_atom_monomer_ids,
                 )
                 q_np = _scaled_live_psf_charges(total_atoms, mm_charge_scale)
@@ -2220,7 +2220,7 @@ def setup_calculator(
     # matching how the MBD model was trained (see mbd_term.py).
     _mbd_energy_force_fn = None
     if mbd_checkpoint is not None:
-        from mmml.interfaces.pycharmmInterface.mbd_term import build_mbd_energy_force_fn
+        from karml.interfaces.pycharmmInterface.mbd_term import build_mbd_energy_force_fn
 
         _mbd_energy_force_fn = build_mbd_energy_force_fn(
             mbd_checkpoint,
@@ -2249,7 +2249,7 @@ def setup_calculator(
         150 -> 705 K at dt=0.25 fs.  Identically zero above WALL_R_ON (1.0 A:
         below water H-bonds, above ZBL), so it cannot perturb the sampled
         region or normal liquid contacts; it only catches trajectories that
-        leave them.  Shared with training via mmml.models.short_range_wall.
+        leave them.  Shared with training via karml.models.short_range_wall.
         """
         mol = jnp.asarray(_atom_mol_id_np[: positions.shape[0]])
         n = positions.shape[0]
@@ -2888,7 +2888,7 @@ def setup_calculator(
         _chunk_size = ml_batch_size
         _do_chunked = _chunk_size is not None and _effective_batch_size > _chunk_size
         _n_chunks = int(np.ceil(_effective_batch_size / _chunk_size)) if (_chunk_size and _do_chunked) else 1
-        from mmml.interfaces.pycharmmInterface.mlpot_gpu import (
+        from karml.interfaces.pycharmmInterface.mlpot_gpu import (
             effective_ml_gpu_count,
             run_chunked_model_apply,
         )
@@ -3456,7 +3456,7 @@ def setup_calculator(
         When omitted, the MM fn uses fixed PSF CGenFF charges (Mode A).
         """
         
-        from mmml.interfaces.pycharmmInterface.mm_energy_forces import _unpack_mm_energy_forces
+        from karml.interfaces.pycharmmInterface.mm_energy_forces import _unpack_mm_energy_forces
 
         # Ensure positions are finite
         positions = jnp.where(jnp.isfinite(positions), positions, 0.0)
@@ -3639,7 +3639,7 @@ def setup_calculator(
                 """Calculate energy and forces for given atomic configuration"""
 
                 ase_calc.Calculator.calculate(self, atoms, properties, system_changes)
-                from mmml.interfaces.pycharmmInterface.mlpot.ml_profile import (
+                from karml.interfaces.pycharmmInterface.mlpot.ml_profile import (
                     get_mlpot_profile_stats,
                     mlpot_profiling_enabled,
                 )
@@ -3731,7 +3731,7 @@ def setup_calculator(
 
                 # First FIRE/MD force eval often JIT-compiles the chunked ML path
                 # after warmup restored OMP=1 for CHARMM; bump compile threads here.
-                from mmml.interfaces.pycharmmInterface.jax_compile_threads import (
+                from karml.interfaces.pycharmmInterface.jax_compile_threads import (
                     jax_compile_threads_context,
                 )
 
@@ -3762,7 +3762,7 @@ def setup_calculator(
                         E = out.energy
                         F = out.forces
 
-                from mmml.interfaces.pycharmmInterface.mlpot.finite_guards import (
+                from karml.interfaces.pycharmmInterface.mlpot.finite_guards import (
                     require_host_finite,
                 )
 

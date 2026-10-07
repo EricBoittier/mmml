@@ -44,7 +44,7 @@ def main():
     if args.train_frames:
         train_indices = [int(x) for x in args.train_frames.split(",")]
 
-    from mmml.interfaces.dcmInterface.kernel_pipeline import run_kernel_fit_pipeline
+    from karml.interfaces.dcmInterface.kernel_pipeline import run_kernel_fit_pipeline
 
     result = run_kernel_fit_pipeline(
         h5_path=args.h5,

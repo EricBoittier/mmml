@@ -1,7 +1,7 @@
 # Methods (draft)
 
 *Condensed-Phase Simulations Using Hybrid ML/MM Energy Functions*  
-Status: draft tied to MMML repository workflows. Numbers and cutoffs below match
+Status: draft tied to KARML repository workflows. Numbers and cutoffs below match
 current defaults in `md-system` / hybrid docs unless noted; freeze YAML when
 promoting to the manuscript PDF.
 
@@ -53,8 +53,8 @@ Charge and LJ treatments follow the hybrid MM options documented in
 optional trainable LJ scales — report which mode each Results row used).
 
 **Implementation.** Production hybrid evaluation is assembled in
-`mmml.interfaces.pycharmmInterface` (MLpot / calculator path) and driven by
-`mmml md-system` with backends `jaxmd` or `pycharmm` (ASE for reference
+`karml.interfaces.pycharmmInterface` (MLpot / calculator path) and driven by
+`karml md-system` with backends `jaxmd` or `pycharmm` (ASE for reference
 smokes). Term bookkeeping follows [hybrid-mlmm-decomposition](../../hybrid-mlmm-decomposition.md).
 
 ---
@@ -108,7 +108,7 @@ Dense liquids follow a **two-phase** protocol ([liquid-box-workflow](../../liqui
    potential, then heat → equilibrate → produce under the target ensemble
    (`pbc_nvt` or `pbc_npt`).
 
-`mmml md-system` YAML encodes composition (`DCM:N`, `ACO:N`, `METH:N`, …),
+`karml md-system` YAML encodes composition (`DCM:N`, `ACO:N`, `METH:N`, …),
 `box_size`, `bulk_density_fraction`, temperature, timestep, checkpoint path, and
 backend. Campaign and sweep matrices are versioned under `workflows/*/config*.yaml`.
 
@@ -149,7 +149,7 @@ family labels in methane and density sweeps). Spoof legs omit neural weights.
 
 | Component | Role |
 |-----------|------|
-| MMML (`mmml`) | CLI (`md-system`, `liquid-box`, …), hybrid calculator, workflows |
+| KARML (`karml`) | CLI (`md-system`, `liquid-box`, …), hybrid calculator, workflows |
 | JAX / jax-md | Differentiable MM + ML evaluation; jaxmd backend |
 | PyCHARMM / CHARMM | Topology, classical MM, optional dynamics backend |
 | Snakemake (+ Slurm plugin) | Parameter sweeps and cluster submission |

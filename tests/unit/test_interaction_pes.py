@@ -10,8 +10,8 @@ import pytest
 from ase import Atoms
 from ase.calculators.calculator import Calculator, all_changes
 
-from mmml.analysis.dimer_scans import centered_atoms
-from mmml.analysis.interaction_pes import (
+from karml.analysis.dimer_scans import centered_atoms
+from karml.analysis.interaction_pes import (
     DEFAULT_R_MAX_A,
     DEFAULT_R_MIN_A,
     ORIENTATION_ACCEPTOR_ACCEPTOR,
@@ -28,7 +28,7 @@ from mmml.analysis.interaction_pes import (
     scan_dimer_slice,
     trimer_mbe_ev,
 )
-from mmml.analysis.interaction_pes_geom import (
+from karml.analysis.interaction_pes_geom import (
     MOTIF_CYCLIC,
     MOTIF_LINEAR,
     cyclic_hbond_trimer,
@@ -41,12 +41,12 @@ from mmml.analysis.interaction_pes_geom import (
     site_site_distance,
     trimer_oo_distances,
 )
-from mmml.cli.misc.pet_interaction_pes import build_parser, main
-from mmml.data.units import EV_TO_KCAL_MOL
+from karml.cli.misc.pet_interaction_pes import build_parser, main
+from karml.data.units import EV_TO_KCAL_MOL
 
 REPO = Path(__file__).resolve().parents[2]
 WATER_XYZ = REPO / "examples" / "orca" / "water_opt" / "water.xyz"
-PLOT_MODULE = REPO / "mmml" / "analysis" / "interaction_pes_plot.py"
+PLOT_MODULE = REPO / "karml" / "analysis" / "interaction_pes_plot.py"
 
 
 class FragmentPairCalculator(Calculator):
@@ -107,7 +107,7 @@ def _water() -> Atoms:
 
 def test_plot_module_uses_shared_icml_style() -> None:
     source = PLOT_MODULE.read_text(encoding="utf-8")
-    assert "from mmml.utils.plotting.styles import apply_plot_style" in source
+    assert "from karml.utils.plotting.styles import apply_plot_style" in source
     assert 'apply_plot_style("icml")' in source
     assert "comparison_colors" in source
 
@@ -215,7 +215,7 @@ def test_three_body_calculator_has_nonzero_e3() -> None:
 def test_interaction_energy_is_dimer_minus_monomers() -> None:
     dimer = dimer_oh_o(_water(), 4.0)
     cache: dict[str, float] = {}
-    from mmml.analysis.interaction_pes import interaction_energy_ev
+    from karml.analysis.interaction_pes import interaction_energy_ev
 
     e_int, e_ab, monomers = interaction_energy_ev(dimer, FragmentPairCalculator, cache)
     assert e_int == pytest.approx(e_ab - monomers[0] - monomers[1], abs=1e-12)
@@ -272,7 +272,7 @@ def test_campaign_json_schema_and_replot(tmp_path: Path, monkeypatch: pytest.Mon
         document["dimer_slices"][0]["far_field_kcal_mol"]
     )
     assert npz.is_file()
-    from mmml.analysis.interaction_pes_plot import write_interaction_pes_figures
+    from karml.analysis.interaction_pes_plot import write_interaction_pes_figures
 
     figures = write_interaction_pes_figures(loaded, tmp_path / "fig", prefix="dummy")
     assert figures["slices"].is_file()
@@ -310,7 +310,7 @@ def test_cli_from_json_replots(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
 
 
 def test_mask_clash_energy_nans_short_contacts() -> None:
-    from mmml.analysis.interaction_pes import mask_clash_energy
+    from karml.analysis.interaction_pes import mask_clash_energy
 
     energy = np.array([-3.0, 1e4, 0.1])
     contact = np.array([2.2, 0.3, 2.5])
@@ -350,9 +350,9 @@ def test_committed_campaign_json_schema() -> None:
 
 
 def test_cli_is_registered() -> None:
-    from mmml.cli.registry import command_by_name
+    from karml.cli.registry import command_by_name
 
     spec = command_by_name("pet-interaction-pes")
     assert spec is not None
-    assert spec.module == "mmml.cli.misc.pet_interaction_pes"
+    assert spec.module == "karml.cli.misc.pet_interaction_pes"
     assert spec.summary

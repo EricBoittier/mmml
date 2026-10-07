@@ -47,7 +47,7 @@ class LiquidBoxBuildResult:
     steps_applied: list[str] = field(default_factory=list)
 
     def to_box_json(self, args: argparse.Namespace | None = None) -> dict[str, Any]:
-        from mmml.utils.intermonomer_geometry import resolve_dynamics_overlap_reference_A
+        from karml.utils.intermonomer_geometry import resolve_dynamics_overlap_reference_A
 
         return {
             "status": self.status,
@@ -105,7 +105,7 @@ def apply_liquid_box_profile(
         return resolved
 
     args.liquid_prep = True
-    from mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
+    from karml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
         apply_density_prep_resilient_defaults,
     )
 
@@ -191,7 +191,7 @@ def estimate_density_g_cm3(
     """
     if box_side_A is None or box_side_A <= 0.0 or composition is None:
         return None
-    from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import total_mass_g_for_composition
+    from karml.interfaces.pycharmmInterface.mlpot.box_sizing import total_mass_g_for_composition
 
     try:
         total_mass_g = total_mass_g_for_composition(composition)
@@ -214,10 +214,10 @@ def measure_worst_intermonomer_A(
     box_side: float | None,
     use_pbc: bool,
 ) -> float:
-    from mmml.interfaces.pycharmmInterface.mlpot.mc_density import (
+    from karml.interfaces.pycharmmInterface.mlpot.mc_density import (
         monomer_offsets_from_atoms_per,
     )
-    from mmml.utils.geometry_checks import find_worst_intermonomer_overlap
+    from karml.utils.geometry_checks import find_worst_intermonomer_overlap
 
     offsets = monomer_offsets_from_atoms_per(atoms_per_list)
     cell = np.diag([float(box_side), float(box_side), float(box_side)]) if box_side else None
@@ -238,7 +238,7 @@ def certify_intermonomer_geometry(
     use_pbc: bool,
 ) -> tuple[float, bool, str]:
     """Return (worst_contact_A, passed, message)."""
-    from mmml.utils.intermonomer_geometry import resolve_pre_mlpot_overlap_min_distance
+    from karml.utils.intermonomer_geometry import resolve_pre_mlpot_overlap_min_distance
 
     floor = resolve_pre_mlpot_overlap_min_distance(args)
     try:
@@ -269,7 +269,7 @@ def write_liquid_box_artifacts(
     *,
     args: argparse.Namespace | None = None,
 ) -> None:
-    from mmml.interfaces.pycharmmInterface.mpi_rank_io import (
+    from karml.interfaces.pycharmmInterface.mpi_rank_io import (
         is_mpi_rank_zero,
         rank0_write_json,
         rank0_write_text,
@@ -291,7 +291,7 @@ def render_liquid_box_report(
     *,
     args: argparse.Namespace | None = None,
 ) -> str:
-    from mmml.utils.intermonomer_geometry import resolve_dynamics_overlap_reference_A
+    from karml.utils.intermonomer_geometry import resolve_dynamics_overlap_reference_A
 
     dyn_ref = resolve_dynamics_overlap_reference_A(args)
     lines = [
@@ -354,7 +354,7 @@ def render_liquid_box_report(
         lines.extend(
             [
                 "```bash",
-                "mmml md-system \\",
+                "karml md-system \\",
                 f"  --from-psf {result.model_psf} \\",
                 f"  --from-crd {result.model_crd} \\",
                 "  --checkpoint /path/to/checkpoint.json \\",
@@ -376,36 +376,36 @@ def run_liquid_box_build(args: argparse.Namespace) -> LiquidBoxBuildResult:
     out_dir = Path(args.output_dir).expanduser().resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    from mmml.interfaces.pycharmmInterface.mlpot.artifact_paths import (
+    from karml.interfaces.pycharmmInterface.mlpot.artifact_paths import (
         model_psf as model_psf_path,
         staged_artifact_paths,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import parse_composition_dict
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+    from karml.interfaces.pycharmmInterface.mlpot.box_sizing import parse_composition_dict
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
         apply_charmm_output_from_args,
         build_cluster_from_args_with_tag,
         print_cluster_geometry_summary,
         resolve_charmm_use_pbc,
         resolve_pbc_box_side,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
+    from karml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
         liquid_prep_enabled,
         maybe_probe_packmol_mic_pipeline,
         run_pre_mlpot_geometry_gate,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+    from karml.interfaces.pycharmmInterface.mlpot.pbc_env import (
         cubic_box_length_from_geometry,
         setup_charmm_environment,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.run_workflow import (
+    from karml.interfaces.pycharmmInterface.mlpot.run_workflow import (
         _charmm_pre_minimize_before_mlpot,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+    from karml.interfaces.pycharmmInterface.mlpot.setup import (
         get_charmm_positions_array,
         save_cluster_topology_for_vmd,
         sync_charmm_positions,
     )
-    from mmml.utils.intermonomer_geometry import resolve_pre_mlpot_overlap_min_distance
+    from karml.utils.intermonomer_geometry import resolve_pre_mlpot_overlap_min_distance
 
     # Build first: ``--box-auto count`` mutates ``args.composition`` (e.g. TIP3:1 →
     # TIP3:903). Re-parse afterward so density certification uses the scaled system.
@@ -422,7 +422,7 @@ def run_liquid_box_build(args: argparse.Namespace) -> LiquidBoxBuildResult:
     target_density_g_cm3: float | None = None
     if charmm_pbc and comp is not None:
         try:
-            from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import (
+            from karml.interfaces.pycharmmInterface.mlpot.box_sizing import (
                 resolve_target_density_g_cm3,
             )
 
@@ -440,7 +440,7 @@ def run_liquid_box_build(args: argparse.Namespace) -> LiquidBoxBuildResult:
         atoms_per_list = [len(z) // int(n_mol)] * int(n_mol)
 
     mc_summary: dict[str, Any] | None = None
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
         use_packmol_placement,
         use_pyxtal_placement,
     )
@@ -452,7 +452,7 @@ def run_liquid_box_build(args: argparse.Namespace) -> LiquidBoxBuildResult:
     else:
         builder_step = "grid_cluster"
     steps_applied: list[str] = [builder_step]
-    from mmml.interfaces.pycharmmInterface.mlpot.box_lattice_abnr import (
+    from karml.interfaces.pycharmmInterface.mlpot.box_lattice_abnr import (
         density_target_holds_box,
     )
 
@@ -468,7 +468,7 @@ def run_liquid_box_build(args: argparse.Namespace) -> LiquidBoxBuildResult:
             )
 
     if atoms_per_list is not None and charmm_pbc and box_side is not None:
-        from mmml.interfaces.pycharmmInterface.mlpot.mc_density import (
+        from karml.interfaces.pycharmmInterface.mlpot.mc_density import (
             apply_mc_density_equalization,
         )
 
@@ -505,7 +505,7 @@ def run_liquid_box_build(args: argparse.Namespace) -> LiquidBoxBuildResult:
             target_box_side_A = float(box_side)
 
     if charmm_pbc and box_side is not None and atoms_per_list is not None:
-        from mmml.cli.run.md_handoff import (
+        from karml.cli.run.md_handoff import (
             align_fresh_cluster_positions_for_charmm_pbc,
         )
 
@@ -564,16 +564,16 @@ def run_liquid_box_build(args: argparse.Namespace) -> LiquidBoxBuildResult:
         sync_charmm_positions(r)
         steps_applied.append("charmm_mm_pre_minimize")
 
-    from mmml.interfaces.pycharmmInterface.mlpot.box_lattice_abnr import (
+    from karml.interfaces.pycharmmInterface.mlpot.box_lattice_abnr import (
         run_mini_lattice_abnr,
         should_run_mini_lattice_abnr,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.box_equil import (
+    from karml.interfaces.pycharmmInterface.mlpot.box_equil import (
         MAX_MM_PRETREAT_DYNAMICS_GRMS,
         measure_mm_pretreat_grms,
         maybe_run_mini_box_equilibration,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import should_run_mini_box_equil
+    from karml.interfaces.pycharmmInterface.mlpot.box_sizing import should_run_mini_box_equil
 
     mm_stages = ["mini"]
     r = get_charmm_positions_array()
@@ -598,7 +598,7 @@ def run_liquid_box_build(args: argparse.Namespace) -> LiquidBoxBuildResult:
                 box_side is None
                 or abs(float(box_side) - float(held_box_side_A)) > 1.0e-3
             ):
-                from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+                from karml.interfaces.pycharmmInterface.mlpot.pbc_env import (
                     push_charmm_cubic_box_side_A,
                 )
 
@@ -632,7 +632,7 @@ def run_liquid_box_build(args: argparse.Namespace) -> LiquidBoxBuildResult:
     mm_grms_after_prep = measure_mm_pretreat_grms()
     r = get_charmm_positions_array()
     if not gate_failed and should_run_mini_lattice_abnr(args, charmm_pbc=charmm_pbc, stages=mm_stages):
-        from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+        from karml.interfaces.pycharmmInterface.mlpot.pbc_env import (
             sync_workflow_pbc_box_side_after_mm_pretreat,
         )
 
@@ -662,7 +662,7 @@ def run_liquid_box_build(args: argparse.Namespace) -> LiquidBoxBuildResult:
         pretreat_mm=False,
         stages=mm_stages,
     ):
-        from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+        from karml.interfaces.pycharmmInterface.mlpot.pbc_env import (
             sync_workflow_pbc_box_side_after_mm_pretreat,
         )
 
@@ -696,10 +696,10 @@ def run_liquid_box_build(args: argparse.Namespace) -> LiquidBoxBuildResult:
     else:
         r = get_charmm_positions_array()
 
-    from mmml.interfaces.pycharmmInterface.mlpot.box_equil import (
+    from karml.interfaces.pycharmmInterface.mlpot.box_equil import (
         measure_mm_pretreat_grms,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import save_minimization_results
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import save_minimization_results
 
     mm_grms = measure_mm_pretreat_grms()
     model_crd = out_dir / "model.crd"
@@ -789,7 +789,7 @@ def run_liquid_box_build(args: argparse.Namespace) -> LiquidBoxBuildResult:
     write_liquid_box_artifacts(result, args=args)
 
     if not getattr(args, "quiet", False):
-        from mmml.interfaces.pycharmmInterface.mpi_rank_io import rank0_print
+        from karml.interfaces.pycharmmInterface.mpi_rank_io import rank0_print
 
         rank0_print(f"\nliquid-box: {result.status.upper()} → {out_dir}")
         if result.report_path is not None:

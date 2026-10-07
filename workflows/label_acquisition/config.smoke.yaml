@@ -1,8 +1,8 @@
 # End-to-end smoke with the mock Morse reference backend.
 # Results written here are NOT scientific results.
 #
-#   MMML_WORKFLOW_CONFIG=config.smoke.yaml bash scripts/snakemake_local.sh 2 -n
-#   MMML_WORKFLOW_CONFIG=config.smoke.yaml bash scripts/snakemake_local.sh 2
+#   KARML_WORKFLOW_CONFIG=config.smoke.yaml bash scripts/snakemake_local.sh 2 -n
+#   KARML_WORKFLOW_CONFIG=config.smoke.yaml bash scripts/snakemake_local.sh 2
 
 tag: smoke_mock
 output_root: artifacts/label_acquisition/smoke_mock

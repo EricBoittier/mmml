@@ -2,8 +2,8 @@
 """Generate the validation figures for docs/prepare-mm-dataset.md.
 
 Everything here is produced from the *real* CGenFF assignment pipeline
-(:mod:`mmml.data.cgenff_dataset`) on real monomer geometries
-(:mod:`mmml.analysis.dimer_molecules`), so the page proves the workflow rather
+(:mod:`karml.data.cgenff_dataset`) on real monomer geometries
+(:mod:`karml.analysis.dimer_molecules`), so the page proves the workflow rather
 than illustrating it.  Outputs -> docs/images/prepare-mm-dataset/.
 """
 
@@ -16,14 +16,14 @@ import matplotlib.pyplot as plt
 from ase.data import covalent_radii
 from ase.data.colors import jmol_colors
 
-from mmml.analysis.dimer_molecules import MOLECULES, make_oriented_scan_geometries
-from mmml.data.cgenff_dataset import (
+from karml.analysis.dimer_molecules import MOLECULES, make_oriented_scan_geometries
+from karml.data.cgenff_dataset import (
     assign_frame_cgenff,
     compute_inter_monomer_mm,
     load_reference,
     match_cgenff_template,
 )
-from mmml.utils.plotting.styles import apply_plot_style, comparison_colors
+from karml.utils.plotting.styles import apply_plot_style, comparison_colors
 
 OUT = Path(__file__).resolve().parents[1] / "docs" / "images" / "prepare-mm-dataset"
 OUT.mkdir(parents=True, exist_ok=True)

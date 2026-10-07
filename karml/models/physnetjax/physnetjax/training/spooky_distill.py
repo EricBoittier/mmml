@@ -1,7 +1,7 @@
 """Teacher-distillation helpers for the SpookyPhysNet extxyz trainer.
 
 The blending arithmetic itself is shared with the generic PhysNet distillation
-pipeline (:mod:`mmml.models.physnetjax.physnetjax.training.distill`); this
+pipeline (:mod:`karml.models.physnetjax.physnetjax.training.distill`); this
 module adds the two pieces that are specific to distilling *between Spooky
 checkpoints*:
 
@@ -29,7 +29,7 @@ from typing import Any
 
 import numpy as np
 
-from mmml.models.physnetjax.physnetjax.training.distill import (
+from karml.models.physnetjax.physnetjax.training.distill import (
     blend_component_loss,
     blend_regression_loss,
 )

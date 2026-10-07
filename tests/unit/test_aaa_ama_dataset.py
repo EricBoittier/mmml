@@ -8,7 +8,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from mmml.data.external.aaa_ama import (
+from karml.data.external.aaa_ama import (
     AAA_DATASET_URL,
     inspect_dataset_aaa,
     load_dataset_aaa,
@@ -18,7 +18,7 @@ from mmml.data.external.aaa_ama import (
 
 @pytest.fixture(scope="module")
 def summary_path() -> Path:
-    return Path(__file__).resolve().parents[2] / "mmml" / "data" / "external" / "aaa_ama_dataset_summary.json"
+    return Path(__file__).resolve().parents[2] / "karml" / "data" / "external" / "aaa_ama_dataset_summary.json"
 
 
 def test_bundled_summary_matches_expected_topology(summary_path: Path) -> None:

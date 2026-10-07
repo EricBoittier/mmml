@@ -5,14 +5,14 @@ from __future__ import annotations
 import os
 from typing import Optional
 
-from mmml.interfaces.pycharmmInterface.jax_device_policy import mlpot_local_gpu_count
+from karml.interfaces.pycharmmInterface.jax_device_policy import mlpot_local_gpu_count
 
 
 def resolve_ml_gpu_count(explicit: Optional[int] = None) -> int:
     """Number of local GPUs to use for parallel PhysNet chunk evaluation (default 1)."""
     if explicit is not None:
         return max(1, int(explicit))
-    env = (os.environ.get("MMML_MLPOT_N_GPUS") or "").strip()
+    env = (os.environ.get("KARML_MLPOT_N_GPUS") or "").strip()
     if env:
         return max(1, int(env))
     return 1

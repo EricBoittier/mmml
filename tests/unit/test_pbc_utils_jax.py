@@ -8,7 +8,7 @@ import pytest
 jax = pytest.importorskip("jax")
 import jax.numpy as jnp
 
-from mmml.interfaces.pycharmmInterface.pbc_utils_jax import (
+from karml.interfaces.pycharmmInterface.pbc_utils_jax import (
     cart_coords,
     cell_inverse,
     frac_coords,

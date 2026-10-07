@@ -10,7 +10,7 @@ and creates comprehensive plots comparing:
 - Model performance across different configurations
 
 Usage:
-    python -m mmml.cli.compare_equivariant_models \
+    python -m karml.cli.compare_equivariant_models \
         --comparison-dirs examples/co2/dcmnet_physnet_train/comparisons/*/ \
         --output-dir analysis/equivariant_comparison/
 """
@@ -879,12 +879,12 @@ def main():
         epilog="""
 Examples:
   # Compare all runs in comparisons directory
-  python -m mmml.cli.compare_equivariant_models \\
+  python -m karml.cli.compare_equivariant_models \\
       --comparison-dirs examples/co2/dcmnet_physnet_train/comparisons/*/ \\
       --output-dir analysis/model_comparison/
   
   # Specific runs only
-  python -m mmml.cli.compare_equivariant_models \\
+  python -m karml.cli.compare_equivariant_models \\
       --comparison-dirs comparisons/run1/ comparisons/run2/ \\
       --output-dir analysis/
         """

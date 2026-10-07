@@ -6,13 +6,13 @@ Supports NPZ files with or without ESP grid data.
 
 Usage:
     # PySCF / atomic-units NPZ → ASE-style training splits (default)
-    mmml fix-and-split \\
+    karml fix-and-split \\
         --efd energies_forces_dipoles.npz \\
         --grid grids_esp.npz \\
         --output-dir ./training_data_fixed
 
     # NPZ already in training units (eV, eV/Å, e·Å, Å): split only, no conversion
-    mmml fix-and-split \\
+    karml fix-and-split \\
         --efd data_ev.npz \\
         --output-dir ./splits \\
         --coords-in angstrom --coords-out same \\
@@ -22,7 +22,7 @@ Usage:
         --grid-coords-in angstrom --grid-coords-out same
 
     # Explicit per-field control (see --help for all *-in / *-out flags)
-    mmml fix-and-split --efd data.npz -o out \\
+    karml fix-and-split --efd data.npz -o out \\
         --energy-in hartree --energy-out ev \\
         --force-in hartree-bohr --force-out ev-angstrom
 
@@ -72,37 +72,37 @@ def create_splits(n_samples: int, train_frac=0.8, valid_frac=0.1, test_frac=0.1,
 
 def convert_energy_hartree_to_ev(E_hartree: np.ndarray) -> np.ndarray:
     """Convert energies from Hartree to eV."""
-    from mmml.data.units import HARTREE_TO_EV
+    from karml.data.units import HARTREE_TO_EV
     return E_hartree * HARTREE_TO_EV
 
 
 def convert_energy_ev_to_hartree(E_ev: np.ndarray) -> np.ndarray:
     """Convert energies from eV to Hartree."""
-    from mmml.data.units import EV_TO_HARTREE
+    from karml.data.units import EV_TO_HARTREE
     return E_ev * EV_TO_HARTREE
 
 
 def convert_forces_hartree_bohr_to_ev_angstrom(F_hartree_bohr: np.ndarray) -> np.ndarray:
     """Convert forces from Hartree/Bohr to eV/Angstrom."""
-    from mmml.data.units import HARTREE_BOHR_TO_EV_ANGSTROM
+    from karml.data.units import HARTREE_BOHR_TO_EV_ANGSTROM
     return F_hartree_bohr * HARTREE_BOHR_TO_EV_ANGSTROM
 
 
 def convert_forces_ev_angstrom_to_hartree_bohr(F_ev_ang: np.ndarray) -> np.ndarray:
     """Convert forces from eV/Angstrom to Hartree/Bohr."""
-    from mmml.data.units import HARTREE_BOHR_TO_EV_ANGSTROM
+    from karml.data.units import HARTREE_BOHR_TO_EV_ANGSTROM
     return F_ev_ang / HARTREE_BOHR_TO_EV_ANGSTROM
 
 
 def convert_dipole_debye_to_eA(D_debye: np.ndarray) -> np.ndarray:
     """Convert dipole moments from Debye to e·Å."""
-    from mmml.data.units import DEBYE_TO_EANGSTROM
+    from karml.data.units import DEBYE_TO_EANGSTROM
     return D_debye * DEBYE_TO_EANGSTROM
 
 
 def convert_dipole_eA_to_debye(D_eA: np.ndarray) -> np.ndarray:
     """Convert dipole moments from e·Å to Debye."""
-    from mmml.data.units import EANGSTROM_TO_DEBYE
+    from karml.data.units import EANGSTROM_TO_DEBYE
     return D_eA * EANGSTROM_TO_DEBYE
 
 
@@ -185,7 +185,7 @@ def convert_coords_array(
 
     Returns (R_out, effective_input_unit, detected_unit_if_auto).
     """
-    from mmml.data.units import ANGSTROM_TO_BOHR, BOHR_TO_ANGSTROM
+    from karml.data.units import ANGSTROM_TO_BOHR, BOHR_TO_ANGSTROM
 
     detected: Optional[str] = None
     if coords_in == "auto":
@@ -298,7 +298,7 @@ def convert_grid_surface_array(
 
     Returns (grid_coords_or_none, effective_input_unit, log_notes).
     """
-    from mmml.data.units import BOHR_TO_ANGSTROM
+    from karml.data.units import BOHR_TO_ANGSTROM
 
     notes: List[str] = []
     keys = _grid_key_candidates(grid_data)
@@ -368,7 +368,7 @@ def convert_grid_surface_array(
     if effective_in == "bohr" and grid_coords_out == "angstrom":
         return vdw_raw * BOHR_TO_ANGSTROM, "bohr", notes
     if effective_in == "angstrom" and grid_coords_out == "bohr":
-        from mmml.data.units import ANGSTROM_TO_BOHR
+        from karml.data.units import ANGSTROM_TO_BOHR
         return vdw_raw * ANGSTROM_TO_BOHR, "angstrom", notes
     if effective_in == "angstrom" and grid_coords_out == "angstrom":
         return vdw_raw.copy(), "angstrom", notes
@@ -546,7 +546,7 @@ def diagnose_energy_unit_for_atomic_refs(
     """
     Detect when E is labeled Hartree but magnitudes match eV totals for the Z composition.
     """
-    from mmml.data.units import EV_TO_HARTREE, HARTREE_TO_EV
+    from karml.data.units import EV_TO_HARTREE, HARTREE_TO_EV
 
     ref_ha = abs(atomic_ref_sum_hartree(Z, scheme, ref_units))
     if ref_ha <= 0.0:
@@ -682,7 +682,7 @@ def reduce_esp_grid(
                 valid &= np.abs(esp_i - mean_esp) <= esp_sd_sigma * std_esp
 
         # Exclude points with |esp| > esp_max_abs_kcal_mol (kcal/mol/e)
-        from mmml.data.units import KCAL_MOL_TO_HARTREE
+        from karml.data.units import KCAL_MOL_TO_HARTREE
         esp_max_hartree = esp_max_abs_kcal_mol * KCAL_MOL_TO_HARTREE
         valid &= np.abs(esp_i) <= esp_max_hartree
 
@@ -717,7 +717,7 @@ def verify_reduction_preserves_alignment(
     Verify that reduce_esp_grid used the same indices for esp and grid (alignment preserved).
     Recomputes the selection logic and checks that output pairs match input pairs.
     """
-    from mmml.data.units import KCAL_MOL_TO_HARTREE
+    from karml.data.units import KCAL_MOL_TO_HARTREE
     rng = np.random.default_rng(seed)
     for i in range(min(n_spot_check, esp_raw.shape[0])):
         esp_i = esp_raw[i]
@@ -1863,7 +1863,7 @@ def fix_and_split_data(
         preserve_units=preserve_units,
         notes=manifest_notes,
     )
-    from mmml.data.units import UnitsManifestV2
+    from karml.data.units import UnitsManifestV2
 
     manifest_v2 = UnitsManifestV2.from_dict(asdict(units_manifest))
     manifest_v2.schema_version = 2
@@ -1899,7 +1899,7 @@ def fix_and_split_data(
         
         # Create EFD split
         efd_split = {k: _index_if_sample_dim(v, split_indices) for k, v in efd_fixed.items()}
-        efd_split["_mmml_units"] = units_embed
+        efd_split["_karml_units"] = units_embed
         efd_out = output_dir / f"energies_forces_dipoles_{split_name}.npz"
         np.savez_compressed(efd_out, **efd_split)
         
@@ -1910,7 +1910,7 @@ def fix_and_split_data(
         # Create grid split (only if grid data exists)
         if has_grid and grid_fixed is not None:
             grid_split = {k: _index_if_sample_dim(v, split_indices) for k, v in grid_fixed.items()}
-            grid_split["_mmml_units"] = units_embed
+            grid_split["_karml_units"] = units_embed
             grid_out = output_dir / f"grids_esp_{split_name}.npz"
             np.savez_compressed(grid_out, **grid_split)
             
@@ -2135,7 +2135,7 @@ vdw_surface = train_grids['vdw_surface']  # Angstroms
 """
     
     readme_content += """
-Generated by: mmml.cli.fix_and_split
+Generated by: karml.cli.fix_and_split
 """
     
     readme_path = output_dir / "README.md"
@@ -2438,7 +2438,7 @@ Examples:
         action='store_true',
         help=(
             'Negate F before unit conversion (Ha/Bohr → eV/Å). Use when F stores the PySCF energy '
-            'gradient ∂E/∂R instead of forces F = −∇E. mmml pyscf-evaluate NPZ already uses −gradient.'
+            'gradient ∂E/∂R instead of forces F = −∇E. karml pyscf-evaluate NPZ already uses −gradient.'
         ),
     )
 

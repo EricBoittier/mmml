@@ -1,4 +1,4 @@
-"""Bundled portable PhysNetJax weights (JSON) for MMML/PhysNet quickstarts."""
+"""Bundled portable PhysNetJax weights (JSON) for KARML/PhysNet quickstarts."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ DEFAULTS_DIR = Path(__file__).resolve().parent
 HF_JSON_DIR = DEFAULTS_DIR / "hf_json"
 HF_JSON_MANIFEST_PATH = HF_JSON_DIR / "manifest.json"
 JOINT_TRAINING_CATEGORY = "joint-training-defaults"
-MMML_DEFAULT_ALIAS = "mmml-default"
+KARML_DEFAULT_ALIAS = "karml-default"
 BEST_FORCE_ALIAS = "best-forces"
 
 
@@ -81,7 +81,7 @@ def resolve_hf_physnet_model(selection: str | None = None) -> dict[str, Any]:
 
     if selected in {"default", "joint-default", "joint-training-default"}:
         selected = default_hf_physnet_model_id()
-    elif selected in {MMML_DEFAULT_ALIAS, BEST_FORCE_ALIAS, "lowest-force-mae"}:
+    elif selected in {KARML_DEFAULT_ALIAS, BEST_FORCE_ALIAS, "lowest-force-mae"}:
         selected = best_force_hf_physnet_model_id()
     elif selected in categories:
         selected = default_hf_physnet_model_id(selected)

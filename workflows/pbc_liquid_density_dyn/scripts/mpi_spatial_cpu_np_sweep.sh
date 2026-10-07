@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Sweep MMML_MPI_NP vs OMP_NUM_THREADS for Tier-2 spatial MPI on CPU (DCM:100).
+# Sweep KARML_MPI_NP vs OMP_NUM_THREADS for Tier-2 spatial MPI on CPU (DCM:100).
 #
 # Usage (from repo root):
-#   export MMML_CKPT=$PWD/examples/ckpts_json/DESdimers_params.json
+#   export KARML_CKPT=$PWD/examples/ckpts_json/DESdimers_params.json
 #   bash workflows/pbc_liquid_density_dyn/scripts/mpi_spatial_cpu_np_sweep.sh
 #
 # Optional:
@@ -14,27 +14,27 @@ WORKFLOW_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 REPO_ROOT="$(cd "$WORKFLOW_ROOT/../.." && pwd)"
 cd "$REPO_ROOT"
 
-# shellcheck source=../../../scripts/resolve_mmml_env.sh
-source "$REPO_ROOT/scripts/resolve_mmml_env.sh"
-mmml_resolve_env "$REPO_ROOT"
-PY="${MMML_PYTHON}"
+# shellcheck source=../../../scripts/resolve_karml_env.sh
+source "$REPO_ROOT/scripts/resolve_karml_env.sh"
+karml_resolve_env "$REPO_ROOT"
+PY="${KARML_PYTHON}"
 
 # shellcheck source=../../../scripts/pc_bach_env.sh
 source "$REPO_ROOT/scripts/pc_bach_env.sh"
 
 export JAX_ENABLE_X64="${JAX_ENABLE_X64:-1}"
-export MMML_MLPOT_DEVICE="${MMML_MLPOT_DEVICE:-cpu}"
+export KARML_MLPOT_DEVICE="${KARML_MLPOT_DEVICE:-cpu}"
 export JAX_PLATFORMS="${JAX_PLATFORMS:-cpu}"
-export MMML_MLPOT_PROFILE="${MMML_MLPOT_PROFILE:-1}"
-export MMML_JAX_COMPILE_TIMERS="${MMML_JAX_COMPILE_TIMERS:-1}"
-# Override mmml-charmm-mpirun default (disables compile thread bump under MPI).
-export MMML_NO_JAX_COMPILE_THREADS="${MMML_NO_JAX_COMPILE_THREADS:-0}"
-export MMML_JAX_COMPILE_THREADS="${MMML_JAX_COMPILE_THREADS:-8}"
-export MMML_FORCE_JAX_COMPILE_THREADS="${MMML_FORCE_JAX_COMPILE_THREADS:-1}"
+export KARML_MLPOT_PROFILE="${KARML_MLPOT_PROFILE:-1}"
+export KARML_JAX_COMPILE_TIMERS="${KARML_JAX_COMPILE_TIMERS:-1}"
+# Override karml-charmm-mpirun default (disables compile thread bump under MPI).
+export KARML_NO_JAX_COMPILE_THREADS="${KARML_NO_JAX_COMPILE_THREADS:-0}"
+export KARML_JAX_COMPILE_THREADS="${KARML_JAX_COMPILE_THREADS:-8}"
+export KARML_FORCE_JAX_COMPILE_THREADS="${KARML_FORCE_JAX_COMPILE_THREADS:-1}"
 
-CKPT="${MMML_CKPT:-$REPO_ROOT/examples/ckpts_json/DESdimers_params.json}"
+CKPT="${KARML_CKPT:-$REPO_ROOT/examples/ckpts_json/DESdimers_params.json}"
 if [[ ! -f "$CKPT" ]]; then
-  echo "ERROR: checkpoint not found: $CKPT (set MMML_CKPT)" >&2
+  echo "ERROR: checkpoint not found: $CKPT (set KARML_CKPT)" >&2
   exit 1
 fi
 
@@ -81,27 +81,27 @@ for np in $NP_LIST; do
     -e "s|REPLACE_ML_BATCH|$ML_BATCH|g" \
     "$WORKFLOW_ROOT/benchmarks/dcm100_spatial_mpi_cpu.yaml.tpl" >"$cfg"
 
-  export MMML_MPI_NP="$np"
+  export KARML_MPI_NP="$np"
   export OMP_NUM_THREADS="$omp"
-  export MMML_NO_MPI_RERUN=1
+  export KARML_NO_MPI_RERUN=1
   if (( np > 1 )); then
-    export MMML_MLPOT_SPATIAL_MPI=1
+    export KARML_MLPOT_SPATIAL_MPI=1
   else
-    unset MMML_MLPOT_SPATIAL_MPI || true
+    unset KARML_MLPOT_SPATIAL_MPI || true
   fi
 
-  echo "--- $tag (MMML_MPI_NP=$np OMP_NUM_THREADS=$omp spatial=$([[ $np -gt 1 ]] && echo 1 || echo 0)) ---"
+  echo "--- $tag (KARML_MPI_NP=$np OMP_NUM_THREADS=$omp spatial=$([[ $np -gt 1 ]] && echo 1 || echo 0)) ---"
   log="$run_dir/stdout.log"
   prof="$run_dir/md_system.prof"
   set +e
   start=$(date +%s.%N)
   md_argv=(md-system --config "$cfg" --mlpot-profile --ml-spatial-mpi --reuse-packmol-cache)
   if [[ "$CPROFILE" == 1 ]]; then
-    "$REPO_ROOT/scripts/mmml-charmm-mpirun.sh" \
-      python -m cProfile -o "$prof" -m mmml.cli.__main__ "${md_argv[@]}" \
+    "$REPO_ROOT/scripts/karml-charmm-mpirun.sh" \
+      python -m cProfile -o "$prof" -m karml.cli.__main__ "${md_argv[@]}" \
       >"$log" 2>&1
   else
-    "$REPO_ROOT/scripts/mmml-charmm-mpirun.sh" "${md_argv[@]}" >"$log" 2>&1
+    "$REPO_ROOT/scripts/karml-charmm-mpirun.sh" "${md_argv[@]}" >"$log" 2>&1
   fi
   rc=$?
   end=$(date +%s.%N)
@@ -129,7 +129,7 @@ PY
   if [[ -f "$run_dir/stage_summary.json" ]]; then
     cp -f "$run_dir/stage_summary.json" "$run_dir/stage_summary_${tag}.json" 2>/dev/null || true
   fi
-  grep -E 'MLpot profile:|JAX compile|mmml: JAX compile timers' "$log" | tail -8 || true
+  grep -E 'MLpot profile:|JAX compile|karml: JAX compile timers' "$log" | tail -8 || true
 done
 
 echo ""

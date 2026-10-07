@@ -9,7 +9,7 @@ the first MLpot energy call, so ``get_term_by_name("MLPO")`` raises
 
 The MLpot energy is therefore USER + MLPO + MLEL on either library: on c49
 MLPO/MLEL are absent (0), on c52a1 USER is 0 unless a genuine ``func_set``
-user term is also registered (mmml never does that alongside MLpot).
+user term is also registered (karml never does that alongside MLpot).
 """
 
 from __future__ import annotations

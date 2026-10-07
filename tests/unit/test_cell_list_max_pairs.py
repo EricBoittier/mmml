@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from mmml.interfaces.pycharmmInterface.cell_list import (
+from karml.interfaces.pycharmmInterface.cell_list import (
     cubic_box_side_from_cell_matrix,
     estimate_max_pairs,
 )
@@ -24,7 +24,7 @@ def test_estimate_max_pairs_dcm_77_cluster() -> None:
 def test_cell_list_pairs_raises_when_buffer_too_small() -> None:
     import numpy as np
 
-    from mmml.interfaces.pycharmmInterface.cell_list import (
+    from karml.interfaces.pycharmmInterface.cell_list import (
         PairListTruncationError,
         cell_list_pairs,
     )
@@ -73,7 +73,7 @@ def test_cubic_box_side_from_scalar_and_matrix() -> None:
 
 def test_build_cell_list_pairs_with_retry_autoscales() -> None:
     import numpy as np
-    from mmml.interfaces.pycharmmInterface.mm_energy_forces import _build_cell_list_pairs_with_retry
+    from karml.interfaces.pycharmmInterface.mm_energy_forces import _build_cell_list_pairs_with_retry
 
     n = 20
     L = 10.0

@@ -19,7 +19,7 @@ After subtraction the model only fits real chemistry (~13 kcal/mol), so a
 < 1 kcal/mol target is a 13:1 reduction rather than 800:1.
 
 Not the same as ``--subtract-atom-energies``: that flag uses *free-atom*
-reference energies from ``mmml.data.units``, which are in a different
+reference energies from ``karml.data.units``, which are in a different
 convention than these labels -- applying it moves the mean from -57 eV to
 +8591 eV, i.e. makes the problem far worse. The references here are fitted on
 the dataset itself and are therefore self-consistent by construction.
@@ -32,7 +32,7 @@ absolute scale can always be restored.
 
 Usage
 -----
-    uv run python -m mmml.cli.misc.subtract_element_refs \\
+    uv run python -m karml.cli.misc.subtract_element_refs \\
         --in  artifacts/.../des_dimers_cgenff_top50_min15.npz \\
         --out artifacts/.../des_dimers_cgenff_top50_min15_eref.npz
 """

@@ -85,8 +85,8 @@ def _setup_env(repo: Path, cfg: dict[str, Any]) -> Path:
             os.environ["JAX_PLATFORMS"] = "cuda"
         elif cleaned != parts:
             os.environ["JAX_PLATFORMS"] = ",".join(cleaned)
-        os.environ.setdefault("MMML_MLPOT_DEVICE", "gpu")
-        os.environ.setdefault("MMML_JAX_WARMUP_DEVICE", "gpu")
+        os.environ.setdefault("KARML_MLPOT_DEVICE", "gpu")
+        os.environ.setdefault("KARML_JAX_WARMUP_DEVICE", "gpu")
     else:
         # Interactive / non-GPU-Slurm: still drop stale rocm from login profiles.
         plat = (os.environ.get("JAX_PLATFORMS") or "").strip()
@@ -100,13 +100,13 @@ def _setup_env(repo: Path, cfg: dict[str, Any]) -> Path:
         plat = (os.environ.get("JAX_PLATFORMS") or "").strip()
         if not plat:
             os.environ["JAX_PLATFORMS"] = "cpu"
-        os.environ.setdefault("MMML_MLPOT_DEVICE", os.environ.get("MMML_MLPOT_DEVICE", "cpu"))
-    os.environ["MMML_CKPT"] = str(ckpt)
-    os.environ.setdefault("MMML_DATA", str((example / "nh3_ch3cl_filtered.npz").resolve()))
-    os.environ.setdefault("MMML_CGENFF_EXTRA_RTF", str((example / "top_ch3cl.rtf").resolve()))
-    os.environ.setdefault("MMML_CGENFF_EXTRA_PRM", str((example / "par_ch3cl.prm").resolve()))
-    os.environ.setdefault("MMML_MM_PAIR_SOURCE", "jax")
-    os.environ.setdefault("MMML_COMPOSITION", "AMM1:1,CH3CL:1")
+        os.environ.setdefault("KARML_MLPOT_DEVICE", os.environ.get("KARML_MLPOT_DEVICE", "cpu"))
+    os.environ["KARML_CKPT"] = str(ckpt)
+    os.environ.setdefault("KARML_DATA", str((example / "nh3_ch3cl_filtered.npz").resolve()))
+    os.environ.setdefault("KARML_CGENFF_EXTRA_RTF", str((example / "top_ch3cl.rtf").resolve()))
+    os.environ.setdefault("KARML_CGENFF_EXTRA_PRM", str((example / "par_ch3cl.prm").resolve()))
+    os.environ.setdefault("KARML_MM_PAIR_SOURCE", "jax")
+    os.environ.setdefault("KARML_COMPOSITION", "AMM1:1,CH3CL:1")
     return ckpt
 
 
@@ -204,7 +204,7 @@ def _ensure_endpoints(repo: Path, example: Path) -> None:
 
 
 def _amm1_move_with(psf: Path) -> str:
-    from mmml.utils.domdec_psf_order import read_psf_atoms_and_bonds
+    from karml.utils.domdec_psf_order import read_psf_atoms_and_bonds
 
     atoms, _ = read_psf_atoms_and_bonds(psf)
     idxs = [str(a.index) for a in atoms if a.resname.upper() == "AMM1"]
@@ -285,7 +285,7 @@ def job_make_boxes(repo: Path, cfg: dict[str, Any], out: Path) -> dict[str, Any]
         cmd = [
             "uv",
             "run",
-            "mmml",
+            "karml",
             "make-box",
             "--pdb",
             str(solute),
@@ -304,7 +304,7 @@ def job_make_boxes(repo: Path, cfg: dict[str, Any], out: Path) -> dict[str, Any]
         print("+", " ".join(cmd), flush=True)
         print(f"CHARMM_LIB_DIR={env.get('CHARMM_LIB_DIR', '')}", flush=True)
         print(
-            f"MMML_CGENFF_EXTRA_RTF={env.get('MMML_CGENFF_EXTRA_RTF', '')}",
+            f"KARML_CGENFF_EXTRA_RTF={env.get('KARML_CGENFF_EXTRA_RTF', '')}",
             flush=True,
         )
         proc = subprocess.run(
@@ -331,7 +331,7 @@ def job_make_boxes(repo: Path, cfg: dict[str, Any], out: Path) -> dict[str, Any]
                 if "CH3CA" in sample or "AMM1A" in sample:
                     hint = (
                         "Packmol PDB still has mangled residue names (e.g. CH3CA/AMM1A); "
-                        "need rewrite_packmol_pdb_resnames after Packmol + MMML_CGENFF_EXTRA_RTF."
+                        "need rewrite_packmol_pdb_resnames after Packmol + KARML_CGENFF_EXTRA_RTF."
                     )
             tail = ""
             err = (proc.stderr or "").strip()
@@ -376,7 +376,7 @@ def job_neb(repo: Path, cfg: dict[str, Any], out: Path, ckpt: Path) -> dict[str,
     _uv_run(
         repo,
         [
-            "mmml",
+            "karml",
             "neb",
             "--config",
             str(example / "yaml" / "neb.yaml"),
@@ -418,7 +418,7 @@ def job_dmc(
     _uv_run(
         repo,
         [
-            "mmml",
+            "karml",
             "dmc",
             "--natm",
             "9",
@@ -469,7 +469,7 @@ def job_umbrella_gas(
     v = _variant_cfg(cfg, variant)
     _prepare_umbrella_outdir(out)
     cmd = [
-        "mmml",
+        "karml",
         "umbrella-sample",
         "--config",
         str(example / "yaml" / "umbrella_nc_gas.yaml"),
@@ -562,7 +562,7 @@ def job_umbrella_sol(
     _uv_run(
         repo,
         [
-            "mmml",
+            "karml",
             "umbrella-sample",
             "--config",
             str(yaml_path),
@@ -610,7 +610,7 @@ def job_adumb_gas(
     cmd = [
         "uv",
         "run",
-        "mmml",
+        "karml",
         "md-system",
         "--config",
         str(example / "yaml" / "adumb_nc_distance.yaml"),
@@ -670,7 +670,7 @@ def job_adumb_sol(
     cmd = [
         "uv",
         "run",
-        "mmml",
+        "karml",
         "md-system",
         "--config",
         str(yaml_cfg),
@@ -712,7 +712,7 @@ def job_mbar(repo: Path, run_dir: Path, out: Path, *, ckpt: Path | None = None) 
         raise FileNotFoundError(f"missing {snap}")
     # CLI has no --output-dir; results land in run_dir (updates umbrella_summary.json).
     cmd = [
-        "mmml",
+        "karml",
         "umbrella-mbar",
         "--run-dir",
         str(run_dir),

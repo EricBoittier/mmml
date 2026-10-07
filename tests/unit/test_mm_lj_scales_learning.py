@@ -20,7 +20,7 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from mmml.models.mm_lj_scales import (
+from karml.models.mm_lj_scales import (
     MM_LJ_EPSILON_SCALE_BOUNDS,
     MM_LJ_EPSILON_SCALE_KEY,
     MM_LJ_SIGMA_SCALE_BOUNDS,
@@ -139,7 +139,7 @@ def _e_mm(
     pme_box_length: float | None = None,
     include_lj: bool = True,
 ) -> jnp.ndarray:
-    from mmml.models.hybrid_energy import hybrid_forward
+    from karml.models.hybrid_energy import hybrid_forward
 
     kw = dict(SWITCH_KW)
     if lr_solver != "mic":
@@ -417,7 +417,7 @@ def test_out_of_bounds_report_names_the_offending_type():
 
 def test_sidecar_outside_bounds_still_loads_but_warns(tmp_path: Path):
     """Runs predating the bounds must not be stranded, only flagged."""
-    from mmml.models.mm_lj_scales import load_mm_lj_scales_sidecar
+    from karml.models.mm_lj_scales import load_mm_lj_scales_sidecar
 
     path = tmp_path / "hybrid_mm.json"
     write_mm_lj_scales_into_hybrid_mm_json(
@@ -432,8 +432,8 @@ def test_train_step_projects_lj_scales_into_bounds():
     """The projection has to live in the real update path, not just a test loop."""
     import optax
 
-    from mmml.models.hybrid_energy import HybridMMConfig
-    from mmml.models.physnetjax.physnetjax.training.trainstep import train_step
+    from karml.models.hybrid_energy import HybridMMConfig
+    from karml.models.physnetjax.physnetjax.training.trainstep import train_step
 
     class _Transform(NamedTuple):
         scale: jnp.ndarray
@@ -549,11 +549,11 @@ def test_atc_types_missing_from_training_are_left_at_unit_scale():
 
 def test_lj_scales_move_emm_under_ewald_when_include_lj():
     """#139 Phase 1: fixed scales affect Ewald E_MM only when include_lj=True."""
-    from mmml.data.units import KCAL_MOL_TO_EV
-    from mmml.models.cgenff_mm import cgenff_lj_energy, monomer_centroids
-    from mmml.interfaces.pycharmmInterface.calculator_utils import mm_switch_scale
-    from mmml.models.hybrid_energy import hybrid_forward
-    from mmml.models.mm_lj_scales import apply_mm_lj_scales
+    from karml.data.units import KCAL_MOL_TO_EV
+    from karml.models.cgenff_mm import cgenff_lj_energy, monomer_centroids
+    from karml.interfaces.pycharmmInterface.calculator_utils import mm_switch_scale
+    from karml.models.hybrid_energy import hybrid_forward
+    from karml.models.mm_lj_scales import apply_mm_lj_scales
 
     batch = _dimer_batch(separation_A=3.5)
     base_kw = dict(
@@ -625,7 +625,7 @@ def test_lj_scales_move_emm_under_ewald_when_include_lj():
 
 def test_ewald_plus_lj_force_energy_fd_smoke():
     """Finite-difference check for Ewald Coulomb + switched LJ forces."""
-    from mmml.models.hybrid_energy import hybrid_forward
+    from karml.models.hybrid_energy import hybrid_forward
 
     jax.config.update("jax_enable_x64", True)
     # float64 for a stable central-difference check (training path is float32).
@@ -743,7 +743,7 @@ def test_negative_epsilon_scale_does_not_produce_nan():
 
 def test_scale_floor_leaves_normal_values_untouched():
     """The floor must not perturb any scale in a plausible range."""
-    from mmml.models.mm_lj_scales import MM_LJ_MIN_SCALE, apply_mm_lj_scales
+    from karml.models.mm_lj_scales import MM_LJ_MIN_SCALE, apply_mm_lj_scales
 
     assert MM_LJ_MIN_SCALE > 0
     sig_in = jnp.array([0.5, 2.0])

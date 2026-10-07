@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from mmml.interfaces.pycharmmInterface.mm_energy_forces import (
+from karml.interfaces.pycharmmInterface.mm_energy_forces import (
     DEFAULT_JAX_MD_CAPACITY_MULTIPLIER,
     DEFAULT_JAX_MD_SKIN_DISTANCE_A,
     _fractional_positions_for_jax_md_neighbor_list,

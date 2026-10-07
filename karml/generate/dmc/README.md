@@ -7,19 +7,19 @@ parallel via ``jax.vmap`` over walker geometries (chunked by ``--max-batch``).
 ## CLI
 
 ```bash
-mmml dmc \
+karml dmc \
   --natm 20 \
   --nwalker 512 \
   --stepsize 5e-4 \
   --nstep 5000 \
   --eqstep 1000 \
   --alpha 1200.0 \
-  --checkpoint mmml/models/physnetjax/ckpts/<your-experiment>/epoch-000123 \
+  --checkpoint karml/models/physnetjax/ckpts/<your-experiment>/epoch-000123 \
   --max-batch 512 \
-  --input mmml/generate/dmc/examples/acetone_dmc.extxyz
+  --input karml/generate/dmc/examples/acetone_dmc.extxyz
 ```
 
-Equivalent module form: ``python -m mmml.generate.dmc.dmc ...``.
+Equivalent module form: ``python -m karml.generate.dmc.dmc ...``.
 
 Replace ``<your-experiment>/epoch-000123`` with the checkpoint you want to run.
 The command will:
@@ -67,7 +67,7 @@ For an input named ``acetone_dmc.extxyz`` (written to ``--output-dir`` or CWD):
 | ``--output-dir`` | Directory for output artifacts (default: CWD). |
 | ``-i/--input`` | Geometry file (XYZ/EXTXYZ/ASE-readable). |
 
-Run ``mmml dmc --help`` for the full argument list.
+Run ``karml dmc --help`` for the full argument list.
 
 ## Tips
 

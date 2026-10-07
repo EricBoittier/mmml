@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build and run one jaxmd CGenFF spoof smoke job via mmml md-system."""
+"""Build and run one jaxmd CGenFF spoof smoke job via karml md-system."""
 
 from __future__ import annotations
 
@@ -26,7 +26,7 @@ def load_config(path: Path | None = None) -> dict[str, Any]:
 
 
 def resolve_checkpoint(cfg: dict[str, Any]) -> Path:
-    env = os.environ.get("MMML_CKPT", "").strip()
+    env = os.environ.get("KARML_CKPT", "").strip()
     if env:
         path = Path(env).expanduser().resolve()
         if path.exists():
@@ -39,12 +39,12 @@ def resolve_checkpoint(cfg: dict[str, Any]) -> Path:
         # Spoof does not load PhysNet; fall back to any existing portable JSON.
         for cand in (
             _REPO / "examples/ckpts_json/DESdimers_params.json",
-            Path("/mmhome/boittier/home/mmml/examples/ckpts_json/DESdimers_params.json"),
+            Path("/mmhome/boittier/home/karml/examples/ckpts_json/DESdimers_params.json"),
         ):
             if cand.exists():
                 return cand.resolve()
         raise FileNotFoundError(
-            f"Placeholder checkpoint not found: {path}. Set MMML_CKPT or copy "
+            f"Placeholder checkpoint not found: {path}. Set KARML_CKPT or copy "
             "examples/ckpts_json/DESdimers_params.json into this clone."
         )
     return path
@@ -83,9 +83,9 @@ def write_job_config(cfg: dict[str, Any], job_id: str, out_dir: Path) -> Path:
     return path
 
 
-def mmml_cmd(md_argv: list[str]) -> list[str]:
-    py = os.environ.get("MMML_PYTHON", sys.executable)
-    return [py, "-m", "mmml.cli.__main__", "md-system", *md_argv]
+def karml_cmd(md_argv: list[str]) -> list[str]:
+    py = os.environ.get("KARML_PYTHON", sys.executable)
+    return [py, "-m", "karml.cli.__main__", "md-system", *md_argv]
 
 
 def main() -> int:
@@ -118,7 +118,7 @@ def main() -> int:
         os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else ""
     )
 
-    cmd = mmml_cmd(["--config", str(job_yaml)])
+    cmd = karml_cmd(["--config", str(job_yaml)])
     report["command"] = cmd
     print(f"=== {args.job_id} ===", flush=True)
     print(" ".join(cmd), flush=True)

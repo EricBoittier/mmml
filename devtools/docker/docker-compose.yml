@@ -1,36 +1,36 @@
 version: '3.8'
 
 services:
-  # CPU version of mmml
-  mmml-cpu:
+  # CPU version of karml
+  karml-cpu:
     build:
       context: .
       dockerfile: Dockerfile
       target: runtime-cpu
-    image: mmml:cpu
-    container_name: mmml-cpu
+    image: karml:cpu
+    container_name: karml-cpu
     volumes:
-      - .:/workspace/mmml
-      - mmml-cpu-cache:/root/.cache
-    working_dir: /workspace/mmml
+      - .:/workspace/karml
+      - karml-cpu-cache:/root/.cache
+    working_dir: /workspace/karml
     stdin_open: true
     tty: true
     command: bash
 
-  # GPU version of mmml
-  mmml-gpu:
+  # GPU version of karml
+  karml-gpu:
     build:
       context: .
       dockerfile: Dockerfile
       target: runtime-gpu
       args:
         CUDA_VERSION: "12.1.1"
-    image: mmml:gpu
-    container_name: mmml-gpu
+    image: karml:gpu
+    container_name: karml-gpu
     volumes:
-      - .:/workspace/mmml
-      - mmml-gpu-cache:/root/.cache
-    working_dir: /workspace/mmml
+      - .:/workspace/karml
+      - karml-gpu-cache:/root/.cache
+    working_dir: /workspace/karml
     stdin_open: true
     tty: true
     deploy:
@@ -46,19 +46,19 @@ services:
     command: bash
 
   # Development environment with Jupyter
-  mmml-jupyter:
+  karml-jupyter:
     build:
       context: .
       dockerfile: Dockerfile
       target: runtime-gpu
       args:
         CUDA_VERSION: "12.1.1"
-    image: mmml:jupyter
-    container_name: mmml-jupyter
+    image: karml:jupyter
+    container_name: karml-jupyter
     volumes:
-      - .:/workspace/mmml
-      - mmml-jupyter-cache:/root/.cache
-    working_dir: /workspace/mmml
+      - .:/workspace/karml
+      - karml-jupyter-cache:/root/.cache
+    working_dir: /workspace/karml
     ports:
       - "8888:8888"
     stdin_open: true
@@ -75,7 +75,7 @@ services:
     command: bash -c "uv run jupyter lab --ip=0.0.0.0 --port=8888 --no-browser --allow-root"
 
 volumes:
-  mmml-cpu-cache:
-  mmml-gpu-cache:
-  mmml-jupyter-cache:
+  karml-cpu-cache:
+  karml-gpu-cache:
+  karml-jupyter-cache:
 

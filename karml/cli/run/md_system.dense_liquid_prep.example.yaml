@@ -1,14 +1,14 @@
 # Dense liquid box preparation with resilient density prep.
 #
 # Single run (PyCHARMM equil only):
-#   mmml md-system --config mmml/cli/run/md_system.dense_liquid_prep.example.yaml
+#   karml md-system --config karml/cli/run/md_system.dense_liquid_prep.example.yaml
 #
 # Full campaign (PyCHARMM equil → JAX-MD prod):
-#   mmml md-system --config mmml/cli/run/md_system.dense_liquid_prep.example.yaml --run-all
+#   karml md-system --config karml/cli/run/md_system.dense_liquid_prep.example.yaml --run-all
 #
 # Composable presets (recommended for DCM:103/:206 from liquid-box):
-#   mmml/cli/run/presets/README.md
-#   mmml md-system --config mmml/cli/run/md_system.dcm103_equil.example.yaml
+#   karml/cli/run/presets/README.md
+#   karml md-system --config karml/cli/run/md_system.dcm103_equil.example.yaml
 #
 # See docs/md-system-configs.md § "Resilient density prep" for snippet variants.
 
@@ -29,7 +29,7 @@ defaults:
   charmm_mm_pretreat_dt_fs: 1.0
   # PBC DCM:206 (1030 ML atoms @ L≈35 Å) needs xlarge tier (max_Npr=12M):
   #   ./scripts/ensure_charmm_mlpot_limits.sh --n-ml 1030 --pbc --box-size 35
-  #   export CHARMM_LIB_DIR=~/.cache/mmml-charmm-build/tier_12000000_nodomdec/lib
+  #   export CHARMM_LIB_DIR=~/.cache/karml-charmm-build/tier_12000000_nodomdec/lib
 
 campaign_output: artifacts/dcm_dense_liquid_prep
 

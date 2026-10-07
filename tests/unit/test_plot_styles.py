@@ -4,11 +4,11 @@ from pathlib import Path
 
 import pytest
 
-from mmml.cli.misc.extract_checkpoint_metrics import (
+from karml.cli.misc.extract_checkpoint_metrics import (
     plot_training_comparison,
     plot_training_metrics,
 )
-from mmml.utils.plotting.styles import (
+from karml.utils.plotting.styles import (
     DEFAULT_PLOT_STYLE,
     LINE_STYLE_CYCLE,
     MARKER_CYCLE,
@@ -219,7 +219,7 @@ def test_legend_outside_auto_matches_explicit_min_area_side() -> None:
     # directly rather than trusting the heuristic reasoning above alone.
     import matplotlib.pyplot as plt
 
-    from mmml.utils.plotting.styles import _legend_footprint_in
+    from karml.utils.plotting.styles import _legend_footprint_in
 
     apply_plot_style("icml")
     fig, ax = plt.subplots(figsize=(7, 6))

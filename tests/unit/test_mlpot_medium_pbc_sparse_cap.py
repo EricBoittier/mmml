@@ -5,14 +5,14 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from mmml.interfaces.pycharmmInterface.mlpot.medium_pbc_validation import (
+from karml.interfaces.pycharmmInterface.mlpot.medium_pbc_validation import (
     MEDIUM_PBC_MONOMER_COUNTS,
     lattice_positions_cubic_pbc,
     suggest_medium_pbc_sizing,
     validate_medium_pbc_geometry,
     workflow_checklist,
 )
-from mmml.interfaces.pycharmmInterface.mlpot.mlpot_sparse_dimer_policy import (
+from karml.interfaces.pycharmmInterface.mlpot.mlpot_sparse_dimer_policy import (
     resolve_max_active_dimers,
 )
 

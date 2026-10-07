@@ -8,7 +8,7 @@ from unittest import mock
 import numpy as np
 import pytest
 
-from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+from karml.interfaces.pycharmmInterface.mlpot.pbc_env import (
     find_latest_pretreat_mm_restart,
     sync_workflow_pbc_box_side_after_mm_pretreat,
 )
@@ -16,13 +16,13 @@ from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
 
 def test_sync_workflow_pbc_box_side_after_mm_pretreat_updates_live_box() -> None:
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.resolve_charmm_cubic_box_side_A",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.resolve_charmm_cubic_box_side_A",
         return_value=(39.99, "pbound"),
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.charmm_crystal_is_active",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.charmm_crystal_is_active",
         return_value=True,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.parse_cubic_box_side_from_charmm_restart",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.parse_cubic_box_side_from_charmm_restart",
         return_value=39.99,
     ):
         synced = sync_workflow_pbc_box_side_after_mm_pretreat(
@@ -35,10 +35,10 @@ def test_sync_workflow_pbc_box_side_after_mm_pretreat_updates_live_box() -> None
 
 def test_sync_workflow_pbc_box_side_after_mm_pretreat_noop_when_unchanged() -> None:
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.resolve_charmm_cubic_box_side_A",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.resolve_charmm_cubic_box_side_A",
         return_value=(28.0, "fallback"),
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.charmm_crystal_is_active",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.charmm_crystal_is_active",
         return_value=False,
     ):
         synced = sync_workflow_pbc_box_side_after_mm_pretreat(28.0, quiet=True)
@@ -72,15 +72,15 @@ def test_find_latest_pretreat_mm_restart_equi_when_no_prod(tmp_path: Path) -> No
 
 
 def test_resolve_charmm_cubic_box_side_A_uses_xucell_when_pbound_zero() -> None:
-    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+    from karml.interfaces.pycharmmInterface.mlpot.pbc_env import (
         resolve_charmm_cubic_box_side_A,
     )
 
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env._read_charmm_box_sides_A",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env._read_charmm_box_sides_A",
         return_value=(0.0, 0.0, 0.0),
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env._read_charmm_ucell_lengths_A",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env._read_charmm_ucell_lengths_A",
         return_value=(32.0, 32.0, 32.0),
     ):
         side, source = resolve_charmm_cubic_box_side_A()
@@ -89,7 +89,7 @@ def test_resolve_charmm_cubic_box_side_A_uses_xucell_when_pbound_zero() -> None:
 
 
 def test_pbc_nbond_cutoffs_ordered_for_restored_l28_box():
-    from mmml.interfaces.pycharmmInterface.nbonds_config import pbc_nbond_cutoffs
+    from karml.interfaces.pycharmmInterface.nbonds_config import pbc_nbond_cutoffs
 
     for side in (25.685, 27.993, 28.0):
         cuts = pbc_nbond_cutoffs(side)
@@ -97,20 +97,20 @@ def test_pbc_nbond_cutoffs_ordered_for_restored_l28_box():
 
 
 def test_push_charmm_cubic_box_side_A_skips_when_already_matched() -> None:
-    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+    from karml.interfaces.pycharmmInterface.mlpot.pbc_env import (
         push_charmm_cubic_box_side_A,
     )
 
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.probe_charmm_cubic_box_side_A",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.probe_charmm_cubic_box_side_A",
         return_value=(30.0, "pbound"),
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.charmm_crystal_lattice_ready",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.charmm_crystal_lattice_ready",
         return_value=True,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.apply_pbc_nbonds",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.apply_pbc_nbonds",
     ) as mock_nbonds, mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.prepare_charmm_pbc",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.prepare_charmm_pbc",
     ) as mock_prepare:
         side, source = push_charmm_cubic_box_side_A(30.0, quiet=True)
     assert side == pytest.approx(30.0)
@@ -120,22 +120,22 @@ def test_push_charmm_cubic_box_side_A_skips_when_already_matched() -> None:
 
 
 def test_push_charmm_cubic_box_side_A_restores_when_xucell_only() -> None:
-    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+    from karml.interfaces.pycharmmInterface.mlpot.pbc_env import (
         push_charmm_cubic_box_side_A,
     )
 
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.probe_charmm_cubic_box_side_A",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.probe_charmm_cubic_box_side_A",
         return_value=(43.616, "xucell"),
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.charmm_crystal_lattice_ready",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.charmm_crystal_lattice_ready",
         return_value=False,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.restore_charmm_cubic_crystal_lattice",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.restore_charmm_cubic_crystal_lattice",
     ) as mock_restore, mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.prepare_charmm_pbc",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.prepare_charmm_pbc",
     ) as mock_prepare, mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.resolve_charmm_cubic_box_side_A",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.resolve_charmm_cubic_box_side_A",
         return_value=(43.616, "pbound"),
     ):
         side, source = push_charmm_cubic_box_side_A(43.616, quiet=True)
@@ -146,19 +146,19 @@ def test_push_charmm_cubic_box_side_A_restores_when_xucell_only() -> None:
 
 
 def test_push_charmm_cubic_box_side_A_calls_prepare_when_mismatch() -> None:
-    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+    from karml.interfaces.pycharmmInterface.mlpot.pbc_env import (
         push_charmm_cubic_box_side_A,
     )
 
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.probe_charmm_cubic_box_side_A",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.probe_charmm_cubic_box_side_A",
         return_value=(28.0, "pbound"),
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.prepare_charmm_pbc",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.prepare_charmm_pbc",
     ) as mock_prepare, mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.apply_pbc_nbonds",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.apply_pbc_nbonds",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.resolve_charmm_cubic_box_side_A",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.resolve_charmm_cubic_box_side_A",
         return_value=(32.0, "pbound"),
     ):
         side, source = push_charmm_cubic_box_side_A(32.0, quiet=True)
@@ -168,13 +168,13 @@ def test_push_charmm_cubic_box_side_A_calls_prepare_when_mismatch() -> None:
 
 
 def test_probe_charmm_cubic_box_side_A_returns_none_when_unavailable() -> None:
-    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import probe_charmm_cubic_box_side_A
+    from karml.interfaces.pycharmmInterface.mlpot.pbc_env import probe_charmm_cubic_box_side_A
 
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env._read_charmm_box_sides_A",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env._read_charmm_box_sides_A",
         return_value=(0.0, 0.0, 0.0),
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env._read_charmm_ucell_lengths_A",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env._read_charmm_ucell_lengths_A",
         side_effect=RuntimeError("no ucell"),
     ):
         side, source = probe_charmm_cubic_box_side_A()
@@ -185,15 +185,15 @@ def test_probe_charmm_cubic_box_side_A_returns_none_when_unavailable() -> None:
 def test_resolve_mlpot_mic_box_side_A_skips_restart_when_crystal_active(
     tmp_path: Path,
 ) -> None:
-    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import resolve_mlpot_mic_box_side_A
+    from karml.interfaces.pycharmmInterface.mlpot.pbc_env import resolve_mlpot_mic_box_side_A
 
     restart = tmp_path / "prod.res"
     restart.write_text("stub")
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.charmm_crystal_is_active",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.charmm_crystal_is_active",
         return_value=True,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.resolve_charmm_cubic_box_side_A",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.resolve_charmm_cubic_box_side_A",
         return_value=(28.0, "pbound"),
     ) as mock_resolve:
         side, source = resolve_mlpot_mic_box_side_A(
@@ -210,7 +210,7 @@ def test_resolve_mlpot_mic_box_side_A_skips_restart_when_crystal_active(
 
 
 def test_pretreat_handoff_panel_tolerates_inactive_pbound(tmp_path: Path) -> None:
-    from mmml.interfaces.pycharmmInterface.mlpot.run_workflow import (
+    from karml.interfaces.pycharmmInterface.mlpot.run_workflow import (
         build_charmm_mm_pretreat_handoff_sections,
     )
 
@@ -238,25 +238,25 @@ def test_pretreat_handoff_panel_tolerates_inactive_pbound(tmp_path: Path) -> Non
     pos = np.linspace(0.0, 10.0, 15).reshape(5, 3)
 
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.run_workflow.charmm_grms",
+        "karml.interfaces.pycharmmInterface.mlpot.run_workflow.charmm_grms",
         return_value=0.5,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env._read_charmm_box_sides_A",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env._read_charmm_box_sides_A",
         return_value=(0.0, 0.0, 0.0),
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.charmm_crystal_is_active",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.charmm_crystal_is_active",
         return_value=False,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.probe_charmm_cubic_box_side_A",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.probe_charmm_cubic_box_side_A",
         return_value=(None, None),
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.resolve_charmm_cubic_box_side_A",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.resolve_charmm_cubic_box_side_A",
         return_value=(28.0, "restart"),
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.resolve_mlpot_mic_box_side_A",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.resolve_mlpot_mic_box_side_A",
         return_value=(28.0, "restart"),
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         return_value=pos.copy(),
     ):
         sections = build_charmm_mm_pretreat_handoff_sections(
@@ -274,93 +274,93 @@ def test_pretreat_handoff_panel_tolerates_inactive_pbound(tmp_path: Path) -> Non
 
 
 def test_charmm_crystal_lattice_ready_requires_pbound_not_xucell_only() -> None:
-    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+    from karml.interfaces.pycharmmInterface.mlpot.pbc_env import (
         charmm_crystal_lattice_ready,
     )
 
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env._charmm_image_ntrans",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env._charmm_image_ntrans",
         return_value=8,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env._read_charmm_box_sides_A",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env._read_charmm_box_sides_A",
         return_value=(0.0, 0.0, 0.0),
     ):
         assert charmm_crystal_lattice_ready() is False
 
 
 def test_charmm_crystal_abnr_ready_accepts_ucell_when_pbound_inactive() -> None:
-    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+    from karml.interfaces.pycharmmInterface.mlpot.pbc_env import (
         charmm_crystal_abnr_ready,
     )
 
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env._charmm_image_ntrans",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env._charmm_image_ntrans",
         return_value=8,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.charmm_crystal_lattice_ready",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.charmm_crystal_lattice_ready",
         return_value=False,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env._read_charmm_ucell_lengths_A",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env._read_charmm_ucell_lengths_A",
         return_value=(50.0, 50.0, 50.0),
     ):
         assert charmm_crystal_abnr_ready(50.0) is True
 
 
 def test_charmm_crystal_abnr_ready_accepts_ucell_when_ntrans_probe_fails() -> None:
-    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+    from karml.interfaces.pycharmmInterface.mlpot.pbc_env import (
         charmm_crystal_abnr_ready,
     )
 
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env._charmm_image_ntrans",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env._charmm_image_ntrans",
         side_effect=RuntimeError("NTRANS unavailable"),
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.charmm_crystal_lattice_ready",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.charmm_crystal_lattice_ready",
         return_value=False,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env._read_charmm_ucell_lengths_A",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env._read_charmm_ucell_lengths_A",
         return_value=(46.864, 46.864, 46.864),
     ):
         assert charmm_crystal_abnr_ready(46.864) is True
 
 
 def test_charmm_crystal_abnr_ready_accepts_ucell_when_ntrans_reports_vacuum() -> None:
-    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+    from karml.interfaces.pycharmmInterface.mlpot.pbc_env import (
         charmm_crystal_abnr_ready,
     )
 
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env._charmm_image_ntrans",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env._charmm_image_ntrans",
         return_value=1,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.charmm_crystal_lattice_ready",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.charmm_crystal_lattice_ready",
         return_value=False,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.charmm_crystal_is_active",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.charmm_crystal_is_active",
         return_value=True,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env._read_charmm_ucell_lengths_A",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env._read_charmm_ucell_lengths_A",
         return_value=(46.864, 46.864, 46.864),
     ):
         assert charmm_crystal_abnr_ready(46.864) is True
 
 
 def test_reinstall_charmm_crystal_for_lattice_abnr_uses_prepare_when_allowed() -> None:
-    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+    from karml.interfaces.pycharmmInterface.mlpot.pbc_env import (
         reinstall_charmm_crystal_for_lattice_abnr,
     )
 
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.charmm_crystal_abnr_ready",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.charmm_crystal_abnr_ready",
         side_effect=[False, True],
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.restore_charmm_cubic_crystal_lattice",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.restore_charmm_cubic_crystal_lattice",
     ) as mock_restore, mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.prepare_charmm_pbc",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.prepare_charmm_pbc",
     ) as mock_prepare, mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.apply_pbc_nbonds",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.apply_pbc_nbonds",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env._free_charmm_crystal_if_available",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env._free_charmm_crystal_if_available",
         return_value=True,
     ) as mock_free:
         side = reinstall_charmm_crystal_for_lattice_abnr(43.616, quiet=True)
@@ -371,19 +371,19 @@ def test_reinstall_charmm_crystal_for_lattice_abnr_uses_prepare_when_allowed() -
 
 
 def test_reinstall_charmm_crystal_for_lattice_abnr_restore_only_when_prepare_disallowed() -> None:
-    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+    from karml.interfaces.pycharmmInterface.mlpot.pbc_env import (
         reinstall_charmm_crystal_for_lattice_abnr,
     )
 
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.charmm_crystal_abnr_ready",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.charmm_crystal_abnr_ready",
         side_effect=[False, True],
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.restore_charmm_cubic_crystal_lattice",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.restore_charmm_cubic_crystal_lattice",
     ) as mock_restore, mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.prepare_charmm_pbc",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.prepare_charmm_pbc",
     ) as mock_prepare, mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env._free_charmm_crystal_if_available",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env._free_charmm_crystal_if_available",
         return_value=False,
     ):
         side = reinstall_charmm_crystal_for_lattice_abnr(
@@ -397,19 +397,19 @@ def test_reinstall_charmm_crystal_for_lattice_abnr_restore_only_when_prepare_dis
 
 
 def test_reinstall_charmm_crystal_for_lattice_abnr_force_skips_ready_shortcut() -> None:
-    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+    from karml.interfaces.pycharmmInterface.mlpot.pbc_env import (
         reinstall_charmm_crystal_for_lattice_abnr,
     )
 
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.charmm_crystal_abnr_ready",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.charmm_crystal_abnr_ready",
         side_effect=[True],
     ) as mock_ready, mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.prepare_charmm_pbc",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.prepare_charmm_pbc",
     ) as mock_prepare, mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.apply_pbc_nbonds",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.apply_pbc_nbonds",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env._free_charmm_crystal_if_available",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env._free_charmm_crystal_if_available",
         return_value=True,
     ):
         side = reinstall_charmm_crystal_for_lattice_abnr(
@@ -423,17 +423,17 @@ def test_reinstall_charmm_crystal_for_lattice_abnr_force_skips_ready_shortcut() 
 
 
 def test_reinstall_charmm_crystal_for_lattice_abnr_raises_without_prepare() -> None:
-    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+    from karml.interfaces.pycharmmInterface.mlpot.pbc_env import (
         reinstall_charmm_crystal_for_lattice_abnr,
     )
 
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.charmm_crystal_abnr_ready",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.charmm_crystal_abnr_ready",
         return_value=False,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.restore_charmm_cubic_crystal_lattice",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.restore_charmm_cubic_crystal_lattice",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env._free_charmm_crystal_if_available",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env._free_charmm_crystal_if_available",
         return_value=False,
     ):
         with pytest.raises(RuntimeError, match="lattice-ready"):
@@ -445,15 +445,15 @@ def test_reinstall_charmm_crystal_for_lattice_abnr_raises_without_prepare() -> N
 
 
 def test_assert_charmm_pbc_lattice_ready_for_mlpot_raises_when_inactive() -> None:
-    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+    from karml.interfaces.pycharmmInterface.mlpot.pbc_env import (
         assert_charmm_pbc_lattice_ready_for_mlpot,
     )
 
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.charmm_crystal_lattice_ready",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.charmm_crystal_lattice_ready",
         return_value=False,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.charmm_crystal_abnr_ready",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.charmm_crystal_abnr_ready",
         return_value=False,
     ), pytest.raises(RuntimeError, match="lattice-ready"):
         assert_charmm_pbc_lattice_ready_for_mlpot(
@@ -463,15 +463,15 @@ def test_assert_charmm_pbc_lattice_ready_for_mlpot_raises_when_inactive() -> Non
 
 
 def test_assert_charmm_pbc_lattice_ready_for_mlpot_accepts_ucell_post_reinstall() -> None:
-    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+    from karml.interfaces.pycharmmInterface.mlpot.pbc_env import (
         assert_charmm_pbc_lattice_ready_for_mlpot,
     )
 
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.charmm_crystal_lattice_ready",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.charmm_crystal_lattice_ready",
         return_value=False,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.charmm_crystal_abnr_ready",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.charmm_crystal_abnr_ready",
         return_value=True,
     ):
         assert_charmm_pbc_lattice_ready_for_mlpot(
@@ -481,27 +481,27 @@ def test_assert_charmm_pbc_lattice_ready_for_mlpot_accepts_ucell_post_reinstall(
 
 
 def test_sync_charmm_crystal_after_mm_pretreat_refreshes_image_without_redef() -> None:
-    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+    from karml.interfaces.pycharmmInterface.mlpot.pbc_env import (
         sync_charmm_crystal_after_mm_pretreat,
     )
 
     mock_py = mock.MagicMock()
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.charmm_crystal_is_active",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.charmm_crystal_is_active",
         return_value=False,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.ensure_charmm_crystal_for_cpt",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.ensure_charmm_crystal_for_cpt",
     ) as ensure, mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.probe_charmm_cubic_box_side_A",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.probe_charmm_cubic_box_side_A",
         return_value=(28.0, "pbound"),
     ), mock.patch.dict(
         "sys.modules",
         {
             "pycharmm": mock_py,
-            "mmml.interfaces.pycharmmInterface.import_pycharmm": mock.MagicMock(),
+            "karml.interfaces.pycharmmInterface.import_pycharmm": mock.MagicMock(),
         },
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.charmm_levels.charmm_relaxed_bomlev",
+        "karml.interfaces.pycharmmInterface.charmm_levels.charmm_relaxed_bomlev",
         return_value=__import__("contextlib").nullcontext(),
     ):
         restored = sync_charmm_crystal_after_mm_pretreat(28.0, quiet=True)
@@ -512,15 +512,15 @@ def test_sync_charmm_crystal_after_mm_pretreat_refreshes_image_without_redef() -
 
 
 def test_sync_charmm_crystal_after_mm_pretreat_noop_when_active() -> None:
-    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+    from karml.interfaces.pycharmmInterface.mlpot.pbc_env import (
         sync_charmm_crystal_after_mm_pretreat,
     )
 
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.charmm_crystal_is_active",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.charmm_crystal_is_active",
         return_value=True,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.ensure_charmm_crystal_for_cpt",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.ensure_charmm_crystal_for_cpt",
     ) as ensure:
         assert sync_charmm_crystal_after_mm_pretreat(28.0, quiet=True) is False
     ensure.assert_not_called()
@@ -528,30 +528,30 @@ def test_sync_charmm_crystal_after_mm_pretreat_noop_when_active() -> None:
 
 def test_ensure_charmm_crystal_for_cpt_keeps_live_cell_when_lattice_ready() -> None:
     """NPT-evolved L must not be overwritten by a stale workflow side."""
-    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+    from karml.interfaces.pycharmmInterface.mlpot.pbc_env import (
         ensure_charmm_crystal_for_cpt,
     )
 
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.charmm_crystal_lattice_ready",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.charmm_crystal_lattice_ready",
         return_value=True,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.restore_charmm_cubic_crystal_lattice",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.restore_charmm_cubic_crystal_lattice",
     ) as restore:
         ensure_charmm_crystal_for_cpt(30.307, quiet=True)
     restore.assert_not_called()
 
 
 def test_ensure_charmm_crystal_for_cpt_restores_when_lattice_not_ready() -> None:
-    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+    from karml.interfaces.pycharmmInterface.mlpot.pbc_env import (
         ensure_charmm_crystal_for_cpt,
     )
 
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.charmm_crystal_lattice_ready",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.charmm_crystal_lattice_ready",
         return_value=False,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.restore_charmm_cubic_crystal_lattice",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.restore_charmm_cubic_crystal_lattice",
     ) as restore:
         ensure_charmm_crystal_for_cpt(30.307, quiet=True)
     restore.assert_called_once_with(30.307, quiet=True)

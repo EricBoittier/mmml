@@ -3,7 +3,7 @@
 This is the reusable core shared by:
 
 * ``scripts/prepare_ml_mm_dataset.py``   -- Orbax bulk caches (ragged frames)
-* ``mmml prepare-mm-dataset``            -- NPZ training splits (dense frames)
+* ``karml prepare-mm-dataset``            -- NPZ training splits (dense frames)
 
 The assignment pipeline, per frame:
 
@@ -24,7 +24,7 @@ The assignment pipeline, per frame:
 
 ``sigma`` follows the conventional ``4*eps [(sig/r)^12 - (sig/r)^6]`` LJ form
 (Lorentz-Berthelot combination); CHARMM's ``Rmin/2`` is converted on parse via
-``sigma = 2 * (Rmin/2) / 2**(1/6)``.  See :mod:`mmml.models.cgenff_mm` for the
+``sigma = 2 * (Rmin/2) / 2**(1/6)``.  See :mod:`karml.models.cgenff_mm` for the
 padding convention consumed downstream: ``cgenff_type_idx < 0`` / ``mol_id < 0``
 mark padding atoms.
 """

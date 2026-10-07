@@ -38,14 +38,14 @@ Default grid: 3.0–10.0 Å, 12×12 points (`config.yaml` → `scan`).
 ## Prerequisites
 
 ```bash
-cd ~/mmml
+cd ~/karml
 uv sync --extra gpu          # PyCHARMM + CHARMM
 uv sync --extra quantum-crosscheck   # tblite xTB (optional)
 # ORCA binary on PATH or export ORCA=/path/to/orca
 ```
 
 On **scicore**, CHARMM is MPI-linked. Use `run_campaign_gpu.sh` (sources
-`scripts/scicore_env.sh` + `mmml-charmm-mpirun.sh`). Do not load a mismatched
+`scripts/scicore_env.sh` + `karml-charmm-mpirun.sh`). Do not load a mismatched
 OpenMPI/GCC module by hand — that makes every pair exit 1 before writing an NPZ.
 
 ## Run
@@ -61,12 +61,12 @@ bash run_campaign_gpu.sh 4
 bash scripts/snakemake_local.sh 2 -n
 
 # Local (2 concurrent pairs; serial CHARMM / macOS)
-MMML_DES_SCAN_NO_MPIRUN=1 bash scripts/snakemake_local.sh 2
+KARML_DES_SCAN_NO_MPIRUN=1 bash scripts/snakemake_local.sh 2
 
 # Slurm CPU farm
 bash scripts/snakemake_slurm.sh 8
 
-# Single pair (scicore: uses mmml-charmm-mpirun.sh)
+# Single pair (scicore: uses karml-charmm-mpirun.sh)
 bash scripts/job_shell.sh aco__meoh
 ```
 
@@ -96,9 +96,9 @@ Pairs without `scan_2d.npz` get a grey **pending** placeholder panel.
 ### Smoke test (CHARMM-only, 5×5 grid)
 
 ```bash
-MMML_WORKFLOW_CONFIG=config.smoke.yaml bash scripts/snakemake_local.sh 4
+KARML_WORKFLOW_CONFIG=config.smoke.yaml bash scripts/snakemake_local.sh 4
 # Rebuild report only (after scans exist):
-MMML_WORKFLOW_CONFIG=config.smoke.yaml snakemake report --configfile config.smoke.yaml
+KARML_WORKFLOW_CONFIG=config.smoke.yaml snakemake report --configfile config.smoke.yaml
 ```
 
 ## Outputs

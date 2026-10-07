@@ -74,8 +74,8 @@ def main() -> int:
     import jax.numpy as jnp
 
     import evaluate_so3lr_spooky_extxyz as ev
-    from mmml.analysis.dimer_molecules import make_oriented_scan_geometries
-    from mmml.utils.model_checkpoint import infer_trainable_zbl_config
+    from karml.analysis.dimer_molecules import make_oriented_scan_geometries
+    from karml.utils.model_checkpoint import infer_trainable_zbl_config
 
     EV_TO_KCAL_MOL = 23.060548867
 

@@ -5,8 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Optional
 
-from mmml.models.physnetjax.defaults import list_hf_physnet_models
-from mmml.utils.model_checkpoint import load_model_checkpoint
+from karml.models.physnetjax.defaults import list_hf_physnet_models
+from karml.utils.model_checkpoint import load_model_checkpoint
 
 
 def load_physnet_checkpoint(path: Path | str) -> tuple[dict[str, Any], Optional[dict[str, Any]]]:

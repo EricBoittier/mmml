@@ -54,7 +54,7 @@ work could not measure.
 
 1. [Quick start](#quick-start)
 2. [Background: what we are computing and why](#background-what-we-are-computing-and-why)
-3. [Machinery added to `mmml`](#machinery-added-to-mmml)
+3. [Machinery added to `karml`](#machinery-added-to-karml)
 4. [Files in this directory](#files-in-this-directory)
 5. [Running the gas-phase PMF](#running-the-gas-phase-pmf)
 6. [Running the solvated campaign](#running-the-solvated-campaign)
@@ -70,7 +70,7 @@ work could not measure.
 ## Quick start
 
 ```bash
-cd /mmhome/andreychev/mmml/mmml
+cd /mmhome/andreychev/karml/karml
 source examples/menshutkin/_env.sh
 ```
 
@@ -87,7 +87,7 @@ SMOKE=1 bash examples/menshutkin/02_gas_pmf.sh
 Production run on the GPU host:
 
 ```bash
-ssh gpu09 /mmhome/andreychev/mmml/mmml/examples/menshutkin/run_gas_gpu.sh
+ssh gpu09 /mmhome/andreychev/karml/karml/examples/menshutkin/run_gas_gpu.sh
 ```
 
 ### Hosts
@@ -110,7 +110,7 @@ login node**, so `import pycharmm` failed with `OSError: libOpenCL.so.1: cannot
 open shared object file`. All fifteen OpenCL symbols CHARMM references are
 functions (no data symbols), so a no-op stub satisfies the dynamic linker
 without changing behaviour — CHARMM only calls them from its explicit OpenCL
-acceleration path, which `mmml` never enables.
+acceleration path, which `karml` never enables.
 
 The stub lives at `~/.local/opencl-stub/libOpenCL.so.1` and `_env.sh` prepends
 it to `LD_LIBRARY_PATH` **only on hosts with no real OpenCL**. `gpu09` has a
@@ -346,19 +346,19 @@ Two things are easy to get wrong here and both are handled explicitly:
 
 ---
 
-## Machinery added to `mmml`
+## Machinery added to `karml`
 
 All of it is shared between the gas and solvated paths on purpose: a reaction
 coordinate defined twice would silently produce two incomparable profiles.
 
 | Component | Location | What it does |
 |---|---|---|
-| `LinearDistanceCV` | `mmml/md/restraints/linear_distance.py` | ξ = Σ cᵈ·r(iᵈ,jᵈ) with analytic gradients, MIC-aware. `LinearDistanceCV.difference((C,Cl),(C,N))` is the Sₙ2 coordinate |
+| `LinearDistanceCV` | `karml/md/restraints/linear_distance.py` | ξ = Σ cᵈ·r(iᵈ,jᵈ) with analytic gradients, MIC-aware. `LinearDistanceCV.difference((C,Cl),(C,N))` is the Sₙ2 coordinate |
 | `FlatBottomWall` | same file | One/two-sided confinement on any CV; zero inside the bounds |
-| `mm_bonded` | `mmml/md/energy/terms/mm_bonded.py` | CGenFF bonded energy for MM molecules, filtering out ML-region rows |
-| `rxncoor` | `mmml/md/energy/terms/rxncoor.py` | Umbrella bias on a `LinearDistanceCV` for solvated windows |
-| combination CVs | `mmml/umbrella/*` | Threaded through config, packed energies/forces, seeding, snapshots and MBAR |
-| `equilibration_steps` | `mmml/umbrella/config.py` | Discards leading frames; window seeds are 0 K optimised geometries, so the start of every run is a heating transient |
+| `mm_bonded` | `karml/md/energy/terms/mm_bonded.py` | CGenFF bonded energy for MM molecules, filtering out ML-region rows |
+| `rxncoor` | `karml/md/energy/terms/rxncoor.py` | Umbrella bias on a `LinearDistanceCV` for solvated windows |
+| combination CVs | `karml/umbrella/*` | Threaded through config, packed energies/forces, seeding, snapshots and MBAR |
+| `equilibration_steps` | `karml/umbrella/config.py` | Discards leading frames; window seeds are 0 K optimised geometries, so the start of every run is a heating transient |
 
 Backward compatibility is covered: all 62 pre-existing umbrella tests still
 pass, and dedicated tests assert that a single-pair `LinearDistanceCV`
@@ -501,7 +501,7 @@ Stock CGenFF is missing two things we need:
 - **Chloromethane.** `examples/m` defines it as `RESI CH3CL`, five characters.
   The PDB residue-name field is columns 18–21 — four characters — so that file
   had to be written with shifted columns, which strict readers (ASE, and hence
-  `mmml make-box`) reject with *"Invalid or missing coordinate(s)"*. We use
+  `karml make-box`) reject with *"Invalid or missing coordinate(s)"*. We use
   `MECL` instead. Parameters are keyed by atom type, so
   `examples/m/par_ch3cl.prm` applies unchanged.
 - **Cyclohexane.** The only cyclohexane in the CHARMM tree is in
@@ -607,7 +607,7 @@ Two levels, run side by side on at least one solvent:
 The difference between the two is a clean, quotable measure of how much of the
 catalysis is electrostatic. (Not yet implemented — see
 [Current status](#current-status).) The charge model is being designed to be
-pluggable so **DCM** (distributed charge model, `mmml/models/dcmnet`) can be
+pluggable so **DCM** (distributed charge model, `karml/models/dcmnet`) can be
 swapped in: off-centre distributed charges reproduce the molecular ESP much
 better than atomic point charges, which matters most exactly where this project
 is aimed — the developing chloride charge and the solvent's response to it.
@@ -638,7 +638,7 @@ an unreactive solvent**, which is the regime this stack targets.
 Anything expressible as a linear combination of interatomic distances works:
 
 ```python
-from mmml.md.restraints import LinearDistanceCV
+from karml.md.restraints import LinearDistanceCV
 
 cv = LinearDistanceCV.difference(minuend=(iC, iX), subtrahend=(iC, iN))   # SN2
 cv = LinearDistanceCV.distance(i, j)                                      # dissociation
@@ -880,7 +880,7 @@ Written 2026-07-29, after the first solvated production attempt.
 | All five solvent boxes at experimental density | water 997, methanol 792, acetonitrile 786, benzene 874 kg/m³ — all on target |
 | CHARMM-free runtime | box builds, minimises to −214 eV, equilibrates to −11.7 kcal/mol per water (TIP3P ≈ −9.9) |
 | GPU throughput | 2.5 → **105 steps/s**; 83 s per window |
-| Two real unit bugs in `mmml` fixed | jax-md timestep (98x), and the host neighbour list starving the GPU |
+| Two real unit bugs in `karml` fixed | jax-md timestep (98x), and the host neighbour list starving the GPU |
 
 ### What is NOT done, and two assumptions that turned out wrong
 
@@ -963,7 +963,7 @@ closest solvent atom to each solute atom, against the LJ contact distance
 
 A water hydrogen 1.586 Å from the chloride — 0.55 Å inside contact — having
 dragged its own oxygen into the methyl group. Fixed with `erf(r/σ)/r` damping at
-σ = 1.0 Å, the same form the learned-charge models in `mmml/models` use. Beyond
+σ = 1.0 Å, the same form the learned-charge models in `karml/models` use. Beyond
 1.6 Å it is within 2.5 % of 1/r, so it bounds the singularity without altering
 the physical interaction range.
 
@@ -1091,8 +1091,8 @@ its data, not the integrator adding energy.
 barrier region — not more points along it. The training histogram along ξ has
 400–900 frames per 0.25 Å bin in the basins but only 55–110 in ξ ∈ [−0.75,
 +0.5], and the scan contributes a thin 1D thread with no thermal spread. Use
-`mmml normal-mode-sample` around TS-region scan geometries and/or
-`mmml active-learning` on the frames that trigger the runaway
+`karml normal-mode-sample` around TS-region scan geometries and/or
+`karml active-learning` on the frames that trigger the runaway
 (`artifacts/menshutkin/diag/hole_geometry.xyz` is one), label at the same level
 of theory, and retrain with `physnet_train_extended.yaml`. Re-run
 `artifacts/menshutkin/diag/manifold_distance.py` afterwards; every window should
@@ -1125,17 +1125,17 @@ Two independent bugs, verified by NVE energy conservation over 2000 steps on a
 
 | convention | |ΔE|max | verdict |
 |---|---|---|
-| raw fs (`mmml/umbrella/sample.py`) | 2.1×10⁶ eV | ~10× too large — this is what the *"0.5 fs often NaNs by step ~100"* comment was actually describing |
-| ps (`mmml/md/drivers/jaxmd.py`) | 1.07×10⁻⁷ eV | 98× too *small*: stable, energy-conserving, and covering 1 % of the labelled duration |
+| raw fs (`karml/umbrella/sample.py`) | 2.1×10⁶ eV | ~10× too large — this is what the *"0.5 fs often NaNs by step ~100"* comment was actually describing |
+| ps (`karml/md/drivers/jaxmd.py`) | 1.07×10⁻⁷ eV | 98× too *small*: stable, energy-conserving, and covering 1 % of the labelled duration |
 | correct | 2.47×10⁻⁴ eV | genuine 0.25 fs step |
 
-Fixed in `mmml/umbrella/sample.py`, `mmml/md/drivers/jaxmd.py`,
+Fixed in `karml/umbrella/sample.py`, `karml/md/drivers/jaxmd.py`,
 `examples/m/05_free_nve_jaxmd.py`, `examples/m/06_free_nvt_jaxmd.py`.
 
 **Still outstanding** (flagged as a separate task, not yet fixed — these feed
-the legacy `md-system --backend jaxmd` path): `mmml/cli/run/jaxmd_runner.py`
-(lines 217, 1308), `mmml/cli/run/lambda_jaxmd.py:286`,
-`mmml/cli/run/md_pbc_suite/jaxmd.py:1642`. If you use those entry points, your
+the legacy `md-system --backend jaxmd` path): `karml/cli/run/jaxmd_runner.py`
+(lines 217, 1308), `karml/cli/run/lambda_jaxmd.py:286`,
+`karml/cli/run/md_pbc_suite/jaxmd.py:1642`. If you use those entry points, your
 runs are 98× shorter than they claim.
 
 One knob is deliberately left alone: `langevin_gamma` is still in jax-md
@@ -1312,7 +1312,7 @@ and the artifacts are the state; anything not written down is not state.
 
 ```bash
 # Relaunch (idempotent - it clears its own output directory first):
-ssh gpu09 /mmhome/andreychev/mmml/mmml/artifacts/menshutkin/diag/pmf_water.sh
+ssh gpu09 /mmhome/andreychev/karml/karml/artifacts/menshutkin/diag/pmf_water.sh
 ```
 
 It runs under `setsid`, so it is in its own session and survives ssh
@@ -1320,7 +1320,7 @@ disconnects, terminal closes and agent restarts. Check on it from anywhere:
 
 ```bash
 # progress
-tail -f /mmhome/andreychev/mmml/mmml/artifacts/menshutkin/diag/pmf_water.log
+tail -f /mmhome/andreychev/karml/karml/artifacts/menshutkin/diag/pmf_water.log
 # alive?
 ssh gpu09 'pgrep -af 07_solvated_pmf; nvidia-smi --query-gpu=index,utilization.gpu --format=csv,noheader'
 ```
@@ -1426,7 +1426,7 @@ All in `artifacts/menshutkin/diag/`, all cheap:
 - **Torrie & Valleau**, J. Comput. Phys. **23**, 187 (1977) — umbrella sampling.
 - **M. R. Shirts, J. D. Chodera**, *Statistically optimal analysis of samples
   from multiple equilibrium states*, J. Chem. Phys. **129**, 124105 (2008) —
-  MBAR, which is what `mmml umbrella-mbar` runs.
+  MBAR, which is what `karml umbrella-mbar` runs.
 - **Kumar et al.**, J. Comput. Chem. **13**, 1011 (1992) — WHAM, used by Turan
   et al.
 
@@ -1477,7 +1477,7 @@ did not was sampling, not the model.
   the sum `r(C-Cl)+r(C-N)`, the `N-C-Cl` attack angle, and (under replica
   exchange) window identity were all free. Each produced finite, smooth,
   meaningless sampling. New `BondRetentionWall` and `AngleWall` in
-  `mmml/md/restraints/`, wired into both the gas (`--wall-min-bond`,
+  `karml/md/restraints/`, wired into both the gas (`--wall-min-bond`,
   `--wall-angle`) and solvated paths, with bounds measured from the training
   data rather than chosen.
 - **Replica exchange + per-window recovery is now refused.** Combining them
@@ -1520,7 +1520,7 @@ defects in the ML/MM coupling, plus two wrong conclusions of our own retracted.
   dumped blow-up geometry shows a water H at **1.586 Å** from the Cl (contact
   2.135 Å), having pulled its oxygen into the methyl group (H···H **0.640 Å**).
   Now damped with `erf(r/σ)/r` at σ = 1.0 Å, the form used elsewhere in
-  `mmml/models`; beyond 1.6 Å it is within 2.5 % of `1/r`.
+  `karml/models`; beyond 1.6 Å it is within 2.5 % of `1/r`.
 - **The chlorine carried the wrong LJ type.** CGenFF's CLGA1 (Rmin/2 1.910 Å) is
   chlorine bonded to carbon, sized for the −0.2 e CGenFF assigns it. Over most of
   this coordinate the atom is chloride; now uses CHARMM's CLA (2.270 Å).
@@ -1642,7 +1642,7 @@ defects in the ML/MM coupling, plus two wrong conclusions of our own retracted.
 - Model validated: `model_ext.json` in eV, 0.046 kcal/mol RMSE on the scan,
   covers the TS; `kl.json` does not and must not be used.
 - Added `LinearDistanceCV`, `FlatBottomWall`, `mm_bonded`, `rxncoor`;
-  combination CVs threaded through `mmml/umbrella`; `equilibration_steps`.
+  combination CVs threaded through `karml/umbrella`; `equilibration_steps`.
 - Fixed two jax-md timestep unit bugs; flagged three more.
 - Gas-phase pipeline working end to end; smoke PMF 31.9–33.5 kcal/mol vs
   Turan 35.8.

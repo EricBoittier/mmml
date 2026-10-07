@@ -17,23 +17,23 @@ from ase.io.trajectory import Trajectory
 from ase.optimize.fire import FIRE
 from ase.calculators.singlepoint import SinglePointCalculator
 
-from mmml.interfaces.calculators.simple_inference import create_calculator_from_checkpoint
-from mmml.interfaces.pycharmmInterface import setupRes
-from mmml.interfaces.pycharmmInterface.cgenff_bonded_reference import set_charmm_positions
-from mmml.interfaces.pycharmmInterface.import_pycharmm import (
+from karml.interfaces.calculators.simple_inference import create_calculator_from_checkpoint
+from karml.interfaces.pycharmmInterface import setupRes
+from karml.interfaces.pycharmmInterface.cgenff_bonded_reference import set_charmm_positions
+from karml.interfaces.pycharmmInterface.import_pycharmm import (
     crystal_free_charmm_for_param_append,
     ensure_pycharmm_loaded,
     pycharmm,
     reset_block,
 )
-from mmml.interfaces.pycharmmInterface.nbonds_config import ic_prm_fill
-from mmml.interfaces.pycharmmInterface.charmm_levels import capture_fortran_stdio
-from mmml.interfaces.pycharmmInterface.trialanine_water_box import (
+from karml.interfaces.pycharmmInterface.nbonds_config import ic_prm_fill
+from karml.interfaces.pycharmmInterface.charmm_levels import capture_fortran_stdio
+from karml.interfaces.pycharmmInterface.trialanine_water_box import (
     TRIA_RESI_NAME,
     _load_cgenff_with_trialanine,
 )
-from mmml.interfaces.pycharmmInterface.utils import get_Z_from_psf
-from mmml.utils.dcd_writer import save_trajectory_dcd
+from karml.interfaces.pycharmmInterface.utils import get_Z_from_psf
+from karml.utils.dcd_writer import save_trajectory_dcd
 
 
 PEPTIDE_CKPT_PATH = "examples/params_aaa_long_2026-07-04_22-30-27.json"

@@ -183,7 +183,7 @@ def update_bimag():
 def get_iminb_stats():
     """Return image nonbond list sizes after ``UPIMNB`` / ``MKIMNB``.
 
-    Requires a CHARMM build that exports ``image_get_iminb_stats`` (MMML
+    Requires a CHARMM build that exports ``image_get_iminb_stats`` (KARML
     ``api_image.F90``).  Returns ``None`` when the symbol is unavailable.
 
     Returns

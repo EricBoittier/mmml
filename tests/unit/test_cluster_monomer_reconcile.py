@@ -8,20 +8,20 @@ import types
 
 import numpy as np
 
-from mmml.interfaces.pycharmmInterface.mlpot.setup import reconcile_n_monomers_with_psf
+from karml.interfaces.pycharmmInterface.mlpot.setup import reconcile_n_monomers_with_psf
 
 
 def _stub_pycharmm_import(monkeypatch) -> None:
     monkeypatch.setitem(
         sys.modules,
-        "mmml.interfaces.pycharmmInterface.import_pycharmm",
+        "karml.interfaces.pycharmmInterface.import_pycharmm",
         types.ModuleType("import_pycharmm"),
     )
 
 
 def test_reconcile_n_monomers_with_psf_overrides_cli_count(monkeypatch) -> None:
     _stub_pycharmm_import(monkeypatch)
-    import mmml.interfaces.pycharmmInterface.mlpot.trimer_scan as trimer_scan
+    import karml.interfaces.pycharmmInterface.mlpot.trimer_scan as trimer_scan
 
     monkeypatch.setattr(
         trimer_scan,
@@ -41,7 +41,7 @@ def test_reconcile_n_monomers_with_psf_overrides_cli_count(monkeypatch) -> None:
 
 def test_reconcile_n_monomers_with_psf_keeps_matching_cli_count(monkeypatch) -> None:
     _stub_pycharmm_import(monkeypatch)
-    import mmml.interfaces.pycharmmInterface.mlpot.trimer_scan as trimer_scan
+    import karml.interfaces.pycharmmInterface.mlpot.trimer_scan as trimer_scan
 
     monkeypatch.setattr(
         trimer_scan,
@@ -59,7 +59,7 @@ def test_reconcile_n_monomers_with_psf_keeps_matching_cli_count(monkeypatch) -> 
 
 def test_reconcile_n_monomers_with_psf_no_psf_unchanged(monkeypatch) -> None:
     _stub_pycharmm_import(monkeypatch)
-    import mmml.interfaces.pycharmmInterface.mlpot.trimer_scan as trimer_scan
+    import karml.interfaces.pycharmmInterface.mlpot.trimer_scan as trimer_scan
 
     monkeypatch.setattr(
         trimer_scan,

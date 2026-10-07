@@ -12,10 +12,10 @@ import ase
 import ase.io
 from ase import Atoms
 
-from mmml.interfaces.pycharmmInterface.import_pycharmm import (
+from karml.interfaces.pycharmmInterface.import_pycharmm import (
     CGENFF_RTF, CGENFF_PRM, CHARMM_HOME, CHARMM_LIB_DIR
 )
-from mmml.interfaces.pycharmmInterface.pycharmmCommands import pbcset
+from karml.interfaces.pycharmmInterface.pycharmmCommands import pbcset
 os.environ["CHARMM_HOME"] = CHARMM_HOME
 os.environ["CHARMM_LIB_DIR"] = CHARMM_LIB_DIR
 
@@ -30,7 +30,7 @@ import pycharmm.write as write
 import pycharmm.lingo
 
 # import simple scripts
-from mmml.interfaces.pycharmmInterface.pycharmmCommands import CLEAR_CHARMM
+from karml.interfaces.pycharmmInterface.pycharmmCommands import CLEAR_CHARMM
 
 
 # unit registry
@@ -90,7 +90,7 @@ solvents_density = {
 
 
 def _normalize_solvent_key(solvent: str) -> str:
-    from mmml.interfaces.pycharmmInterface.cgenff_residues import (
+    from karml.interfaces.pycharmmInterface.cgenff_residues import (
         require_cgenff_residue_name,
     )
 
@@ -99,7 +99,7 @@ def _normalize_solvent_key(solvent: str) -> str:
 
 def _resolve_solvent_atoms(solvent: str) -> Atoms:
     """Return solvent monomer atoms for any CGenFF residue name."""
-    from mmml.analysis.residue_geometry import load_residue_monomer_atoms
+    from karml.analysis.residue_geometry import load_residue_monomer_atoms
 
     name = _normalize_solvent_key(solvent)
     if name in solvents_ase:
@@ -112,7 +112,7 @@ def _resolve_solvent_atoms(solvent: str) -> Atoms:
 
 
 def _resolve_solvent_density_kg_m3(solvent: str, density: float | None) -> float:
-    from mmml.analysis.residue_geometry import resolve_solvent_density_kg_m3
+    from karml.analysis.residue_geometry import resolve_solvent_density_kg_m3
 
     name = _normalize_solvent_key(solvent)
     if density is not None:
@@ -179,7 +179,7 @@ def _read_pdb_atoms_split(pdb_path: Path) -> Atoms:
     never mistaken for coordinates when occupancy/tempFactor are omitted.
     """
     from ase import Atoms as _Atoms
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+    from karml.interfaces.pycharmmInterface.mlpot.setup import (
         _parse_pdb_atoms_whitespace,
     )
 
@@ -414,7 +414,7 @@ def run_packmol_solvation(
     enables Packmol's ``pbc`` so tolerances hold across the cell faces.
     ``region="sphere"`` restores the spherical-shell (droplet) placement.
     """
-    from mmml.analysis.residue_geometry import ensure_residue_pdb
+    from karml.analysis.residue_geometry import ensure_residue_pdb
 
     if region not in ("box", "sphere"):
         raise ValueError(f"region must be 'box' or 'sphere', got {region!r}")
@@ -542,7 +542,7 @@ def run_packmol_solvation(
     with open(f"packmol/packmol-{solvent_tag}.inp", "w") as f:
         f.write(packmol_input)
 
-    from mmml.interfaces.pycharmmInterface.packmol_placement import (
+    from karml.interfaces.pycharmmInterface.packmol_placement import (
         packmol_executable,
         rewrite_packmol_pdb_resnames,
     )
@@ -557,7 +557,7 @@ def run_packmol_solvation(
     except ValueError:  # killed by a signal, or the shell could not exec
         exit_code = status
     if exit_code != 0:
-        from mmml.interfaces.pycharmmInterface.packmol_placement import (
+        from karml.interfaces.pycharmmInterface.packmol_placement import (
             PACKMOL_EXIT_LABELS,
         )
 
@@ -582,7 +582,7 @@ def run_packmol_solvation(
         ],
     )
     # Fail fast if the solvent template was ASE ``MOL`` (CHARMM GENERATE aborts).
-    from mmml.analysis.residue_geometry import _pdb_resnames
+    from karml.analysis.residue_geometry import _pdb_resnames
 
     restored = _pdb_resnames(out_pdb)
     if name not in restored:
@@ -633,7 +633,7 @@ def run_packmol(
     with open("packmol/packmol.inp", "w") as f:
         f.write(packmol_input)
 
-    from mmml.interfaces.pycharmmInterface.packmol_placement import (
+    from karml.interfaces.pycharmmInterface.packmol_placement import (
         packmol_executable,
         rewrite_packmol_pdb_resnames,
     )
@@ -646,7 +646,7 @@ def run_packmol(
     except ValueError:  # killed by a signal, or the shell could not exec
         exit_code = status
     if exit_code != 0:
-        from mmml.interfaces.pycharmmInterface.packmol_placement import (
+        from karml.interfaces.pycharmmInterface.packmol_placement import (
             PACKMOL_EXIT_LABELS,
         )
 
@@ -668,7 +668,7 @@ def _ensure_crystal_image_str() -> None:
     dst = Path("crystal_image.str")
     if dst.exists():
         return
-    from mmml.paths import crystal_image_str_source
+    from karml.paths import crystal_image_str_source
 
     src = crystal_image_str_source()
     if src.exists():
@@ -688,18 +688,18 @@ def setup_box_generic(pdb_path, rtf=CGENFF_RTF, prm=CGENFF_PRM, side_length: flo
         skip_energy_show: If True, skip energy.show() to avoid slow CHARMM energy evaluation
             (Drude setup). Use for faster startup when validation is not needed.
         rtf, prm: Retained for API compatibility; topology is loaded via
-            ``read_cgenff_toppar()`` so ``MMML_CGENFF_EXTRA_RTF`` append residues
+            ``read_cgenff_toppar()`` so ``KARML_CGENFF_EXTRA_RTF`` append residues
             (e.g. CH3CL) are available.
     """
-    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import pycharmm_quiet, safe_energy_show
-    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import prepare_charmm_pbc
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+    from karml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
+    from karml.interfaces.pycharmmInterface.import_pycharmm import pycharmm_quiet, safe_energy_show
+    from karml.interfaces.pycharmmInterface.mlpot.pbc_env import prepare_charmm_pbc
+    from karml.interfaces.pycharmmInterface.mlpot.setup import (
         _parse_pdb_atoms_whitespace,
         _residue_sequence_from_pdb,
         sync_charmm_positions,
     )
-    from mmml.interfaces.pycharmmInterface.nbonds_config import read_cgenff_toppar
+    from karml.interfaces.pycharmmInterface.nbonds_config import read_cgenff_toppar
     import pycharmm.generate as generate
     import pycharmm.read as read
 
@@ -730,7 +730,7 @@ def setup_box_generic(pdb_path, rtf=CGENFF_RTF, prm=CGENFF_PRM, side_length: flo
             raise RuntimeError(
                 f"GENERATE SYS failed for {pdb_path} (status={status}; "
                 f"sequence={res_seq}). Check CGenFF residue names and "
-                "MMML_CGENFF_EXTRA_RTF (e.g. CH3CL)."
+                "KARML_CGENFF_EXTRA_RTF (e.g. CH3CL)."
             )
     sync_charmm_positions(np.asarray(pdb_xyz, dtype=float))
     # KEY_LIBRARY builds do not parse lingo ``nbonds`` / ``open`` / ``crystal``;
@@ -754,14 +754,14 @@ def initialize_psf(resid: str, n_molecules: int, side_length: float, solvent: st
     """
     Initializes the PSF file
     """
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import pycharmm_quiet
+    from karml.interfaces.pycharmmInterface.import_pycharmm import pycharmm_quiet
     CLEAR_CHARMM()
     if pdb_path is None:
         pdbfilename = "pdb/init-packmol.pdb"
     else:
         pdbfilename = pdb_path
 
-    from mmml.interfaces.pycharmmInterface.nbonds_config import read_cgenff_toppar
+    from karml.interfaces.pycharmmInterface.nbonds_config import read_cgenff_toppar
 
     read_cgenff_toppar()
 
@@ -774,7 +774,7 @@ def initialize_psf(resid: str, n_molecules: int, side_length: float, solvent: st
         " ".join([resid.upper()]*n_molecules)
         pdb_path = pdbfilename
 
-    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_silent_command
+    from karml.interfaces.pycharmmInterface.charmm_levels import charmm_silent_command
 
     header = f"""OPEN UNIT 1 READ FORM NAME {pdb_path}
     READ SEQU PDB UNIT 1
@@ -811,7 +811,7 @@ def minimize_box(skip_energy_show: bool = False, nbxmod: int = 3):
     if skip_energy_show:
         print("Skipping energy.show() (--skip-energy-show).")
     else:
-        from mmml.interfaces.pycharmmInterface.import_pycharmm import safe_energy_show
+        from karml.interfaces.pycharmmInterface.import_pycharmm import safe_energy_show
 
         safe_energy_show()
 

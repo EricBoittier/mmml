@@ -1,6 +1,6 @@
 """Plotting utilities."""
 
-from mmml.utils.plotting.fes import (
+from karml.utils.plotting.fes import (
     FreeEnergySurface,
     calculate_fes,
     evaluate_coordinates,
@@ -8,7 +8,7 @@ from mmml.utils.plotting.fes import (
     plot_fes,
 )
 
-from mmml.utils.plotting.styles import (
+from karml.utils.plotting.styles import (
     DEFAULT_PLOT_STYLE,
     PLOT_STYLES,
     PlotStyle,

@@ -8,7 +8,7 @@ from unittest.mock import MagicMock
 import numpy as np
 import pytest
 
-from mmml.interfaces.pycharmmInterface.mlpot.monomer_physnet_mini import (
+from karml.interfaces.pycharmmInterface.mlpot.monomer_physnet_mini import (
     SelectiveMonomerPhysnetMiniConfig,
     _cap_flagged_monomers,
     monomer_physnet_mini_enabled,
@@ -138,11 +138,11 @@ def test_resolve_monomer_template_rejects_collapsed_restart_and_uses_memory(monk
     intact_memory = current + np.array([0.0, 0.0, 0.2])
     ctx = _ctx(positions=current, mini_positions=intact_memory)
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.monomer_physnet_mini.build_monomer_template_recovery_candidates",
+        "karml.interfaces.pycharmmInterface.mlpot.monomer_physnet_mini.build_monomer_template_recovery_candidates",
         lambda *a, **k: [__import__("pathlib").Path("bad.res")],
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.extent_repack_recovery.resolve_extent_reference_positions",
+        "karml.interfaces.pycharmmInterface.mlpot.extent_repack_recovery.resolve_extent_reference_positions",
         lambda *a, **k: (collapsed, __import__("pathlib").Path("bad.res")),
     )
     resolved = resolve_monomer_template_reference_positions(
@@ -173,15 +173,15 @@ def test_resolve_monomer_template_reference_positions_same_residue_fallback(monk
     ctx.workflow_args = SimpleNamespace(residue="DCM")
 
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.monomer_physnet_mini.build_monomer_template_recovery_candidates",
+        "karml.interfaces.pycharmmInterface.mlpot.monomer_physnet_mini.build_monomer_template_recovery_candidates",
         lambda *a, **k: [],
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.extent_repack_recovery.resolve_extent_reference_positions",
+        "karml.interfaces.pycharmmInterface.mlpot.extent_repack_recovery.resolve_extent_reference_positions",
         lambda *a, **k: (_ for _ in ()).throw(RuntimeError("no ref")),
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         lambda: pos,
     )
 
@@ -219,15 +219,15 @@ def test_resolve_monomer_template_reference_positions_prefers_packmol_template(m
     )
 
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.monomer_physnet_mini.build_monomer_template_recovery_candidates",
+        "karml.interfaces.pycharmmInterface.mlpot.monomer_physnet_mini.build_monomer_template_recovery_candidates",
         lambda *a, **k: [],
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.extent_repack_recovery.resolve_extent_reference_positions",
+        "karml.interfaces.pycharmmInterface.mlpot.extent_repack_recovery.resolve_extent_reference_positions",
         lambda *a, **k: (_ for _ in ()).throw(RuntimeError("no ref")),
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         lambda: pos,
     )
 
@@ -245,11 +245,11 @@ def test_resolve_monomer_template_reference_positions_prefers_packmol_template(m
 def test_run_selective_monomer_physnet_mini_skips_without_flagged(monkeypatch):
     ctx = _ctx(positions=np.zeros((6, 3)))
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         lambda: ctx._positions,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.monomer_physnet_mini.mlpot_hybrid_grms_from_calculator",
+        "karml.interfaces.pycharmmInterface.mlpot.monomer_physnet_mini.mlpot_hybrid_grms_from_calculator",
         lambda _ctx: 12.0,
     )
     empty_diag = SimpleNamespace(
@@ -258,7 +258,7 @@ def test_run_selective_monomer_physnet_mini_skips_without_flagged(monkeypatch):
         cluster_grms=5.0,
     )
     monkeypatch.setattr(
-        "mmml.utils.monomer_force_diag.resolve_selective_repack_monomers",
+        "karml.utils.monomer_force_diag.resolve_selective_repack_monomers",
         lambda *a, **k: empty_diag,
     )
     result = run_selective_monomer_physnet_mini(ctx, context_prefix="test")
@@ -288,15 +288,15 @@ def test_run_selective_monomer_physnet_mini_runs_bfgs_on_flagged(monkeypatch):
         cluster_grms=30.0,
     )
     monkeypatch.setattr(
-        "mmml.utils.monomer_force_diag.resolve_selective_repack_monomers",
+        "karml.utils.monomer_force_diag.resolve_selective_repack_monomers",
         lambda *a, **k: diag,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.monomer_physnet_mini.resolve_mlpot_checkpoint_path",
+        "karml.interfaces.pycharmmInterface.mlpot.monomer_physnet_mini.resolve_mlpot_checkpoint_path",
         lambda _ctx: __import__("pathlib").Path("/tmp/fake.ckpt"),
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.monomer_physnet_mini._monomer_ase_calculator",
+        "karml.interfaces.pycharmmInterface.mlpot.monomer_physnet_mini._monomer_ase_calculator",
         lambda *a, **k: MagicMock(),
     )
 
@@ -306,19 +306,19 @@ def test_run_selective_monomer_physnet_mini_runs_bfgs_on_flagged(monkeypatch):
         synced.append(np.asarray(arr, dtype=np.float64).copy())
 
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         lambda: ctx._positions,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
         _sync,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.invalidate_mlpot_calculator_caches",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics.invalidate_mlpot_calculator_caches",
         lambda _ctx: None,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.monomer_physnet_mini.refresh_mlpot_energy_and_grms",
+        "karml.interfaces.pycharmmInterface.mlpot.monomer_physnet_mini.refresh_mlpot_energy_and_grms",
         lambda _ctx, context="": 8.5,
     )
 
@@ -350,7 +350,7 @@ def test_cap_flagged_monomers_keeps_highest_fmax(monkeypatch):
     forces[3, 0] = 2.0
     forces[6, 0] = 9.0
     monkeypatch.setattr(
-        "mmml.utils.monomer_force_diag.mlpot_hybrid_forces_kcalmol_A",
+        "karml.utils.monomer_force_diag.mlpot_hybrid_forces_kcalmol_A",
         lambda _ctx, positions=None: forces,
     )
     kept = _cap_flagged_monomers(
@@ -374,31 +374,31 @@ def test_run_selective_monomer_physnet_mini_caps_explicit_flagged(monkeypatch):
     forces[6, 0] = 9.0
 
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.monomer_physnet_mini.resolve_mlpot_checkpoint_path",
+        "karml.interfaces.pycharmmInterface.mlpot.monomer_physnet_mini.resolve_mlpot_checkpoint_path",
         lambda _ctx: __import__("pathlib").Path("/tmp/fake.ckpt"),
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.monomer_physnet_mini._monomer_ase_calculator",
+        "karml.interfaces.pycharmmInterface.mlpot.monomer_physnet_mini._monomer_ase_calculator",
         lambda *a, **k: MagicMock(),
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         lambda: ctx._positions,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
         lambda arr: None,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.invalidate_mlpot_calculator_caches",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics.invalidate_mlpot_calculator_caches",
         lambda _ctx: None,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.monomer_physnet_mini.refresh_mlpot_energy_and_grms",
+        "karml.interfaces.pycharmmInterface.mlpot.monomer_physnet_mini.refresh_mlpot_energy_and_grms",
         lambda _ctx, context="": 4.0,
     )
     monkeypatch.setattr(
-        "mmml.utils.monomer_force_diag.mlpot_hybrid_forces_kcalmol_A",
+        "karml.utils.monomer_force_diag.mlpot_hybrid_forces_kcalmol_A",
         lambda _ctx, positions=None: forces,
     )
 
@@ -428,27 +428,27 @@ def test_run_selective_monomer_physnet_mini_explicit_flagged(monkeypatch):
     ctx = _ctx(positions=pos)
 
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.monomer_physnet_mini.resolve_mlpot_checkpoint_path",
+        "karml.interfaces.pycharmmInterface.mlpot.monomer_physnet_mini.resolve_mlpot_checkpoint_path",
         lambda _ctx: __import__("pathlib").Path("/tmp/fake.ckpt"),
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.monomer_physnet_mini._monomer_ase_calculator",
+        "karml.interfaces.pycharmmInterface.mlpot.monomer_physnet_mini._monomer_ase_calculator",
         lambda *a, **k: MagicMock(),
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         lambda: ctx._positions,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
         lambda arr: None,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.invalidate_mlpot_calculator_caches",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics.invalidate_mlpot_calculator_caches",
         lambda _ctx: None,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.monomer_physnet_mini.refresh_mlpot_energy_and_grms",
+        "karml.interfaces.pycharmmInterface.mlpot.monomer_physnet_mini.refresh_mlpot_energy_and_grms",
         lambda _ctx, context="": 4.0,
     )
 
@@ -492,29 +492,29 @@ def test_run_selective_monomer_physnet_mini_runs_dimer_group(monkeypatch):
         return MagicMock()
 
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.monomer_physnet_mini.resolve_mlpot_checkpoint_path",
+        "karml.interfaces.pycharmmInterface.mlpot.monomer_physnet_mini.resolve_mlpot_checkpoint_path",
         lambda _ctx: __import__("pathlib").Path("/tmp/fake.ckpt"),
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.monomer_physnet_mini._monomer_ase_calculator",
+        "karml.interfaces.pycharmmInterface.mlpot.monomer_physnet_mini._monomer_ase_calculator",
         _calc,
     )
 
     synced: list[np.ndarray] = []
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         lambda: ctx._positions,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
         lambda arr: synced.append(np.asarray(arr, dtype=np.float64).copy()),
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.invalidate_mlpot_calculator_caches",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics.invalidate_mlpot_calculator_caches",
         lambda _ctx: None,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.monomer_physnet_mini.refresh_mlpot_energy_and_grms",
+        "karml.interfaces.pycharmmInterface.mlpot.monomer_physnet_mini.refresh_mlpot_energy_and_grms",
         lambda _ctx, context="": 3.0,
     )
 

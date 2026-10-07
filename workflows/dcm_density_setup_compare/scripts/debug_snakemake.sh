@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Snakemake driver + Slurm log triage (pc-studix login node).
 #
-# Usage (from ~/mmml/workflows/dcm_density_setup_compare):
+# Usage (from ~/karml/workflows/dcm_density_setup_compare):
 #   bash scripts/debug_snakemake.sh
 #   bash scripts/debug_snakemake.sh --job 203595
 #   bash scripts/debug_snakemake.sh --tag resilient_dcm_154_t50_l32_ht_hoover
@@ -79,7 +79,7 @@ if [[ -n "$SLURM_JOB" ]]; then
   if [[ -n "$slurm_log" ]]; then
     echo "log: $slurm_log"
     debug_grep_section "Slurm rule log" "$slurm_log" \
-      "$DBG_PAT_SLURM|error|Error|Traceback|libOpenCL|MMML_CKPT" 60
+      "$DBG_PAT_SLURM|error|Error|Traceback|libOpenCL|KARML_CKPT" 60
   else
     echo "(no rule log under $SLURM_LOG_DIR for job $SLURM_JOB)"
   fi

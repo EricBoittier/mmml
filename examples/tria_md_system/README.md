@@ -10,7 +10,7 @@ still fails closed until generalized lowering lands.
 ## 1. Build the box
 
 ```bash
-uv run mmml md-embedding build -o artifacts/md_embedding/aaa --n-waters 10 --box-side-A 28
+uv run karml md-embedding build -o artifacts/md_embedding/aaa --n-waters 10 --box-side-A 28
 ```
 
 Needs sibling `model.pdb` (CHARMM `coor_pdb` with TRIA/TIP3 RESN — **rebuild**
@@ -18,7 +18,7 @@ if an older ASE `MOL` PDB is present), `model.psf`, `box.json`.
 
 ```bash
 # Force a fresh PDB with correct residue names:
-uv run mmml md-embedding build -o artifacts/md_embedding/aaa --n-waters 10 --box-side-A 28
+uv run karml md-embedding build -o artifacts/md_embedding/aaa --n-waters 10 --box-side-A 28
 # Confirm RESN (should list TRIA and TIP3, not MOL):
 awk '/^ATOM/{print substr($0,18,4)}' artifacts/md_embedding/aaa/model.pdb | sort -u
 ```
@@ -26,11 +26,11 @@ awk '/^ATOM/{print substr($0,18,4)}' artifacts/md_embedding/aaa/model.pdb | sort
 ## 2. NVT / NPT / NVE smokes (dilute aaa — stability only)
 
 ```bash
-export MMML_CKPT="${MMML_CKPT:-examples/spooky_so3lr_muon3_epoch0013.json}"
+export KARML_CKPT="${KARML_CKPT:-examples/spooky_so3lr_muon3_epoch0013.json}"
 
-uv run mmml md-system \
+uv run karml md-system \
   --config examples/tria_md_system/yaml/campaign_nvt_npt_nve.yaml \
-  --checkpoint "$MMML_CKPT" \
+  --checkpoint "$KARML_CKPT" \
   --run-all
 ```
 
@@ -39,7 +39,7 @@ Pass criteria:
 - Policy log: `mechanical-embedding; ownership validated`
 - Each job exit 0; finite energies under `artifacts/tria_md_system/campaign/{nvt,npt,nve}`
 - `ml_resnames=[TRIA]` applied (peptide ML region, TIP3 MM bonded + nonbonded)
-- GPU banner: `mmml: JAX requested=gpu ... active=cuda:0` (or intentional CPU)
+- GPU banner: `karml: JAX requested=gpu ... active=cuda:0` (or intentional CPU)
 - **NPT**: log line with `V0`, `Vfinal`, `Vfinal/V0`, `P0`/`Pfinal` (bar). Pass =
   finite E + finite V + `Vfinal/V0` in `[0.5, 2.0]` on this short smoke — **not**
   equilibrated density.
@@ -48,20 +48,20 @@ Pass criteria:
 
 ```bash
 # 200 waters need ~L=30 Å (L=20 overpacks → E0 ~ 1e6 eV / NaN)
-uv run mmml md-embedding build \
+uv run karml md-embedding build \
   -o artifacts/md_embedding/aaa_dense \
   --n-waters 200 \
   --box-side-A 30
 
-uv run mmml md-system \
+uv run karml md-system \
   --config examples/tria_md_system/yaml/campaign_nvt_npt_dense.yaml \
-  --checkpoint "$MMML_CKPT" \
+  --checkpoint "$KARML_CKPT" \
   --run-all
 
 # Optional: NVT Nose–Hoover chain (jax-md nvt_nose_hoover) instead of Langevin
-uv run mmml md-system \
+uv run karml md-system \
   --config examples/tria_md_system/yaml/campaign_nvt_npt_dense_nhc.yaml \
-  --checkpoint "$MMML_CKPT" \
+  --checkpoint "$KARML_CKPT" \
   --run-all
 ```
 
@@ -73,7 +73,7 @@ Expect log lines:
 - NPT/NVE (`--run-all`): `continue-from geometry …` and `skipping FIRE` (campaign `depends_on`)
 - Geometry-only handoff (positions + box); velocities are rethermalized
 
-If NVT still blows after a good `E0` without those lines, the cluster tree is stale — sync `mmml/md/lowering.py` + `mmml/cli/run/md_system_unified.py` before retrying.
+If NVT still blows after a good `E0` without those lines, the cluster tree is stale — sync `karml/md/lowering.py` + `karml/cli/run/md_system_unified.py` before retrying.
 
 ### Sense-checking pressures
 
@@ -92,7 +92,7 @@ Your recent dilute run (`P0≈−2600`, `V` fixed) matches the dilute-box row: v
 
 ### Export trajectories (ASE / CHARMM PSF+DCD)
 
-`trajectory.npz` from jaxmd-unified can be converted with `mmml npz2traj`.
+`trajectory.npz` from jaxmd-unified can be converted with `karml npz2traj`.
 Use the box PSF from the build (`artifacts/md_embedding/aaa_dense/model.psf`).
 
 ```bash
@@ -100,18 +100,18 @@ PSF=artifacts/md_embedding/aaa_dense/model.psf
 LEG=artifacts/tria_md_system/campaign_dense/nvt_1057729e   # or nvt/
 
 # Full system → ASE
-uv run mmml npz2traj "$LEG/trajectory.npz" -o "$LEG/all.traj"
+uv run karml npz2traj "$LEG/trajectory.npz" -o "$LEG/all.traj"
 
 # Full system → CHARMM PSF+DCD (PSF copied next to the DCD)
-uv run mmml npz2traj "$LEG/trajectory.npz" -o "$LEG/all.dcd" --psf "$PSF"
+uv run karml npz2traj "$LEG/trajectory.npz" -o "$LEG/all.dcd" --psf "$PSF"
 
 # Also write protein-only and water-only copies
-uv run mmml npz2traj "$LEG/trajectory.npz" -o "$LEG/all.dcd" --psf "$PSF" \
+uv run karml npz2traj "$LEG/trajectory.npz" -o "$LEG/all.dcd" --psf "$PSF" \
   --split-resnames TRIA,TIP3
 # → all.dcd / all.psf, all.TRIA.dcd / all.TRIA.psf, all.TIP3.dcd / all.TIP3.psf
 
 # Primary output = selection only
-uv run mmml npz2traj "$LEG/trajectory.npz" -o "$LEG/tria.dcd" --psf "$PSF" \
+uv run karml npz2traj "$LEG/trajectory.npz" -o "$LEG/tria.dcd" --psf "$PSF" \
   --resnames TRIA
 ```
 
@@ -138,11 +138,11 @@ PY
 ## Notes
 
 - **GPU**: jaxmd-unified pins Spooky/PhysNet + jax-md under
-  `MMML_MLPOT_DEVICE` (default `gpu`). Look for
-  `mmml: JAX requested=gpu ... default_backend=gpu` (or `cuda`). If you see
+  `KARML_MLPOT_DEVICE` (default `gpu`). Look for
+  `karml: JAX requested=gpu ... default_backend=gpu` (or `cuda`). If you see
   `computing on CPU` / `no GPU device`, fix the env before blaming MD:
-  `unset JAX_PLATFORMS MMML_MLPOT_DEVICE`, then `uv sync --extra gpu`, and
-  prefer `./scripts/mmml-charmm-mpirun.sh md-system ...` so bundled CUDA libs
+  `unset JAX_PLATFORMS KARML_MLPOT_DEVICE`, then `uv sync --extra gpu`, and
+  prefer `./scripts/karml-charmm-mpirun.sh md-system ...` so bundled CUDA libs
   are on `LD_LIBRARY_PATH`.
 - **NPT / pressure**: CLI `--pressure` / YAML `pressure` is treated as **bar**
   by jaxmd-unified (`EnsembleSpec.pressure_bar`); the argparse help text still

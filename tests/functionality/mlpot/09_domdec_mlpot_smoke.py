@@ -11,13 +11,13 @@ in this script as diagnostics only; true DOMDEC testing should start from a
 CHARMM-native/prebuilt state.
 
 Safety:
-  - Live mode requires ``MMML_DOMDEC_MLPOT_SMOKE=1``.
+  - Live mode requires ``KARML_DOMDEC_MLPOT_SMOKE=1``.
   - The default live command is ``domdec on``; pass ``--no-domdec-command`` for a
     no-DOMDEC baseline or ``--domdec-command 'domdec off'`` for an off-control.
 
 Example:
-  MMML_MPI_NP=1 MMML_DOMDEC_MLPOT_SMOKE=1 \\
-    ./scripts/mmml-charmm-mpirun.sh python \\
+  KARML_MPI_NP=1 KARML_DOMDEC_MLPOT_SMOKE=1 \\
+    ./scripts/karml-charmm-mpirun.sh python \\
     tests/functionality/mlpot/09_domdec_mlpot_smoke.py \\
     --residue OCOH --n-molecules 1 --box-side 32
 """
@@ -43,7 +43,7 @@ def _parse_args() -> argparse.Namespace:
         "--checkpoint",
         type=Path,
         default=None,
-        help="PhysNet checkpoint (.json or Orbax root). Default: MMML_CKPT or repo ckpts.",
+        help="PhysNet checkpoint (.json or Orbax root). Default: KARML_CKPT or repo ckpts.",
     )
     parser.add_argument("--box-side", type=float, default=32.0)
     parser.add_argument(
@@ -57,7 +57,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--prepare-prebuilt-only",
         action="store_true",
-        help="Build OCOH topology/coords, write PSF/CRD, and exit (run with MMML_MPI_NP=1).",
+        help="Build OCOH topology/coords, write PSF/CRD, and exit (run with KARML_MPI_NP=1).",
     )
     parser.add_argument(
         "--use-prebuilt-topology",
@@ -78,7 +78,7 @@ def _parse_args() -> argparse.Namespace:
         "--allow-domdec-off-hook",
         action="store_true",
         help=(
-            "Do not set MMML_NO_CHARMM_DOMDEC_OFF=1. Default protects this active-DOMDEC "
+            "Do not set KARML_NO_CHARMM_DOMDEC_OFF=1. Default protects this active-DOMDEC "
             "smoke from the MLpot DOMDEC-off safety hook."
         ),
     )
@@ -121,21 +121,21 @@ def _parse_args() -> argparse.Namespace:
 
 def _mpi_info() -> tuple[int, int]:
     try:
-        from mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
+        from karml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
 
         rank, size = mpi_rank_size()
-        if size <= 1 and os.environ.get("MMML_MPI_NP"):
-            return rank, max(1, int(os.environ["MMML_MPI_NP"]))
+        if size <= 1 and os.environ.get("KARML_MPI_NP"):
+            return rank, max(1, int(os.environ["KARML_MPI_NP"]))
         return rank, size
     except Exception:
-        return 0, max(1, int(os.environ.get("MMML_MPI_NP", "1")))
+        return 0, max(1, int(os.environ.get("KARML_MPI_NP", "1")))
 
 
 def _print_dry_run(args: argparse.Namespace) -> None:
     cmd = [
-        f"MMML_MPI_NP={2 if args.allow_mpi_size_gt1 else 1}",
-        "MMML_DOMDEC_MLPOT_SMOKE=1",
-        "./scripts/mmml-charmm-mpirun.sh",
+        f"KARML_MPI_NP={2 if args.allow_mpi_size_gt1 else 1}",
+        "KARML_DOMDEC_MLPOT_SMOKE=1",
+        "./scripts/karml-charmm-mpirun.sh",
         "python",
         "tests/functionality/mlpot/09_domdec_mlpot_smoke.py",
         "--residue",
@@ -197,7 +197,7 @@ def _known_domdec_order_issue(residue: str) -> str | None:
 
 def _skip_vacuum_crystal_free_for_mpi_cluster_build() -> None:
     """Avoid the known np>1 hang in the fresh-process cluster-build reset."""
-    import mmml.interfaces.pycharmmInterface.mlpot.setup as mlpot_setup
+    import karml.interfaces.pycharmmInterface.mlpot.setup as mlpot_setup
 
     def _skip() -> None:
         _rank_log("skipping pre-cluster prepare_charmm_vacuum/crystal free for np>1")
@@ -252,9 +252,9 @@ def _load_prebuilt_topology(psf_path: Path, crd_path: Path) -> tuple["np.ndarray
     import pycharmm.coor as coor
     import pycharmm.read as read
 
-    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_PRM
-    from mmml.interfaces.pycharmmInterface.utils import get_Z_from_psf
+    from karml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
+    from karml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_PRM
+    from karml.interfaces.pycharmmInterface.utils import get_Z_from_psf
 
     if not psf_path.is_file():
         raise FileNotFoundError(f"Prebuilt PSF not found: {psf_path}")
@@ -324,10 +324,10 @@ def _minimal_rtf_for_psf_types(psf_path: Path, prm_path: Path) -> Path:
     if missing:
         raise ValueError(f"Missing MASS records in {prm_path}: {missing}")
 
-    fd, name = tempfile.mkstemp(suffix=".rtf", prefix="mmml_domdec_mass_")
+    fd, name = tempfile.mkstemp(suffix=".rtf", prefix="karml_domdec_mass_")
     path = Path(name)
     with os.fdopen(fd, "w", encoding="utf-8") as handle:
-        handle.write("* MMML DOMDEC smoke minimal MASS topology\n")
+        handle.write("* KARML DOMDEC smoke minimal MASS topology\n")
         handle.write("*\n")
         for line in mass_lines:
             handle.write(f"{line}\n")
@@ -351,15 +351,15 @@ def _build_ocoh_cluster_traced(
     import pycharmm.psf as psf
     import pycharmm.read as read
 
-    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_PRM, CGENFF_RTF
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
-    from mmml.interfaces.pycharmmInterface.nbonds_config import _rtf_path_without_drude_autogen
-    from mmml.interfaces.pycharmmInterface.utils import get_Z_from_psf
+    from karml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
+    from karml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_PRM, CGENFF_RTF
+    from karml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
+    from karml.interfaces.pycharmmInterface.nbonds_config import _rtf_path_without_drude_autogen
+    from karml.interfaces.pycharmmInterface.utils import get_Z_from_psf
 
     residue = "OCOH"
     sequence = " ".join([residue] * int(n_molecules))
-    template_pdb = REPO_ROOT / "mmml" / "data" / "charmm" / "ocoh.pdb"
+    template_pdb = REPO_ROOT / "karml" / "data" / "charmm" / "ocoh.pdb"
 
     if skip_delete_atom:
         _rank_log("traced cluster: DELETE ATOM skipped for fresh np>1 diagnostic")
@@ -439,16 +439,16 @@ def main() -> int:
         _print_dry_run(args)
         return 0
 
-    if os.environ.get("MMML_DOMDEC_MLPOT_SMOKE") != "1":
+    if os.environ.get("KARML_DOMDEC_MLPOT_SMOKE") != "1":
         print(
-            "Refusing live DOMDEC+MLpot smoke without MMML_DOMDEC_MLPOT_SMOKE=1.",
+            "Refusing live DOMDEC+MLpot smoke without KARML_DOMDEC_MLPOT_SMOKE=1.",
             file=sys.stderr,
         )
         print("Use --dry-run for a launch recipe.", file=sys.stderr)
         return 2
 
     if not args.allow_domdec_off_hook:
-        os.environ["MMML_NO_CHARMM_DOMDEC_OFF"] = "1"
+        os.environ["KARML_NO_CHARMM_DOMDEC_OFF"] = "1"
 
     rank, size = _mpi_info()
     if size > 1 and not args.allow_mpi_size_gt1:
@@ -460,7 +460,7 @@ def main() -> int:
         )
         return 4
     if size > 1 and not args.no_skip_vacuum_crystal_free_on_mpi:
-        os.environ["MMML_SKIP_CHARMM_RESET_BLOCK"] = "1"
+        os.environ["KARML_SKIP_CHARMM_RESET_BLOCK"] = "1"
         _rank_log("skipping CHARMM reset_block for np>1 diagnostic")
         _skip_vacuum_crystal_free_for_mpi_cluster_build()
 
@@ -533,7 +533,7 @@ def main() -> int:
 
     if args.prepare_prebuilt_only:
         if size > 1:
-            print("--prepare-prebuilt-only must be run with MMML_MPI_NP=1.", file=sys.stderr)
+            print("--prepare-prebuilt-only must be run with KARML_MPI_NP=1.", file=sys.stderr)
             return 6
         _write_prebuilt_topology(psf_path, crd_path)
         if rank == 0:
@@ -541,13 +541,13 @@ def main() -> int:
         return 0
 
     _rank_log("importing PyCHARMM modules")
-    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+    import karml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
     import ase
     import pycharmm
     import pycharmm.energy as energy
     _rank_log("imported PyCHARMM modules")
 
-    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import setup_charmm_environment
+    from karml.interfaces.pycharmmInterface.mlpot.pbc_env import setup_charmm_environment
 
     _rank_log("PBC setup begin")
     setup_charmm_environment(use_pbc=True, cubic_box_side_A=float(args.box_side))
@@ -564,7 +564,7 @@ def main() -> int:
     atoms = ase.Atoms(numbers=z, positions=r)
     _rank_log("loading checkpoint/model done")
 
-    from mmml.models.physnetjax.physnetjax.calc.helper_mlp import get_pyc
+    from karml.models.physnetjax.physnetjax.calc.helper_mlp import get_pyc
 
     _rank_log("building PyCHARMM ML model begin")
     pyc_model = get_pyc(params, model, atoms)

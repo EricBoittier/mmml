@@ -1,4 +1,4 @@
-# `mmml fix-and-split`
+# `karml fix-and-split`
 
 Unit fixes + train/valid/test splits.
 
@@ -6,13 +6,13 @@ Unit fixes + train/valid/test splits.
 ## Usage
 
 ```bash
-mmml fix-and-split --help
+karml fix-and-split --help
 ```
 
 ## Options
 
 ```text
-usage: mmml fix-and-split [-h] [--coords-in {auto,bohr,angstrom}]
+usage: karml fix-and-split [-h] [--coords-in {auto,bohr,angstrom}]
                           [--coords-out {angstrom,bohr,same}]
                           [--energy-in {hartree,ev}]
                           [--energy-out {ev,hartree,same}]
@@ -74,7 +74,7 @@ options:
   --quiet, -q           Suppress detailed output
   --flip-forces         Negate F before unit conversion (Ha/Bohr → eV/Å). Use
                         when F stores the PySCF energy gradient ∂E/∂R instead of
-                        forces F = −∇E. mmml pyscf-evaluate NPZ already uses
+                        forces F = −∇E. karml pyscf-evaluate NPZ already uses
                         −gradient.
   --energy-scale X      Multiply E by X after Hartree→eV. Also efield_energy,
                         efield_scf_energy if present (default 1.0).
@@ -130,25 +130,25 @@ Unit conversion:
                         out, etc. For selective conversion, omit this flag and
                         set *-out same per field.
 
-Examples: # Basic usage with default 8:1:1 split (with grid) mmml fix-and-split
+Examples: # Basic usage with default 8:1:1 split (with grid) karml fix-and-split
 --efd data.npz --grid grids.npz --output-dir ./training_data # Without grid data
-(EFD only) mmml fix-and-split --efd data.npz --output-dir ./training_data #
-Custom split ratios mmml fix-and-split --efd data.npz --grid grids.npz --output-
+(EFD only) karml fix-and-split --efd data.npz --output-dir ./training_data #
+Custom split ratios karml fix-and-split --efd data.npz --grid grids.npz --output-
 dir ./training_data \ --train-frac 0.7 --valid-frac 0.15 --test-frac 0.15 #
-Different cube spacing (e.g., 0.5 Bohr) mmml fix-and-split --efd data.npz --grid
+Different cube spacing (e.g., 0.5 Bohr) karml fix-and-split --efd data.npz --grid
 grids.npz --output-dir ./training_data \ --cube-spacing 0.5 # Skip validation
-for speed mmml fix-and-split --efd data.npz --output-dir ./training_data \
+for speed karml fix-and-split --efd data.npz --output-dir ./training_data \
 --skip-validation # Concatenate multiple NPZ files (e.g. extend training set
-with MD samples) mmml fix-and-split --efd train.npz md_evaluated.npz --output-
+with MD samples) karml fix-and-split --efd train.npz md_evaluated.npz --output-
 dir ./splits_extended # NPZ has raw PySCF gradient in F (not forces): negate
-before converting to eV/Å mmml fix-and-split --efd raw.npz --output-dir ./out
+before converting to eV/Å karml fix-and-split --efd raw.npz --output-dir ./out
 --flip-forces # Correct a systematic factor after normal conversion (e.g.
-duplicate unit fix upstream) mmml fix-and-split --efd data.npz --output-dir
+duplicate unit fix upstream) karml fix-and-split --efd data.npz --output-dir
 ./out --energy-scale 0.5 --force-scale 1.0 # Z-scale energies with training-set
-statistics and save the mean/std mmml fix-and-split --efd data.npz --output-dir
+statistics and save the mean/std karml fix-and-split --efd data.npz --output-dir
 ./out --zscale-energies # Already in training units (eV, eV/Å, e·Å, Å): split
-only mmml fix-and-split --efd data.npz -o ./splits --preserve-units # Explicit:
-PySCF Hartree/Bohr in, ASE units out (same as default) mmml fix-and-split --efd
+only karml fix-and-split --efd data.npz -o ./splits --preserve-units # Explicit:
+PySCF Hartree/Bohr in, ASE units out (same as default) karml fix-and-split --efd
 pyscf.npz -o ./out \ --energy-in hartree --energy-out ev \ --force-in hartree-
 bohr --force-out ev-angstrom \ --dipole-in debye --dipole-out e-angstrom
 ```

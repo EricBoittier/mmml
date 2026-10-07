@@ -8,7 +8,7 @@ import h5py
 import numpy as np
 import pytest
 
-from mmml.data.spice_alpha import (
+from karml.data.spice_alpha import (
     DEFAULT_CHARGE_TOL,
     SPICE_ALPHA_CANONICAL_UNITS,
     TRAIN_NPZ_UNITS,
@@ -24,7 +24,7 @@ from mmml.data.spice_alpha import (
     read_units_map,
     write_physnet_npz,
 )
-from mmml.models.physnetjax.physnetjax.data.read_h5 import _detect_natoms, load_h5
+from karml.models.physnetjax.physnetjax.data.read_h5 import _detect_natoms, load_h5
 from spice_alpha_fixtures import write_spice_h5
 
 pytestmark = pytest.mark.data_loading
@@ -181,7 +181,7 @@ def test_pad_and_contract_variable_atom_counts(tmp_path):
     assert int(data["Z"][2, 3:].sum()) == 0
     assert data["Z"][2, :3].tolist() == [8, 1, 1]
     assert max_atomic_number(data) == 8
-    units = json.loads(str(data["_mmml_units"]))
+    units = json.loads(str(data["_karml_units"]))
     assert units["E"] == TRAIN_NPZ_UNITS["E"]
     assert units["force"] == "negated dft_total_gradient"
 
@@ -298,7 +298,7 @@ def test_assert_train_npz_contract_rejects_stale_units():
         "N": np.array([2], np.int32),
         "E": np.array([-1.0]),
         "F": np.zeros((1, 2, 3)),
-        "_mmml_units": np.array(json.dumps({"E": "hartree", "F": "hartree_bohr"})),
+        "_karml_units": np.array(json.dumps({"E": "hartree", "F": "hartree_bohr"})),
     }
     with pytest.raises(ValueError, match="train units"):
         assert_train_npz_contract(data)
@@ -510,7 +510,7 @@ def test_extract_des370k_hdf5_accepts_dot_slash_members(tmp_path):
     import io
     import tarfile
 
-    from mmml.data.spice_alpha import extract_des370k_hdf5
+    from karml.data.spice_alpha import extract_des370k_hdf5
 
     archive = tmp_path / "SPICE-alpha.tar.gz"
     dest = tmp_path / "out"
@@ -532,7 +532,7 @@ def test_extract_des370k_hdf5_accepts_bare_members(tmp_path):
     import io
     import tarfile
 
-    from mmml.data.spice_alpha import extract_des370k_hdf5
+    from karml.data.spice_alpha import extract_des370k_hdf5
 
     archive = tmp_path / "bare.tar.gz"
     dest = tmp_path / "out"
@@ -547,7 +547,7 @@ def test_extract_des370k_hdf5_accepts_bare_members(tmp_path):
 
 
 def test_check_efield_train_npz_accepts_bohr3_zero_field(tmp_path):
-    from mmml.data.spice_alpha import check_efield_train_npz
+    from karml.data.spice_alpha import check_efield_train_npz
 
     src = _write_spice_h5(tmp_path / "spice.hdf5", extra_group=False)
     out = tmp_path / "ef.npz"
@@ -556,7 +556,7 @@ def test_check_efield_train_npz_accepts_bohr3_zero_field(tmp_path):
 
 
 def test_check_efield_train_npz_rejects_spice_polar_units(tmp_path):
-    from mmml.data.spice_alpha import check_efield_train_npz
+    from karml.data.spice_alpha import check_efield_train_npz
 
     src = _write_spice_h5(tmp_path / "spice.hdf5", extra_group=False)
     out = tmp_path / "ef.npz"
@@ -566,7 +566,7 @@ def test_check_efield_train_npz_rejects_spice_polar_units(tmp_path):
 
 
 def test_efield_flag_writes_zero_field_and_bohr3_polar(tmp_path):
-    from mmml.data.units import E_ANGSTROM2_PER_VOLT_TO_BOHR3
+    from karml.data.units import E_ANGSTROM2_PER_VOLT_TO_BOHR3
 
     src = _write_spice_h5(tmp_path / "spice.hdf5", extra_group=False)
     out = tmp_path / "ef.npz"
@@ -582,7 +582,7 @@ def test_efield_flag_writes_zero_field_and_bohr3_polar(tmp_path):
 
 
 def test_split_npz_keeps_polar_and_efield(tmp_path):
-    from mmml.data.spice_alpha import split_npz
+    from karml.data.spice_alpha import split_npz
 
     src = _write_spice_h5(tmp_path / "spice.hdf5")
     data = convert_spice_alpha_hdf5(
@@ -621,7 +621,7 @@ def test_cli_efield_and_split(tmp_path):
 
 
 def test_package_export_round_trip(tmp_path):
-    from mmml.data import convert_spice_alpha_hdf5 as exported
+    from karml.data import convert_spice_alpha_hdf5 as exported
 
     src = _write_spice_h5(tmp_path / "spice.hdf5", extra_group=False)
     data = exported([src], tmp_path / "pkg.npz", max_frames=1)

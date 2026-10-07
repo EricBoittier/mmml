@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 """
-Generic ASE Calculator for trained MMML models.
+Generic ASE Calculator for trained KARML models.
 
 Works with any checkpoint - automatically detects model type and provides
 a simple interface for molecular dynamics and property calculations.
 
 Usage:
-    from mmml.cli.calculator import MMMLCalculator
+    from karml.cli.calculator import KARMLCalculator
     from ase import Atoms
     
-    calc = MMMLCalculator.from_checkpoint('path/to/checkpoint')
+    calc = KARMLCalculator.from_checkpoint('path/to/checkpoint')
     atoms = Atoms('CO2', positions=[[0,0,0], [1.16,0,0], [-1.16,0,0]])
     atoms.calc = calc
     
@@ -17,7 +17,7 @@ Usage:
     forces = atoms.get_forces()
     
 Or from command line:
-    python -m mmml.cli.calculator --checkpoint path/to/ckpt --test-molecule CO2
+    python -m karml.cli.calculator --checkpoint path/to/ckpt --test-molecule CO2
 """
 
 import sys
@@ -40,12 +40,12 @@ except ImportError:
     print("Install with: pip install ase")
     sys.exit(1)
 
-from mmml.data.units import EANGSTROM_TO_DEBYE
+from karml.data.units import EANGSTROM_TO_DEBYE
 
 
-class MMMLCalculator(Calculator):
+class KARMLCalculator(Calculator):
     """
-    Generic ASE calculator for MMML models.
+    Generic ASE calculator for KARML models.
     
     This calculator automatically handles:
     - Edge list construction
@@ -182,7 +182,7 @@ class MMMLCalculator(Calculator):
         cutoff: float = 10.0,
         use_dcmnet_dipole: bool = False,
         model_type: Optional[str] = None,
-    ) -> 'MMMLCalculator':
+    ) -> 'KARMLCalculator':
         """
         Create calculator from checkpoint file.
         
@@ -200,7 +200,7 @@ class MMMLCalculator(Calculator):
         
         Returns
         -------
-        MMMLCalculator
+        KARMLCalculator
             Configured calculator ready to use
         """
         import pickle
@@ -269,7 +269,7 @@ class MMMLCalculator(Calculator):
         # Import and create model
         if model_type == 'dcmnet':
             try:
-                from mmml.models.physnetjax.physnetjax.models.joint_physnet_dcmnet import JointPhysNetDCMNet
+                from karml.models.physnetjax.physnetjax.models.joint_physnet_dcmnet import JointPhysNetDCMNet
                 model = JointPhysNetDCMNet(
                     physnet_config=config['physnet_config'],
                     dcmnet_config=config['dcmnet_config'],
@@ -280,7 +280,7 @@ class MMMLCalculator(Calculator):
                 raise
         elif model_type == 'noneq':
             try:
-                from mmml.models.physnetjax.physnetjax.models.joint_physnet_noneq import JointPhysNetNonEquivariant
+                from karml.models.physnetjax.physnetjax.models.joint_physnet_noneq import JointPhysNetNonEquivariant
                 model = JointPhysNetNonEquivariant(
                     physnet_config=config['physnet_config'],
                     noneq_config=config['noneq_config'],
@@ -291,7 +291,7 @@ class MMMLCalculator(Calculator):
                 raise
         else:
             try:
-                from mmml.models.physnetjax.physnetjax.models.model import EF
+                from karml.models.physnetjax.physnetjax.models.model import EF
                 model = EF(**config.get('physnet_config', config))
             except ImportError:
                 print("⚠️  Could not import PhysNet models")
@@ -305,18 +305,18 @@ def main():
     import argparse
     
     parser = argparse.ArgumentParser(
-        description="Test MMML calculator with a simple molecule",
+        description="Test KARML calculator with a simple molecule",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
   # Test with CO2
-  python -m mmml.cli.calculator --checkpoint my_model/best_params.pkl --test-molecule CO2
+  python -m karml.cli.calculator --checkpoint my_model/best_params.pkl --test-molecule CO2
   
   # Test with H2O
-  python -m mmml.cli.calculator --checkpoint my_model/ --test-molecule H2O
+  python -m karml.cli.calculator --checkpoint my_model/ --test-molecule H2O
   
   # Custom molecule
-  python -m mmml.cli.calculator --checkpoint my_model/ --symbols C O O --positions "0,0,0" "1.16,0,0" "-1.16,0,0"
+  python -m karml.cli.calculator --checkpoint my_model/ --symbols C O O --positions "0,0,0" "1.16,0,0" "-1.16,0,0"
         """
     )
     
@@ -341,7 +341,7 @@ Examples:
     
     # Create calculator
     print("\n🔧 Creating calculator...")
-    calc = MMMLCalculator.from_checkpoint(
+    calc = KARMLCalculator.from_checkpoint(
         args.checkpoint,
         cutoff=args.cutoff,
         use_dcmnet_dipole=args.use_dcmnet_dipole,

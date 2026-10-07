@@ -16,7 +16,7 @@ import pytest
 
 jnp = pytest.importorskip("jax.numpy")
 
-from mmml.models.dcmnet.dcmnet.loss import (  # noqa: E402
+from karml.models.dcmnet.dcmnet.loss import (  # noqa: E402
     esp_loss_eval,
     mean_absolute_error,
 )
@@ -114,7 +114,7 @@ def test_esp_loss_eval_scales_linearly_with_the_residual():
 @pytest.mark.parametrize("esp_w,chg_w", [(1.0, 1.0), (3.0, 5.0), (0.0, 0.0)])
 def test_loss_terms_have_expected_values_and_independent_weights(esp_w, chg_w):
     """Evaluate the objective: source spelling cannot establish active loss terms."""
-    from mmml.models.dcmnet.dcmnet.loss import dipo_esp_mono_loss
+    from karml.models.dcmnet.dcmnet.loss import dipo_esp_mono_loss
 
     # Zero charges give zero ESP and dipole. Nonzero targets make every loss
     # nonzero before weighting; the second grid point is deliberately masked.

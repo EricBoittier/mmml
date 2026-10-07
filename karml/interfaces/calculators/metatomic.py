@@ -4,7 +4,7 @@ Metatomic models are TorchScript ``AtomisticModel`` files (typically ``.pt``).
 This module does not import torch or metatomic at package import time.
 
 Install: ``uv sync --extra metatomic`` (pulls ``metatomic-ase`` + torch).
-Device: ``MMML_METATOMIC_DEVICE`` (default ``cpu``); do not set CUDA here at
+Device: ``KARML_METATOMIC_DEVICE`` (default ``cpu``); do not set CUDA here at
 import time.
 """
 
@@ -25,7 +25,7 @@ METATOMIC_DIR_FILENAMES = (
     "atomistic-model.pt",
 )
 DEFAULT_METATOMIC_DEVICE = "cpu"
-METATOMIC_DEVICE_ENV = "MMML_METATOMIC_DEVICE"
+METATOMIC_DEVICE_ENV = "KARML_METATOMIC_DEVICE"
 
 
 def have_metatomic() -> bool:

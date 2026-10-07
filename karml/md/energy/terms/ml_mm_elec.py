@@ -18,7 +18,7 @@ included automatically -- a hand-written force that differentiated only the
 Double counting
 ---------------
 ``mm_nonbonded`` also computes Coulomb over the same intermolecular pairs. Set
-the solute's charges to zero in :class:`~mmml.md.system.FFParams` when using
+the solute's charges to zero in :class:`~karml.md.system.FFParams` when using
 this term, which removes the solute's electrostatics from ``mm_nonbonded``
 without touching its Lennard-Jones (LJ reads epsilon / Rmin, not charge). The
 builder in ``examples/menshutkin/jaxmd_box.py`` does this via
@@ -38,10 +38,10 @@ from typing import Any, Sequence
 
 import numpy as np
 
-from mmml.data.units import KCAL_MOL_TO_EV
-from mmml.md.energy.registry import EnergyContext, NeighborRequest, TermFns, register_term
-from mmml.md.energy.terms._common import ase_contribution_from_jax, resolve_ml_model
-from mmml.md.system import MolecularSystem
+from karml.data.units import KCAL_MOL_TO_EV
+from karml.md.energy.registry import EnergyContext, NeighborRequest, TermFns, register_term
+from karml.md.energy.terms._common import ase_contribution_from_jax, resolve_ml_model
+from karml.md.system import MolecularSystem
 
 __all__ = ["MLMMElectrostaticTerm"]
 
@@ -85,7 +85,7 @@ class MLMMElectrostaticTerm:
         # the attraction is tens of kcal/mol with nothing opposing it. Observed
         # directly: a water H reached 1.586 A from the solute Cl and dragged its
         # oxygen into the methyl group (0.640 A H-H) before the energy diverged.
-        # erf(r/sigma)/r is the same damping the models in mmml/models use for
+        # erf(r/sigma)/r is the same damping the models in karml/models use for
         # their own learned-charge electrostatics; at sigma = 1 A it is within
         # 2.5 % of 1/r beyond 1.6 A, so it bounds the singularity without
         # touching the physical interaction range. Set 0 to disable.
@@ -269,7 +269,7 @@ class MLMMElectrostaticTerm:
         if use_ewald:
             if cell is None:
                 raise ValueError("lr_solver='ewald' needs a periodic box")
-            from mmml.interfaces.pycharmmInterface.ewald_native import (
+            from karml.interfaces.pycharmmInterface.ewald_native import (
                 build_kspace_integers,
                 default_ewald_alpha,
                 ewald_reciprocal_energy,

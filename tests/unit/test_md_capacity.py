@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from mmml.md.energy.capacity import (
+from karml.md.energy.capacity import (
     INDEX_DTYPE,
     MASK_DTYPE,
     CapacityOverflow,
@@ -71,9 +71,9 @@ def test_int8_mask_matches_float_mask_numerically():
     pytest.importorskip("jax")
     import jax.numpy as jnp
 
-    from mmml.md.energy import EnergyContext
-    from mmml.md.energy.terms import RepulsiveCoreVdwTerm
-    from mmml.md.system import MolecularSystem
+    from karml.md.energy import EnergyContext
+    from karml.md.energy.terms import RepulsiveCoreVdwTerm
+    from karml.md.system import MolecularSystem
 
     rng = np.random.default_rng(7)
     n_core, n_groups = 3, 4
@@ -108,7 +108,7 @@ def test_int8_mask_matches_float_mask_numerically():
 
 def test_pair_capacity_is_half_the_shell_sum_before_headroom():
     """One atom's shell x atoms / 2, because the builders emit j > i only."""
-    from mmml.md.energy.capacity import pair_capacity, shell_capacity
+    from karml.md.energy.capacity import pair_capacity, shell_capacity
 
     n, cutoff, rho = 4000, 6.0, 0.03
     per_atom = shell_capacity(cutoff, rho, headroom=1.0, minimum=1)
@@ -117,7 +117,7 @@ def test_pair_capacity_is_half_the_shell_sum_before_headroom():
 
 
 def test_pair_capacity_scales_with_headroom():
-    from mmml.md.energy.capacity import pair_capacity
+    from karml.md.energy.capacity import pair_capacity
 
     n, cutoff, rho = 4000, 6.0, 0.03
     one = pair_capacity(n, cutoff, rho, headroom=1.0)
@@ -126,7 +126,7 @@ def test_pair_capacity_scales_with_headroom():
 
 def test_pair_capacity_never_exceeds_the_pairs_that_can_exist():
     """The shell estimate assumes an unbounded medium; the box is the truth."""
-    from mmml.md.energy.capacity import pair_capacity
+    from karml.md.energy.capacity import pair_capacity
 
     # Tiny box, huge cutoff: the sphere estimate is wildly impossible.
     got = pair_capacity(50, 100.0, 0.1, headroom=3.0)
@@ -134,7 +134,7 @@ def test_pair_capacity_never_exceeds_the_pairs_that_can_exist():
 
 
 def test_pair_capacity_discounts_intramolecular_pairs():
-    from mmml.md.energy.capacity import pair_capacity
+    from karml.md.energy.capacity import pair_capacity
 
     sizes = np.full(10, 3)  # 10 molecules of 3 atoms
     got = pair_capacity(30, 100.0, 0.1, mol_sizes=sizes, headroom=3.0)
@@ -142,7 +142,7 @@ def test_pair_capacity_discounts_intramolecular_pairs():
 
 
 def test_pair_capacity_rejects_headroom_below_one():
-    from mmml.md.energy.capacity import pair_capacity
+    from karml.md.energy.capacity import pair_capacity
 
     with pytest.raises(ValueError, match="headroom"):
         pair_capacity(100, 6.0, 0.03, headroom=0.5)
@@ -154,7 +154,7 @@ def test_pair_capacity_default_headroom_covers_a_dense_excursion():
     Measured worst requirement over 300-10 800 atoms was 2.50x the mean-field
     estimate; the default must stay above that with room to spare.
     """
-    from mmml.md.energy.capacity import PAIR_HEADROOM, pair_capacity
+    from karml.md.energy.capacity import PAIR_HEADROOM, pair_capacity
 
     assert PAIR_HEADROOM >= 2.75, "below the measured worst case (2.50x) plus margin"
 

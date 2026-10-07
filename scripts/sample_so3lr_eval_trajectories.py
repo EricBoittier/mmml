@@ -9,8 +9,8 @@ structures in the SAME order -- so they can be diffed frame by frame
 
 Loads the checkpoint the same way evaluate_so3lr_spooky_extxyz.py does
 (restore_checkpoint + create_model_from_config from that script) rather than
-mmml.models.spookynet_calc.SpookyNetCalculator -- that calculator's own
-loader (mmml.utils.model_checkpoint.load_model_checkpoint) does not handle
+karml.models.spookynet_calc.SpookyNetCalculator -- that calculator's own
+loader (karml.utils.model_checkpoint.load_model_checkpoint) does not handle
 this checkpoint family's OCDBT-format orbax layout, while
 evaluate_so3lr_spooky_extxyz.py's raw ocp.PyTreeCheckpointer().restore(...)
 does (confirmed working against this checkpoint on the GPU node).
@@ -21,7 +21,7 @@ evaluate_so3lr_spooky_extxyz.py sizes its model per file.
 
 Usage:
     python scripts/sample_so3lr_eval_trajectories.py \\
-        --checkpoint /mmhome/boittier/home/mmml/artifacts/spooky_so3lr_muon3/epoch-0010 \\
+        --checkpoint /mmhome/boittier/home/karml/artifacts/spooky_so3lr_muon3/epoch-0010 \\
         --extxyz ~/data/so3lr_test/ \\
         --num-samples 5 \\
         --out-dir eval_out/sample_trajectories
@@ -95,7 +95,7 @@ def main() -> int:
     import jax.numpy as jnp
 
     import evaluate_so3lr_spooky_extxyz as ev
-    from mmml.utils.model_checkpoint import infer_trainable_zbl_config
+    from karml.utils.model_checkpoint import infer_trainable_zbl_config
 
     checkpoint_path = Path(args.checkpoint).resolve()
     params, config = ev.restore_checkpoint(checkpoint_path)

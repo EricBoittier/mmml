@@ -3,10 +3,10 @@
 # CV: N–C distance (fix C=2, move N+H). Same ordering as NEB endpoints.
 #
 #   source examples/m/_env.sh
-#   uv run mmml umbrella-sample --config examples/m/yaml/umbrella_nc_gas.yaml --overwrite
+#   uv run karml umbrella-sample --config examples/m/yaml/umbrella_nc_gas.yaml --overwrite
 #   bash examples/m/14_umbrella_sample_gas.sh
 #
-# MBAR: mmml umbrella-mbar --run-dir artifacts/nh3_ch3cl/umbrella_nc_gas
+# MBAR: karml umbrella-mbar --run-dir artifacts/nh3_ch3cl/umbrella_nc_gas
 
 # Paths resolve relative to this file (examples/m/yaml/) → repo root is ../../..
 checkpoint: ../../model_ext.json

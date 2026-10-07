@@ -29,7 +29,7 @@ def _patch(text: str, body: str) -> str:
 
 def generate(*, check: bool = False, use_live_pyxtal: bool = False) -> int:
     sys.path.insert(0, str(REPO))
-    from mmml.interfaces.crystal_reference import literature_comparison_markdown
+    from karml.interfaces.crystal_reference import literature_comparison_markdown
 
     body = literature_comparison_markdown(use_live_pyxtal=use_live_pyxtal)
     if not DOC.is_file():

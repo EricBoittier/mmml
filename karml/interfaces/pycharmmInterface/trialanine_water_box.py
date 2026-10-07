@@ -15,8 +15,8 @@ from typing import TYPE_CHECKING
 import numpy as np
 import pandas as pd
 
-from mmml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_PRM, CGENFF_RTF
-from mmml.interfaces.pycharmmInterface.nbonds_config import PbcNbondCutoffs
+from karml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_PRM, CGENFF_RTF
+from karml.interfaces.pycharmmInterface.nbonds_config import PbcNbondCutoffs
 
 if TYPE_CHECKING:
     from ase import Atoms
@@ -45,7 +45,7 @@ class TrialanineWaterBox:
 
 def trialanine_cgenff_rtf_path() -> Path:
     """Supplemental RTF defining ``RESI TRIA`` (ACE–ALA×3–CT3)."""
-    from mmml.paths import bundled_file
+    from karml.paths import bundled_file
 
     return bundled_file("data", "charmm", "top_trialanine_cgenff.rtf")
 
@@ -56,7 +56,7 @@ def have_trialanine_cgenff() -> bool:
 
 def trialanine_backbone_cmap_prm_path() -> Path:
     """Bundled CMAP grid for ``RESI TRIA`` backbone (CGENFF type headers)."""
-    from mmml.interfaces.pycharmmInterface.cgenff_cmap import (
+    from karml.interfaces.pycharmmInterface.cgenff_cmap import (
         trialanine_backbone_cmap_prm_path as _cmap_prm_path,
     )
 
@@ -65,7 +65,7 @@ def trialanine_backbone_cmap_prm_path() -> Path:
 
 def trialanine_cmap_extra_prm_files() -> tuple[Path, ...]:
     """Extra PRM path(s) for CMAP on the bundled TRIA residue."""
-    from mmml.interfaces.pycharmmInterface.cgenff_cmap import (
+    from karml.interfaces.pycharmmInterface.cgenff_cmap import (
         trialanine_backbone_cmap_extra_prm_files as _extra,
     )
 
@@ -79,8 +79,8 @@ def have_trialanine_cmap_prm() -> bool:
 def _load_cgenff_with_trialanine() -> None:
     import pycharmm.read as read
 
-    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
-    from mmml.interfaces.pycharmmInterface.nbonds_config import (
+    from karml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
+    from karml.interfaces.pycharmmInterface.nbonds_config import (
         CGENFF_PRM_BOMLEV,
         _rtf_path_without_drude_autogen,
         read_cgenff_prm,
@@ -99,7 +99,7 @@ def prepare_charmm_for_trialanine_box_psf(*, skip_reset_block: bool = True) -> N
     """Clear CHARMM and load CGENFF+TRIA toppar before reading a saved TRIA+water PSF."""
     import pycharmm.settings as settings
 
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import (
+    from karml.interfaces.pycharmmInterface.import_pycharmm import (
         crystal_free_charmm_for_param_append,
         pycharmm,
         reset_block,
@@ -115,7 +115,7 @@ def prepare_charmm_for_trialanine_box_psf(*, skip_reset_block: bool = True) -> N
 
 def _tip3_template() -> np.ndarray:
     """TIP3 coordinates (Å) from bundled ``tip3.pdb`` (OH2, H1, H2)."""
-    from mmml.paths import bundled_file
+    from karml.paths import bundled_file
 
     tip3_pdb = bundled_file("data", "charmm", "tip3.pdb")
     lines = tip3_pdb.read_text(encoding="utf-8").splitlines()
@@ -217,17 +217,17 @@ def load_trialanine_water_atoms_for_docs() -> Atoms:
 
     Refresh with::
 
-        ./scripts/mmml-charmm-mpirun.sh python scripts/export_docs_structure_assets.py
+        ./scripts/karml-charmm-mpirun.sh python scripts/export_docs_structure_assets.py
     """
     from ase.io import read
 
-    from mmml.paths import default_trialanine_water_smoke_extxyz
+    from karml.paths import default_trialanine_water_smoke_extxyz
 
     path = default_trialanine_water_smoke_extxyz()
     if not path.is_file():
         raise FileNotFoundError(
             f"Missing bundled trialanine box at {path}. "
-            "Run: ./scripts/mmml-charmm-mpirun.sh python scripts/export_docs_structure_assets.py"
+            "Run: ./scripts/karml-charmm-mpirun.sh python scripts/export_docs_structure_assets.py"
         )
     return read(path)
 
@@ -274,18 +274,18 @@ def build_trialanine_water_box_in_charmm(
     import pycharmm.settings as settings
     import pycharmm.write as write
 
-    from mmml.interfaces.pycharmmInterface import setupRes
-    from mmml.interfaces.pycharmmInterface import import_pycharmm as ipy
-    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+    from karml.interfaces.pycharmmInterface import setupRes
+    from karml.interfaces.pycharmmInterface import import_pycharmm as ipy
+    from karml.interfaces.pycharmmInterface.mlpot.pbc_env import (
         apply_pbc_nbonds,
         prepare_charmm_pbc,
     )
-    from mmml.interfaces.pycharmmInterface.nbonds_config import ic_prm_fill
+    from karml.interfaces.pycharmmInterface.nbonds_config import ic_prm_fill
 
     if not ipy.ensure_pycharmm_loaded():
         raise RuntimeError(
             "PyCHARMM not available (CHARMM_LIB_DIR / libcharmm.so). "
-            "Set CHARMM_LIB_DIR or unset MMML_WARMUP_MLPOT_JAX_ONLY=0 for live tests."
+            "Set CHARMM_LIB_DIR or unset KARML_WARMUP_MLPOT_JAX_ONLY=0 for live tests."
         )
     pycharmm = ipy.pycharmm
     reset_block = ipy.reset_block
@@ -294,7 +294,7 @@ def build_trialanine_water_box_in_charmm(
     if not have_trialanine_cgenff():
         raise FileNotFoundError(
             f"Missing {trialanine_cgenff_rtf_path()}. "
-            "Run: ./scripts/mmml-charmm-mpirun.sh python scripts/export_trialanine_cgenff_rtf.py"
+            "Run: ./scripts/karml-charmm-mpirun.sh python scripts/export_trialanine_cgenff_rtf.py"
         )
 
     rng = np.random.default_rng(seed)
@@ -336,13 +336,13 @@ def build_trialanine_water_box_in_charmm(
     coor.set_positions(pd.DataFrame(peptide, columns=["x", "y", "z"]))
 
     # Use packmol to pack waters
-    from mmml.interfaces.pycharmmInterface.packmol_placement import packmol_executable
+    from karml.interfaces.pycharmmInterface.packmol_placement import packmol_executable
     from ase import Atoms
     from ase.io import write as ase_write
     from ase.io import read as ase_read
     import subprocess
     import shutil
-    from mmml.interfaces.pycharmmInterface.utils import get_Z_from_psf
+    from karml.interfaces.pycharmmInterface.utils import get_Z_from_psf
     
     out_dir = Path(workdir or Path.cwd())
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -352,7 +352,7 @@ def build_trialanine_water_box_in_charmm(
     pep_pdb_path = out_dir / "peptide.pdb"
     ase_write(str(pep_pdb_path), pep_atoms)
     
-    from mmml.paths import bundled_file
+    from karml.paths import bundled_file
     tip3_pdb_src = bundled_file("data", "charmm", "tip3.pdb")
     shutil.copy(tip3_pdb_src, out_dir / tip3_pdb_src.name)
     
@@ -397,7 +397,7 @@ end structure
     prepare_charmm_pbc(box_side_A)
     nbond_cutoffs = apply_pbc_nbonds(nbxmod=5, cubic_box_side_A=box_side_A)
 
-    from mmml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap import (
+    from karml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap import (
         mark_cgenff_params_full,
     )
 
@@ -464,15 +464,15 @@ def reload_trialanine_water_box_in_charmm(
     """
     import pycharmm.coor as coor
 
-    from mmml.interfaces.pycharmmInterface.cgenff_bonded_reference import (
+    from karml.interfaces.pycharmmInterface.cgenff_bonded_reference import (
         read_psf_card_file,
         set_charmm_positions,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         apply_crd_file_to_charmm,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap import mark_cgenff_params_full
-    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+    from karml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap import mark_cgenff_params_full
+    from karml.interfaces.pycharmmInterface.mlpot.pbc_env import (
         apply_pbc_nbonds,
         prepare_charmm_pbc,
     )

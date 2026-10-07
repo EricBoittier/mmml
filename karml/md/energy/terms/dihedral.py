@@ -10,10 +10,10 @@ from __future__ import annotations
 
 from typing import Any, Sequence
 
-from mmml.md.energy.registry import EnergyContext, TermFns, register_term
-from mmml.md.energy.terms._common import ase_contribution_from_jax
-from mmml.md.system import MolecularSystem
-from mmml.md.restraints.dihedral import DihedralRestraint
+from karml.md.energy.registry import EnergyContext, TermFns, register_term
+from karml.md.energy.terms._common import ase_contribution_from_jax
+from karml.md.system import MolecularSystem
+from karml.md.restraints.dihedral import DihedralRestraint
 
 __all__ = ["DihedralRestraint", "DihedralRestraintTerm"]
 
@@ -49,7 +49,7 @@ def _periodic_angle_delta_rad(angle, target):
 
 @register_term("dihedral")
 class DihedralRestraintTerm:
-    """Composable :class:`~mmml.md.energy.registry.EnergyTerm` of dihedral restraints."""
+    """Composable :class:`~karml.md.energy.registry.EnergyTerm` of dihedral restraints."""
 
     name = "dihedral"
 

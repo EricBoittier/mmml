@@ -57,8 +57,8 @@ def _setup_charmm_psf(resid: str, n_monomers: int) -> int:
     """Generate a CHARMM PSF for ``n_monomers`` copies of ``resid``."""
     import pycharmm
 
-    from mmml.interfaces.pycharmmInterface import setupRes
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import (
+    from karml.interfaces.pycharmmInterface import setupRes
+    from karml.interfaces.pycharmmInterface.import_pycharmm import (
         pycharmm_quiet,
         reset_block,
     )
@@ -76,7 +76,7 @@ def _psf_ordered_monomer(data, resid: str, n_real: int):
     """A real monomer geometry from the dataset, reindexed into PSF order."""
     import pycharmm
 
-    from mmml.interfaces.pycharmmInterface.utils import get_Z_from_psf
+    from karml.interfaces.pycharmmInterface.utils import get_Z_from_psf
 
     res = np.array([str(x) for x in data["res_name"]])
     idx = np.where(res == resid)[0]
@@ -114,7 +114,7 @@ def _terms(out) -> dict:
 
 
 def main() -> int:
-    from mmml.interfaces.pycharmmInterface.cutoffs import (
+    from karml.interfaces.pycharmmInterface.cutoffs import (
         DEFAULT_ML_SWITCH_WIDTH,
         DEFAULT_MM_SWITCH_ON,
         DEFAULT_MM_SWITCH_WIDTH,
@@ -137,9 +137,9 @@ def main() -> int:
     import jax.numpy as jnp
     from ase import Atoms
 
-    from mmml.analysis.dimer_scans import build_rigid_dimer
-    from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
-    from mmml.interfaces.pycharmmInterface.mmml_calculator import setup_calculator
+    from karml.analysis.dimer_scans import build_rigid_dimer
+    from karml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
+    from karml.interfaces.pycharmmInterface.karml_calculator import setup_calculator
 
     out_dir = Path(args.out)
     out_dir.mkdir(parents=True, exist_ok=True)

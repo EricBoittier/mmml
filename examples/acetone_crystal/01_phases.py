@@ -20,8 +20,8 @@ import sys
 
 import numpy as np
 
-from mmml.analysis.acetone_crystal import ACETONE_CRYSTAL_PHASES, read_acetone_phase
-from mmml.analysis.lattice_energy import unwrap_molecules
+from karml.analysis.acetone_crystal import ACETONE_CRYSTAL_PHASES, read_acetone_phase
+from karml.analysis.lattice_energy import unwrap_molecules
 
 CELL_TOLERANCE_A = 0.01
 VOLUME_TOLERANCE_FRAC = 0.005

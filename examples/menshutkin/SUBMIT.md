@@ -134,7 +134,7 @@ MENSH_CKPT=$PWD/model_longrange_c14.json \
 
 **Runs on CPU** — it needs no GPU and will not disturb production. `MENSH_DEVICE=cpu`
 sets `JAX_PLATFORMS`, unsets `CUDA_VISIBLE_DEVICES`, **and** sets
-`MMML_MLPOT_DEVICE=cpu`; the last is not optional, because the CLI otherwise
+`KARML_MLPOT_DEVICE=cpu`; the last is not optional, because the CLI otherwise
 rewrites the platform back to CUDA and silently takes a production GPU.
 
 `model_longrange_c14.json` is the portable export of the Orbax checkpoint, which

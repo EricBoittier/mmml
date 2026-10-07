@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Matrix-wide health report (pc-studix login node).
 #
-# Usage (from ~/mmml/workflows/dcm_density_setup_compare):
+# Usage (from ~/karml/workflows/dcm_density_setup_compare):
 #   bash scripts/debug_matrix.sh
 #   bash scripts/debug_matrix.sh --failed-only
 #   bash scripts/debug_matrix.sh --grep 'post-overlap-rescue'
@@ -48,7 +48,7 @@ echo "host:          $(hostname)"
 echo "artifact_root: $ROOT"
 echo
 
-echo "=== Your Slurm queue (mmml / setup_compare) ==="
+echo "=== Your Slurm queue (karml / setup_compare) ==="
 debug_user_gpu_queue || true
 echo
 

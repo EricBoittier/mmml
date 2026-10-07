@@ -9,14 +9,14 @@ import numpy as np
 import pytest
 from jax_md.mm_forcefields.io.charmm import parse_pdb_simple
 
-from mmml.interfaces.pycharmmInterface.cgenff_bonded_reference import (
+from karml.interfaces.pycharmmInterface.cgenff_bonded_reference import (
     compare_bonded_to_charmm,
     read_psf_card_file,
     run_charmm_bonded_ener_force,
     set_charmm_positions,
     setup_bonded_only_charmm,
 )
-from mmml.interfaces.pycharmmInterface.mlpot.jax_mm_spoof import (
+from karml.interfaces.pycharmmInterface.mlpot.jax_mm_spoof import (
     load_monomer_bonded_components_from_psf,
 )
 from tests.conftest import bonded_block_hangs_under_mpi_mpirun, can_import_pycharmm
@@ -45,8 +45,8 @@ def _perturb_positions(positions: np.ndarray, seed: int = 29) -> np.ndarray:
 def test_jax_mm_spoof_aco_components_match_pycharmm(pycharmm_workdir) -> None:
     """Spoof PSF bonded components must match CHARMM BOND/ANGL/DIHE/IMPR/UREY."""
     import pycharmm.read as read
-    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_PRM, CGENFF_RTF
+    from karml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
+    from karml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_PRM, CGENFF_RTF
 
     assert ACO_PSF.is_file(), f"missing fixture PSF: {ACO_PSF}"
     assert ACO_PDB.is_file(), f"missing fixture PDB: {ACO_PDB}"

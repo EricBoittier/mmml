@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 import pytest
 
-from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+from karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
     ase_to_charmm_akma_velocities,
     assign_maxwell_boltzmann_velocities_via_ase,
     charmm_akma_to_ang_fs_velocities,
@@ -58,7 +58,7 @@ def test_clamp_velocity_assignment_temp_k_enforces_floor():
 
 
 def test_clamp_velocity_assignment_dynamics_kw_clamps_firstt_on_start():
-    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+    from karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
         clamp_velocity_assignment_dynamics_kw,
     )
 
@@ -69,7 +69,7 @@ def test_clamp_velocity_assignment_dynamics_kw_clamps_firstt_on_start():
 
 
 def test_zero_temperature_assignment_requires_explicit_opt_in():
-    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+    from karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
         clamp_velocity_assignment_dynamics_kw,
     )
 
@@ -87,7 +87,7 @@ def test_zero_temperature_assignment_requires_explicit_opt_in():
 def test_maybe_assign_velocities_via_ase_if_cold_sets_iasvel_after_assign():
     kw = {"iasvel": 0, "start": True, "finalt": 240.0}
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.assign_maxwell_boltzmann_velocities_via_ase",
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.assign_maxwell_boltzmann_velocities_via_ase",
         return_value=58.0,
     ) as assign:
         assert maybe_assign_velocities_via_ase_if_cold(kw) is True
@@ -99,10 +99,10 @@ def test_maybe_assign_velocities_via_ase_if_cold_sets_iasvel_after_assign():
 def test_maybe_assign_velocities_via_ase_if_cold_skips_when_warm():
     kw = {"iasvel": 0, "start": False}
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.velocities_are_cold",
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.velocities_are_cold",
         return_value=False,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.assign_maxwell_boltzmann_velocities_via_ase",
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.assign_maxwell_boltzmann_velocities_via_ase",
     ) as assign:
         assert maybe_assign_velocities_via_ase_if_cold(kw) is False
     assign.assert_not_called()
@@ -111,10 +111,10 @@ def test_maybe_assign_velocities_via_ase_if_cold_skips_when_warm():
 def test_maybe_assign_velocities_via_ase_if_cold_never_overwrites_restart():
     kw = {"restart": True, "iasvel": 0, "start": False}
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.velocities_are_cold",
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.velocities_are_cold",
         return_value=True,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.assign_maxwell_boltzmann_velocities_via_ase",
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.assign_maxwell_boltzmann_velocities_via_ase",
     ) as assign:
         assert maybe_assign_velocities_via_ase_if_cold(kw) is False
     assign.assert_not_called()
@@ -124,7 +124,7 @@ def test_maybe_assign_velocities_via_ase_if_cold_never_overwrites_restart():
 def test_maybe_assign_velocities_via_ase_if_cold_assigns_and_clears_start():
     kw = {"iasvel": 0, "start": True, "finalt": 240.0}
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.assign_maxwell_boltzmann_velocities_via_ase",
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.assign_maxwell_boltzmann_velocities_via_ase",
         return_value=58.0,
     ) as assign:
         assert maybe_assign_velocities_via_ase_if_cold(kw) is True
@@ -153,15 +153,15 @@ def test_assign_maxwell_boltzmann_velocities_via_ase_syncs_charmm():
         sys.modules,
         {"ase.md": md_mod, "ase.md.velocitydistribution": vd_mod},
     ), patch(
-        "mmml.interfaces.pycharmmInterface.import_pycharmm.ase_from_pycharmm_state",
+        "karml.interfaces.pycharmmInterface.import_pycharmm.ase_from_pycharmm_state",
         return_value=atoms,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.charmm_masses_amu",
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.charmm_masses_amu",
         return_value=masses,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.sync_charmm_velocities_akma",
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.sync_charmm_velocities_akma",
     ) as sync, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.estimate_kinetic_temperature_k",
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.estimate_kinetic_temperature_k",
         return_value=300.0,
     ):
         assign_maxwell_boltzmann_velocities_via_ase(300.0, quiet=True)
@@ -171,7 +171,7 @@ def test_assign_maxwell_boltzmann_velocities_via_ase_syncs_charmm():
 
 
 def test_sync_charmm_velocities_akma_always_mirrors_comp():
-    from mmml.interfaces.pycharmmInterface.mlpot import charmm_ase_velocities as cav
+    from karml.interfaces.pycharmmInterface.mlpot import charmm_ase_velocities as cav
 
     vel = np.array([[10.0, 0.0, 0.0], [0.0, 20.0, 0.0]], dtype=float)
     fake_coor = types.ModuleType("pycharmm.coor")
@@ -185,7 +185,7 @@ def test_sync_charmm_velocities_akma_always_mirrors_comp():
         "_velocity_array_matches_psf",
         return_value=True,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.sync_comparison_velocities_akma",
+        "karml.interfaces.pycharmmInterface.mlpot.comp_velocities.sync_comparison_velocities_akma",
     ) as sync_comp:
         cav.sync_charmm_velocities_akma(vel)
     fake_coor.set_velocity.assert_called_once()
@@ -206,10 +206,10 @@ def test_run_dynamics_preserves_explicit_bussi_iasvel_one(monkeypatch):
     import numpy as np
 
     # Even with the experimental handoff env, explicit iasvel=1 wins.
-    monkeypatch.setenv("MMML_BUSSI_INIT_VELOCITIES_HANDOFF", "1")
-    monkeypatch.setenv("MMML_BUSSI_IASVEL0_CONTINUATION", "1")
+    monkeypatch.setenv("KARML_BUSSI_INIT_VELOCITIES_HANDOFF", "1")
+    monkeypatch.setenv("KARML_BUSSI_IASVEL0_CONTINUATION", "1")
 
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import run_dynamics
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import run_dynamics
 
     kw = {
         "nstep": 10,
@@ -233,29 +233,29 @@ def test_run_dynamics_preserves_explicit_bussi_iasvel_one(monkeypatch):
         sys.modules,
         {"pycharmm": fake_pycharmm, "pycharmm.lib": fake_pycharmm.lib},
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_via_c_api",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_via_c_api",
         return_value=MagicMock(),
     ) as run_capi, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_c_api_available",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_c_api_available",
         return_value=True,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._init_velocities_handoff_looks_valid",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._init_velocities_handoff_looks_valid",
         return_value=True,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._validate_init_velocities_handoff",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._validate_init_velocities_handoff",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._resolve_dynamics_init_velocities",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._resolve_dynamics_init_velocities",
         return_value=init,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._apply_dynamics_io_setters",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._apply_dynamics_io_setters",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.mirror_comparison_velocities_for_dynamics",
+        "karml.interfaces.pycharmmInterface.mlpot.comp_velocities.mirror_comparison_velocities_for_dynamics",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.refresh_bussi_comp_velocity_handoff",
+        "karml.interfaces.pycharmmInterface.mlpot.comp_velocities.refresh_bussi_comp_velocity_handoff",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._release_charmm_dynamics_api_buffers",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._release_charmm_dynamics_api_buffers",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.capture_charmm_velocities_for_bussi",
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.capture_charmm_velocities_for_bussi",
     ):
         run_dynamics(kw)
     passed_kw = run_capi.call_args[0][0]

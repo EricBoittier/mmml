@@ -4,7 +4,7 @@
 ``mm_charge_mode=latent`` (Mode B) needs a live AB-dimer forward at every MD
 step, which only makes sense for a 2-monomer system: with N monomers in a
 liquid box, "the AB dimer" is undefined (see
-``mmml/models/mm_charge_mode.py``). This script sidesteps that by averaging
+``karml/models/mm_charge_mode.py``). This script sidesteps that by averaging
 Mode B's ``neutralize_per_monomer(q_ML)`` over many *training-set* homo-dimer
 forwards of one species, offline, once. The mean is a fixed per-atom charge
 template for that monomer, which ``mm_charge_mode=latent_mean`` (Mode D) then
@@ -22,7 +22,7 @@ Usage::
 
 Then pass ``--mm-charge-mode latent_mean --mm-latent-charge-template
 ckpts/mp2_nms/latent_charge_template_DCM.npz`` to an MD run
-(``mmml/cli/run/md_system.py`` or the ``md-pbc-suite`` jaxmd/ase backends).
+(``karml/cli/run/md_system.py`` or the ``md-pbc-suite`` jaxmd/ase backends).
 
 The dataset must be dimers (the same shape ``check_hybrid_train_md_parity.py``
 consumes: ``Z``, ``R``, ``N``, ``mol_id``, ``res_name``) and the checkpoint
@@ -102,9 +102,9 @@ def main() -> int:
 
     import jax.numpy as jnp
 
-    from mmml.cli.misc.physnet_evaluate import _load_physnet_checkpoint
-    from mmml.models.cgenff_mm import neutralize_per_monomer
-    from mmml.models.latent_charge_template import (
+    from karml.cli.misc.physnet_evaluate import _load_physnet_checkpoint
+    from karml.models.cgenff_mm import neutralize_per_monomer
+    from karml.models.latent_charge_template import (
         LatentChargeTemplate,
         save_latent_charge_template,
     )

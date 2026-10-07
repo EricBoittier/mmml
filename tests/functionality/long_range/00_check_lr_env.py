@@ -36,7 +36,7 @@ def main() -> int:
         ok = False
 
     try:
-        from mmml.interfaces.pycharmmInterface.pbc_utils_jax import mic_displacement
+        from karml.interfaces.pycharmmInterface.pbc_utils_jax import mic_displacement
 
         _ = mic_displacement
         print_pass("MIC utilities (pbc_utils_jax)")
@@ -47,7 +47,7 @@ def main() -> int:
     if have_jax_pme_package():
         print_pass("jax-pme (jaxpme)")
     else:
-        print_fail("jax-pme not installed — install mmml deps or: pip install jax-pme")
+        print_fail("jax-pme not installed — install karml deps or: pip install jax-pme")
         ok = False
 
     if have_scafacos_library():

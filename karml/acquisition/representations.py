@@ -13,10 +13,10 @@ from typing import Sequence
 
 import numpy as np
 
-from mmml.acquisition.linear_student import LinearStudent
-from mmml.acquisition.pca import PCAFit, fit_pca, project_jacobian_rows, transform_pca
-from mmml.acquisition.pooling import pool_species_aware
-from mmml.acquisition.splits import StructureRecord
+from karml.acquisition.linear_student import LinearStudent
+from karml.acquisition.pca import PCAFit, fit_pca, project_jacobian_rows, transform_pca
+from karml.acquisition.pooling import pool_species_aware
+from karml.acquisition.splits import StructureRecord
 
 
 @dataclass
@@ -238,7 +238,7 @@ def fit_embedding_pca(
     variance_threshold: float | None,
     row_normalize: bool,
 ) -> tuple[PCAFit, np.ndarray]:
-    from mmml.acquisition.selection import maybe_row_normalize
+    from karml.acquisition.selection import maybe_row_normalize
 
     Xn = maybe_row_normalize(X, row_normalize)
     fit = fit_pca(

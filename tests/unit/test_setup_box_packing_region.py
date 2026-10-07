@@ -12,7 +12,7 @@ from __future__ import annotations
 import math
 from pathlib import Path
 
-SETUP_BOX = Path("mmml/interfaces/pycharmmInterface/setupBox.py")
+SETUP_BOX = Path("karml/interfaces/pycharmmInterface/setupBox.py")
 
 
 def _solvation_body() -> str:
@@ -54,7 +54,7 @@ def test_count_is_clamped_to_region_capacity() -> None:
 
 
 def test_callers_use_the_returned_count() -> None:
-    cli = Path("mmml/cli/make/make_box.py").read_text(encoding="utf-8")
+    cli = Path("karml/cli/make/make_box.py").read_text(encoding="utf-8")
     assert "n_molecules = setupBox.run_packmol_solvation(" in cli
     src = SETUP_BOX.read_text(encoding="utf-8")
     main_body = src.split("\ndef main(density")[1].split("\ndef ")[0]

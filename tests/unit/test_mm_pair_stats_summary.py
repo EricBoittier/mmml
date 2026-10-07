@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from mmml.interfaces.pycharmmInterface.mm_energy_forces import (
+from karml.interfaces.pycharmmInterface.mm_energy_forces import (
     _mm_pair_stats_init,
     format_mm_pair_update_stats_summary,
     resolve_mm_pair_stats_n_valid,
@@ -66,7 +66,7 @@ def test_summary_includes_last_rebuild_backend():
 
 
 def test_gpu_pair_builder_saving_requires_recorded_backend():
-    from mmml.interfaces.pycharmmInterface.mm_energy_forces import (
+    from karml.interfaces.pycharmmInterface.mm_energy_forces import (
         gpu_pair_builder_saving_is_claimable,
     )
 

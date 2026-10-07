@@ -1,7 +1,7 @@
 """Compile N JAX-MD integrator steps into one dispatch.
 
 ``jaxmd_runner`` already batches steps with ``lax.fori_loop`` inside a jitted
-block (``_bind_sim``); λ-dynamics and :class:`~mmml.md.drivers.JaxmdDriver` both
+block (``_bind_sim``); λ-dynamics and :class:`~karml.md.drivers.JaxmdDriver` both
 ran a Python ``for`` loop over single jitted steps instead, paying a dispatch
 per step. This module packages that pattern so a caller only supplies the
 per-step function and the block size.
@@ -9,7 +9,7 @@ per-step function and the block size.
 The block is where neighbor-list freshness is spent: dynamic pair arrays are
 passed in as *arguments* (not closed over) and held fixed for the whole block,
 so ``block_steps`` must stay within the Verlet skin budget — see
-:func:`mmml.md.nl_cadence.verlet_reuse_displacement_limit_A`.
+:func:`karml.md.nl_cadence.verlet_reuse_displacement_limit_A`.
 """
 
 from __future__ import annotations
@@ -36,7 +36,7 @@ def make_block_stepper(
     mid-block has no effect — refresh between blocks instead.
 
     ``normalize`` runs on the carry after every step; pass
-    ``mmml.cli.run.jaxmd_runner.normalize_jaxmd_state`` (or an equivalent) when
+    ``karml.cli.run.jaxmd_runner.normalize_jaxmd_state`` (or an equivalent) when
     the integrator carry must keep a fixed dtype across the loop, since
     ``fori_loop`` requires the carry structure and dtypes to be invariant.
     """

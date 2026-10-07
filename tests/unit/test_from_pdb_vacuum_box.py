@@ -6,7 +6,7 @@ import argparse
 
 import pytest
 
-from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+from karml.interfaces.pycharmmInterface.mlpot.setup import (
     _vacuum_from_pdb_allows_missing_box,
 )
 
@@ -30,7 +30,7 @@ def test_vacuum_from_pdb_allows_missing_box(kwargs, allowed):
 
 def test_resolve_charmm_use_pbc_stays_off_when_vacuum_from_pdb_omits_box():
     """Inventing box_size for vacuum from-pdb would wrongly enable crystal."""
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import resolve_charmm_use_pbc
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import resolve_charmm_use_pbc
 
     args = argparse.Namespace(setup="free_nvt", free_space=False, box_size=None)
     assert resolve_charmm_use_pbc(args) is False
@@ -42,7 +42,7 @@ def test_resolve_charmm_use_pbc_stays_off_when_vacuum_from_pdb_omits_box():
 
 
 def test_from_pdb_topology_prefers_sibling_psf(tmp_path):
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import from_pdb_topology_strategy
+    from karml.interfaces.pycharmmInterface.mlpot.setup import from_pdb_topology_strategy
 
     pdb = tmp_path / "model.pdb"
     pdb.write_text("ATOM\n", encoding="utf-8")
@@ -53,7 +53,7 @@ def test_from_pdb_topology_prefers_sibling_psf(tmp_path):
 
 
 def test_from_pdb_topology_allows_small_sequence_without_psf(tmp_path):
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import from_pdb_topology_strategy
+    from karml.interfaces.pycharmmInterface.mlpot.setup import from_pdb_topology_strategy
 
     pdb = tmp_path / "dimer.pdb"
     pdb.write_text("ATOM\n", encoding="utf-8")
@@ -61,7 +61,7 @@ def test_from_pdb_topology_allows_small_sequence_without_psf(tmp_path):
 
 
 def test_residue_sequence_from_pdb_preserves_resid_order(tmp_path):
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+    from karml.interfaces.pycharmmInterface.mlpot.setup import (
         _parse_pdb_atoms_whitespace,
         _residue_sequence_from_pdb,
     )
@@ -91,7 +91,7 @@ def test_residue_sequence_from_pdb_preserves_resid_order(tmp_path):
 
 def test_parse_pdb_atoms_whitespace_minimal_no_occupancy(tmp_path):
     """Serial/resid must not be taken as x/y when occ/tempFactor are omitted."""
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import _parse_pdb_atoms_whitespace
+    from karml.interfaces.pycharmmInterface.mlpot.setup import _parse_pdb_atoms_whitespace
 
     pdb = tmp_path / "minimal.pdb"
     # ATOM serial name resname resid x y z  (exactly 5 numeric tokens)

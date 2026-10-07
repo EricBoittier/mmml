@@ -7,7 +7,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from mmml.umbrella.structure import (
+from karml.umbrella.structure import (
     load_structure,
     load_structure_frames,
     pack_window_seeds,
@@ -141,7 +141,7 @@ def test_load_structure_xyz(tmp_path: Path):
 
 
 def test_per_window_temperatures_shape():
-    from mmml.umbrella.sample import _per_window_temperatures_K
+    from karml.umbrella.sample import _per_window_temperatures_K
 
     k_b = 8.617333262145e-5
     n_windows, n_atoms = 3, 2

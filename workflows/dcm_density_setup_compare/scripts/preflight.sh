@@ -4,18 +4,18 @@ WORKFLOW_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 REPO_ROOT="$(cd "$WORKFLOW_ROOT/../.." && pwd)"
 cd "$REPO_ROOT"
 
-_cfg_raw="${MMML_WORKFLOW_CONFIG:-config.yaml}"
+_cfg_raw="${KARML_WORKFLOW_CONFIG:-config.yaml}"
 if [[ "$_cfg_raw" = /* ]]; then
   CFG="${_cfg_raw}"
 else
   CFG="${WORKFLOW_ROOT}/${_cfg_raw}"
 fi
-export MMML_WORKFLOW_CONFIG="$CFG"
+export KARML_WORKFLOW_CONFIG="$CFG"
 
-# shellcheck source=../../../scripts/resolve_mmml_env.sh
-source "$REPO_ROOT/scripts/resolve_mmml_env.sh"
-mmml_resolve_env "$REPO_ROOT"
-PY="${MMML_PYTHON}"
+# shellcheck source=../../../scripts/resolve_karml_env.sh
+source "$REPO_ROOT/scripts/resolve_karml_env.sh"
+karml_resolve_env "$REPO_ROOT"
+PY="${KARML_PYTHON}"
 
 "$PY" -c "
 from pathlib import Path
@@ -45,7 +45,7 @@ from campaign_lib import (
     slurm_tier_resource_pools,
     warmup_mlpot_enabled,
 )
-from mmml.cli.run.warmup_mlpot_jax import resolve_warmup_do_mm_for_config
+from karml.cli.run.warmup_mlpot_jax import resolve_warmup_do_mm_for_config
 from setup_variants import resolve_setup_variant
 from bulk_density import bulk_reference_table, matrix_uses_bulk_density
 cfg = load_config(Path('${CFG}'))
@@ -87,7 +87,7 @@ for i, cell in enumerate(iter_matrix_cells(cfg)):
     if i >= 7:
         print('  ...')
         break
-from mmml.interfaces.pycharmmInterface.mlpot.mlpot_limits import (
+from karml.interfaces.pycharmmInterface.mlpot.mlpot_limits import (
     NPR_TIERS,
     estimate_ml_atoms,
     pbc_pair_budget_box_side_A,
@@ -115,7 +115,7 @@ print(
     f'(max_Npr={NPR_TIERS[tier]}, PBC pairs)'
 )
 validate_mlpot_system_size(max_n_ml, pbc=True, box_side_A=budget_box)
-from mmml.interfaces.pycharmmInterface.charmm_paths import assert_cgenff_toppar_readable
+from karml.interfaces.pycharmmInterface.charmm_paths import assert_cgenff_toppar_readable
 toppar = assert_cgenff_toppar_readable()
 print('CGENFF RTF:', toppar.rtf)
 print('CGENFF PRM:', toppar.prm)
@@ -134,7 +134,7 @@ print('warmup_do_mm:', resolve_warmup_do_mm_for_config(cfg))
 "
 
 if ! command -v packmol >/dev/null 2>&1; then
-  _packmol_bundled="$("$PY" -c "from mmml.interfaces.pycharmmInterface.packmol_placement import packmol_executable; print(packmol_executable())" 2>/dev/null || true)"
+  _packmol_bundled="$("$PY" -c "from karml.interfaces.pycharmmInterface.packmol_placement import packmol_executable; print(packmol_executable())" 2>/dev/null || true)"
   if [[ -n "$_packmol_bundled" && -x "$_packmol_bundled" ]]; then
     echo "packmol: bundled ${_packmol_bundled}"
   else
@@ -142,10 +142,10 @@ if ! command -v packmol >/dev/null 2>&1; then
   fi
 fi
 
-if [[ -n "${MMML_CKPT:-}" ]]; then
-  echo "MMML_CKPT=${MMML_CKPT} (optional override when config uses \${MMML_CKPT})"
+if [[ -n "${KARML_CKPT:-}" ]]; then
+  echo "KARML_CKPT=${KARML_CKPT} (optional override when config uses \${KARML_CKPT})"
 fi
 
-if [[ -n "${MMML_MLPOT_ALLOW_HIGH_GRMS:-}" ]]; then
-  echo "NOTE: MMML_MLPOT_ALLOW_HIGH_GRMS=${MMML_MLPOT_ALLOW_HIGH_GRMS} (env override; config allow_high_grms also applies via campaign.yaml)" >&2
+if [[ -n "${KARML_MLPOT_ALLOW_HIGH_GRMS:-}" ]]; then
+  echo "NOTE: KARML_MLPOT_ALLOW_HIGH_GRMS=${KARML_MLPOT_ALLOW_HIGH_GRMS} (env override; config allow_high_grms also applies via campaign.yaml)" >&2
 fi

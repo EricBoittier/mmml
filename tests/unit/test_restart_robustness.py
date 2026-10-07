@@ -6,12 +6,12 @@ from unittest.mock import MagicMock, patch
 import pytest
 import numpy as np
 
-from mmml.models.physnetjax.physnetjax.restart.restart import (
+from karml.models.physnetjax.physnetjax.restart.restart import (
     get_last,
     get_params_model,
     restart_training,
 )
-from mmml.models.physnetjax.physnetjax.utils.utils import get_files
+from karml.models.physnetjax.physnetjax.utils.utils import get_files
 
 
 def test_get_files_keeps_epochs_under_system_tmp(tmp_path: Path) -> None:
@@ -50,7 +50,7 @@ def test_get_params_model_robustness(tmp_path: Path) -> None:
         }
     }
     
-    with patch("mmml.models.physnetjax.physnetjax.restart.restart.orbax_checkpointer") as mock_checkpointer:
+    with patch("karml.models.physnetjax.physnetjax.restart.restart.orbax_checkpointer") as mock_checkpointer:
         mock_checkpointer.metadata.return_value = MagicMock(item_metadata=None)
         mock_checkpointer.restore.return_value = restored_mock
         
@@ -89,7 +89,7 @@ def test_get_params_model_prefers_ema_by_default(tmp_path: Path) -> None:
         },
     }
     with patch(
-        "mmml.models.physnetjax.physnetjax.restart.restart.orbax_checkpointer"
+        "karml.models.physnetjax.physnetjax.restart.restart.orbax_checkpointer"
     ) as mock_checkpointer:
         mock_checkpointer.metadata.return_value = MagicMock(item_metadata=None)
         mock_checkpointer.restore.return_value = restored_mock
@@ -144,7 +144,7 @@ def test_get_params_model_loads_portable_json(tmp_path: Path) -> None:
     fake_model = MagicMock()
     fake_model.zbl = False
     with patch(
-        "mmml.utils.model_checkpoint.build_physnet_from_config",
+        "karml.utils.model_checkpoint.build_physnet_from_config",
         return_value=fake_model,
     ):
         params, model, restored = get_params_model(
@@ -192,7 +192,7 @@ def test_restart_training_from_json(tmp_path: Path) -> None:
     mock_transform = MagicMock()
     mock_transform.init.return_value = "tx"
     with patch(
-        "mmml.utils.model_checkpoint.build_physnet_from_config",
+        "karml.utils.model_checkpoint.build_physnet_from_config",
         return_value=fake_model,
     ):
         (
@@ -244,7 +244,7 @@ def test_restart_training_robustness(tmp_path: Path) -> None:
     mock_transform = MagicMock()
     mock_transform.init.return_value = "transform_state_dummy"
 
-    with patch("mmml.models.physnetjax.physnetjax.restart.restart.orbax_checkpointer") as mock_checkpointer:
+    with patch("karml.models.physnetjax.physnetjax.restart.restart.orbax_checkpointer") as mock_checkpointer:
         mock_checkpointer.metadata.return_value = MagicMock(item_metadata=None)
         mock_checkpointer.restore.return_value = restored_mock
         

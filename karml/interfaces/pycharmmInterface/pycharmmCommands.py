@@ -442,7 +442,7 @@ close unit 35
 
 """
 
-from mmml.interfaces.pycharmmInterface.import_pycharmm import pycharmm_quiet
+from karml.interfaces.pycharmmInterface.import_pycharmm import pycharmm_quiet
 
 def CLEAR_CHARMM():
     pycharmm_quiet()

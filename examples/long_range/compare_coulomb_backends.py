@@ -5,7 +5,7 @@ Run from repo root:
 
     JAX_PLATFORMS=cpu python examples/long_range/compare_coulomb_backends.py
 
-Requires jax-pme (core MMML dependency). ScaFaCoS is optional (set SCAFACOS_LIB).
+Requires jax-pme (core KARML dependency). ScaFaCoS is optional (set SCAFACOS_LIB).
 """
 
 from __future__ import annotations
@@ -27,7 +27,7 @@ from _common import (  # noqa: E402
 
 
 def main() -> None:
-    print_header("MMML Coulomb backend comparison")
+    print_header("KARML Coulomb backend comparison")
     print(describe_environment())
     print()
 

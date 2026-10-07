@@ -27,11 +27,11 @@ def load_config(config_path: Path | None = None) -> dict[str, Any]:
 
 
 def resolve_checkpoint(raw: str) -> Path:
-    if raw == "${MMML_CKPT}":
-        env = os.environ.get("MMML_CKPT", "").strip()
+    if raw == "${KARML_CKPT}":
+        env = os.environ.get("KARML_CKPT", "").strip()
         if not env:
             raise RuntimeError(
-                "MMML_CKPT is not set (config checkpoint: ${MMML_CKPT}). "
+                "KARML_CKPT is not set (config checkpoint: ${KARML_CKPT}). "
                 "Export your DCM PhysNet checkpoint directory before running Snakemake."
             )
         path = Path(env).expanduser().resolve()
@@ -48,12 +48,12 @@ def validate_checkpoint(path: Path) -> None:
         raise RuntimeError(
             f"Checkpoint path looks like a placeholder: {path}\n"
             "Set a real directory, e.g.\n"
-            "  export MMML_CKPT=$HOME/mmml_tutorial/acodcm/ckpts/dcm1-..."
+            "  export KARML_CKPT=$HOME/karml_tutorial/acodcm/ckpts/dcm1-..."
         )
     if not path.exists():
         raise RuntimeError(
             f"Checkpoint not found: {path}\n"
-            "Verify MMML_CKPT points at your DCM PhysNet ckpt directory."
+            "Verify KARML_CKPT points at your DCM PhysNet ckpt directory."
         )
 
 
@@ -108,7 +108,7 @@ def run_dir(cfg: dict[str, Any], preset_id: str, geom_id: str) -> Path:
 
 
 def expected_nve_nstep(cfg: dict[str, Any]) -> int:
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import dynamics_nstep_from_ps
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import dynamics_nstep_from_ps
 
     return int(dynamics_nstep_from_ps(float(cfg["ps_nve"]), float(cfg["dt_fs"])))
 
@@ -135,7 +135,7 @@ def build_md_system_argv(
     *,
     output_dir: Path | None = None,
 ) -> list[str]:
-    """Build ``mmml md-system`` argv for one preset × geometry NVE job."""
+    """Build ``karml md-system`` argv for one preset × geometry NVE job."""
     _assert_per_step_output(cfg)
     preset = preset_config(cfg, preset_id)
     geom = geometry_config(cfg, geom_id)

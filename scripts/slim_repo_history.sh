@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# slim_repo_history.sh — shrink the mmml git history and reclaim Git LFS quota.
+# slim_repo_history.sh — shrink the karml git history and reclaim Git LFS quota.
 #
 # WHY: `git clone` is slow because large, regenerable binaries were committed
 # over time. They live in *history*, so deleting them from the working tree does
@@ -40,7 +40,7 @@ command -v git-filter-repo >/dev/null 2>&1 || FILTER_REPO=(python3 -m git_filter
 # Review/adjust before running. (charmm.tar.xz is intentionally kept — it is the
 # CHARMM source needed by setup/install.sh; host it externally if you want it gone.)
 PURGE_GLOBS=(
-  'mmml/gui/viewer/node_modules/**'
+  'karml/gui/viewer/node_modules/**'
   '*.pov-state'
   '*.pov-state.gz'
   '*.dcd'
@@ -54,7 +54,7 @@ PURGE_GLOBS=(
 # AGGRESSIVE (uncomment after review — these may be referenced by notebooks/tests).
 # Adding these took a test rewrite from 3.8 GB -> ~0.95 GB; pruning the items below
 # the line further approaches a few hundred MB:
-#   'mmml/models/EF/data/**'      # large model param JSONs
+#   'karml/models/EF/data/**'      # large model param JSONs
 #   'tests/EF/**'                 # 18-23 MB test-fixture params + arrays
 #   '**/epoch-*/**'               # orbax training checkpoints
 #   '*.ipynb'                     # prefer `nbstripout` to keep notebooks, drop outputs
@@ -80,7 +80,7 @@ case "$MODE" in
     read -r -p "Type 'rewrite' to continue: " ans
     [ "$ans" = "rewrite" ] || { echo "aborted"; exit 1; }
 
-    backup="../mmml-backup-$(date +%Y%m%d-%H%M%S).git"
+    backup="../karml-backup-$(date +%Y%m%d-%H%M%S).git"
     echo "Creating mirror backup at: $backup"
     git clone --mirror . "$backup"
 

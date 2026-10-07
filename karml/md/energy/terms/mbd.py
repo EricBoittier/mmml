@@ -3,16 +3,16 @@
 Per-atom C6/C8/C10 and damping radii are frozen at build time (from an MBD
 checkpoint prediction or injected via ``EnergyContext.options``). The neural
 MBD model is not re-evaluated during sampling; only
-:func:`mmml.models.mbd.qdo_pairwise_dispersion` runs on the current geometry.
+:func:`karml.models.mbd.qdo_pairwise_dispersion` runs on the current geometry.
 """
 
 from __future__ import annotations
 
 from typing import Any
 
-from mmml.md.energy.capacity import COMPUTE_DTYPE
-from mmml.md.energy.registry import EnergyContext, NeighborRequest, TermFns, register_term
-from mmml.md.system import MolecularSystem
+from karml.md.energy.capacity import COMPUTE_DTYPE
+from karml.md.energy.registry import EnergyContext, NeighborRequest, TermFns, register_term
+from karml.md.system import MolecularSystem
 
 __all__ = ["MBDDispersionTerm", "DEFAULT_MBD_CUTOFF_A"]
 
@@ -36,7 +36,7 @@ class MBDDispersionTerm:
     def make(self, system: MolecularSystem, ctx: EnergyContext) -> TermFns:
         import jax.numpy as jnp
 
-        from mmml.models.mbd.qdo import qdo_pairwise_dispersion
+        from karml.models.mbd.qdo import qdo_pairwise_dispersion
 
         opts = dict(ctx.options)
         fixed = opts.get("fixed_dispersion")

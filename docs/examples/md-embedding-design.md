@@ -1,9 +1,9 @@
-# Solvated peptide MD embedding (`mmml md-embedding`)
+# Solvated peptide MD embedding (`karml md-embedding`)
 
 Design reference for **QM/MM-style** solvated peptide dynamics: the peptide is treated with
 PhysNet; nearby MM atoms participate in an **ML–MM electrostatic shell**; distant solvent
 remains **pure CHARMM MM**. This path is intentionally separate from homogeneous cluster
-liquids driven by [`mmml md-system`](../cli/commands/md-system.md) (all monomers hybrid).
+liquids driven by [`karml md-system`](../cli/commands/md-system.md) (all monomers hybrid).
 
 User-facing workflow: [aaa-ama-workflow.md](aaa-ama-workflow.md).  
 Upstream reference: [MMunibas/aaa.ama](https://github.com/MMunibas/aaa.ama) (`dyna.sol.py`).
@@ -33,9 +33,9 @@ flowchart TB
 
 Waters do **not** receive PhysNet monomer energy. They may receive **ML–MM electrostatic**
 coupling to the peptide when Phase 2 wires CHARMM `idxu`/`idxv` pair lists into
-`mmml/models/physnetjax/physnetjax/calc/pycharmm_calculator.py`.
+`karml/models/physnetjax/physnetjax/calc/pycharmm_calculator.py`.
 
-## vs `mmml md-system`
+## vs `karml md-system`
 
 | | `md-system` | `md-embedding` |
 |--|-------------|----------------|
@@ -52,16 +52,16 @@ for homogeneous hybrid liquids.
 
 ```bash
 # 1. Train small PhysNet on peptide NPZ (aaa.ama default; fix-and-split + ASE figure)
-mmml md-embedding train -o artifacts/md_embedding/aaa
+karml md-embedding train -o artifacts/md_embedding/aaa
 
 # 1b. Shuffle-only split (no fix-and-split manifest)
-mmml md-embedding train -o artifacts/md_embedding/aaa --simple-split
+karml md-embedding train -o artifacts/md_embedding/aaa --simple-split
 
 # 2. Build solvated box (CHARMM MM only)
-mmml md-embedding build -o artifacts/md_embedding/aaa --n-waters 10
+karml md-embedding build -o artifacts/md_embedding/aaa --n-waters 10
 
 # 3. Register partial MLpot + minimize (CHARMM node)
-mmml md-embedding run -o artifacts/md_embedding/aaa \
+karml md-embedding run -o artifacts/md_embedding/aaa \
   --checkpoint artifacts/md_embedding/aaa/aaa_smoke_params.json
 ```
 
@@ -73,7 +73,7 @@ for pass criteria. Published smoke metrics: [md-embedding-results.md](md-embeddi
 | Source | Atoms | Notes |
 |--------|-------|-------|
 | [aaa.ama `dataset_aaa.npz`](https://github.com/MMunibas/aaa.ama/tree/main/aaa_model) | 34 | Training labels (`Z`, `E`, `F`) |
-| MMML `TRIA` CGENFF build | 42 | `mmml/interfaces/pycharmmInterface/trialanine_water_box.py` |
+| KARML `TRIA` CGENFF build | 42 | `karml/interfaces/pycharmmInterface/trialanine_water_box.py` |
 
 **Phase 1 training** uses NPZ arrays directly (`num_atoms: 34`).  
 **Phase 1 MD build** uses the bundled CGENFF `TRIA` box for convenience; `box.json` records
@@ -85,12 +85,12 @@ a 34-atom export).
 
 | Component | Path |
 |-----------|------|
-| Orchestration | `mmml/interfaces/pycharmmInterface/mlpot/embedding_workflow.py` |
-| Partial registration | `mmml/interfaces/pycharmmInterface/mlpot/partial_mm.py` |
-| Dataset helpers | `mmml/data/external/aaa_ama.py` |
-| CLI | `mmml/cli/run/md_embedding.py` |
-| Train config | `mmml/cli/run/md_embedding_aaa_train.example.yaml` |
-| ASE figures | `mmml/utils/ase_structure_plot.py` (bonds, orthographic) |
+| Orchestration | `karml/interfaces/pycharmmInterface/mlpot/embedding_workflow.py` |
+| Partial registration | `karml/interfaces/pycharmmInterface/mlpot/partial_mm.py` |
+| Dataset helpers | `karml/data/external/aaa_ama.py` |
+| CLI | `karml/cli/run/md_embedding.py` |
+| Train config | `karml/cli/run/md_embedding_aaa_train.example.yaml` |
+| ASE figures | `karml/utils/ase_structure_plot.py` (bonds, orthographic) |
 | Split tool | [`fix-and-split`](../cli/commands/fix-and-split.md) (default train phase) |
 
 ## Phase 2 — ML/MM electrostatic embedding
@@ -99,7 +99,7 @@ a 34-atom export).
 2. Enable `PartialMlMmConfig.use_mlmm_pair_lists=True` once pair lists are wired.
 3. Forward `mlmm_ctonnb` / `mlmm_ctofnb` from MLpot registration (already in API).
 
-Reference: `mmml/interfaces/pycharmmInterface/mlpot/NONBOND_LISTS.md`.
+Reference: `karml/interfaces/pycharmmInterface/mlpot/NONBOND_LISTS.md`.
 
 ## Phase 3 — Multi-peptide / extended hybrid zone
 

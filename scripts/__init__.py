@@ -8,6 +8,6 @@ namespace package. Several workflows under ``workflows/*/scripts/`` are put on
 collection order, so tests errored under a subset run (``pytest tests/unit/``)
 while passing under ``pytest tests/``.
 
-Not shipped: ``[tool.setuptools.packages.find]`` only includes ``mmml*`` and
+Not shipped: ``[tool.setuptools.packages.find]`` only includes ``karml*`` and
 ``pycharmm*``.
 """

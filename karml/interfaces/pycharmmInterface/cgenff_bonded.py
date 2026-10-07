@@ -1,6 +1,6 @@
 """JAX CGENFF bonded energy and forces (bond/angle/torsion/improper/urey-bradley).
 
-Formulas follow :mod:`jax_md.mm_forcefields.oplsaa.energy` so MMML bonded terms
+Formulas follow :mod:`jax_md.mm_forcefields.oplsaa.energy` so KARML bonded terms
 can be cross-checked against the jax-md reference implementation.  Urey–Bradley
 1–3 distance terms (from CHARMM angle lines with ``K_ub`` / ``S0``) are evaluated
 alongside angle terms using the same ``topology.angles`` index rows.
@@ -18,20 +18,20 @@ from jax_md import space
 from jax_md.mm_forcefields.base import BondedParameters, Topology
 from jax_md.util import normalize, safe_arccos, safe_norm
 
-from mmml.interfaces.pycharmmInterface.cgenff_cmap import cmap_energy
+from karml.interfaces.pycharmmInterface.cgenff_cmap import cmap_energy
 
 if TYPE_CHECKING:
-    from mmml.interfaces.pycharmmInterface.cgenff_topology import CgenffBondedSystem
+    from karml.interfaces.pycharmmInterface.cgenff_topology import CgenffBondedSystem
 
 # Re-exported for callers that import it from here; the value is owned by
-# mmml.data.units. This module previously carried its own literal
+# karml.data.units. This module previously carried its own literal
 # (0.04336411530877155, i.e. 1 eV = 23.060541945 kcal/mol), which disagreed with
-# mmml.data.units in the 8th significant figure and made two sources of truth for
-# one constant. mmml.data.units is the CHARMM-consistent choice: CHARMM's own
+# karml.data.units in the 8th significant figure and made two sources of truth for
+# one constant. karml.data.units is the CHARMM-consistent choice: CHARMM's own
 # TOKCAL (627.5095, consta_ltm.F90) over Hartree->eV gives 23.060548992
-# kcal/mol/eV, which mmml.data.units matches to 8e-09 while the old literal was
+# kcal/mol/eV, which karml.data.units matches to 8e-09 while the old literal was
 # 7e-06 off -- and it is also the closer of the two to ASE's kcal/mol.
-from mmml.data.units import KCAL_MOL_TO_EV
+from karml.data.units import KCAL_MOL_TO_EV
 
 
 def free_space_displacement() -> space.DisplacementFn:

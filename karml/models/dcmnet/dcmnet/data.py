@@ -5,7 +5,7 @@ import jax.numpy as jnp
 import numpy as np
 import pandas as pd
 from scipy.spatial.distance import cdist
-from mmml.utils.rotations import (
+from karml.utils.rotations import (
     rotate_batched_rank2_tensors,
     rotate_batched_vectors,
     sample_random_rotations,

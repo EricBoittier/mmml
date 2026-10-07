@@ -18,7 +18,7 @@ fi
 cd "$ROOT"
 source .venv/bin/activate
 export PATH="${HOME}/.local/bin:${PATH}"
-export LJ_DEVICE=gpu JAX_PLATFORMS=cuda MMML_MLPOT_DEVICE=gpu MMML_JAX_WARMUP_DEVICE=gpu
+export LJ_DEVICE=gpu JAX_PLATFORMS=cuda KARML_MLPOT_DEVICE=gpu KARML_JAX_WARMUP_DEVICE=gpu
 export UV_NO_SYNC=1 PYTHONUNBUFFERED=1
 export XLA_PYTHON_CLIENT_PREALLOCATE=false
 

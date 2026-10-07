@@ -1,4 +1,4 @@
-"""``mmml mpi-check`` — validate OpenMPI / CHARMM / mpi4py environment."""
+"""``karml mpi-check`` — validate OpenMPI / CHARMM / mpi4py environment."""
 
 from __future__ import annotations
 
@@ -36,7 +36,7 @@ class MpiCheckReport:
 
 
 def run_mpi_check(*, strict: bool = False, prelaunch: bool = False) -> MpiCheckReport:
-    from mmml.interfaces.pycharmmInterface.charmm_mpi import (
+    from karml.interfaces.pycharmmInterface.charmm_mpi import (
         _under_mpirun,
         charmm_lib_available,
         charmm_lib_links_mpi,
@@ -50,8 +50,8 @@ def run_mpi_check(*, strict: bool = False, prelaunch: bool = False) -> MpiCheckR
     )
 
     prepare_charmm_mpi_runtime()
-    from mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
-    from mmml.interfaces.pycharmmInterface.mlpot.spatial_mpi_policy import (
+    from karml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
+    from karml.interfaces.pycharmmInterface.mlpot.spatial_mpi_policy import (
         spatial_mpi_enabled,
     )
 
@@ -84,12 +84,12 @@ def run_mpi_check(*, strict: bool = False, prelaunch: bool = False) -> MpiCheckR
                 "CHARMM_LIB_DIR must be a directory (e.g. setup/charmm), not libcharmm.so"
             )
         else:
-            from mmml.interfaces.pycharmmInterface.charmm_paths import (
+            from karml.interfaces.pycharmmInterface.charmm_paths import (
                 default_repo_charmm_home,
-                mmml_repo_root,
+                karml_repo_root,
             )
 
-            repo_default = default_repo_charmm_home(mmml_repo_root())
+            repo_default = default_repo_charmm_home(karml_repo_root())
             if repo_default is not None and lib_dir and lib_dir != str(repo_default):
                 report.errors.append(
                     f"libcharmm not under CHARMM_LIB_DIR={lib_dir!r}; "
@@ -104,7 +104,7 @@ def run_mpi_check(*, strict: bool = False, prelaunch: bool = False) -> MpiCheckR
     elif report.charmm_links_mpi and mpirun is None:
         report.errors.append(
             "MPI-linked libcharmm.so but no matching mpirun found "
-            "(set MMML_MPIRUN or OPENMPI_ROOT)"
+            "(set KARML_MPIRUN or OPENMPI_ROOT)"
         )
         report.ok = False
 
@@ -120,7 +120,7 @@ def run_mpi_check(*, strict: bool = False, prelaunch: bool = False) -> MpiCheckR
 
     if report.charmm_links_mpi and not report.under_mpirun:
         report.warnings.append(
-            "Not under mpirun; use ./scripts/mmml-charmm-mpirun.sh for MLpot jobs"
+            "Not under mpirun; use ./scripts/karml-charmm-mpirun.sh for MLpot jobs"
         )
 
     if report.charmm_links_mpi and report.mpi4py_available is False:
@@ -149,15 +149,15 @@ def run_mpi_check(*, strict: bool = False, prelaunch: bool = False) -> MpiCheckR
 
     if report.charmm_links_mpi:
         report.recommended_launch = (
-            "MMML_MPI_NP=1 ./scripts/mmml-charmm-mpirun.sh md-system ..."
+            "KARML_MPI_NP=1 ./scripts/karml-charmm-mpirun.sh md-system ..."
         )
         if report.spatial_mpi_env:
             report.recommended_launch = (
-                "MMML_MPI_NP=4 MMML_MLPOT_SPATIAL_MPI=1 "
-                "./scripts/mmml-charmm-mpirun.sh md-system --ml-spatial-mpi ..."
+                "KARML_MPI_NP=4 KARML_MLPOT_SPATIAL_MPI=1 "
+                "./scripts/karml-charmm-mpirun.sh md-system --ml-spatial-mpi ..."
             )
     else:
-        report.recommended_launch = "mmml md-system ...  # serial libcharmm"
+        report.recommended_launch = "karml md-system ...  # serial libcharmm"
 
     if strict and report.warnings:
         if prelaunch:
@@ -176,7 +176,7 @@ def run_mpi_check(*, strict: bool = False, prelaunch: bool = False) -> MpiCheckR
 
 def render_mpi_check_report(report: MpiCheckReport) -> str:
     lines = [
-        "MMML MPI environment check",
+        "KARML MPI environment check",
         "==========================",
         f"Status: {'OK' if report.ok else 'FAIL'}",
         f"CHARMM_LIB_DIR: {report.charmm_lib_dir or '(unset)'}",
@@ -212,7 +212,7 @@ def render_mpi_check_report(report: MpiCheckReport) -> str:
         lines.append("Full mpirun hint:")
         lines.append(
             __import__(
-                "mmml.interfaces.pycharmmInterface.charmm_mpi",
+                "karml.interfaces.pycharmmInterface.charmm_mpi",
                 fromlist=["mpirun_launch_hint"],
             ).mpirun_launch_hint()
         )
@@ -221,7 +221,7 @@ def render_mpi_check_report(report: MpiCheckReport) -> str:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="mmml mpi-check",
+        prog="karml mpi-check",
         description="Validate OpenMPI / CHARMM / mpi4py setup for PyCHARMM MLpot runs.",
     )
     parser.add_argument(
@@ -253,7 +253,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
-    from mmml.interfaces.pycharmmInterface.charmm_mpi import (
+    from karml.interfaces.pycharmmInterface.charmm_mpi import (
         _under_mpirun,
         prepare_charmm_mpi_runtime,
         prepare_serial_charmm_mpi_env,
@@ -270,7 +270,7 @@ def main(argv: list[str] | None = None) -> int:
     tier3_ok = True
     tier3_report = None
     if args.tier2:
-        from mmml.interfaces.pycharmmInterface.mlpot.spatial_mpi_validate import (
+        from karml.interfaces.pycharmmInterface.mlpot.spatial_mpi_validate import (
             validate_tier2_spatial_mpi_env,
         )
 
@@ -281,7 +281,7 @@ def main(argv: list[str] | None = None) -> int:
         tier2_ok = tier2_report.ok
 
     if args.tier3:
-        from mmml.interfaces.pycharmmInterface.mlpot.tier3_domdec_validate import (
+        from karml.interfaces.pycharmmInterface.mlpot.tier3_domdec_validate import (
             validate_tier3_domdec_env,
         )
 
@@ -298,14 +298,14 @@ def main(argv: list[str] | None = None) -> int:
     else:
         print(render_mpi_check_report(report))
         if tier2_report is not None:
-            from mmml.interfaces.pycharmmInterface.mlpot.spatial_mpi_validate import (
+            from karml.interfaces.pycharmmInterface.mlpot.spatial_mpi_validate import (
                 render_tier2_report,
             )
 
             print()
             print(render_tier2_report(tier2_report, prelaunch=bool(args.prelaunch)))
         if tier3_report is not None:
-            from mmml.interfaces.pycharmmInterface.mlpot.tier3_domdec_validate import (
+            from karml.interfaces.pycharmmInterface.mlpot.tier3_domdec_validate import (
                 render_tier3_report,
             )
 

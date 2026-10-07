@@ -8,7 +8,7 @@ from unittest import mock
 
 import pytest
 
-from mmml.interfaces.pycharmmInterface.mlpot import cgenff_prm_swap, ml_type_copies
+from karml.interfaces.pycharmmInterface.mlpot import cgenff_prm_swap, ml_type_copies
 
 
 @pytest.fixture(autouse=True)
@@ -91,7 +91,7 @@ def _fake_charmm(iac_after):
             "_allocatable_array",
             side_effect=lambda lib, var, ctype, n: {"psf.it": [2], "psf.jt": [1], "psf.kt": [3]}[var],
         ),
-        mock.patch("mmml.interfaces.pycharmmInterface.nbonds_config.read_cgenff_prm"),
+        mock.patch("karml.interfaces.pycharmmInterface.nbonds_config.read_cgenff_prm"),
     ]
     return pycharmm, itc, patches
 
@@ -102,7 +102,7 @@ def _apply(pycharmm, patches):
         prm_texts: list[str] = []
         read_fn = mocks[-1]
         read_fn.side_effect = lambda path, append: prm_texts.append(path.read_text())
-        counts = ml_type_copies.apply_ml_type_copies([0, 1], "mmml_ml", pycharmm=pycharmm)
+        counts = ml_type_copies.apply_ml_type_copies([0, 1], "karml_ml", pycharmm=pycharmm)
         return counts, prm_texts
     finally:
         for p in patches:
@@ -124,8 +124,8 @@ def test_apply_ml_type_copies_moves_only_ml_atoms():
     assert itc[2:] == [7, 8]
     scripts = [c.args[0] for c in pycharmm.lingo.charmm_script.call_args_list]
     assert scripts == [
-        "SCALAR TYPE SET 3 SELE MMML_ML .AND. CHEM A END",
-        "SCALAR TYPE SET 4 SELE MMML_ML .AND. CHEM B END",
+        "SCALAR TYPE SET 3 SELE KARML_ML .AND. CHEM A END",
+        "SCALAR TYPE SET 4 SELE KARML_ML .AND. CHEM B END",
     ]
     assert ml_type_copies.ml_type_copies_active()
 

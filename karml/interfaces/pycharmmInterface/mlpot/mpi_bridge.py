@@ -4,7 +4,7 @@ When multiple MPI ranks are active, only rank 0 runs the JAX PhysNet callback;
 forces and energy are broadcast to other ranks before subtracting into CHARMM
 force arrays. This is a correctness stopgap, not a performance path.
 
-Disable with ``MMML_MLPOT_RANK0_BRIDGE=0`` (falls back to every rank running ML).
+Disable with ``KARML_MLPOT_RANK0_BRIDGE=0`` (falls back to every rank running ML).
 """
 
 from __future__ import annotations
@@ -14,7 +14,7 @@ from typing import Any, Optional, Tuple
 
 import numpy as np
 
-_BRIDGE_ENV = "MMML_MLPOT_RANK0_BRIDGE"
+_BRIDGE_ENV = "KARML_MLPOT_RANK0_BRIDGE"
 
 
 def _truthy(name: str, default: bool = True) -> bool:
@@ -48,7 +48,7 @@ def _rank_size_from_launcher_env() -> Tuple[int, int]:
 
 def _import_mpi4py_mpi():
     """Import ``mpi4py.MPI`` after pointing ABI discovery at system OpenMPI."""
-    from mmml.interfaces.pycharmmInterface.charmm_mpi import ensure_mpi4py_libmpi_env
+    from karml.interfaces.pycharmmInterface.charmm_mpi import ensure_mpi4py_libmpi_env
 
     ensure_mpi4py_libmpi_env()
     from mpi4py import MPI
@@ -99,7 +99,7 @@ def mpi_rank_size(comm: Any = None) -> Tuple[int, int]:
     # Serial libcharmm: ignore stale multi-rank launcher env (causes bare mpi4py
     # imports that fail with "cannot load MPI library" under a plain venv).
     try:
-        from mmml.interfaces.pycharmmInterface.charmm_mpi import (
+        from karml.interfaces.pycharmmInterface.charmm_mpi import (
             charmm_lib_links_mpi,
             _under_mpirun,
         )
@@ -123,7 +123,7 @@ def mpi_rank_size(comm: Any = None) -> Tuple[int, int]:
 
 def mlpot_runs_on_this_rank(comm: Any = None) -> bool:
     """True when this rank should execute the MLpot JAX callback."""
-    from mmml.interfaces.pycharmmInterface.mlpot.spatial_mpi_policy import (
+    from karml.interfaces.pycharmmInterface.mlpot.spatial_mpi_policy import (
         spatial_mpi_enabled,
     )
 
@@ -145,7 +145,7 @@ def broadcast_mlpot_result(
     comm: Any = None,
 ) -> Tuple[np.ndarray, float]:
     """Broadcast ML forces and energy from rank 0 to all ranks (rank-0 bridge only)."""
-    from mmml.interfaces.pycharmmInterface.mlpot.spatial_mpi_policy import (
+    from karml.interfaces.pycharmmInterface.mlpot.spatial_mpi_policy import (
         spatial_mpi_enabled,
     )
 
@@ -153,8 +153,8 @@ def broadcast_mlpot_result(
     if size > 1 and spatial_mpi_enabled():
         if forces is None:
             raise ValueError("forces required in spatial MPI mode")
-        from mmml.interfaces.pycharmmInterface.charmm_mpi import ensure_charmm_mpi_initialized
-        from mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.force_exchange import (
+        from karml.interfaces.pycharmmInterface.charmm_mpi import ensure_charmm_mpi_initialized
+        from karml.interfaces.pycharmmInterface.mlpot.mpi_spatial.force_exchange import (
             mpi_allreduce_energy,
             mpi_allreduce_forces,
         )
@@ -169,7 +169,7 @@ def broadcast_mlpot_result(
             raise ValueError("forces required on single rank")
         return np.asarray(forces, dtype=np.float64), float(energy_kcal)
 
-    from mmml.interfaces.pycharmmInterface.charmm_mpi import ensure_charmm_mpi_initialized
+    from karml.interfaces.pycharmmInterface.charmm_mpi import ensure_charmm_mpi_initialized
 
     ensure_charmm_mpi_initialized()
     try:

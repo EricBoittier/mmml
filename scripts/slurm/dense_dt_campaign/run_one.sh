@@ -62,10 +62,10 @@ case "$ENSEMBLE" in
 esac
 
 if [[ "$X64" == "1" ]]; then
-  export JAX_ENABLE_X64=1 MMML_ML_DTYPE=float64
+  export JAX_ENABLE_X64=1 KARML_ML_DTYPE=float64
   ML_DTYPE=float64
 else
-  export JAX_ENABLE_X64=0 MMML_ML_DTYPE=float32
+  export JAX_ENABLE_X64=0 KARML_ML_DTYPE=float32
   ML_DTYPE=float32
 fi
 
@@ -87,7 +87,7 @@ if p.exists():
 PY
 } | tee "$OUT/run_meta.txt"
 
-export LJ_DEVICE=gpu JAX_PLATFORMS=cuda MMML_MLPOT_DEVICE=gpu MMML_MM_NL_DEVICE=gpu PYTHONUNBUFFERED=1
+export LJ_DEVICE=gpu JAX_PLATFORMS=cuda KARML_MLPOT_DEVICE=gpu KARML_MM_NL_DEVICE=gpu PYTHONUNBUFFERED=1
 
 # NPT/NVE from packmol+mini alone blow up on dense L24/L26 (max|F|~140–180 eV/Å,
 # E_pot explosion by step 1000). Prefer continue-from a finished NVT H5.
@@ -153,7 +153,7 @@ fi
 
 set +e
 /usr/bin/time -f 'elapsed_s %e' -o "$OUT/wall.time" \
-  uv run mmml md-system \
+  uv run karml md-system \
     --backend jaxmd --setup "$SETUP" \
     --composition DCM:120 --box-size "$BOX_A" \
     --from-psf "$PSF" --from-crd "$CRD" --no-packmol \

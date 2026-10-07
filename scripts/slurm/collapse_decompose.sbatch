@@ -42,18 +42,18 @@
 #   full - no_mm  = the MM term        full - no_dimer = the ML dimer term
 #
 # Single points only, so this is minutes. Deliberately run from the SAME tree
-# that produced the collapsing trajectory ($HOME/mmml_npt), so the potential
+# that produced the collapsing trajectory ($HOME/karml_npt), so the potential
 # being decomposed is the one that actually failed, not a rebuilt approximation.
 set -uo pipefail
 
-REPO="${MMML_REPO:-$HOME/mmml_npt}"
+REPO="${KARML_REPO:-$HOME/karml_npt}"
 cd "$REPO" || exit 1
-export MMML_SCICORE_CMAKE="${MMML_SCICORE_CMAKE:-CMake/3.31.8-GCCcore-14.3.0}"
-export MMML_SCICORE_TOOLCHAIN="${MMML_SCICORE_TOOLCHAIN:-foss/2025a}"
+export KARML_SCICORE_CMAKE="${KARML_SCICORE_CMAKE:-CMake/3.31.8-GCCcore-14.3.0}"
+export KARML_SCICORE_TOOLCHAIN="${KARML_SCICORE_TOOLCHAIN:-foss/2025a}"
 # shellcheck disable=SC1091
 source scripts/scicore_env.sh
-if [[ ! -f "$REPO/setup/charmm/libcharmm.so" && -f "$HOME/mmml/setup/charmm/libcharmm.so" ]]; then
-  export CHARMM_LIB_DIR="$HOME/mmml/setup/charmm" CHARMM_HOME="$HOME/mmml/setup/charmm"
+if [[ ! -f "$REPO/setup/charmm/libcharmm.so" && -f "$HOME/karml/setup/charmm/libcharmm.so" ]]; then
+  export CHARMM_LIB_DIR="$HOME/karml/setup/charmm" CHARMM_HOME="$HOME/karml/setup/charmm"
 fi
 source .venv/bin/activate
 export PYTHONPATH="$REPO${PYTHONPATH:+:$PYTHONPATH}"
@@ -116,7 +116,7 @@ if [[ "$arm" != "no_mm" && -f "$SCALES" ]]; then
   scale_flags=(--mm-lj-scales-file "$SCALES")
 fi
 
-uv run mmml md-system \
+uv run karml md-system \
   --backend jaxmd --setup pbc_nve \
   --composition "$COMP" \
   --box-size "$BOXSIZE" \

@@ -14,7 +14,7 @@ for script in 00_check_lr_env.py 01_mic_analytic_dimer.py 02_jax_pme_madelung.py
   echo
   echo ">>> $script"
   if [[ "$script" == 04_* || "$script" == 05_* ]]; then
-    MMML_SCAFACOS_TESTS=1 ${SCAFACOS_MPIEXEC} "$PY" "$script"
+    KARML_SCAFACOS_TESTS=1 ${SCAFACOS_MPIEXEC} "$PY" "$script"
   else
     "$PY" "$script"
   fi

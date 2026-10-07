@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from mmml.md.energy.capacity import (
+from karml.md.energy.capacity import (
     CapacityOverflow,
     check_capacity,
     pad_indices,
     shell_capacity,
 )
-from mmml.md.energy.registry import (
+from karml.md.energy.registry import (
     EnergyContext,
     EnergyTerm,
     HybridEnergy,

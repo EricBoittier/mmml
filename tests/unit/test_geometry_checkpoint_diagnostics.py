@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import numpy as np
 
-from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint_diagnostics import (
+from karml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint_diagnostics import (
     print_geometry_checkpoint_diff,
 )
 
@@ -18,7 +18,7 @@ def test_print_geometry_checkpoint_diff_reports_rmsd(capsys):
     ctx = MagicMock(topology_psf_path=None)
 
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint_diagnostics.print_topology_composition_note",
+        "karml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint_diagnostics.print_topology_composition_note",
     ):
         print_geometry_checkpoint_diff(
             before,
@@ -43,13 +43,13 @@ def test_print_geometry_checkpoint_diff_bond_stretch_delta(capsys, tmp_path):
     psf.write_text("psf\n", encoding="utf-8")
 
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint_diagnostics._bond_stretch_summary",
+        "karml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint_diagnostics._bond_stretch_summary",
         side_effect=[
             {"n_bonds": 1, "n_stretched": 0, "max_stretch_A": 0.0, "mean_stretch_A": 0.0},
             {"n_bonds": 1, "n_stretched": 1, "max_stretch_A": 0.8, "mean_stretch_A": 0.8},
         ],
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint_diagnostics.print_topology_composition_note",
+        "karml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint_diagnostics.print_topology_composition_note",
     ):
         print_geometry_checkpoint_diff(
             before,

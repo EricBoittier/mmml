@@ -31,7 +31,7 @@ def count_readable_dcd_frames(path: Path) -> int:
     if not p.is_file():
         return 0
     try:
-        from mmml.utils.dcd_reader import scan_dcd_frame_count
+        from karml.utils.dcd_reader import scan_dcd_frame_count
 
         readable, _, _ = scan_dcd_frame_count(p)
         return int(readable)
@@ -41,7 +41,7 @@ def count_readable_dcd_frames(path: Path) -> int:
 
 def overlap_chunk_dcd_paths(dcd_path: Path) -> list[Path]:
     """Sorted per-chunk DCD siblings for an overlap stage trajectory."""
-    from mmml.interfaces.pycharmmInterface.mlpot.artifact_paths import overlap_chunk_dcd_paths as _paths
+    from karml.interfaces.pycharmmInterface.mlpot.artifact_paths import overlap_chunk_dcd_paths as _paths
 
     return _paths(dcd_path)
 
@@ -431,7 +431,7 @@ def _restart_section_values(path: Path, section_marker: str) -> list[float]:
 def read_restart_velocities(path: Path) -> np.ndarray | None:
     """Return ``(N, 3)`` velocities from a CHARMM restart when present.
 
-    CHARMM ``WRIDYN`` uses ``!VX, VY, VZ``; mmml-written restarts may use ``!VELOCITIES``.
+    CHARMM ``WRIDYN`` uses ``!VX, VY, VZ``; karml-written restarts may use ``!VELOCITIES``.
     """
     p = Path(path)
     natom = read_restart_natom(p)
@@ -615,7 +615,7 @@ def apply_crd_file_to_charmm(path: Path) -> None:
     pos = read_crd_coordinates(path)
     if pos is None:
         raise RuntimeError(f"failed to parse CRD coordinates: {path}")
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
+    from karml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
 
     sync_charmm_positions(pos)
 
@@ -681,7 +681,7 @@ def quarantine_restart_file(path: Path | str, *, reason: str = "corrupt") -> Pat
 
 def charmm_coordinates_are_finite() -> bool:
     """True when all CHARMM Cartesian coordinates are finite."""
-    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+    import karml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
     import pycharmm.coor as coor
 
     pos = coor.get_positions()
@@ -693,7 +693,7 @@ def charmm_coordinates_are_finite() -> bool:
 
 def charmm_coordinates_are_nontrivial(*, min_span_A: float = 1.0e-6) -> bool:
     """False when every atom is at the origin (blow-up / cleared CRD)."""
-    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+    import karml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
     import pycharmm.coor as coor
 
     pos = coor.get_positions()
@@ -708,7 +708,7 @@ def charmm_coordinates_are_nontrivial(*, min_span_A: float = 1.0e-6) -> bool:
 
 def charmm_dynamics_energy_is_finite() -> bool:
     """True when the current CHARMM energy row has no NaN/Inf scalars."""
-    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+    import karml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
     import pycharmm.energy as energy
 
     try:
@@ -734,7 +734,7 @@ def charmm_dynamics_energy_is_plausible(
     max_abs_kcalmol: float = _DYNAMICS_ENERGY_ABS_MAX_KCALMOL,
 ) -> bool:
     """False when any CHARMM energy scalar exceeds a sane magnitude."""
-    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+    import karml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
     import pycharmm.energy as energy
 
     limit = float(max_abs_kcalmol)
@@ -757,7 +757,7 @@ def charmm_dynamics_grms_is_plausible(
     max_grms_kcalmol_A: float = _DYNAMICS_GRMS_MAX_KCALMOL_A,
 ) -> bool:
     """False when CHARMM reports a finite but integration-unsafe GRMS spike."""
-    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+    import karml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
     import pycharmm.energy as energy
 
     limit = float(max_grms_kcalmol_A)
@@ -776,7 +776,7 @@ def charmm_dynamics_grms_is_plausible(
 
 def charmm_coordinates_are_bounded(*, max_abs_A: float = 2000.0) -> bool:
     """False when any atom coordinate magnitude exceeds a sane bound."""
-    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+    import karml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
     import pycharmm.coor as coor
 
     pos = coor.get_positions()

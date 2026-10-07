@@ -1,6 +1,6 @@
 # Protein force fields — CHARMM and jax-md
 
-Build small peptides with **CHARMM36 all-atom protein** parameters (PyCHARMM) and evaluate **JAX** bonded or full MM energies with **jax-md** or MMML loaders.
+Build small peptides with **CHARMM36 all-atom protein** parameters (PyCHARMM) and evaluate **JAX** bonded or full MM energies with **jax-md** or KARML loaders.
 
 Related: [Tri-alanine water box](trialanine-water-box.md) (bundled CGENFF peptide),
 [Peptide φ/ψ teaching exercise](examples/tria-phi-psi-scan.md) (maps, umbrella, other sequences),
@@ -13,12 +13,12 @@ Related: [Tri-alanine water box](trialanine-water-box.md) (bundled CGENFF peptid
 | Stack | jax-md module | Typical input | Protein-ready? |
 |-------|---------------|---------------|----------------|
 | **CHARMM all36 protein** | `oplsaa.load_charmm_system` | `top_all36_prot.rtf` + `par_all36m_prot.prm` + PDB | Yes (via CHARMM files) |
-| **CHARMM CGENFF** | `io.charmm.parse_*` (via MMML) | bundled `top_all36_cgenff.rtf` + PSF | Small molecules + bundled `TRIA` peptide |
+| **CHARMM CGENFF** | `io.charmm.parse_*` (via KARML) | bundled `top_all36_cgenff.rtf` + PSF | Small molecules + bundled `TRIA` peptide |
 | **OPLS-AA native** | `oplsaa.create_topology` / `create_parameters` | Programmatic or CHARMM files | Same as CHARMM-file path |
 | **AMBER** | `amber.energy` | Topology from **OpenMM** import (`openmm.py` tools) | Yes, after OpenMM conversion |
 | **ReaxFF** | `reaxff` | Reactive FF; not standard fixed-charge protein MD | Specialized |
 
-MMML production MLpot uses **CGENFF** for small-molecule liquids and **hybrid ML** for solutes; protein **CHARMM36** is supported for MM reference builds and jax-md cross-checks via the paths below.
+KARML production MLpot uses **CGENFF** for small-molecule liquids and **hybrid ML** for solutes; protein **CHARMM36** is supported for MM reference builds and jax-md cross-checks via the paths below.
 
 ---
 
@@ -29,7 +29,7 @@ Requires `CHARMM_HOME` with protein `toppar` (`top_all36_prot.rtf`, `par_all36m_
 ### Alanine dipeptide (ACE–ALA–CT3)
 
 ```bash
-./scripts/mmml-charmm-mpirun.sh python scripts/examples/charmm_build_protein_alad.py \
+./scripts/karml-charmm-mpirun.sh python scripts/examples/charmm_build_protein_alad.py \
   -o /tmp/alad_charmm
 ```
 
@@ -40,14 +40,14 @@ Writes:
 /tmp/alad_charmm/alad.psf
 ```
 
-Python API (`mmml.interfaces.pycharmmInterface.protein_charmm_build`):
+Python API (`karml.interfaces.pycharmmInterface.protein_charmm_build`):
 
 ```python
 from pathlib import Path
-from mmml.interfaces.pycharmmInterface.import_pycharmm import ensure_pycharmm_loaded
+from karml.interfaces.pycharmmInterface.import_pycharmm import ensure_pycharmm_loaded
 
 ensure_pycharmm_loaded()
-from mmml.interfaces.pycharmmInterface.protein_charmm_build import (
+from karml.interfaces.pycharmmInterface.protein_charmm_build import (
     build_alad_dipeptide,
     protein_toppar_paths,
     write_alad_artifacts,
@@ -66,7 +66,7 @@ Use standard PyCHARMM generation after loading protein toppar:
 
 ```python
 from pycharmm import generate, ic, read, settings
-from mmml.interfaces.pycharmmInterface.protein_charmm_build import protein_toppar_paths
+from karml.interfaces.pycharmmInterface.protein_charmm_build import protein_toppar_paths
 
 toppar = protein_toppar_paths()
 settings.set_verbosity(5)
@@ -83,21 +83,21 @@ ic.prm_fill(replace_all=True)
 ic.build()
 ```
 
-For production solvated proteins, continue with [Packmol placement](packmol-placement.md) (`TIP3` waters) or `mmml liquid-box` after PSF/PDB export.
+For production solvated proteins, continue with [Packmol placement](packmol-placement.md) (`TIP3` waters) or `karml liquid-box` after PSF/PDB export.
 
 ### MPI φ/ψ scan (workshop smoke)
 
 ```bash
-MMML_MPI_NP=4 ./scripts/mmml-charmm-mpirun.sh python \
+KARML_MPI_NP=4 ./scripts/karml-charmm-mpirun.sh python \
   tests/functionality/charmm/mpi_alad_phi_psi.py --n-phi 12 --n-psi 12 \
   -o /tmp/alad_phi_psi_mpi.json
 ```
 
 ---
 
-## 2. JAX evaluation (jax-md + MMML)
+## 2. JAX evaluation (jax-md + KARML)
 
-### MMML bonded loader (PSF + protein PRM)
+### KARML bonded loader (PSF + protein PRM)
 
 Matches `cgenff_bonded.py` / `cgenff_topology.py` (jax-md CHARMM parsers, CMAP and Urey–Bradley when present in the PRM):
 
@@ -106,15 +106,15 @@ JAX_PLATFORMS=cpu uv run python scripts/examples/jaxmd_protein_alad_energy.py \
   --pdb /tmp/alad_charmm/alad.pdb \
   --psf /tmp/alad_charmm/alad.psf \
   --prm "$CHARMM_HOME/toppar/par_all36m_prot.prm" \
-  --loader mmml-bonded
+  --loader karml-bonded
 ```
 
 ```python
 import jax.numpy as jnp
 import numpy as np
-from mmml.interfaces.pycharmmInterface.cgenff_bonded import bonded_energy_and_forces
-from mmml.interfaces.pycharmmInterface.cgenff_topology import load_cgenff_bonded_from_psf
-from mmml.interfaces.pycharmmInterface.protein_charmm_build import protein_toppar_paths
+from karml.interfaces.pycharmmInterface.cgenff_bonded import bonded_energy_and_forces
+from karml.interfaces.pycharmmInterface.cgenff_topology import load_cgenff_bonded_from_psf
+from karml.interfaces.pycharmmInterface.protein_charmm_build import protein_toppar_paths
 
 positions = np.loadtxt(...)  # or ASE read
 toppar = protein_toppar_paths()
@@ -185,16 +185,16 @@ jax-md's `amber.energy` expects systems converted from OpenMM (see jax-md `openm
 2. Export CHARMM-like topology/parameters through jax-md's OpenMM conversion utilities.
 3. Call `amber.energy(...)` with the resulting `Topology` + `Parameters`.
 
-MMML does not ship OpenMM protein builders; use OpenMM directly for that path, then jax-md for JIT dynamics.
+KARML does not ship OpenMM protein builders; use OpenMM directly for that path, then jax-md for JIT dynamics.
 
 ---
 
 ## 3. General Peptide Builder & Solvation (CGenFF + Protein append)
 
-For arbitrary residue sequences, MMML provides a general peptide builder that supports terminal patching, solvation, and Quality Control (QC) structural checks:
+For arbitrary residue sequences, KARML provides a general peptide builder that supports terminal patching, solvation, and Quality Control (QC) structural checks:
 
 ```python
-from mmml.interfaces.pycharmmInterface.peptide_builder import (
+from karml.interfaces.pycharmmInterface.peptide_builder import (
     build_peptide_in_charmm,
     solvate_peptide_in_charmm,
     qc_built_system,
@@ -232,11 +232,11 @@ print(f"Charge: {total_charge}, Spin Multiplicity: {spin_multiplicity}")
 Tri-alanine in periodic water uses a supplemental CGENFF residue **`TRIA`** — no `top_all36_prot.rtf` at runtime:
 
 ```bash
-./scripts/mmml-charmm-mpirun.sh python -c "
+./scripts/karml-charmm-mpirun.sh python -c "
 from pathlib import Path
-from mmml.interfaces.pycharmmInterface.import_pycharmm import ensure_pycharmm_loaded
+from karml.interfaces.pycharmmInterface.import_pycharmm import ensure_pycharmm_loaded
 ensure_pycharmm_loaded()
-from mmml.interfaces.pycharmmInterface.trialanine_water_box import build_trialanine_water_box_in_charmm
+from karml.interfaces.pycharmmInterface.trialanine_water_box import build_trialanine_water_box_in_charmm
 box = build_trialanine_water_box_in_charmm(n_waters=10, box_side_A=28.0, workdir=Path('/tmp/tria'))
 print(box.n_atoms if hasattr(box, 'n_atoms') else len(box.positions), box.psf_path)
 "
@@ -268,4 +268,4 @@ JAX cross-check: [trialanine-water-box.md](trialanine-water-box.md).
 | `scripts/examples/jaxmd_protein_alad_energy.py` | JAX energy from PDB (+ PSF/RTF/PRM) |
 | `tests/functionality/charmm/mpi_alad_phi_psi.py` | MPI φ/ψ grid on ALAD |
 
-User-run tests: [tests/functionality/protein/README.md](https://github.com/EricBoittier/mmml/blob/main/tests/functionality/protein/README.md).
+User-run tests: [tests/functionality/protein/README.md](https://github.com/EricBoittier/karml/blob/main/tests/functionality/protein/README.md).

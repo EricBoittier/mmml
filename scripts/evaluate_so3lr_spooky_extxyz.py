@@ -36,8 +36,8 @@ from ase.io import iread
 from flax import jax_utils
 from flax.training import orbax_utils
 
-from mmml.models.physnetjax.physnetjax.models.spooky_model import SpookyPhysNet
-from mmml.models.physnetjax.physnetjax.training.spooky_training import (
+from karml.models.physnetjax.physnetjax.models.spooky_model import SpookyPhysNet
+from karml.models.physnetjax.physnetjax.training.spooky_training import (
     build_spooky_batch_from_flat_data,
 )
 
@@ -611,7 +611,7 @@ def plot_force_parity(
     from ase.data import chemical_symbols
     from ase.data.colors import jmol_colors
 
-    from mmml.utils.plotting.styles import apply_plot_style, legend_outside
+    from karml.utils.plotting.styles import apply_plot_style, legend_outside
 
     force_reference = np.asarray(force_reference, dtype=float).reshape(-1, 3)
     force_prediction = np.asarray(force_prediction, dtype=float).reshape(-1, 3)
@@ -670,7 +670,7 @@ def plot_force_parity(
 
 
 def restore_checkpoint(checkpoint_path: Path) -> tuple[dict[str, Any], dict[str, Any]]:
-    from mmml.utils.model_checkpoint import _restore_pytree_cpu_safe
+    from karml.utils.model_checkpoint import _restore_pytree_cpu_safe
 
     checkpointer = ocp.PyTreeCheckpointer()
     # Device-agnostic restore: a checkpoint saved on one multi-GPU node's
@@ -905,7 +905,7 @@ def main() -> None:
     checkpoint_path = Path(args.checkpoint).resolve()
     print(f"Restoring checkpoint from: {checkpoint_path}")
     params, config = restore_checkpoint(checkpoint_path)
-    from mmml.utils.model_checkpoint import infer_trainable_zbl_config
+    from karml.utils.model_checkpoint import infer_trainable_zbl_config
 
     config = infer_trainable_zbl_config(config, params)
     

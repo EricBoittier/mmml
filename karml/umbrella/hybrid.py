@@ -9,21 +9,21 @@ from typing import Sequence
 
 import numpy as np
 
-from mmml.md.ml_region import (
+from karml.md.ml_region import (
     compact_mol_id,
     merge_ml_region_mol_id,
     resolve_ml_region_indices,
 )
-from mmml.md.system import MolecularSystem, SystemSpec
-from mmml.umbrella.config import UmbrellaConfig
-from mmml.umbrella.io import (
+from karml.md.system import MolecularSystem, SystemSpec
+from karml.umbrella.config import UmbrellaConfig
+from karml.umbrella.io import (
     BIN_MINIMA_TRAJ,
     SNAPSHOTS_NPZ,
     SUMMARY_JSON,
     save_snapshots,
     write_summary,
 )
-from mmml.umbrella.sample import (
+from karml.umbrella.sample import (
     UmbrellaResult,
     center_com_positions,
     select_lowest_energy_frames,
@@ -93,7 +93,7 @@ def mic_distance(
     box: np.ndarray | None,
 ) -> float:
     """Scalar distance (Å), minimum-image when ``box`` is set."""
-    from mmml.interfaces.pycharmmInterface.mlpot.mlpot_sparse_dimer_policy import (
+    from karml.interfaces.pycharmmInterface.mlpot.mlpot_sparse_dimer_policy import (
         mic_displacement_numpy,
     )
 
@@ -111,7 +111,7 @@ def stretch_distance_seed_mic(
     move_with: Sequence[int] | None = None,
 ) -> np.ndarray:
     """MIC-aware rigid stretch of ``atom_j`` (+ ``move_with``); ``atom_i`` fixed."""
-    from mmml.interfaces.pycharmmInterface.mlpot.mlpot_sparse_dimer_policy import (
+    from karml.interfaces.pycharmmInterface.mlpot.mlpot_sparse_dimer_policy import (
         mic_displacement_numpy,
     )
 
@@ -156,7 +156,7 @@ def _cubic_box(side: float) -> np.ndarray:
 
 
 def _psf_atom_tables(psf_path: Path) -> tuple[list[str], list[str]]:
-    from mmml.utils.domdec_psf_order import read_psf_atoms_and_bonds
+    from karml.utils.domdec_psf_order import read_psf_atoms_and_bonds
 
     atoms, _bonds = read_psf_atoms_and_bonds(psf_path)
     names = [a.atom_name for a in atoms]
@@ -210,8 +210,8 @@ def bind_hybrid_atom_names(
           pairs: [[C1, CL1], [C1, N1]]
           coefficients: [1.0, -1.0]   # ξ = r(C–Cl) − r(C–N)
     """
-    from mmml.md.restraints import LinearDistanceCV
-    from mmml.umbrella.config import _resolve_wall, _spec_needs_name_bind
+    from karml.md.restraints import LinearDistanceCV
+    from karml.umbrella.config import _resolve_wall, _spec_needs_name_bind
 
     ml = cfg.ml_resnames
 
@@ -313,13 +313,13 @@ def build_hybrid_umbrella_system(cfg: UmbrellaConfig) -> tuple[MolecularSystem, 
 
     Returns ``(system, ml_indices, atom_names, resnames)``.
     """
-    from mmml.md.builders import PsfSystemBuilder
-    from mmml.md.builders._topology import monomer_indices_from_mol_id
-    from mmml.interfaces.pycharmmInterface.charmm_paths import resolve_cgenff_toppar_paths
+    from karml.md.builders import PsfSystemBuilder
+    from karml.md.builders._topology import monomer_indices_from_mol_id
+    from karml.interfaces.pycharmmInterface.charmm_paths import resolve_cgenff_toppar_paths
 
     if cfg.composition is not None and cfg.from_psf is None:
-        from mmml.cli.run.md_system_unified import build_packmol_system_with_ffparams
-        from mmml.md.system import SystemSpec as Spec
+        from karml.cli.run.md_system_unified import build_packmol_system_with_ffparams
+        from karml.md.system import SystemSpec as Spec
 
         if cfg.box_size is None:
             raise ValueError("composition hybrid path requires box_size")
@@ -462,7 +462,7 @@ def save_failure_trace(
     Only the tail of the trajectory is kept, so a window that dies at 52000
     steps does not write hundreds of megabytes.
     """
-    from mmml.umbrella.hybrid_windows import windows_dir
+    from karml.umbrella.hybrid_windows import windows_dir
 
     positions = list(getattr(exc, "positions", []) or [])
     energies = list(getattr(exc, "energies", []) or [])
@@ -584,9 +584,9 @@ def _build_window_leg(
     Shared by the pre-equilibration leg and every window so the two cannot
     drift apart in force field, solver or pair-list treatment.
     """
-    from mmml.md.assemble import build_hybrid_energy
-    from mmml.md.neighbors import make_intermolecular_neighbor_fn
-    from mmml.md.static_pairs import make_static_pair_fn
+    from karml.md.assemble import build_hybrid_energy
+    from karml.md.neighbors import make_intermolecular_neighbor_fn
+    from karml.md.static_pairs import make_static_pair_fn
 
     leg_system = MolecularSystem(
         R=positions,
@@ -713,8 +713,8 @@ def _pre_equilibrate(
     """
     import time
 
-    from mmml.md.config import EnsembleSpec
-    from mmml.md.drivers import JaxmdDriver
+    from karml.md.config import EnsembleSpec
+    from karml.md.drivers import JaxmdDriver
 
     ps = float(getattr(cfg, "pre_equilibrate_ps", 0.0) or 0.0)
     if ps <= 0.0:
@@ -815,19 +815,19 @@ def run_umbrella_hybrid_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
     from ase.data import atomic_masses
     from ase.io import write
 
-    from mmml.md.config import EnsembleSpec
-    from mmml.md.drivers import JaxmdDriver
-    from mmml.md.energy.registry import EnergyContext
-    from mmml.md.nl_cadence import resolve_block_steps
-    from mmml.md.restraints import LinearDistanceCV
-    from mmml.cli.run.md_system_unified import _load_model
+    from karml.md.config import EnsembleSpec
+    from karml.md.drivers import JaxmdDriver
+    from karml.md.energy.registry import EnergyContext
+    from karml.md.nl_cadence import resolve_block_steps
+    from karml.md.restraints import LinearDistanceCV
+    from karml.cli.run.md_system_unified import _load_model
 
     jax.config.update("jax_enable_x64", True)
 
     if cfg.engine != "hybrid_jaxmd":
         raise ValueError(f"run_umbrella_hybrid_nvt requires engine=hybrid_jaxmd (got {cfg.engine})")
 
-    from mmml.umbrella.hybrid_windows import (
+    from karml.umbrella.hybrid_windows import (
         bootstrap_windows_from_snapshots,
         load_all_window_arrays,
         save_window_checkpoint,

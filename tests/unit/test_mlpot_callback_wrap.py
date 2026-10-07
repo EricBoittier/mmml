@@ -6,7 +6,7 @@ from types import MethodType, SimpleNamespace
 
 import numpy as np
 
-from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import DecomposedMlpotCalculator
+from karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import DecomposedMlpotCalculator
 
 
 def test_callback_wrap_is_lattice_only_and_leaves_charmm_arrays():
@@ -56,7 +56,7 @@ def test_callback_wrap_uses_live_box_not_stale_cell():
 
 def test_sync_callback_pbc_box_refreshes_cell_before_wrap(monkeypatch):
     """``calculate_charmm`` must read pbound, then wrap with that side."""
-    from mmml.interfaces.pycharmmInterface.mlpot import pbc_env
+    from karml.interfaces.pycharmmInterface.mlpot import pbc_env
 
     fake = SimpleNamespace(
         _cell=20.0,

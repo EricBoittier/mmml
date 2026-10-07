@@ -61,7 +61,7 @@ def _psf_permutation(ds_Z, ds_q, psf_Z, psf_q):
 
 
 def main() -> int:
-    from mmml.interfaces.pycharmmInterface.cutoffs import (
+    from karml.interfaces.pycharmmInterface.cutoffs import (
         DEFAULT_ML_SWITCH_WIDTH,
         DEFAULT_MM_SWITCH_ON,
         DEFAULT_MM_SWITCH_WIDTH,
@@ -87,8 +87,8 @@ def main() -> int:
 
     import jax.numpy as jnp
 
-    from mmml.cli.misc.physnet_evaluate import _load_physnet_checkpoint
-    from mmml.models.hybrid_energy import hybrid_forward
+    from karml.cli.misc.physnet_evaluate import _load_physnet_checkpoint
+    from karml.models.hybrid_energy import hybrid_forward
 
     raw = dict(np.load(args.data, allow_pickle=True))
     res = np.array([str(x) for x in raw["res_name"]])
@@ -144,14 +144,14 @@ def main() -> int:
     if args.with_charmm:
         import pycharmm
 
-        from mmml.interfaces.pycharmmInterface import setupRes
-        from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
-        from mmml.interfaces.pycharmmInterface.import_pycharmm import (
+        from karml.interfaces.pycharmmInterface import setupRes
+        from karml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
+        from karml.interfaces.pycharmmInterface.import_pycharmm import (
             pycharmm_quiet,
             reset_block,
         )
-        from mmml.interfaces.pycharmmInterface.mmml_calculator import setup_calculator
-        from mmml.interfaces.pycharmmInterface.utils import get_Z_from_psf
+        from karml.interfaces.pycharmmInterface.karml_calculator import setup_calculator
+        from karml.interfaces.pycharmmInterface.utils import get_Z_from_psf
 
         pycharmm_quiet(); reset_block()
         setupRes.main(args.resid)

@@ -49,19 +49,19 @@ from jax_md import space, minimize, simulate
 # PyCHARMM lingo imports
 import pycharmm.lingo as lingo
 
-import mmml
-from mmml.interfaces.pycharmmInterface.import_pycharmm import (
+import karml
+from karml.interfaces.pycharmmInterface.import_pycharmm import (
     ensure_pycharmm_loaded,
     CGENFF_PRM,
     pycharmm_loud,
     coor,
 )
-from mmml.interfaces.pycharmmInterface.trialanine_water_box import build_trialanine_water_box_in_charmm
-from mmml.interfaces.pycharmmInterface.cgenff_bonded_reference import (
+from karml.interfaces.pycharmmInterface.trialanine_water_box import build_trialanine_water_box_in_charmm
+from karml.interfaces.pycharmmInterface.cgenff_bonded_reference import (
     set_charmm_positions,
     setup_nonbonded_only_charmm,
 )
-from mmml.interfaces.pycharmmInterface.mm_system_energy import (
+from karml.interfaces.pycharmmInterface.mm_system_energy import (
     load_nonbonded_system_from_charmm,
     nonbonded_energy_and_forces,
     _build_pair_indices,
@@ -72,17 +72,17 @@ from mmml.interfaces.pycharmmInterface.mm_system_energy import (
     _pair_vdw_energy,
     _pair_elec_energy,
 )
-from mmml.interfaces.pycharmmInterface.charmm_jax_energy_benchmark import _nbond_settings_from_cutoffs
-from mmml.interfaces.pycharmmInterface.utils import get_Z_from_psf
-from mmml.interfaces.pycharmmInterface.charmm_levels import run_charmm_script_loud
-from mmml.interfaces.calculators.simple_inference import create_calculator_from_checkpoint
-from mmml.data.units import KCAL_MOL_TO_EV
-from mmml.interfaces.jaxmdInterface import (
+from karml.interfaces.pycharmmInterface.charmm_jax_energy_benchmark import _nbond_settings_from_cutoffs
+from karml.interfaces.pycharmmInterface.utils import get_Z_from_psf
+from karml.interfaces.pycharmmInterface.charmm_levels import run_charmm_script_loud
+from karml.interfaces.calculators.simple_inference import create_calculator_from_checkpoint
+from karml.data.units import KCAL_MOL_TO_EV
+from karml.interfaces.jaxmdInterface import (
     make_monomer_energy_fn,
     make_peptide_water_ml_energy_fn,
     get_intermolecular_pairs,
 )
-from mmml.interfaces.pycharmmInterface.pbc_utils_jax import mic_displacement
+from karml.interfaces.pycharmmInterface.pbc_utils_jax import mic_displacement
 
 # 1. Initialize JAX and PyCHARMM configuration
 jax.config.update("jax_enable_x64", True)
@@ -401,7 +401,7 @@ def load_peptide_start_frame(traj_path, frame_index=0):
 
 # 2. Build the initial system in PyCHARMM and minimize
 workdir = Path(config.workdir)
-from mmml.interfaces.pycharmmInterface.peptide_builder import parse_sequence
+from karml.interfaces.pycharmmInterface.peptide_builder import parse_sequence
 sequence_residues = parse_sequence(config.sequence)
 SOLVENT_ONLY = len(sequence_residues) == 0
 
@@ -409,7 +409,7 @@ if config.pdb_id is not None and SOLVENT_ONLY:
     raise ValueError("pdb_id cannot be used with an empty solvent-only sequence.")
 
 if config.pdb_id is not None:
-    from mmml.interfaces.pycharmmInterface.peptide_builder import prepare_rcsb_peptide_input
+    from karml.interfaces.pycharmmInterface.peptide_builder import prepare_rcsb_peptide_input
 
     if config.first_patch == "ACE" and config.last_patch == "CT3":
         config.first_patch = None
@@ -444,7 +444,7 @@ if SOLVENT_ONLY:
     if CONSTRAIN_PHI_PSI:
         raise ValueError("constrain_phi_psi cannot be used in solvent-only mode.")
     print(f"--- Building TIP3 solvent-only box with {NWATER} waters in CHARMM ---")
-    from mmml.interfaces.pycharmmInterface.tip3_liquid_box import build_tip3_liquid_box_in_charmm
+    from karml.interfaces.pycharmmInterface.tip3_liquid_box import build_tip3_liquid_box_in_charmm
 
     box = build_tip3_liquid_box_in_charmm(
         n_waters=NWATER,
@@ -468,7 +468,7 @@ elif NWATER > 0:
             )
     else:
         print(f"--- Building Solvated Peptide ({config.sequence}) with {NWATER} waters in CHARMM ---")
-        from mmml.interfaces.pycharmmInterface.peptide_builder import (
+        from karml.interfaces.pycharmmInterface.peptide_builder import (
             build_peptide_in_charmm,
             solvate_peptide_in_charmm,
         )
@@ -491,7 +491,7 @@ elif NWATER > 0:
         )
 else:
     print(f"--- Building Gas-Phase Peptide ({config.sequence}) in CHARMM ---")
-    from mmml.interfaces.pycharmmInterface.peptide_builder import build_peptide_in_charmm, SolvatedPeptideBox, PbcNbondCutoffs
+    from karml.interfaces.pycharmmInterface.peptide_builder import build_peptide_in_charmm, SolvatedPeptideBox, PbcNbondCutoffs
 
     build_result = build_peptide_in_charmm(
         sequence=config.sequence,
@@ -532,7 +532,7 @@ n_trialanine = int(getattr(box, "n_peptide_atoms", 0 if SOLVENT_ONLY else 42))
 HAS_PEPTIDE = n_trialanine > 0
 
 if HAS_PEPTIDE:
-    from mmml.interfaces.pycharmmInterface.peptide_builder import infer_charge_and_spin_from_psf
+    from karml.interfaces.pycharmmInterface.peptide_builder import infer_charge_and_spin_from_psf
     pep_charge, pep_spin = infer_charge_and_spin_from_psf(box.psf_path)
     print(f"Inferred peptide charge={pep_charge}, spin multiplicity={pep_spin} from PSF.")
     peptide_center = pos[:n_trialanine].mean(axis=0)
@@ -575,8 +575,8 @@ if USE_ML_INTRAMOLECULAR and HAS_PEPTIDE:
         PEPTIDE_CKPT_PATH,
         electrostatics_damping_sigma=config.electrostatics_damping_sigma,
     )
-    peptide_model = getattr(peptide_calc, "model", getattr(peptide_calc, "_mmml_physnet_model", None))
-    peptide_params = getattr(peptide_calc, "params", getattr(peptide_calc, "_mmml_physnet_params", None))
+    peptide_model = getattr(peptide_calc, "model", getattr(peptide_calc, "_karml_physnet_model", None))
+    peptide_params = getattr(peptide_calc, "params", getattr(peptide_calc, "_karml_physnet_params", None))
 
     if peptide_model is None or peptide_params is None:
         raise ValueError("Could not extract model or params from the loaded peptide calculator.")
@@ -662,8 +662,8 @@ if nbond_data.psf_path is not None and nbond_data.psf_bonds is not None:
         natom=int(np.asarray(nbond_data.charges).shape[0]),
     )
 
-from mmml.interfaces.pycharmmInterface.mm_system_energy import load_bonded_system_from_psf
-from mmml.interfaces.pycharmmInterface.cgenff_bonded import (
+from karml.interfaces.pycharmmInterface.mm_system_energy import load_bonded_system_from_psf
+from karml.interfaces.pycharmmInterface.cgenff_bonded import (
     bonded_energy_components,
     KCAL_MOL_TO_EV,
 )
@@ -705,8 +705,8 @@ if USE_ML_INTRAMOLECULAR:
         WATER_CKPT_PATH,
         electrostatics_damping_sigma=config.electrostatics_damping_sigma,
     )
-    water_model = getattr(water_calc, "model", getattr(water_calc, "_mmml_physnet_model", None))
-    water_params = getattr(water_calc, "params", getattr(water_calc, "_mmml_physnet_params", None))
+    water_model = getattr(water_calc, "model", getattr(water_calc, "_karml_physnet_model", None))
+    water_params = getattr(water_calc, "params", getattr(water_calc, "_karml_physnet_params", None))
 
     if water_model is None or water_params is None:
         raise ValueError("Could not extract model or params from the loaded water calculator.")
@@ -2017,7 +2017,7 @@ def run_fire_block_repair(state, pi, pj, mask, e14, vdw14, pw_slots, pw_mask):
 
 
 def _repair_candidate_metrics(label, positions):
-    """Evaluate repaired candidate quality under the current MMML potential."""
+    """Evaluate repaired candidate quality under the current KARML potential."""
     pos_np = np.asarray(positions, dtype=np.float64)
     if not np.isfinite(pos_np).all():
         return {
@@ -2047,8 +2047,8 @@ def _repair_candidate_metrics(label, positions):
     }
 
 
-def _run_jax_mmml_fire_repair(positions):
-    """Run the MMML FIRE repair stage from supplied coordinates."""
+def _run_jax_karml_fire_repair(positions):
+    """Run the KARML FIRE repair stage from supplied coordinates."""
     pos_np = np.asarray(positions, dtype=np.float64)
     update_pair_refs(pos_np)
     pi, pj, mask, e14, vdw14, pw_slots, pw_mask = _current_energy_refs()
@@ -2067,7 +2067,7 @@ def _run_jax_mmml_fire_repair(positions):
 
 
 def run_staged_repair_for_jaxmd(positions, label):
-    """Run MM(system), ML(peptide), and MMML FIRE repair; return best candidate."""
+    """Run MM(system), ML(peptide), and KARML FIRE repair; return best candidate."""
     candidates = []
 
     print(f"[REPAIR] {label}: running MM(system) CHARMM minimization...")
@@ -2084,9 +2084,9 @@ def run_staged_repair_for_jaxmd(positions, label):
         print(f"[REPAIR] {label}: skipping ML(peptide) minimization (ML disabled).")
         ml_pos = mm_pos
 
-    print(f"[REPAIR] {label}: running MMML(system) JAX FIRE minimization (200 steps)...")
-    mmml_pos = _run_jax_mmml_fire_repair(ml_pos)
-    candidates.append(_repair_candidate_metrics("MMML(system) FIRE", mmml_pos))
+    print(f"[REPAIR] {label}: running KARML(system) JAX FIRE minimization (200 steps)...")
+    karml_pos = _run_jax_karml_fire_repair(ml_pos)
+    candidates.append(_repair_candidate_metrics("KARML(system) FIRE", karml_pos))
 
     finite_candidates = [candidate for candidate in candidates if candidate["finite"]]
     if not finite_candidates:
@@ -2336,7 +2336,7 @@ for step in range(0, NVT_TOTAL_STEPS, NVT_BLOCK_STEPS):
         scaled_pos, _ = scale_broken_h_bonds(
             repair_input_pos, box_size, h_idx_arr, x_idx_arr
         )
-        # 2. Run staged MM/ML/MMML repair and select the best finite candidate
+        # 2. Run staged MM/ML/KARML repair and select the best finite candidate
         print(f"[REPAIR] NVT repair input source: {repair_source}")
         final_min_pos = run_staged_repair_for_jaxmd(scaled_pos, "NVT")
 
@@ -2455,7 +2455,7 @@ for step in range(0, NVE_TOTAL_STEPS, NVE_BLOCK_STEPS):
         scaled_pos, _ = scale_broken_h_bonds(
             repair_input_pos, box_size, h_idx_arr, x_idx_arr
         )
-        # 2. Run staged MM/ML/MMML repair and select the best finite candidate
+        # 2. Run staged MM/ML/KARML repair and select the best finite candidate
         print(f"[REPAIR] NVE repair input source: {repair_source}")
         final_min_pos = run_staged_repair_for_jaxmd(scaled_pos, "NVE")
 

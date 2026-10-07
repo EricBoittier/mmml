@@ -18,15 +18,15 @@ import orbax.checkpoint as ocp
 
 os.environ.setdefault(
     "MPLCONFIGDIR",
-    str(Path(tempfile.gettempdir()) / "mmml-matplotlib"),
+    str(Path(tempfile.gettempdir()) / "karml-matplotlib"),
 )
 import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-from mmml.data.orbax_shards import partition_shards
-from mmml.models.mbd import E3xMBDModel, mbd_energy_and_forces
+from karml.data.orbax_shards import partition_shards
+from karml.models.mbd import E3xMBDModel, mbd_energy_and_forces
 
 try:
     from scripts.train_qcml_mbd import (
@@ -680,7 +680,7 @@ def main() -> None:
         prediction,
         num_atoms,
     )
-    from mmml.utils.rich_report import print_colored_json
+    from karml.utils.rich_report import print_colored_json
 
     print_colored_json(metrics, sort_keys=True)
     print(f"Wrote MBD report to {args.output_dir}")

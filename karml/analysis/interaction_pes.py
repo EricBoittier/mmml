@@ -7,7 +7,7 @@ Interaction energy (kcal/mol unless noted)::
     E3         = E_int(ABC) - sum_{I<J} E_int(IJ)
 
 Site–site distances (O–O for hydroxyl dimers) replace COM translations.
-Plots live in ``mmml.analysis.interaction_pes_plot`` and consume this JSON.
+Plots live in ``karml.analysis.interaction_pes_plot`` and consume this JSON.
 """
 
 from __future__ import annotations
@@ -23,13 +23,13 @@ from ase import Atoms
 from ase.calculators.calculator import Calculator
 from ase.io import read as ase_read
 
-from mmml.analysis.dimer_scans import (
+from karml.analysis.dimer_scans import (
     assign_mol_id,
     centered_atoms,
     fragment_index_arrays,
     intermolecular_min_distance,
 )
-from mmml.analysis.interaction_pes_geom import (
+from karml.analysis.interaction_pes_geom import (
     DEFAULT_ACCEPTOR_FLAP_DEG,
     MOTIF_CYCLIC,
     MOTIF_LABELS,
@@ -60,9 +60,9 @@ from mmml.analysis.interaction_pes_geom import (
     trimer_for_motif,
     trimer_oo_distances,
 )
-from mmml.data.units import EV_TO_KCAL_MOL
+from karml.data.units import EV_TO_KCAL_MOL
 
-SCHEMA_VERSION = "mmml.interaction_pes/v2"
+SCHEMA_VERSION = "karml.interaction_pes/v2"
 
 DEFAULT_R_MIN_A = 2.2
 DEFAULT_R_MAX_A = 12.0
@@ -262,7 +262,7 @@ def default_system_monomers(*, include_acetone: bool = True) -> dict[str, Atoms]
         SYSTEM_ETHANOL: load_monomer_xyz(repo / DEFAULT_ETOH_XYZ),
     }
     if include_acetone:
-        from mmml.distill.acetone_pool import load_acetone_monomer
+        from karml.distill.acetone_pool import load_acetone_monomer
 
         systems[SYSTEM_ACETONE] = centered_atoms(load_acetone_monomer(), center="com")
     return systems

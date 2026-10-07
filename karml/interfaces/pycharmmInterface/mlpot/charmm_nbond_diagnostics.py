@@ -12,8 +12,8 @@ import numpy as np
 
 
 def nbond_debug_enabled() -> bool:
-    """True when ``MMML_NBOND_DEBUG`` or ``MMML_SAVE_NBOND_SNAPSHOTS`` is set."""
-    for key in ("MMML_NBOND_DEBUG", "MMML_SAVE_NBOND_SNAPSHOTS"):
+    """True when ``KARML_NBOND_DEBUG`` or ``KARML_SAVE_NBOND_SNAPSHOTS`` is set."""
+    for key in ("KARML_NBOND_DEBUG", "KARML_SAVE_NBOND_SNAPSHOTS"):
         val = os.environ.get(key, "").strip().lower()
         if val in ("1", "true", "yes", "on"):
             return True
@@ -26,10 +26,10 @@ def _resolve_debug_dir(ctx: Any | None) -> Path:
             raw = getattr(ctx, attr, None)
             if raw:
                 return Path(raw).expanduser().resolve() / "nbond_debug"
-    env = os.environ.get("MMML_NBOND_DEBUG_DIR", "").strip()
+    env = os.environ.get("KARML_NBOND_DEBUG_DIR", "").strip()
     if env:
         return Path(env).expanduser().resolve()
-    return Path("/tmp/mmml-nbond-debug")
+    return Path("/tmp/karml-nbond-debug")
 
 
 def _safe_int(fn: Any, default: int = -1) -> int:
@@ -65,7 +65,7 @@ def collect_nbond_state(ctx: Any | None = None, *, context: str = "") -> dict[st
         "timestamp_unix": time.time(),
     }
     try:
-        import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+        import karml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
         import pycharmm
         import pycharmm.psf as psf
 
@@ -82,7 +82,7 @@ def collect_nbond_state(ctx: Any | None = None, *, context: str = "") -> dict[st
         if box is not None:
             payload["pbound_A"] = {"x": box[0], "y": box[1], "z": box[2]}
         try:
-            from mmml.interfaces.pycharmmInterface.mlpot.topology_recovery import (
+            from karml.interfaces.pycharmmInterface.mlpot.topology_recovery import (
                 coerce_iblo_inb,
             )
 
@@ -116,7 +116,7 @@ def collect_nbond_state(ctx: Any | None = None, *, context: str = "") -> dict[st
             "charmm_cubic_box_side_A": getattr(ctx, "charmm_cubic_box_side_A", None),
         }
     try:
-        from mmml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap import (
+        from karml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap import (
             active_cgenff_prm_mode,
         )
 
@@ -141,5 +141,5 @@ def maybe_snapshot_nbond_state(
     slug = "".join(c if c.isalnum() else "_" for c in context)[:80] or "snapshot"
     path = out_dir / f"{int(state['timestamp_unix'])}_{slug}.json"
     path.write_text(json.dumps(state, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    print(f"MMML nbond debug: wrote {path}", flush=True)
+    print(f"KARML nbond debug: wrote {path}", flush=True)
     return path

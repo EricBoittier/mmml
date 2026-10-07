@@ -2,7 +2,7 @@
 """PyCHARMM MLpot 2D dimer/trimer scan with component energies.
 
 Builds an N-monomer cluster via the same CLI/cluster path as
-``mmml md-system --backend pycharmm``, registers ``MLpot``, and records
+``karml md-system --backend pycharmm``, registers ``MLpot``, and records
 energies on a 2D grid of COM separations. For dimers only d01 changes
 geometry; d02 is retained as a grid axis for a consistent output shape.
 
@@ -13,8 +13,8 @@ For each grid point the script saves:
 
 Examples
 --------
-  export MMML_CKPT=/path/to/dcm_ckpt
-  ./scripts/mmml-charmm-mpirun.sh python scripts/scan_mlpot_dimer_2d_pycharmm.py \\
+  export KARML_CKPT=/path/to/dcm_ckpt
+  ./scripts/karml-charmm-mpirun.sh python scripts/scan_mlpot_dimer_2d_pycharmm.py \\
     DCM:2 --scan-1d --scan-tag pbc_jax_pme_ewald \\
     --box-size 36 --mlpot-pbc --lr-solver jax_pme --jax-pme-method ewald \\
     --output-dir artifacts/dimer_lr_scans
@@ -22,16 +22,16 @@ Examples
   # Full DCM + ACO solver sweep:
   ./scripts/run_dcm_aco_dimer_lr_scans.sh
 
-  ./scripts/mmml-charmm-mpirun.sh python scripts/scan_mlpot_dimer_2d_pycharmm.py \\
+  ./scripts/karml-charmm-mpirun.sh python scripts/scan_mlpot_dimer_2d_pycharmm.py \\
     DCM:3 --output-dir artifacts/pycharmm_mlpot/dimer_2d_scan/dcm3
 
-  ./scripts/mmml-charmm-mpirun.sh python scripts/scan_mlpot_dimer_2d_pycharmm.py \\
+  ./scripts/karml-charmm-mpirun.sh python scripts/scan_mlpot_dimer_2d_pycharmm.py \\
     --composition ACO:3 --checkpoint /path/to/aco_ckpt \\
     --scan-2d-min 3.0 --scan-2d-max 10.0 --scan-2d-steps 11
 
   # Multiple compositions (one NPZ each):
-  ./scripts/mmml-charmm-mpirun.sh python scripts/scan_mlpot_dimer_2d_pycharmm.py \\
-    --batch-compositions DCM:2,ACO:2 --checkpoint "$MMML_CKPT"
+  ./scripts/karml-charmm-mpirun.sh python scripts/scan_mlpot_dimer_2d_pycharmm.py \\
+    --batch-compositions DCM:2,ACO:2 --checkpoint "$KARML_CKPT"
 """
 
 from __future__ import annotations
@@ -52,8 +52,8 @@ EV_PER_KCAL = 1.0 / 23.0605
 
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    from mmml.interfaces.pycharmmInterface.cutoffs import add_handoff_cutoff_args
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+    from karml.interfaces.pycharmmInterface.cutoffs import add_handoff_cutoff_args
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
         add_charmm_output_args,
         add_cluster_args,
         add_mlpot_lr_nonbond_args,
@@ -165,7 +165,7 @@ def _parse_batch_compositions(text: str) -> list[str]:
 
 
 def _composition_monomer_count(composition: str) -> int:
-    from mmml.cli.run.md_pbc_suite.ase import _parse_composition
+    from karml.cli.run.md_pbc_suite.ase import _parse_composition
 
     return sum(count for _, count in _parse_composition(composition))
 
@@ -237,7 +237,7 @@ def _eval_decomposed(
     import jax
     import jax.numpy as jnp
 
-    from mmml.interfaces.pycharmmInterface.calculator_utils import ModelOutput
+    from karml.interfaces.pycharmmInterface.calculator_utils import ModelOutput
 
     calc = pyCModel.get_pycharmm_calculator()
     pos_j = jnp.asarray(positions, dtype=jnp.float64)
@@ -291,8 +291,8 @@ def _make_evaluator(
     *,
     do_mm: bool,
 ) -> Any:
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_energy_row
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_energy_row
+    from karml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
 
     import pycharmm
 
@@ -319,8 +319,8 @@ def _make_evaluator(
 
 
 def _run_one_scan(args: argparse.Namespace, composition: str) -> Path:
-    from mmml.interfaces.pycharmmInterface.cutoffs import cutoff_parameters_from_args
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+    from karml.interfaces.pycharmmInterface.cutoffs import cutoff_parameters_from_args
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
         apply_charmm_output_from_args,
         build_cluster_from_args_with_tag,
         print_cluster_geometry_summary,
@@ -329,10 +329,10 @@ def _run_one_scan(args: argparse.Namespace, composition: str) -> Path:
         resolve_pbc_box_side,
         resolve_use_pbc,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import setup_charmm_environment
-    from mmml.interfaces.pycharmmInterface.mlpot.run_workflow import _register_mlpot_context
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import setup_default_nbonds
-    from mmml.interfaces.pycharmmInterface.mlpot.trimer_scan import (
+    from karml.interfaces.pycharmmInterface.mlpot.pbc_env import setup_charmm_environment
+    from karml.interfaces.pycharmmInterface.mlpot.run_workflow import _register_mlpot_context
+    from karml.interfaces.pycharmmInterface.mlpot.setup import setup_default_nbonds
+    from karml.interfaces.pycharmmInterface.mlpot.trimer_scan import (
         atoms_per_monomer_from_psf,
         default_scan_2d_metric_keys,
         distance_report,
@@ -349,7 +349,7 @@ def _run_one_scan(args: argparse.Namespace, composition: str) -> Path:
     ckpt = resolve_checkpoint(args.checkpoint)
     apply_charmm_output_from_args(args)
 
-    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+    import karml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
 
     z, ref_pos, n_mol, tag = build_cluster_from_args_with_tag(args)
     if n_mol < 2:
@@ -390,7 +390,7 @@ def _run_one_scan(args: argparse.Namespace, composition: str) -> Path:
     )
 
     try:
-        from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import warmup_decomposed_mlpot
+        from karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import warmup_decomposed_mlpot
 
         warmup_decomposed_mlpot(
             pyCModel,
@@ -439,7 +439,7 @@ def _run_one_scan(args: argparse.Namespace, composition: str) -> Path:
         ctx.unset()
 
     out_path = _resolve_output_path(args, tag=tag, ckpt=ckpt, batch=bool(args.batch_compositions))
-    from mmml.interfaces.pycharmmInterface.long_range_backend import pick_lr_solver
+    from karml.interfaces.pycharmmInterface.long_range_backend import pick_lr_solver
 
     lr_requested = getattr(args, "lr_solver", None)
     lr_active = pick_lr_solver(lr_requested)

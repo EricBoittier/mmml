@@ -68,12 +68,12 @@ def main() -> int:
     p.add_argument("--mm-switch-width", type=float, default=None)
     args = p.parse_args()
 
-    from mmml.cli.run.md_evaluate_npz import _attach_ase_mmml_calculator
-    from mmml.interfaces.pycharmmInterface import import_pycharmm as ipy
-    from mmml.interfaces.pycharmmInterface.cgenff_bonded_reference import (
+    from karml.cli.run.md_evaluate_npz import _attach_ase_karml_calculator
+    from karml.interfaces.pycharmmInterface import import_pycharmm as ipy
+    from karml.interfaces.pycharmmInterface.cgenff_bonded_reference import (
         read_psf_card_file,
     )
-    from mmml.interfaces.pycharmmInterface.nbonds_config import read_cgenff_toppar
+    from karml.interfaces.pycharmmInterface.nbonds_config import read_cgenff_toppar
 
     side = json.loads(Path(args.sidecar).read_text())
     mm_on = float(args.mm_switch_on if args.mm_switch_on is not None else side.get("mm_switch_on", 5.0))
@@ -140,7 +140,7 @@ def main() -> int:
         mm_latent_charge_template=None,
         hybrid_mm_json=str(args.sidecar.resolve()),
     )
-    _attach_ase_mmml_calculator(
+    _attach_ase_karml_calculator(
         calc_args,
         atoms=atoms,
         z=z,

@@ -1,4 +1,4 @@
-"""Categorized ``mmml md-system`` help (``-h`` index, ``-hN`` section, ``--help-all``)."""
+"""Categorized ``karml md-system`` help (``-h`` index, ``-hN`` section, ``--help-all``)."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ import sys
 from collections.abc import Sequence
 from typing import Any
 
-from mmml.cli.argparse_suggest import SuggestingArgumentParser
+from karml.cli.argparse_suggest import SuggestingArgumentParser
 
 # (number, title, aliases) — ``-hN`` / ``-halias`` / ``--help-alias``.
 MD_SYSTEM_HELP_CATEGORIES: tuple[tuple[int, str, tuple[str, ...]], ...] = (
@@ -395,7 +395,7 @@ def iter_categorized_actions(
 
 
 def _prog(parser: argparse.ArgumentParser) -> str:
-    return parser.prog or "mmml md-system"
+    return parser.prog or "karml md-system"
 
 
 def format_help_index(parser: argparse.ArgumentParser) -> str:
@@ -515,10 +515,10 @@ class MdSystemArgumentParser(SuggestingArgumentParser):
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         kwargs.setdefault("add_help", False)
         super().__init__(*args, **kwargs)
-        self._mmml_help_mode: str | int = "index"
+        self._karml_help_mode: str | int = "index"
 
     def format_help(self) -> str:  # type: ignore[override]
-        return format_md_system_help(self, self._mmml_help_mode)
+        return format_md_system_help(self, self._karml_help_mode)
 
     def parse_known_args(  # type: ignore[override]
         self,
@@ -539,7 +539,7 @@ class MdSystemArgumentParser(SuggestingArgumentParser):
                     f"unknown help category {mode}; "
                     f"choose one of: {format_valid_help_categories()}, or --help-all"
                 )
-            self._mmml_help_mode = mode
+            self._karml_help_mode = mode
             self.print_help()
             self.exit(0)
         return super().parse_known_args(argv, namespace)

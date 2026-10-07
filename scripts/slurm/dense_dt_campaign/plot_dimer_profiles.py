@@ -19,8 +19,8 @@ import pandas as pd
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT))
 
-from mmml.analysis.dimer_scans import DEFAULT_ORIENT_MIN_CONTACT_A  # noqa: E402
-from mmml.utils.plotting.styles import (  # noqa: E402
+from karml.analysis.dimer_scans import DEFAULT_ORIENT_MIN_CONTACT_A  # noqa: E402
+from karml.utils.plotting.styles import (  # noqa: E402
     apply_plot_style,
     comparison_colors,
     legend_outside,

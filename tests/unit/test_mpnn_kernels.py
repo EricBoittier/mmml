@@ -10,7 +10,7 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from mmml.models.physnetjax.physnetjax.models.mpnn_kernels import (
+from karml.models.physnetjax.physnetjax.models.mpnn_kernels import (
     COULOMB_PAIR_FACTOR_EV_A,
     calc_electrostatics_switches,
     encode_geometry_and_basis,
@@ -18,8 +18,8 @@ from mmml.models.physnetjax.physnetjax.models.mpnn_kernels import (
     pair_electrostatics_energy,
     radial_spherical_basis,
 )
-from mmml.models.physnetjax.physnetjax.models.model import PhysNet
-from mmml.models.physnetjax.physnetjax.models.spooky_model import SpookyPhysNet
+from karml.models.physnetjax.physnetjax.models.model import PhysNet
+from karml.models.physnetjax.physnetjax.models.spooky_model import SpookyPhysNet
 
 
 def _reference_switches(

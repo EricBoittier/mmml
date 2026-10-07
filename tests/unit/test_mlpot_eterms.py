@@ -7,8 +7,8 @@ import types
 
 import pytest
 
-from mmml.interfaces.pycharmmInterface.mlpot import setup as mlpot_setup
-from mmml.interfaces.pycharmmInterface.mlpot.mlpot_eterms import (
+from karml.interfaces.pycharmmInterface.mlpot import setup as mlpot_setup
+from karml.interfaces.pycharmmInterface.mlpot.mlpot_eterms import (
     MLPOT_ETERM_KEYS,
     mlpot_eterm_kcal_from_terms,
     read_mlpot_eterm_kcal,

@@ -174,17 +174,17 @@ uv run pytest \
 | `test_short_npt_run_barostat_pressure_matches_recomputed_true_pressure` | \(P_\mathrm{baro}-P_\mathrm{kin}\) / \(P_\mathrm{vir}^\mathrm{true}\) \(= 1\) |
 | `test_npt_forces_are_real_space_and_conserve_energy` | soft barostat ≈ NVE energy conservation |
 
-Optional in-situ: `MMML_NPT_VIRIAL_SELFCHECK=1` on a jax-md NpT start.
+Optional in-situ: `KARML_NPT_VIRIAL_SELFCHECK=1` on a jax-md NpT start.
 
 ### PyCHARMM CPT (needs rebuilt lib)
 
 ```bash
 export CHARMM_HOME="$PWD/setup/charmm"
 export CHARMM_LIB_DIR="$CHARMM_HOME/lib"   # serial rebuild: --no-mpi
-export MMML_NO_CHARMM_MPI=1 MMML_NO_MPI_RERUN=1
+export KARML_NO_CHARMM_MPI=1 KARML_NO_MPI_RERUN=1
 
 # Hook present?
-uv run python -c "from mmml.interfaces.pycharmmInterface.mlpot.strain_virial import require_charmm_virial_hook; require_charmm_virial_hook(); print('ok')"
+uv run python -c "from karml.interfaces.pycharmmInterface.mlpot.strain_virial import require_charmm_virial_hook; require_charmm_virial_hook(); print('ok')"
 
 uv run pytest tests/functionality/charmm/test_charmm_ff_thermostat_barostat.py -v
 uv run pytest tests/unit/test_mlpot_strain_virial.py tests/unit/test_npt_cpt_chunking.py -q

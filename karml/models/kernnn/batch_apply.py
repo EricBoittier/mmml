@@ -8,7 +8,7 @@ import jax
 import jax.numpy as jnp
 from jax import Array
 
-from mmml.models.kernnn.model import KerNNConfig, KerNNStats, energy_and_forces
+from karml.models.kernnn.model import KerNNConfig, KerNNStats, energy_and_forces
 
 
 def build_kernnn_batch_apply(

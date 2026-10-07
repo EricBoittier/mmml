@@ -1,4 +1,4 @@
-# `mmml efield-md`
+# `karml efield-md`
 
 MD with external electric-field PhysNet.
 
@@ -6,15 +6,15 @@ MD with external electric-field PhysNet.
 ## Usage
 
 ```bash
-mmml efield-md --help
+karml efield-md --help
 ```
 
 ## Options
 
 ```text
-usage: mmml efield-md [-h] [--backend {ase,jax}]
+usage: karml efield-md [-h] [--backend {ase,jax}]
 
-Run MD with the electric-field equivariant model (trained via mmml ef-train).
+Run MD with the electric-field equivariant model (trained via karml ef-train).
 Default backend is ASE; use --backend jax for the fully JIT-compiled integrator.
 
 options:

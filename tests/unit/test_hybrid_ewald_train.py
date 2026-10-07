@@ -14,7 +14,7 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from mmml.models.hybrid_energy import HybridMMConfig, hybrid_forward
+from karml.models.hybrid_energy import HybridMMConfig, hybrid_forward
 
 jax.config.update("jax_enable_x64", True)
 
@@ -113,7 +113,7 @@ def test_hybrid_mm_config_ewald_honors_include_lj_and_requires_box():
 
 
 def test_build_hybrid_mm_config_cli_ewald(tmp_path):
-    from mmml.cli.make.make_training import _build_hybrid_mm_config
+    from karml.cli.make.make_training import _build_hybrid_mm_config
 
     path = tmp_path / "d.npz"
     np.savez(
@@ -201,7 +201,7 @@ def test_ewald_path_independent_of_lj_tables():
 
 def test_full_box_ewald_keeps_intra_monomer_coulomb():
     """Full-box many-to-many: single monomer still contributes E_ewald (no subtract)."""
-    from mmml.models.ewald_hybrid_coulomb import hybrid_ewald_coulomb_energy
+    from karml.models.ewald_hybrid_coulomb import hybrid_ewald_coulomb_energy
 
     pos = jnp.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]], dtype=jnp.float64)
     mid = jnp.array([0, 0])
@@ -215,7 +215,7 @@ def test_full_box_ewald_keeps_intra_monomer_coulomb():
 
 def test_cross_monomer_ewald_removes_single_monomer_coulomb():
     """MIC-trained compatibility mode must not double-count monomer Coulomb."""
-    from mmml.models.ewald_hybrid_coulomb import hybrid_ewald_coulomb_energy
+    from karml.models.ewald_hybrid_coulomb import hybrid_ewald_coulomb_energy
 
     pos = jnp.array([[0.0, 0.0, 0.0], [0.96, 0.0, 0.0]], dtype=jnp.float64)
     energy = hybrid_ewald_coulomb_energy(
@@ -232,8 +232,8 @@ def test_cross_monomer_ewald_removes_single_monomer_coulomb():
 
 
 def test_ewald_omit_self_drops_geometry_independent_offset():
-    from mmml.models.ewald_hybrid_coulomb import hybrid_ewald_coulomb_energy
-    from mmml.interfaces.pycharmmInterface.ewald_native import (
+    from karml.models.ewald_hybrid_coulomb import hybrid_ewald_coulomb_energy
+    from karml.interfaces.pycharmmInterface.ewald_native import (
         default_ewald_alpha,
         ewald_self_energy,
     )
@@ -253,7 +253,7 @@ def test_ewald_omit_self_drops_geometry_independent_offset():
     )
     import math
 
-    from mmml.models.ewald_hybrid_coulomb import COULOMB_KCAL
+    from karml.models.ewald_hybrid_coulomb import COULOMB_KCAL
 
     alpha = default_ewald_alpha(10.0, accuracy_exponent=math.sqrt(max(-math.log(1e-6), 1.0)))
     e_self = float(ewald_self_energy(q, alpha) * COULOMB_KCAL)
@@ -263,7 +263,7 @@ def test_ewald_omit_self_drops_geometry_independent_offset():
 
 def test_full_box_ewald_ignores_com_switch_kwargs():
     """COM MM taper is not applied (matches untapered MD many-to-many Ewald)."""
-    from mmml.models.ewald_hybrid_coulomb import hybrid_ewald_coulomb_energy
+    from karml.models.ewald_hybrid_coulomb import hybrid_ewald_coulomb_energy
 
     pos = jnp.array(
         [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [20.0, 0.0, 0.0], [21.0, 0.0, 0.0]],
@@ -286,7 +286,7 @@ def test_full_box_ewald_ignores_com_switch_kwargs():
 def test_cli_exposes_ewald_lr_solver_choice():
     import inspect
 
-    from mmml.cli.make import make_training
+    from karml.cli.make import make_training
 
     src = inspect.getsource(make_training)
     assert '"--lr-solver"' in src
@@ -295,7 +295,7 @@ def test_cli_exposes_ewald_lr_solver_choice():
 
 def test_ewald_energy_jittable_with_grad():
     """Train path must survive jit + value_and_grad -- the whole point."""
-    from mmml.models.ewald_hybrid_coulomb import hybrid_ewald_coulomb_energy
+    from karml.models.ewald_hybrid_coulomb import hybrid_ewald_coulomb_energy
 
     pos0 = jnp.array([[0.0, 0.0, 0.0], [2.0, 0.0, 0.0]], dtype=jnp.float64)
     mid = jnp.array([0, 1])

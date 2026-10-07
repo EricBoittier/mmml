@@ -5,10 +5,10 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from mmml.md.energy.registry import EnergyContext
-from mmml.md.energy.terms.rxncoor import ReactionCoordinateBiasTerm
-from mmml.md.restraints import LinearDistanceCV
-from mmml.md.system import MolecularSystem
+from karml.md.energy.registry import EnergyContext
+from karml.md.energy.terms.rxncoor import ReactionCoordinateBiasTerm
+from karml.md.restraints import LinearDistanceCV
+from karml.md.system import MolecularSystem
 
 # Cl(0), N(1), C(2) collinear: r(C-Cl) = 1.8, r(C-N) = 3.0, xi = -1.2
 _R = np.array([[0.0, 0.0, 0.0], [4.8, 0.0, 0.0], [1.8, 0.0, 0.0]], dtype=np.float64)
@@ -119,7 +119,7 @@ def test_gas_and_solvated_paths_agree_on_the_same_coordinate():
     """rxncoor must reproduce the packed sampler's bias, or profiles won't compare."""
     import jax.numpy as jnp
 
-    from mmml.umbrella.energy import packed_bias_energies_nd
+    from karml.umbrella.energy import packed_bias_energies_nd
 
     target, k = -0.4, 6.505
     fns = ReactionCoordinateBiasTerm(cv=_CV, target=target, k_ev_per_A2=k).make(
@@ -148,8 +148,8 @@ def test_out_of_range_atom_index_is_caught_at_build_time():
 
 
 def test_term_is_registered():
-    import mmml.md.energy.terms  # noqa: F401
-    from mmml.md.energy.registry import available_terms, get_term
+    import karml.md.energy.terms  # noqa: F401
+    from karml.md.energy.registry import available_terms, get_term
 
     assert "rxncoor" in available_terms()
     assert get_term("rxncoor") is ReactionCoordinateBiasTerm
@@ -170,7 +170,7 @@ def test_wall_is_silent_inside_its_band():
     flat-bottom rather than a harmonic restraint on the sum.
     """
     import jax.numpy as jnp
-    from mmml.md.restraints import FlatBottomWall
+    from karml.md.restraints import FlatBottomWall
 
     # The fixture geometry has sum = 1.8 + 3.0 = 4.8, inside [3.8, 5.8].
     plain = ReactionCoordinateBiasTerm(cv=_CV, target=-1.2, k_ev_per_A2=10.0)
@@ -194,7 +194,7 @@ def test_wall_penalises_the_degenerate_branch_the_bias_cannot_see():
     training manifold.
     """
     import jax.numpy as jnp
-    from mmml.md.restraints import FlatBottomWall
+    from karml.md.restraints import FlatBottomWall
 
     stretched = _R.copy()
     stretched[0, 0] -= 1.0   # Cl further from C
@@ -228,7 +228,7 @@ def test_bond_retention_wall_catches_what_the_sum_wall_cannot():
     bonded to something, and it holds at every xi in the training set.
     """
     import jax.numpy as jnp
-    from mmml.md.restraints import BondRetentionWall
+    from karml.md.restraints import BondRetentionWall
 
     ctx = EnergyContext()
     wall = BondRetentionWall(pairs=((2, 0), (2, 1)), r_max=2.35, k=10.0)
@@ -253,7 +253,7 @@ def test_bond_retention_wall_catches_what_the_sum_wall_cannot():
 
 
 def test_bond_retention_wall_rejects_a_single_pair():
-    from mmml.md.restraints import BondRetentionWall
+    from karml.md.restraints import BondRetentionWall
 
     with pytest.raises(ValueError, match="at least two competing pairs"):
         BondRetentionWall(pairs=((2, 0),), r_max=2.35)
@@ -267,7 +267,7 @@ def test_angle_wall_confines_the_attack_channel():
     the system has left the backside-attack channel entirely.
     """
     import jax.numpy as jnp
-    from mmml.md.restraints import AngleWall
+    from karml.md.restraints import AngleWall
 
     # Cl(0), N(1), C(2) with C between them: N-C-Cl = 180 deg.
     collinear = np.array([[0.0, 0.0, 0.0], [0.0, 0.0, 4.3], [0.0, 0.0, 1.8]])
@@ -293,7 +293,7 @@ def test_angle_wall_confines_the_attack_channel():
 
 
 def test_angle_wall_rejects_bad_atom_specs():
-    from mmml.md.restraints import AngleWall
+    from karml.md.restraints import AngleWall
 
     with pytest.raises(ValueError, match="three distinct atoms"):
         AngleWall(atoms=(1, 2, 2))

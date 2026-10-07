@@ -1,8 +1,8 @@
 # Parallel hybrid umbrella windows (ML solute + MM solvent) via Snakemake/Slurm.
 #
 #   cd workflows/hybrid_umbrella_windows
-#   MMML_WORKFLOW_CONFIG=config.smoke.yaml bash scripts/snakemake_local.sh 2 -n
-#   MMML_WORKFLOW_CONFIG=config.yaml bash scripts/snakemake_slurm.sh 8
+#   KARML_WORKFLOW_CONFIG=config.smoke.yaml bash scripts/snakemake_local.sh 2 -n
+#   KARML_WORKFLOW_CONFIG=config.yaml bash scripts/snakemake_slurm.sh 8
 #
 # Each window is one GPU job writing output_dir/windows/wXXX.npz; assemble+MBAR
 # run once all windows exist (failed windows still produce a checkpoint).

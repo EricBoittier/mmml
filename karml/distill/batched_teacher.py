@@ -65,7 +65,7 @@ class BatchedMetatomicTeacher:
         import torch
         from metatomic.torch import load_atomistic_model
 
-        from mmml.interfaces.calculators.metatomic import (
+        from karml.interfaces.calculators.metatomic import (
             metatomic_device_name,
             resolve_metatomic_model_path,
         )

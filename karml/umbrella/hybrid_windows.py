@@ -14,7 +14,7 @@ from typing import Any, Sequence
 
 import numpy as np
 
-from mmml.umbrella.io import SNAPSHOTS_NPZ, load_snapshots
+from karml.umbrella.io import SNAPSHOTS_NPZ, load_snapshots
 
 WINDOWS_SUBDIR = "windows"
 

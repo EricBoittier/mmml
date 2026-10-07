@@ -12,7 +12,7 @@ Examples
 Post-mini geometry (DCM:8 NVE scaling):
 
   python scripts/validate_mlpot_pair_lists.py \\
-    --crd workflows/dcm_nve_scaling/results/dcm_8_nve/inbfrq_50/02_mlpot_mmml_dcm_8.crd \\
+    --crd workflows/dcm_nve_scaling/results/dcm_8_nve/inbfrq_50/02_mlpot_karml_dcm_8.crd \\
     --n-monomers 8 --atoms-per-monomer 5 --free-space
 
 NVE frame where COM QC shows drift (frame index 0-based):
@@ -36,8 +36,8 @@ _REPO = Path(__file__).resolve().parents[1]
 if str(_REPO) not in sys.path:
     sys.path.insert(0, str(_REPO))
 
-from mmml.interfaces.pycharmmInterface.calculator_utils import dimer_permutations  # noqa: E402
-from mmml.interfaces.pycharmmInterface.mlpot.mlpot_sparse_dimer_policy import (  # noqa: E402
+from karml.interfaces.pycharmmInterface.calculator_utils import dimer_permutations  # noqa: E402
+from karml.interfaces.pycharmmInterface.mlpot.mlpot_sparse_dimer_policy import (  # noqa: E402
     build_monomer_dimer_index_arrays,
     dimer_com_distance_numpy,
     validate_sparse_dimer_cap,
@@ -51,8 +51,8 @@ from scripts.validate_mlpot_sparse_dimers import (  # noqa: E402
 def _read_dcd_frame(path: Path, frame: int) -> np.ndarray:
     import importlib.util
 
-    mod_path = _REPO / "mmml" / "utils" / "dcd_reader.py"
-    spec = importlib.util.spec_from_file_location("_mmml_dcd_reader", mod_path)
+    mod_path = _REPO / "karml" / "utils" / "dcd_reader.py"
+    spec = importlib.util.spec_from_file_location("_karml_dcd_reader", mod_path)
     if spec is None or spec.loader is None:
         raise ImportError(f"cannot load DCD reader from {mod_path}")
     mod = importlib.util.module_from_spec(spec)

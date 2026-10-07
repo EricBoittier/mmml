@@ -8,8 +8,8 @@ from typing import TYPE_CHECKING, Any, Literal
 import numpy as np
 
 if TYPE_CHECKING:
-    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import DynamicsOverlapConfig
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
+    from karml.interfaces.pycharmmInterface.mlpot.overlap_guard import DynamicsOverlapConfig
+    from karml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
 
 GeometryReferenceKind = Literal["baseline", "mini"]
 
@@ -20,7 +20,7 @@ def stash_geometry_reference_on_ctx(
     kind: GeometryReferenceKind,
 ) -> None:
     """Keep a copy of current CHARMM coordinates for extent repack (no disk required)."""
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
+    from karml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
 
     pos = get_charmm_positions_array()
     if pos is None or int(pos.size) == 0:
@@ -65,7 +65,7 @@ def resolve_extent_reference_positions(
     mlpot_ctx: MlpotContext | None,
 ) -> tuple[np.ndarray, Path]:
     """Load repack template from disk ladder, then in-memory mini/baseline snapshots."""
-    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+    from karml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
         _load_extent_reference_positions,
     )
 
@@ -78,7 +78,7 @@ def resolve_extent_reference_positions(
     for arr, virtual in _memory_extent_reference_sources(mlpot_ctx):
         return arr, virtual
 
-    from mmml.interfaces.pycharmmInterface.cluster_geometry import (
+    from karml.interfaces.pycharmmInterface.cluster_geometry import (
         same_residue_cluster_reference_from_ctx,
     )
 
@@ -106,13 +106,13 @@ def polish_after_extent_repack(
     label: str,
 ) -> float:
     """Relax repacked geometry: hybrid FIRE, optional BFGS, bonded SD, MLpot mini."""
-    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+    from karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
         _bonded_cfg_from_overlap_config,
         _resolve_mlpot_recovery_nstep,
         _resolve_pyCModel,
         _run_hybrid_bonded_mlpot_recovery,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
         refresh_mlpot_energy_and_grms,
     )
 
@@ -121,7 +121,7 @@ def polish_after_extent_repack(
     grms = float(refresh_mlpot_energy_and_grms(mlpot_ctx, context=f"{label} pre-polish"))
 
     if args is not None and bool(getattr(args, "calculator_pre_minimize", True)):
-        from mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize import (
+        from karml.interfaces.pycharmmInterface.mlpot.calculator_minimize import (
             HybridCalculatorFireConfig,
             HybridCalculatorMinimizeConfig,
             coerce_hybrid_minimize_result,
@@ -200,7 +200,7 @@ def polish_after_extent_repack(
         setattr(mlpot_ctx, "_overlap_extent_polish_mlpot_sd_done", True)
         grms = float(refresh_mlpot_energy_and_grms(mlpot_ctx, context=""))
     elif int(getattr(config, "mlpot_rescue_mini_nstep", 0) or 0) > 0:
-        from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+        from karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
             _run_mlpot_recovery_mini,
         )
 

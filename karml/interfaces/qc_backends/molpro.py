@@ -12,8 +12,8 @@ from typing import Any
 import numpy as np
 from ase import Atoms
 
-from mmml.data.xml_to_npz import MolproConverter
-from mmml.interfaces.qc_backends.npz_output import stack_frame_results
+from karml.data.xml_to_npz import MolproConverter
+from karml.interfaces.qc_backends.npz_output import stack_frame_results
 
 _DEFAULT_BASIS = "cc-pVDZ"
 _DEFAULT_METHOD_BLOCK = "rhf"
@@ -46,7 +46,7 @@ def render_molpro_input(
             .replace("{geometry}", geom_block)
         )
 
-    return f"""***, MMML cross-check
+    return f"""***, KARML cross-check
 gdirect;
 geometry={{
      {geom_block}
@@ -160,7 +160,7 @@ class MolproBackend:
             n = len(atoms)
             frames_z.append(np.asarray(atoms.get_atomic_numbers(), dtype=np.int32))
             frames_r.append(np.asarray(atoms.get_positions(), dtype=np.float64))
-            with tempfile.TemporaryDirectory(prefix="mmml_molpro_") as tmp:
+            with tempfile.TemporaryDirectory(prefix="karml_molpro_") as tmp:
                 workdir = Path(tmp)
                 npz_data = self._run_single(atoms, workdir)
                 energies.append(float(np.asarray(npz_data["E"]).reshape(())))

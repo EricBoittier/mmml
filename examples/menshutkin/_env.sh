@@ -4,7 +4,7 @@
 # Host notes
 # ----------
 # Login node: no GPU (cuInit fails), and libcharmm.so needs libOpenCL.so.1 which
-#   is not installed there -- MMML_OPENCL_STUB supplies a no-op loader so
+#   is not installed there -- KARML_OPENCL_STUB supplies a no-op loader so
 #   PyCHARMM imports. Use it for smoke runs only.
 # gpu09:      2x RTX 5090 and a real libOpenCL; run production here via
 #             `ssh gpu09`. GPU 0 is often occupied by another user, so
@@ -30,9 +30,9 @@ export CHARMM_LIB_DIR="${CHARMM_LIB_DIR:-${REPO_ROOT}/setup/charmm/lib}"
 
 # No-op OpenCL loader for hosts without one (login node). Harmless where a real
 # libOpenCL exists because it is appended, not prepended.
-MMML_OPENCL_STUB="${MMML_OPENCL_STUB:-${HOME}/.local/opencl-stub}"
-if [[ ! -e /usr/lib/x86_64-linux-gnu/libOpenCL.so.1 && -d "${MMML_OPENCL_STUB}" ]]; then
-  export LD_LIBRARY_PATH="${MMML_OPENCL_STUB}:${LD_LIBRARY_PATH:-}"
+KARML_OPENCL_STUB="${KARML_OPENCL_STUB:-${HOME}/.local/opencl-stub}"
+if [[ ! -e /usr/lib/x86_64-linux-gnu/libOpenCL.so.1 && -d "${KARML_OPENCL_STUB}" ]]; then
+  export LD_LIBRARY_PATH="${KARML_OPENCL_STUB}:${LD_LIBRARY_PATH:-}"
 fi
 
 # GPU when one is visible, CPU otherwise -- unless MENSH_DEVICE says otherwise.
@@ -48,14 +48,14 @@ case "${MENSH_DEVICE:-auto}" in
   cpu)
     export JAX_PLATFORMS=cpu
     unset CUDA_VISIBLE_DEVICES
-    # JAX_PLATFORMS alone is NOT enough for anything under `mmml`. The CLI calls
+    # JAX_PLATFORMS alone is NOT enough for anything under `karml`. The CLI calls
     # apply_mlpot_jax_platform_env(), which treats JAX_PLATFORMS=cpu as a stale
     # login-node export and REWRITES it to put CUDA first whenever
-    # MMML_MLPOT_DEVICE is unset (it defaults to gpu). The job then dies with
+    # KARML_MLPOT_DEVICE is unset (it defaults to gpu). The job then dies with
     # "no supported devices found for platform CUDA" -- or worse, succeeds and
     # silently runs on a production GPU. This is the variable that actually
     # decides, so set it here.
-    export MMML_MLPOT_DEVICE=cpu
+    export KARML_MLPOT_DEVICE=cpu
     ;;
   gpu)
     export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-1}"
@@ -93,8 +93,8 @@ mkdir -p "${MENSH_ARTIFACTS}"
 # PDB-legal name -- see top_mecl.rtf) and CHEX
 # (cyclohexane -- only exists in top_all35_ethers.rtf with legacy ether types,
 # so examples/menshutkin/top_chex.rtf re-types it for CGenFF). Colon-separated.
-export MMML_CGENFF_EXTRA_RTF="${MMML_CGENFF_EXTRA_RTF:-${MENSH_DIR}/top_mecl.rtf:${MENSH_DIR}/top_chex.rtf}"
-export MMML_CGENFF_EXTRA_PRM="${MMML_CGENFF_EXTRA_PRM:-${REPO_ROOT}/examples/m/par_ch3cl.prm}"
+export KARML_CGENFF_EXTRA_RTF="${KARML_CGENFF_EXTRA_RTF:-${MENSH_DIR}/top_mecl.rtf:${MENSH_DIR}/top_chex.rtf}"
+export KARML_CGENFF_EXTRA_PRM="${KARML_CGENFF_EXTRA_PRM:-${REPO_ROOT}/examples/m/par_ch3cl.prm}"
 
 # --- Solvents (Turan, Brickel & Meuwly, JPCB 126, 1951 (2022)) ---------------
 # name:CGenFF residue:density(kg/m3):box side(A)

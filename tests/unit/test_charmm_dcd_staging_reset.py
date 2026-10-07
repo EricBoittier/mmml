@@ -1,7 +1,7 @@
 """Regression tests for CHARMM DCD staging / formatted-unformatted I/O crashes.
 
 Aborted ``mini_box_equil`` runs can leave partial binary DCDs under
-``$TMPDIR/mmml-charmm-io``.  Reopening those aliases via ``dynamics_set_iuncrd``
+``$TMPDIR/karml-charmm-io``.  Reopening those aliases via ``dynamics_set_iuncrd``
 without clearing them triggers ``Format present for UNFORMATTED data transfer``
 in ``dynio.F90`` (READYN on a trajectory unit).
 """
@@ -14,8 +14,8 @@ from unittest.mock import patch
 
 import pytest
 
-from mmml.interfaces.pycharmmInterface import charmm_paths
-from mmml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
+from karml.interfaces.pycharmmInterface import charmm_paths
+from karml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
 
 
 def _staging_alias(
@@ -35,12 +35,12 @@ def _staging_alias(
 
 
 def test_reset_stage_trajectory_removes_output_and_staging(tmp_path, monkeypatch):
-    from mmml.interfaces.pycharmmInterface.mlpot.staged_workflow import (
+    from karml.interfaces.pycharmmInterface.mlpot.staged_workflow import (
         _reset_stage_trajectory,
     )
 
     staging = tmp_path / "staging"
-    monkeypatch.setenv("MMML_CHARMM_IO_STAGING", str(staging))
+    monkeypatch.setenv("KARML_CHARMM_IO_STAGING", str(staging))
     dcd = tmp_path / "pretreat" / "mini_box_equil.dcd"
     dcd.parent.mkdir(parents=True)
     dcd.write_bytes(b"old-output-dcd")
@@ -57,7 +57,7 @@ def test_hot_and_cold_mini_box_equil_staging_aliases_are_independent(
     monkeypatch,
 ):
     staging = tmp_path / "staging"
-    monkeypatch.setenv("MMML_CHARMM_IO_STAGING", str(staging))
+    monkeypatch.setenv("KARML_CHARMM_IO_STAGING", str(staging))
     pretreat = tmp_path / "pretreat"
     pretreat.mkdir()
     hot = pretreat / "mini_box_equil_hot.dcd"
@@ -67,7 +67,7 @@ def test_hot_and_cold_mini_box_equil_staging_aliases_are_independent(
     cold_alias = _staging_alias(cold, staging, payload=b"cold-partial")
     assert hot_alias != cold_alias
 
-    from mmml.interfaces.pycharmmInterface.mlpot.staged_workflow import (
+    from karml.interfaces.pycharmmInterface.mlpot.staged_workflow import (
         _reset_stage_trajectory,
     )
 
@@ -80,12 +80,12 @@ def test_hot_and_cold_mini_box_equil_staging_aliases_are_independent(
 
 def test_open_for_run_after_reset_has_no_stale_staging_alias(tmp_path, monkeypatch):
     staging = tmp_path / "staging"
-    monkeypatch.setenv("MMML_CHARMM_IO_STAGING", str(staging))
+    monkeypatch.setenv("KARML_CHARMM_IO_STAGING", str(staging))
     dcd = tmp_path / "pretreat" / "mini_box_equil.dcd"
     dcd.parent.mkdir(parents=True)
     stale_alias = _staging_alias(dcd, staging)
 
-    from mmml.interfaces.pycharmmInterface.mlpot.staged_workflow import (
+    from karml.interfaces.pycharmmInterface.mlpot.staged_workflow import (
         _reset_stage_trajectory,
     )
 
@@ -152,29 +152,29 @@ def test_mini_box_equil_heat_leg_resets_trajectory_before_dynamics(tmp_path):
 
     with (
         patch(
-            "mmml.interfaces.pycharmmInterface.mlpot.staged_workflow._reset_stage_trajectory",
+            "karml.interfaces.pycharmmInterface.mlpot.staged_workflow._reset_stage_trajectory",
             side_effect=_track_reset,
         ),
         patch(
-            "mmml.interfaces.pycharmmInterface.mlpot.dynamics.run_dynamics_with_io",
+            "karml.interfaces.pycharmmInterface.mlpot.dynamics.run_dynamics_with_io",
             side_effect=_fake_dynamics,
         ),
         patch(
-            "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.assert_stage_dynamics_completed",
+            "karml.interfaces.pycharmmInterface.mlpot.dynamics_validation.assert_stage_dynamics_completed",
         ),
         patch(
-            "mmml.interfaces.pycharmmInterface.mlpot.cli_common.apply_pretreat_dyn_freq_kwargs",
+            "karml.interfaces.pycharmmInterface.mlpot.cli_common.apply_pretreat_dyn_freq_kwargs",
         ),
         patch(
-            "mmml.interfaces.pycharmmInterface.mlpot.cli_common.resolve_dcd_nsavc",
+            "karml.interfaces.pycharmmInterface.mlpot.cli_common.resolve_dcd_nsavc",
             return_value=100,
         ),
         patch(
-            "mmml.interfaces.pycharmmInterface.mlpot.cli_common.resolve_heat_ihtfrq",
+            "karml.interfaces.pycharmmInterface.mlpot.cli_common.resolve_heat_ihtfrq",
             return_value=100,
         ),
     ):
-        from mmml.interfaces.pycharmmInterface.mlpot.box_equil import (
+        from karml.interfaces.pycharmmInterface.mlpot.box_equil import (
             _run_mini_box_equil_heat_leg,
         )
 
@@ -222,28 +222,28 @@ def test_mini_box_equil_cold_leg_resets_only_cold_dcd(tmp_path):
 
     with (
         patch(
-            "mmml.interfaces.pycharmmInterface.mlpot.staged_workflow._reset_stage_trajectory",
+            "karml.interfaces.pycharmmInterface.mlpot.staged_workflow._reset_stage_trajectory",
             side_effect=_capture_reset,
         ),
         patch(
-            "mmml.interfaces.pycharmmInterface.mlpot.dynamics.run_dynamics_with_io",
+            "karml.interfaces.pycharmmInterface.mlpot.dynamics.run_dynamics_with_io",
         ),
         patch(
-            "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.assert_stage_dynamics_completed",
+            "karml.interfaces.pycharmmInterface.mlpot.dynamics_validation.assert_stage_dynamics_completed",
         ),
         patch(
-            "mmml.interfaces.pycharmmInterface.mlpot.cli_common.apply_pretreat_dyn_freq_kwargs",
+            "karml.interfaces.pycharmmInterface.mlpot.cli_common.apply_pretreat_dyn_freq_kwargs",
         ),
         patch(
-            "mmml.interfaces.pycharmmInterface.mlpot.cli_common.resolve_dcd_nsavc",
+            "karml.interfaces.pycharmmInterface.mlpot.cli_common.resolve_dcd_nsavc",
             return_value=100,
         ),
         patch(
-            "mmml.interfaces.pycharmmInterface.mlpot.cli_common.resolve_heat_ihtfrq",
+            "karml.interfaces.pycharmmInterface.mlpot.cli_common.resolve_heat_ihtfrq",
             return_value=100,
         ),
     ):
-        from mmml.interfaces.pycharmmInterface.mlpot.box_equil import (
+        from karml.interfaces.pycharmmInterface.mlpot.box_equil import (
             _run_mini_box_equil_heat_leg,
         )
 
@@ -275,12 +275,12 @@ def test_reset_stage_trajectory_always_clears_staging_even_with_rescue_old(
     monkeypatch,
     rescue_old: bool,
 ):
-    from mmml.interfaces.pycharmmInterface.mlpot.staged_workflow import (
+    from karml.interfaces.pycharmmInterface.mlpot.staged_workflow import (
         _reset_stage_trajectory,
     )
 
     staging = tmp_path / "staging"
-    monkeypatch.setenv("MMML_CHARMM_IO_STAGING", str(staging))
+    monkeypatch.setenv("KARML_CHARMM_IO_STAGING", str(staging))
     dcd = tmp_path / "pretreat" / "mini_box_equil.dcd"
     dcd.parent.mkdir(parents=True)
     dcd.write_bytes(b"output-dcd")

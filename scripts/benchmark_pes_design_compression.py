@@ -13,7 +13,7 @@ from pathlib import Path
 
 import numpy as np
 
-from mmml.cli.misc.pes_design import (
+from karml.cli.misc.pes_design import (
     _coverage,
     _embed,
     bayesian_select,
@@ -134,7 +134,7 @@ def main(argv=None) -> int:
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
-    from mmml.utils.plotting.styles import apply_plot_style
+    from karml.utils.plotting.styles import apply_plot_style
     style = apply_plot_style("icml")
     bayes_color = style.colors["train"]
     random_color = style.colors["valid"]

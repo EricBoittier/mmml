@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 import pytest
 
-from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
     MinimizeWithMlpotConfig,
     MlpotSdChunkResult,
     _effective_mlpot_sd_chunk_nstep,
@@ -36,7 +36,7 @@ def _disable_mlpot_mpi_defer_in_generic_chunk_tests(request):
         yield
         return
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.mlpot_skip_charmm_ener_force_before_first_sd",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.mlpot_skip_charmm_ener_force_before_first_sd",
         return_value=False,
     ):
         yield
@@ -161,20 +161,20 @@ def test_run_minimize_in_chunks_splits_long_pbc_sd():
     base_kw = {"tolenr": 1e-3, "tolgrd": 1e-3, "inbfrq": 0, "ihbfrq": 0}
 
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._sync_mlpot_lists_after_sd_chunk",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._sync_mlpot_lists_after_sd_chunk",
         return_value=None,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_mlpot_sd_list_frequencies",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_mlpot_sd_list_frequencies",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         return_value=np.zeros((1, 3)),
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.resolve_mlpot_grms_kcalmol_A",
+        "karml.interfaces.pycharmmInterface.mlpot.cli_common.resolve_mlpot_grms_kcalmol_A",
         return_value=5.0,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.assert_charmm_pbc_lattice_ready_for_mlpot",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.assert_charmm_pbc_lattice_ready_for_mlpot",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.charmm_levels.charmm_quiet_output",
+        "karml.interfaces.pycharmmInterface.charmm_levels.charmm_quiet_output",
     ):
         result = _run_minimize_in_chunks(
             minimize,
@@ -207,22 +207,22 @@ def test_run_minimize_in_chunks_watchdog_stops_early():
     base_kw = {"inbfrq": 0, "ihbfrq": 0}
 
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._sync_mlpot_lists_after_sd_chunk",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._sync_mlpot_lists_after_sd_chunk",
         return_value=200.0,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_mlpot_sd_list_frequencies",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_mlpot_sd_list_frequencies",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         return_value=np.zeros((1, 3)),
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.resolve_mlpot_grms_kcalmol_A",
+        "karml.interfaces.pycharmmInterface.mlpot.cli_common.resolve_mlpot_grms_kcalmol_A",
         return_value=12.0,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._rollback_mlpot_sd_chunk_geometry",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._rollback_mlpot_sd_chunk_geometry",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.assert_charmm_pbc_lattice_ready_for_mlpot",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.assert_charmm_pbc_lattice_ready_for_mlpot",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.charmm_levels.charmm_quiet_output",
+        "karml.interfaces.pycharmmInterface.charmm_levels.charmm_quiet_output",
     ):
         result = _run_minimize_in_chunks(
             minimize,
@@ -258,22 +258,22 @@ def test_run_minimize_in_chunks_watchdog_uses_sd_watchdog_initial_grms():
     base_kw = {"inbfrq": 0, "ihbfrq": 0}
 
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._sync_mlpot_lists_after_sd_chunk",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._sync_mlpot_lists_after_sd_chunk",
         return_value=200.0,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_mlpot_sd_list_frequencies",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_mlpot_sd_list_frequencies",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.resolve_mlpot_grms_kcalmol_A",
+        "karml.interfaces.pycharmmInterface.mlpot.cli_common.resolve_mlpot_grms_kcalmol_A",
         return_value=477.0,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         return_value=np.zeros((1, 3)),
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._rollback_mlpot_sd_chunk_geometry",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._rollback_mlpot_sd_chunk_geometry",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.assert_charmm_pbc_lattice_ready_for_mlpot",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.assert_charmm_pbc_lattice_ready_for_mlpot",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.charmm_levels.charmm_quiet_output",
+        "karml.interfaces.pycharmmInterface.charmm_levels.charmm_quiet_output",
     ):
         result = _run_minimize_in_chunks(
             minimize,
@@ -309,22 +309,22 @@ def test_run_minimize_in_chunks_watchdog_rolls_back_after_chunk_blowup():
     good_positions = np.zeros((3, 3))
 
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._sync_mlpot_lists_after_sd_chunk",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._sync_mlpot_lists_after_sd_chunk",
         side_effect=[11.5, 1200.0],
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_mlpot_sd_list_frequencies",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_mlpot_sd_list_frequencies",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.resolve_mlpot_grms_kcalmol_A",
+        "karml.interfaces.pycharmmInterface.mlpot.cli_common.resolve_mlpot_grms_kcalmol_A",
         return_value=12.0,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         return_value=good_positions,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._rollback_mlpot_sd_chunk_geometry",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._rollback_mlpot_sd_chunk_geometry",
     ) as rollback, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.assert_charmm_pbc_lattice_ready_for_mlpot",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.assert_charmm_pbc_lattice_ready_for_mlpot",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.charmm_levels.charmm_quiet_output",
+        "karml.interfaces.pycharmmInterface.charmm_levels.charmm_quiet_output",
     ):
         result = _run_minimize_in_chunks(
             minimize,
@@ -374,36 +374,36 @@ def test_minimize_with_mlpot_refreshes_grms_after_sync():
     )
 
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._import_pycharmm_modules",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._import_pycharmm_modules",
         return_value=(pycharmm, cons_fix, MagicMock(), minimize, MagicMock()),
     ), patch(
-        "mmml.interfaces.pycharmmInterface.charmm_mpi.recover_mpi_for_charmm_after_jax",
+        "karml.interfaces.pycharmmInterface.charmm_mpi.recover_mpi_for_charmm_after_jax",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._ensure_domdec_off_for_mlpot_energy",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._ensure_domdec_off_for_mlpot_energy",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._rewrap_mlpot_pbc_after_sd",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._rewrap_mlpot_pbc_after_sd",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.sync_charmm_lists_after_mini",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics.sync_charmm_lists_after_mini",
     ) as sync_lists, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.invalidate_mlpot_calculator_caches",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics.invalidate_mlpot_calculator_caches",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._maybe_promote_mlpot_jax_after_sd",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._maybe_promote_mlpot_jax_after_sd",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._maybe_show_energy",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._maybe_show_energy",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.nbonds_config.apply_vacuum_nbonds",
+        "karml.interfaces.pycharmmInterface.nbonds_config.apply_vacuum_nbonds",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.nbonds_config.apply_nbonds_script_kwargs",
+        "karml.interfaces.pycharmmInterface.nbonds_config.apply_nbonds_script_kwargs",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.materialize_deferred_mlpot_jax_before_sd",
+        "karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.materialize_deferred_mlpot_jax_before_sd",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_mlpot_sd_then_abnr",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._run_mlpot_sd_then_abnr",
         return_value=MlpotSdChunkResult(completed=True),
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.prepare_mlpot_hybrid_state_for_sd",
+        "karml.interfaces.pycharmmInterface.mlpot.cli_common.prepare_mlpot_hybrid_state_for_sd",
         return_value=(1.0, -10.0),
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.refresh_mlpot_energy_and_grms",
+        "karml.interfaces.pycharmmInterface.mlpot.cli_common.refresh_mlpot_energy_and_grms",
     ) as refresh_grms:
         minimize_with_mlpot(config)
 
@@ -426,21 +426,21 @@ def test_minimize_with_mlpot_raises_when_sd_watchdog_aborts():
     )
 
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._import_pycharmm_modules",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._import_pycharmm_modules",
         return_value=(pycharmm, cons_fix, MagicMock(), minimize, MagicMock()),
     ), patch(
-        "mmml.interfaces.pycharmmInterface.charmm_mpi.recover_mpi_for_charmm_after_jax",
+        "karml.interfaces.pycharmmInterface.charmm_mpi.recover_mpi_for_charmm_after_jax",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._ensure_domdec_off_for_mlpot_energy",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._ensure_domdec_off_for_mlpot_energy",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._rewrap_mlpot_pbc_after_sd",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._rewrap_mlpot_pbc_after_sd",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.prepare_mlpot_hybrid_state_for_sd",
+        "karml.interfaces.pycharmmInterface.mlpot.cli_common.prepare_mlpot_hybrid_state_for_sd",
         return_value=(12.0, -100.0),
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.materialize_deferred_mlpot_jax_before_sd",
+        "karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.materialize_deferred_mlpot_jax_before_sd",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_mlpot_sd_then_abnr",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._run_mlpot_sd_then_abnr",
         return_value=MlpotSdChunkResult(completed=False),
     ):
         with pytest.raises(RuntimeError, match="watchdog"):
@@ -466,21 +466,21 @@ def test_minimize_with_mlpot_continues_after_rollback():
     )
 
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._import_pycharmm_modules",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._import_pycharmm_modules",
         return_value=(pycharmm, cons_fix, MagicMock(), minimize, MagicMock()),
     ), patch(
-        "mmml.interfaces.pycharmmInterface.charmm_mpi.recover_mpi_for_charmm_after_jax",
+        "karml.interfaces.pycharmmInterface.charmm_mpi.recover_mpi_for_charmm_after_jax",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._ensure_domdec_off_for_mlpot_energy",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._ensure_domdec_off_for_mlpot_energy",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._rewrap_mlpot_pbc_after_sd",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._rewrap_mlpot_pbc_after_sd",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.prepare_mlpot_hybrid_state_for_sd",
+        "karml.interfaces.pycharmmInterface.mlpot.cli_common.prepare_mlpot_hybrid_state_for_sd",
         return_value=(12.0, -100.0),
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.materialize_deferred_mlpot_jax_before_sd",
+        "karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.materialize_deferred_mlpot_jax_before_sd",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_mlpot_sd_then_abnr",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._run_mlpot_sd_then_abnr",
         return_value=MlpotSdChunkResult(
             completed=False,
             rolled_back=True,
@@ -488,13 +488,13 @@ def test_minimize_with_mlpot_continues_after_rollback():
             rolled_back_chunk=5,
         ),
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.sync_charmm_lists_after_mini",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics.sync_charmm_lists_after_mini",
     ) as sync_lists, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.invalidate_mlpot_calculator_caches",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics.invalidate_mlpot_calculator_caches",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._maybe_promote_mlpot_jax_after_sd",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._maybe_promote_mlpot_jax_after_sd",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.refresh_mlpot_energy_and_grms",
+        "karml.interfaces.pycharmmInterface.mlpot.cli_common.refresh_mlpot_energy_and_grms",
     ) as refresh_grms:
         minimize_with_mlpot(config)
 
@@ -517,34 +517,34 @@ def test_minimize_with_mlpot_raises_when_sd_stall_still_above_dynamics_gate():
     )
 
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._import_pycharmm_modules",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._import_pycharmm_modules",
         return_value=(pycharmm, cons_fix, MagicMock(), minimize, MagicMock()),
     ), patch(
-        "mmml.interfaces.pycharmmInterface.charmm_mpi.recover_mpi_for_charmm_after_jax",
+        "karml.interfaces.pycharmmInterface.charmm_mpi.recover_mpi_for_charmm_after_jax",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._ensure_domdec_off_for_mlpot_energy",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._ensure_domdec_off_for_mlpot_energy",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._rewrap_mlpot_pbc_after_sd",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._rewrap_mlpot_pbc_after_sd",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.prepare_mlpot_hybrid_state_for_sd",
+        "karml.interfaces.pycharmmInterface.mlpot.cli_common.prepare_mlpot_hybrid_state_for_sd",
         return_value=(5588.0, -91065.0),
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.materialize_deferred_mlpot_jax_before_sd",
+        "karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.materialize_deferred_mlpot_jax_before_sd",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_mlpot_sd_then_abnr",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._run_mlpot_sd_then_abnr",
         return_value=MlpotSdChunkResult(
             completed=False,
             stalled=True,
             last_grms=5588.864,
         ),
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder.maybe_run_density_prep_ladder_for_mlpot",
+        "karml.interfaces.pycharmmInterface.mlpot.density_prep_ladder.maybe_run_density_prep_ladder_for_mlpot",
         return_value=(5588.864, False),
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.refresh_mlpot_energy_and_grms",
+        "karml.interfaces.pycharmmInterface.mlpot.cli_common.refresh_mlpot_energy_and_grms",
         return_value=5588.864,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.sync_charmm_lists_after_mini",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics.sync_charmm_lists_after_mini",
     ) as sync_lists:
         with pytest.raises(RuntimeError, match="refusing to start dynamics"):
             minimize_with_mlpot(config)
@@ -567,38 +567,38 @@ def test_minimize_with_mlpot_recovers_when_sd_stall_ladder_lowers_grms():
     )
 
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._import_pycharmm_modules",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._import_pycharmm_modules",
         return_value=(pycharmm, cons_fix, MagicMock(), minimize, MagicMock()),
     ), patch(
-        "mmml.interfaces.pycharmmInterface.charmm_mpi.recover_mpi_for_charmm_after_jax",
+        "karml.interfaces.pycharmmInterface.charmm_mpi.recover_mpi_for_charmm_after_jax",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._ensure_domdec_off_for_mlpot_energy",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._ensure_domdec_off_for_mlpot_energy",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._rewrap_mlpot_pbc_after_sd",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._rewrap_mlpot_pbc_after_sd",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.prepare_mlpot_hybrid_state_for_sd",
+        "karml.interfaces.pycharmmInterface.mlpot.cli_common.prepare_mlpot_hybrid_state_for_sd",
         return_value=(1232.0, -91065.0),
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.materialize_deferred_mlpot_jax_before_sd",
+        "karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.materialize_deferred_mlpot_jax_before_sd",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_mlpot_sd_then_abnr",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._run_mlpot_sd_then_abnr",
         return_value=MlpotSdChunkResult(
             completed=False,
             stalled=True,
             last_grms=1232.2355,
         ),
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder.maybe_run_density_prep_ladder_for_mlpot",
+        "karml.interfaces.pycharmmInterface.mlpot.density_prep_ladder.maybe_run_density_prep_ladder_for_mlpot",
         return_value=(42.0, True),
     ) as density_ladder, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.refresh_mlpot_energy_and_grms",
+        "karml.interfaces.pycharmmInterface.mlpot.cli_common.refresh_mlpot_energy_and_grms",
         return_value=42.0,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.sync_charmm_lists_after_mini",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics.sync_charmm_lists_after_mini",
     ) as sync_lists, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.invalidate_mlpot_calculator_caches",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics.invalidate_mlpot_calculator_caches",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._maybe_promote_mlpot_jax_after_sd",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._maybe_promote_mlpot_jax_after_sd",
     ):
         minimize_with_mlpot(config)
 
@@ -627,38 +627,38 @@ def test_minimize_with_mlpot_continues_when_sd_stall_near_ceiling():
     )
 
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._import_pycharmm_modules",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._import_pycharmm_modules",
         return_value=(pycharmm, cons_fix, MagicMock(), minimize, MagicMock()),
     ), patch(
-        "mmml.interfaces.pycharmmInterface.charmm_mpi.recover_mpi_for_charmm_after_jax",
+        "karml.interfaces.pycharmmInterface.charmm_mpi.recover_mpi_for_charmm_after_jax",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._ensure_domdec_off_for_mlpot_energy",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._ensure_domdec_off_for_mlpot_energy",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._rewrap_mlpot_pbc_after_sd",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._rewrap_mlpot_pbc_after_sd",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.prepare_mlpot_hybrid_state_for_sd",
+        "karml.interfaces.pycharmmInterface.mlpot.cli_common.prepare_mlpot_hybrid_state_for_sd",
         return_value=(597.5595, -32771.17733),
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.materialize_deferred_mlpot_jax_before_sd",
+        "karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.materialize_deferred_mlpot_jax_before_sd",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_mlpot_sd_then_abnr",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._run_mlpot_sd_then_abnr",
         return_value=MlpotSdChunkResult(
             completed=False,
             stalled=True,
             last_grms=597.5595,
         ),
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder.maybe_run_density_prep_ladder_for_mlpot",
+        "karml.interfaces.pycharmmInterface.mlpot.density_prep_ladder.maybe_run_density_prep_ladder_for_mlpot",
         return_value=(597.5595, False),
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.refresh_mlpot_energy_and_grms",
+        "karml.interfaces.pycharmmInterface.mlpot.cli_common.refresh_mlpot_energy_and_grms",
         return_value=597.5595,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.sync_charmm_lists_after_mini",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics.sync_charmm_lists_after_mini",
     ) as sync_lists, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.invalidate_mlpot_calculator_caches",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics.invalidate_mlpot_calculator_caches",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._maybe_promote_mlpot_jax_after_sd",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._maybe_promote_mlpot_jax_after_sd",
     ):
         minimize_with_mlpot(config)
 
@@ -680,38 +680,38 @@ def test_minimize_with_mlpot_continues_when_sd_stall_within_retry_band():
     )
 
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._import_pycharmm_modules",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._import_pycharmm_modules",
         return_value=(pycharmm, cons_fix, MagicMock(), minimize, MagicMock()),
     ), patch(
-        "mmml.interfaces.pycharmmInterface.charmm_mpi.recover_mpi_for_charmm_after_jax",
+        "karml.interfaces.pycharmmInterface.charmm_mpi.recover_mpi_for_charmm_after_jax",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._ensure_domdec_off_for_mlpot_energy",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._ensure_domdec_off_for_mlpot_energy",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._rewrap_mlpot_pbc_after_sd",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._rewrap_mlpot_pbc_after_sd",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.prepare_mlpot_hybrid_state_for_sd",
+        "karml.interfaces.pycharmmInterface.mlpot.cli_common.prepare_mlpot_hybrid_state_for_sd",
         return_value=(1377.6864, -24145.88462),
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.materialize_deferred_mlpot_jax_before_sd",
+        "karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.materialize_deferred_mlpot_jax_before_sd",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_mlpot_sd_then_abnr",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._run_mlpot_sd_then_abnr",
         return_value=MlpotSdChunkResult(
             completed=False,
             stalled=True,
             last_grms=1377.6864,
         ),
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder.maybe_run_density_prep_ladder_for_mlpot",
+        "karml.interfaces.pycharmmInterface.mlpot.density_prep_ladder.maybe_run_density_prep_ladder_for_mlpot",
         return_value=(1377.6864, False),
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.refresh_mlpot_energy_and_grms",
+        "karml.interfaces.pycharmmInterface.mlpot.cli_common.refresh_mlpot_energy_and_grms",
         return_value=1377.6864,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.sync_charmm_lists_after_mini",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics.sync_charmm_lists_after_mini",
     ) as sync_lists, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.invalidate_mlpot_calculator_caches",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics.invalidate_mlpot_calculator_caches",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._maybe_promote_mlpot_jax_after_sd",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._maybe_promote_mlpot_jax_after_sd",
     ):
         minimize_with_mlpot(config)
 
@@ -758,11 +758,11 @@ def test_run_minimize_in_chunks_aborts_before_first_chunk_on_stress_grms():
     base_kw = {"inbfrq": 0, "ihbfrq": 0}
 
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_mlpot_sd_list_frequencies",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_mlpot_sd_list_frequencies",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.assert_charmm_pbc_lattice_ready_for_mlpot",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.assert_charmm_pbc_lattice_ready_for_mlpot",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.charmm_levels.charmm_quiet_output",
+        "karml.interfaces.pycharmmInterface.charmm_levels.charmm_quiet_output",
     ):
         result = _run_minimize_in_chunks(
             minimize,
@@ -824,20 +824,20 @@ def test_run_minimize_in_chunks_stops_on_grms_plateau():
     base_kw = {"inbfrq": 0, "ihbfrq": 0}
 
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._sync_mlpot_lists_after_sd_chunk",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._sync_mlpot_lists_after_sd_chunk",
         return_value=272.8245,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_mlpot_sd_list_frequencies",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_mlpot_sd_list_frequencies",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         return_value=np.zeros((1, 3)),
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.resolve_mlpot_grms_kcalmol_A",
+        "karml.interfaces.pycharmmInterface.mlpot.cli_common.resolve_mlpot_grms_kcalmol_A",
         return_value=272.8245,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.assert_charmm_pbc_lattice_ready_for_mlpot",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.assert_charmm_pbc_lattice_ready_for_mlpot",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.charmm_levels.charmm_quiet_output",
+        "karml.interfaces.pycharmmInterface.charmm_levels.charmm_quiet_output",
     ):
         result = _run_minimize_in_chunks(
             minimize,
@@ -879,20 +879,20 @@ def test_run_minimize_in_chunks_exits_early_when_converged():
     assert _resolved_sd_converged_grms(config) == pytest.approx(50.0)
 
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._sync_mlpot_lists_after_sd_chunk",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._sync_mlpot_lists_after_sd_chunk",
         return_value=9.5,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_mlpot_sd_list_frequencies",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_mlpot_sd_list_frequencies",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         return_value=np.zeros((1, 3)),
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.resolve_mlpot_grms_kcalmol_A",
+        "karml.interfaces.pycharmmInterface.mlpot.cli_common.resolve_mlpot_grms_kcalmol_A",
         return_value=120.0,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.assert_charmm_pbc_lattice_ready_for_mlpot",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.assert_charmm_pbc_lattice_ready_for_mlpot",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.charmm_levels.charmm_quiet_output",
+        "karml.interfaces.pycharmmInterface.charmm_levels.charmm_quiet_output",
     ):
         result = _run_minimize_in_chunks(
             minimize,
@@ -924,12 +924,12 @@ def test_run_minimize_in_chunks_skips_when_initial_grms_already_converged():
     base_kw = {"inbfrq": 0, "ihbfrq": 0}
 
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.resolve_mlpot_grms_kcalmol_A",
+        "karml.interfaces.pycharmmInterface.mlpot.cli_common.resolve_mlpot_grms_kcalmol_A",
         return_value=0.52,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.assert_charmm_pbc_lattice_ready_for_mlpot",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.assert_charmm_pbc_lattice_ready_for_mlpot",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.charmm_levels.charmm_quiet_output",
+        "karml.interfaces.pycharmmInterface.charmm_levels.charmm_quiet_output",
     ):
         result = _run_minimize_in_chunks(
             minimize,
@@ -960,29 +960,29 @@ def test_run_minimize_in_chunks_materializes_deferred_jax_before_first_sd():
     base_kw = {"inbfrq": 0, "ihbfrq": 0}
 
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._sync_mlpot_lists_after_sd_chunk",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._sync_mlpot_lists_after_sd_chunk",
         return_value=1.0,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_mlpot_sd_list_frequencies",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_mlpot_sd_list_frequencies",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         return_value=np.zeros((1, 3)),
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.resolve_mlpot_grms_kcalmol_A",
+        "karml.interfaces.pycharmmInterface.mlpot.cli_common.resolve_mlpot_grms_kcalmol_A",
         return_value=2.0,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.assert_charmm_pbc_lattice_ready_for_mlpot",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.assert_charmm_pbc_lattice_ready_for_mlpot",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.charmm_levels.charmm_quiet_output",
+        "karml.interfaces.pycharmmInterface.charmm_levels.charmm_quiet_output",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.mlpot_skip_charmm_ener_force_before_first_sd",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.mlpot_skip_charmm_ener_force_before_first_sd",
         return_value=True,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.rebind_mlpot_calculator_from_pycmodel",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.rebind_mlpot_calculator_from_pycmodel",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.charmm_mpi.recover_mpi_for_charmm_after_jax",
+        "karml.interfaces.pycharmmInterface.charmm_mpi.recover_mpi_for_charmm_after_jax",
     ) as recover_mpi, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.materialize_deferred_mlpot_jax_before_sd",
+        "karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.materialize_deferred_mlpot_jax_before_sd",
     ) as materialize:
         _run_minimize_in_chunks(
             minimize,
@@ -1003,21 +1003,21 @@ def test_run_minimize_in_chunks_materializes_deferred_jax_before_first_sd():
 
 
 def test_materialize_deferred_mlpot_jax_before_sd_skips_without_mpi_defer():
-    from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
+    from karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
         materialize_deferred_mlpot_jax_before_sd,
     )
 
     ctx = MagicMock()
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.mlpot_skip_charmm_ener_force_before_first_sd",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.mlpot_skip_charmm_ener_force_before_first_sd",
         return_value=False,
     ):
         assert materialize_deferred_mlpot_jax_before_sd(ctx) is False
 
 
 def test_materialize_deferred_mlpot_jax_before_sd_skips_update_sync_by_default():
-    from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
-    from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
+    from karml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
+    from karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
         DecomposedMlpotCalculator,
         DecomposedMlpotModel,
         materialize_deferred_mlpot_jax_before_sd,
@@ -1034,24 +1034,24 @@ def test_materialize_deferred_mlpot_jax_before_sd_skips_update_sync_by_default()
     ctx = MagicMock(pyCModel=model, use_pbc=True, _mlpot_pre_sd_ener_probed=True)
 
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.mlpot_skip_charmm_ener_force_before_first_sd",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.mlpot_skip_charmm_ener_force_before_first_sd",
         return_value=True,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.charmm_mpi.assert_mpi_launcher_for_mlpot_sd",
+        "karml.interfaces.pycharmmInterface.charmm_mpi.assert_mpi_launcher_for_mlpot_sd",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.rebind_mlpot_calculator_from_pycmodel",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.rebind_mlpot_calculator_from_pycmodel",
         return_value=True,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         return_value=np.zeros((6, 3)),
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot._warmup_value_and_grad_for_model",
+        "karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot._warmup_value_and_grad_for_model",
     ) as warmup, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.prime_charmm_hybrid_energy_before_mlpot_sd",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.prime_charmm_hybrid_energy_before_mlpot_sd",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.charmm_mpi.recover_mpi_for_charmm_after_jax",
+        "karml.interfaces.pycharmmInterface.charmm_mpi.recover_mpi_for_charmm_after_jax",
     ) as recover, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.sync_charmm_lists_after_mini",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics.sync_charmm_lists_after_mini",
     ) as sync_lists, patch.object(
         model,
         "get_pycharmm_calculator",
@@ -1068,8 +1068,8 @@ def test_materialize_deferred_mlpot_jax_before_sd_skips_update_sync_by_default()
 
 
 def test_materialize_deferred_mlpot_jax_before_sd_skips_charmm_ener_after_fresh_jax_materialize():
-    from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
-    from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
+    from karml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
+    from karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
         DecomposedMlpotCalculator,
         DecomposedMlpotModel,
         _DeferredDecomposedMlpotCalculator,
@@ -1093,27 +1093,27 @@ def test_materialize_deferred_mlpot_jax_before_sd_skips_charmm_ener_after_fresh_
         return np.zeros((6, 3))
 
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.mlpot_skip_charmm_ener_force_before_first_sd",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.mlpot_skip_charmm_ener_force_before_first_sd",
         return_value=True,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.charmm_mpi.assert_mpi_launcher_for_mlpot_sd",
+        "karml.interfaces.pycharmmInterface.charmm_mpi.assert_mpi_launcher_for_mlpot_sd",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.rebind_mlpot_calculator_from_pycmodel",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.rebind_mlpot_calculator_from_pycmodel",
         return_value=True,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         return_value=np.zeros((6, 3)),
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.mlpot_spherical_forces_ev_angstrom",
+        "karml.interfaces.pycharmmInterface.mlpot.cli_common.mlpot_spherical_forces_ev_angstrom",
         side_effect=_materialize_forces,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot._warmup_value_and_grad_for_model",
+        "karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot._warmup_value_and_grad_for_model",
     ) as warmup, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.prime_charmm_hybrid_energy_before_mlpot_sd",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.prime_charmm_hybrid_energy_before_mlpot_sd",
     ) as prime, patch(
-        "mmml.interfaces.pycharmmInterface.charmm_mpi.recover_mpi_for_charmm_after_jax",
+        "karml.interfaces.pycharmmInterface.charmm_mpi.recover_mpi_for_charmm_after_jax",
     ) as recover, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.sync_charmm_lists_after_mini",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics.sync_charmm_lists_after_mini",
     ) as sync_lists, patch.object(
         model,
         "get_pycharmm_calculator",
@@ -1135,8 +1135,8 @@ def test_materialize_deferred_mlpot_jax_before_sd_skips_charmm_ener_after_fresh_
 
 
 def test_materialize_deferred_mlpot_jax_before_sd_warms_callback_after_calculator_baseline():
-    from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
-    from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
+    from karml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
+    from karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
         DecomposedMlpotCalculator,
         DecomposedMlpotModel,
         materialize_deferred_mlpot_jax_before_sd,
@@ -1159,22 +1159,22 @@ def test_materialize_deferred_mlpot_jax_before_sd_warms_callback_after_calculato
     )
 
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.mlpot_skip_charmm_ener_force_before_first_sd",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.mlpot_skip_charmm_ener_force_before_first_sd",
         return_value=True,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.charmm_mpi.assert_mpi_launcher_for_mlpot_sd",
+        "karml.interfaces.pycharmmInterface.charmm_mpi.assert_mpi_launcher_for_mlpot_sd",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.rebind_mlpot_calculator_from_pycmodel",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.rebind_mlpot_calculator_from_pycmodel",
         return_value=True,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         return_value=np.zeros((6, 3)),
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot._warmup_value_and_grad_for_model",
+        "karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot._warmup_value_and_grad_for_model",
     ) as warmup, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.prime_charmm_hybrid_energy_before_mlpot_sd",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.prime_charmm_hybrid_energy_before_mlpot_sd",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.charmm_mpi.recover_mpi_for_charmm_after_jax",
+        "karml.interfaces.pycharmmInterface.charmm_mpi.recover_mpi_for_charmm_after_jax",
     ) as recover, patch.object(
         model,
         "get_pycharmm_calculator",
@@ -1190,8 +1190,8 @@ def test_materialize_deferred_mlpot_jax_before_sd_warms_callback_after_calculato
 
 
 def test_materialize_deferred_mlpot_jax_before_sd_warms_callback_when_spherical_fn_ready():
-    from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
-    from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
+    from karml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
+    from karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
         DecomposedMlpotCalculator,
         DecomposedMlpotModel,
         materialize_deferred_mlpot_jax_before_sd,
@@ -1213,22 +1213,22 @@ def test_materialize_deferred_mlpot_jax_before_sd_warms_callback_when_spherical_
     )
 
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.mlpot_skip_charmm_ener_force_before_first_sd",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.mlpot_skip_charmm_ener_force_before_first_sd",
         return_value=True,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.charmm_mpi.assert_mpi_launcher_for_mlpot_sd",
+        "karml.interfaces.pycharmmInterface.charmm_mpi.assert_mpi_launcher_for_mlpot_sd",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.rebind_mlpot_calculator_from_pycmodel",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.rebind_mlpot_calculator_from_pycmodel",
         return_value=True,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         return_value=np.zeros((6, 3)),
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot._warmup_value_and_grad_for_model",
+        "karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot._warmup_value_and_grad_for_model",
     ) as warmup, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.prime_charmm_hybrid_energy_before_mlpot_sd",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.prime_charmm_hybrid_energy_before_mlpot_sd",
     ) as prime, patch(
-        "mmml.interfaces.pycharmmInterface.charmm_mpi.recover_mpi_for_charmm_after_jax",
+        "karml.interfaces.pycharmmInterface.charmm_mpi.recover_mpi_for_charmm_after_jax",
     ) as recover, patch.object(
         model,
         "get_pycharmm_calculator",
@@ -1249,8 +1249,8 @@ def test_materialize_deferred_mlpot_jax_before_sd_skips_probe_after_calculator_p
 
 
 def test_materialize_deferred_mlpot_jax_before_sd_skips_repeat_jax_on_second_call():
-    from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
-    from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
+    from karml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
+    from karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
         DecomposedMlpotCalculator,
         DecomposedMlpotModel,
         materialize_deferred_mlpot_jax_before_sd,
@@ -1272,22 +1272,22 @@ def test_materialize_deferred_mlpot_jax_before_sd_skips_repeat_jax_on_second_cal
     )
 
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.mlpot_skip_charmm_ener_force_before_first_sd",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.mlpot_skip_charmm_ener_force_before_first_sd",
         return_value=True,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.charmm_mpi.assert_mpi_launcher_for_mlpot_sd",
+        "karml.interfaces.pycharmmInterface.charmm_mpi.assert_mpi_launcher_for_mlpot_sd",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.rebind_mlpot_calculator_from_pycmodel",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.rebind_mlpot_calculator_from_pycmodel",
         return_value=True,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         return_value=np.zeros((6, 3)),
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot._warmup_value_and_grad_for_model",
+        "karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot._warmup_value_and_grad_for_model",
     ) as warmup, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.prime_charmm_hybrid_energy_before_mlpot_sd",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.prime_charmm_hybrid_energy_before_mlpot_sd",
     ) as prime, patch(
-        "mmml.interfaces.pycharmmInterface.charmm_mpi.recover_mpi_for_charmm_after_jax",
+        "karml.interfaces.pycharmmInterface.charmm_mpi.recover_mpi_for_charmm_after_jax",
     ), patch.object(
         model,
         "get_pycharmm_calculator",
@@ -1304,8 +1304,8 @@ def test_materialize_deferred_mlpot_jax_before_sd_skips_repeat_jax_on_second_cal
 
 
 def test_materialize_deferred_mlpot_jax_before_sd_skips_callback_warmup_when_model_flag_set():
-    from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
-    from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
+    from karml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
+    from karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
         DecomposedMlpotCalculator,
         DecomposedMlpotModel,
         materialize_deferred_mlpot_jax_before_sd,
@@ -1328,22 +1328,22 @@ def test_materialize_deferred_mlpot_jax_before_sd_skips_callback_warmup_when_mod
     )
 
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.mlpot_skip_charmm_ener_force_before_first_sd",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.mlpot_skip_charmm_ener_force_before_first_sd",
         return_value=True,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.charmm_mpi.assert_mpi_launcher_for_mlpot_sd",
+        "karml.interfaces.pycharmmInterface.charmm_mpi.assert_mpi_launcher_for_mlpot_sd",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.rebind_mlpot_calculator_from_pycmodel",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.rebind_mlpot_calculator_from_pycmodel",
         return_value=True,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         return_value=np.zeros((6, 3)),
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot._warmup_value_and_grad_for_model",
+        "karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot._warmup_value_and_grad_for_model",
     ) as warmup, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.prime_charmm_hybrid_energy_before_mlpot_sd",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.prime_charmm_hybrid_energy_before_mlpot_sd",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.charmm_mpi.recover_mpi_for_charmm_after_jax",
+        "karml.interfaces.pycharmmInterface.charmm_mpi.recover_mpi_for_charmm_after_jax",
     ), patch.object(
         model,
         "get_pycharmm_calculator",
@@ -1358,30 +1358,30 @@ def test_materialize_deferred_mlpot_jax_before_sd_skips_callback_warmup_when_mod
 
 
 def test_prime_charmm_hybrid_energy_before_mlpot_sd_under_mpirun():
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+    from karml.interfaces.pycharmmInterface.mlpot.setup import (
         prime_charmm_hybrid_energy_before_mlpot_sd,
     )
 
     ctx = MagicMock(_mlpot_pre_sd_ener_probed=False)
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.mlpot_skip_charmm_ener_force_before_first_sd",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.mlpot_skip_charmm_ener_force_before_first_sd",
         return_value=True,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.charmm_mpi._under_mpirun",
+        "karml.interfaces.pycharmmInterface.charmm_mpi._under_mpirun",
         return_value=True,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.rebind_mlpot_calculator_from_pycmodel",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.rebind_mlpot_calculator_from_pycmodel",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.ensure_ml_exclusions_before_mlpot_charmm_energy",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.ensure_ml_exclusions_before_mlpot_charmm_energy",
     ) as ensure_excl, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._ensure_domdec_off_for_mlpot_energy",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._ensure_domdec_off_for_mlpot_energy",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.charmm_grms_after_ener_force",
+        "karml.interfaces.pycharmmInterface.mlpot.cli_common.charmm_grms_after_ener_force",
         return_value=4.2,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.charmm_mpi.recover_mpi_for_charmm_after_jax",
+        "karml.interfaces.pycharmmInterface.charmm_mpi.recover_mpi_for_charmm_after_jax",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup._read_mlpot_user_energy_kcal",
+        "karml.interfaces.pycharmmInterface.mlpot.setup._read_mlpot_user_energy_kcal",
         return_value=-12.5,
     ):
         grms = prime_charmm_hybrid_energy_before_mlpot_sd(ctx, verbose=False)
@@ -1396,23 +1396,23 @@ def test_prime_charmm_hybrid_energy_before_mlpot_sd_under_mpirun():
 
 
 def test_prime_charmm_hybrid_energy_before_mlpot_sd_skips_serial():
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+    from karml.interfaces.pycharmmInterface.mlpot.setup import (
         prime_charmm_hybrid_energy_before_mlpot_sd,
     )
 
     ctx = MagicMock(_mlpot_pre_sd_ener_probed=False)
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.mlpot_skip_charmm_ener_force_before_first_sd",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.mlpot_skip_charmm_ener_force_before_first_sd",
         return_value=True,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.charmm_mpi._under_mpirun",
+        "karml.interfaces.pycharmmInterface.charmm_mpi._under_mpirun",
         return_value=False,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.rebind_mlpot_calculator_from_pycmodel",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.rebind_mlpot_calculator_from_pycmodel",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.ensure_ml_exclusions_before_mlpot_charmm_energy",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.ensure_ml_exclusions_before_mlpot_charmm_energy",
     ) as ensure_excl, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.charmm_grms_after_ener_force",
+        "karml.interfaces.pycharmmInterface.mlpot.cli_common.charmm_grms_after_ener_force",
     ) as probe:
         assert prime_charmm_hybrid_energy_before_mlpot_sd(ctx) is None
 
@@ -1421,28 +1421,28 @@ def test_prime_charmm_hybrid_energy_before_mlpot_sd_skips_serial():
 
 
 def test_prime_charmm_hybrid_energy_re_primes_when_stale_probed_flag_without_user():
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+    from karml.interfaces.pycharmmInterface.mlpot.setup import (
         prime_charmm_hybrid_energy_before_mlpot_sd,
     )
 
     ctx = MagicMock(_mlpot_pre_sd_ener_probed=True)
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.mlpot_skip_charmm_ener_force_before_first_sd",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.mlpot_skip_charmm_ener_force_before_first_sd",
         return_value=True,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.charmm_mpi._under_mpirun",
+        "karml.interfaces.pycharmmInterface.charmm_mpi._under_mpirun",
         return_value=True,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.rebind_mlpot_calculator_from_pycmodel",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.rebind_mlpot_calculator_from_pycmodel",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._ensure_domdec_off_for_mlpot_energy",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._ensure_domdec_off_for_mlpot_energy",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.charmm_grms_after_ener_force",
+        "karml.interfaces.pycharmmInterface.mlpot.cli_common.charmm_grms_after_ener_force",
         return_value=3.1,
     ) as probe, patch(
-        "mmml.interfaces.pycharmmInterface.charmm_mpi.recover_mpi_for_charmm_after_jax",
+        "karml.interfaces.pycharmmInterface.charmm_mpi.recover_mpi_for_charmm_after_jax",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup._read_mlpot_user_energy_kcal",
+        "karml.interfaces.pycharmmInterface.mlpot.setup._read_mlpot_user_energy_kcal",
         side_effect=[None, -8.0],
     ):
         grms = prime_charmm_hybrid_energy_before_mlpot_sd(ctx, verbose=False)

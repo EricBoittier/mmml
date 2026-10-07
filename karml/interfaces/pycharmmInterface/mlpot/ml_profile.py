@@ -13,7 +13,7 @@ from typing import Any, Optional
 
 
 def mlpot_profiling_enabled() -> bool:
-    return (os.environ.get("MMML_MLPOT_PROFILE") or "").strip().lower() in (
+    return (os.environ.get("KARML_MLPOT_PROFILE") or "").strip().lower() in (
         "1",
         "yes",
         "true",
@@ -22,8 +22,8 @@ def mlpot_profiling_enabled() -> bool:
 
 def enable_mlpot_profiling() -> None:
     """Turn on lightweight MLpot/ASE timing and JAX compile timers."""
-    os.environ["MMML_MLPOT_PROFILE"] = "1"
-    os.environ["MMML_JAX_COMPILE_TIMERS"] = "1"
+    os.environ["KARML_MLPOT_PROFILE"] = "1"
+    os.environ["KARML_JAX_COMPILE_TIMERS"] = "1"
 
 
 @dataclass
@@ -342,7 +342,7 @@ def write_profile_git_metadata(
     filename: str = "profile_git_metadata.json",
 ) -> Path:
     """Write a JSON sidecar with git metadata for profiling output."""
-    override = os.environ.get("MMML_PROFILE_GIT_METADATA")
+    override = os.environ.get("KARML_PROFILE_GIT_METADATA")
     path = Path(override) if override else Path(output_dir or ".") / filename
     path.parent.mkdir(parents=True, exist_ok=True)
     metadata = collect_profile_git_metadata(argv=argv)

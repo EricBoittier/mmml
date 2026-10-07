@@ -24,7 +24,7 @@ from pathlib import Path
 import numpy as np
 from ase.data import atomic_masses
 
-from mmml.data.cgenff_dataset import find_covalent_components, format_composition
+from karml.data.cgenff_dataset import find_covalent_components, format_composition
 
 
 def _summary(values: list[float]) -> dict[str, float | int]:

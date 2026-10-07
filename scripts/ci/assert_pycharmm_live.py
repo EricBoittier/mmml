@@ -19,7 +19,7 @@ import traceback
 
 
 def main() -> int:
-    from mmml.interfaces.pycharmmInterface.charmm_paths import resolve_charmm_paths
+    from karml.interfaces.pycharmmInterface.charmm_paths import resolve_charmm_paths
 
     home, lib = resolve_charmm_paths()
     print(f"CHARMM_HOME={home or '<unset>'}")
@@ -33,7 +33,7 @@ def main() -> int:
         return 1
 
     try:
-        from mmml.interfaces.pycharmmInterface.import_pycharmm import (
+        from karml.interfaces.pycharmmInterface.import_pycharmm import (
             ensure_pycharmm_loaded,
         )
 

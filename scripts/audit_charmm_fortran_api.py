@@ -458,7 +458,7 @@ def main() -> int:
     args.markdown.parent.mkdir(parents=True, exist_ok=True)
     args.json.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     args.markdown.write_text(markdown(report), encoding="utf-8")
-    from mmml.utils.rich_report import print_colored_json
+    from karml.utils.rich_report import print_colored_json
 
     print_colored_json(report["summary"], sort_keys=True)
     print(f"JSON: {args.json}")

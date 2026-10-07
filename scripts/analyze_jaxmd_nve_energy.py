@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Summarize JAX-MD NVE total-energy conservation from an mmml HDF5 trace."""
+"""Summarize JAX-MD NVE total-energy conservation from an karml HDF5 trace."""
 
 from __future__ import annotations
 
@@ -63,7 +63,7 @@ def main() -> None:
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
-    from mmml.utils.rich_report import print_colored_json
+    from karml.utils.rich_report import print_colored_json
 
     print_colored_json(report)
 

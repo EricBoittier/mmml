@@ -9,8 +9,8 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from mmml.models.cgenff_mm import neutralize_per_monomer
-from mmml.models.mm_charge_mode import (
+from karml.models.cgenff_mm import neutralize_per_monomer
+from karml.models.mm_charge_mode import (
     MMChargeMode,
     apply_mm_charge_mode,
     hybrid_mm_metadata_dict,
@@ -20,7 +20,7 @@ from mmml.models.mm_charge_mode import (
     require_charge_head_for_mode,
     resolve_hybrid_mm_charge_mode,
 )
-from mmml.interfaces.pycharmmInterface.mm_charge_correction import (
+from karml.interfaces.pycharmmInterface.mm_charge_correction import (
     assert_mm_charge_mode_dimer_supported,
     assert_mode_c_dimer_supported,
     load_hybrid_mm_metadata,
@@ -215,7 +215,7 @@ def test_parse_latent_mean_aliases():
 
 
 def test_latent_mean_is_static_template_only():
-    from mmml.models.mm_charge_mode import mm_charge_mode_is_static_template
+    from karml.models.mm_charge_mode import mm_charge_mode_is_static_template
 
     assert mm_charge_mode_is_static_template("latent_mean")
     assert not mm_charge_mode_is_static_template("fixed")
@@ -244,7 +244,7 @@ def test_parse_latent_dynamic_aliases():
 
 
 def test_latent_dynamic_is_not_static_template():
-    from mmml.models.mm_charge_mode import (
+    from karml.models.mm_charge_mode import (
         mm_charge_mode_is_dynamic_liquid,
         mm_charge_mode_is_static_template,
     )
@@ -333,7 +333,7 @@ def test_latent_mean_bypasses_dimer_only_gate_for_liquids():
 
 
 def test_parse_q0_and_q1_aliases():
-    from mmml.models.mm_charge_mode import mm_charge_mode_is_q0
+    from karml.models.mm_charge_mode import mm_charge_mode_is_q0
 
     for alias in ("q0", "q_0", "latent_q0", "unperturbed", "monomer"):
         assert parse_mm_charge_mode(alias) is MMChargeMode.Q0
@@ -345,7 +345,7 @@ def test_parse_q0_and_q1_aliases():
 
 
 def test_assemble_q0_from_monomer_forwards():
-    from mmml.models.mm_charge_mode import assemble_q0_from_monomer_forwards
+    from karml.models.mm_charge_mode import assemble_q0_from_monomer_forwards
 
     # One padded dimer: A=[0.5,-0.5], B=[0.2,-0.2], pad zeros.
     q_a = jnp.array([[0.5, -0.5, 9.0, 9.0]])  # B/pad slots ignored

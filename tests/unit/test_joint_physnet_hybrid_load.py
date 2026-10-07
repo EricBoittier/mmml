@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from mmml.interfaces.calculators.checkpoint_loading import (
+from karml.interfaces.calculators.checkpoint_loading import (
     extract_physnet_params_for_hybrid,
     is_joint_checkpoint_config,
 )

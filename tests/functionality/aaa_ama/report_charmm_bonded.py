@@ -3,7 +3,7 @@
 
 Run on a CHARMM node::
 
-    ./scripts/mmml-charmm-mpirun.sh python tests/functionality/aaa_ama/report_charmm_bonded.py
+    ./scripts/karml-charmm-mpirun.sh python tests/functionality/aaa_ama/report_charmm_bonded.py
 
 This is a **reference MM** build (42 atoms).  Compare NPZ labels only after
 building a PSF that matches ``dataset_aaa.npz`` ``Z`` (34 atoms).
@@ -20,7 +20,7 @@ REPO = Path(__file__).resolve().parents[3]
 
 
 def main() -> int:
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import (
+    from karml.interfaces.pycharmmInterface.import_pycharmm import (
         CHARMM_HOME,
         crystal_free_charmm_for_param_append,
         ensure_pycharmm_loaded,
@@ -30,9 +30,9 @@ def main() -> int:
     import pycharmm.generate as generate
     import pycharmm.lingo as lingo
     import pycharmm.read as read
-    from mmml.interfaces.pycharmmInterface import setupRes
-    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
-    from mmml.interfaces.pycharmmInterface.cgenff_bonded_reference import (
+    from karml.interfaces.pycharmmInterface import setupRes
+    from karml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
+    from karml.interfaces.pycharmmInterface.cgenff_bonded_reference import (
         charmm_bonded_energy_components_kcalmol,
         run_charmm_bonded_ener_force,
         setup_bonded_only_charmm,

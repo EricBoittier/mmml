@@ -11,11 +11,11 @@ a **CGenFF atom type** (→ LJ σ/ε), a **CGenFF charge**, and a **monomer id**
 
 Raw QM datasets (`R`, `Z`, `E`, `F`, `D`, …) carry none of this — a `.npz` from
 `pyscf-evaluate` is just geometries and labels. This page describes the step that
-adds it: [`mmml prepare-mm-dataset`](cli/commands/prepare-mm-dataset.md), backed
-by [`mmml/data/cgenff_dataset.py`](https://github.com/EricBoittier/mmml/blob/main/mmml/data/cgenff_dataset.py).
+adds it: [`karml prepare-mm-dataset`](cli/commands/prepare-mm-dataset.md), backed
+by [`karml/data/cgenff_dataset.py`](https://github.com/EricBoittier/karml/blob/main/karml/data/cgenff_dataset.py).
 
 Everything below is generated from the real pipeline
-([`scripts/gen_docs_prepare_mm_figures.py`](https://github.com/EricBoittier/mmml/blob/main/scripts/gen_docs_prepare_mm_figures.py)),
+([`scripts/gen_docs_prepare_mm_figures.py`](https://github.com/EricBoittier/karml/blob/main/scripts/gen_docs_prepare_mm_figures.py)),
 on the tutorial's **acodcm** (acetone–dichloromethane) system.
 
 !!! note "Related"
@@ -79,7 +79,7 @@ flowchart TD
 
 Padding atoms are marked `cgenff_type_idx = -1` and `mol_id = -1`, matching the
 mask convention in
-[`mmml/models/cgenff_mm.py`](https://github.com/EricBoittier/mmml/blob/main/mmml/models/cgenff_mm.py).
+[`karml/models/cgenff_mm.py`](https://github.com/EricBoittier/karml/blob/main/karml/models/cgenff_mm.py).
 
 ---
 
@@ -124,13 +124,13 @@ out dropped frames consistently) and appends:
 
 The master tables are `(n_types,)` — **not** per-sample — so the batching loader
 skips them; the trainer loads them once as closure state
-([`make_training.py`](https://github.com/EricBoittier/mmml/blob/main/mmml/cli/make/make_training.py)).
+([`make_training.py`](https://github.com/EricBoittier/karml/blob/main/karml/cli/make/make_training.py)).
 `cgenff_type_idx`, `mol_id` and `cgenff_charge` are the
 `HYBRID_MM_BATCH_KEYS` its preflight check requires.
 
 `cgenff_res_name` is not used by the trainer — it is what lets a later step
 select frames by residue, e.g.
-[`scripts/filter_mm_dataset_by_residue.py`](https://github.com/EricBoittier/mmml/blob/main/scripts/filter_mm_dataset_by_residue.py)
+[`scripts/filter_mm_dataset_by_residue.py`](https://github.com/EricBoittier/karml/blob/main/scripts/filter_mm_dataset_by_residue.py)
 keeping only the best-sampled residues of a broad set
 ([DES dimers](des-so3lr-dimers.md)). It is named `cgenff_res_name` rather than
 `res_name` because some upstream geometry banks already carry a per-frame
@@ -188,11 +188,11 @@ like:
 
 The LJ *parameters* and the LJ *formula* used here are independently pinned to
 the MD calculator by the unit tests
-[`test_cgenff_lj_parity.py`](https://github.com/EricBoittier/mmml/blob/main/tests/unit/test_cgenff_lj_parity.py)
+[`test_cgenff_lj_parity.py`](https://github.com/EricBoittier/karml/blob/main/tests/unit/test_cgenff_lj_parity.py)
 and
-[`test_cgenff_mm_energy.py`](https://github.com/EricBoittier/mmml/blob/main/tests/unit/test_cgenff_mm_energy.py),
+[`test_cgenff_mm_energy.py`](https://github.com/EricBoittier/karml/blob/main/tests/unit/test_cgenff_mm_energy.py),
 and the enrichment path itself by
-[`test_prepare_mm_dataset.py`](https://github.com/EricBoittier/mmml/blob/main/tests/unit/test_prepare_mm_dataset.py).
+[`test_prepare_mm_dataset.py`](https://github.com/EricBoittier/karml/blob/main/tests/unit/test_prepare_mm_dataset.py).
 
 ---
 
@@ -201,8 +201,8 @@ and the enrichment path itself by
 Minimal:
 
 ```bash
-mmml prepare-mm-dataset -i mp2_nms15_clean_train.npz -o mp2_nms15_clean_train_mm.npz
-mmml prepare-mm-dataset -i mp2_nms15_clean_valid.npz -o mp2_nms15_clean_valid_mm.npz
+karml prepare-mm-dataset -i mp2_nms15_clean_train.npz -o mp2_nms15_clean_train_mm.npz
+karml prepare-mm-dataset -i mp2_nms15_clean_valid.npz -o mp2_nms15_clean_valid_mm.npz
 ```
 
 Config-driven (flags may still override the file):
@@ -216,13 +216,13 @@ no_mm_baseline: false   # keep E_cgenff_mm / F_cgenff_mm
 ```
 
 ```bash
-mmml prepare-mm-dataset --config prepare_mm.yaml
+karml prepare-mm-dataset --config prepare_mm.yaml
 ```
 
 Then point the hybrid trainer at the enriched NPZ:
 
 ```bash
-mmml physnet-train --config gfn2_nms_hybrid.yaml --hybrid-mm \
+karml physnet-train --config gfn2_nms_hybrid.yaml --hybrid-mm \
     --data mp2_nms15_clean_train_mm.npz \
     --valid-data mp2_nms15_clean_valid_mm.npz
 ```
@@ -257,7 +257,7 @@ A monomer that matches no template — or whose atoms fall back to the zero-LJ
 `DEFAULT` sentinel — is **dropped** (reported in the run summary) rather than
 silently mis-parametrised. To add coverage, extend `DES_SMILES_TO_RESI` or the
 composition fast-path in
-[`cgenff_dataset.py`](https://github.com/EricBoittier/mmml/blob/main/mmml/data/cgenff_dataset.py).
+[`cgenff_dataset.py`](https://github.com/EricBoittier/karml/blob/main/karml/data/cgenff_dataset.py).
 
 ---
 
@@ -267,8 +267,8 @@ The assignment logic is shared, so both paths produce identical semantics:
 
 | Input | Command | Output | Use for |
 |---|---|---|---|
-| Dense padded **NPZ** | `mmml prepare-mm-dataset` | enriched NPZ | tutorial-style dimer training splits |
-| Ragged **Orbax cache** | [`scripts/prepare_ml_mm_dataset.py`](https://github.com/EricBoittier/mmml/blob/main/scripts/prepare_ml_mm_dataset.py) | Orbax cache | DES-S66 bulk workflow (millions of frames) |
+| Dense padded **NPZ** | `karml prepare-mm-dataset` | enriched NPZ | tutorial-style dimer training splits |
+| Ragged **Orbax cache** | [`scripts/prepare_ml_mm_dataset.py`](https://github.com/EricBoittier/karml/blob/main/scripts/prepare_ml_mm_dataset.py) | Orbax cache | DES-S66 bulk workflow (millions of frames) |
 
-Both import [`mmml.data.cgenff_dataset`](https://github.com/EricBoittier/mmml/blob/main/mmml/data/cgenff_dataset.py)
+Both import [`karml.data.cgenff_dataset`](https://github.com/EricBoittier/karml/blob/main/karml/data/cgenff_dataset.py)
 (`assign_frame_cgenff`, `match_cgenff_template`, `load_reference`).

@@ -11,8 +11,8 @@ def _can_import(name: str) -> bool:
 
 @pytest.mark.skipif(not _can_import("pycharmm"), reason="pycharmm not available")
 def test_setup_res_smoke(pycharmm_workdir):
-    from mmml.interfaces.pycharmmInterface import setupRes
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import (
+    from karml.interfaces.pycharmmInterface import setupRes
+    from karml.interfaces.pycharmmInterface.import_pycharmm import (
         reset_block,
         reset_block_no_internal,
     )

@@ -3,7 +3,7 @@ import jax
 import jax.numpy as jnp
 from jax import vmap
 
-from mmml.data.units import ANGSTROM_TO_BOHR
+from karml.data.units import ANGSTROM_TO_BOHR
 
 
 @functools.partial(jax.jit)

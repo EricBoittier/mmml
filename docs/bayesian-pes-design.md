@@ -5,13 +5,13 @@ number of Cartesian geometries. It is to cover the local environments that a
 message-passing model sees, while keeping the reference set physical,
 non-redundant, and learnable.
 
-`mmml pes-design` performs this compression on an NPZ candidate pool. Its
+`karml pes-design` performs this compression on an NPZ candidate pool. Its
 default representation is deliberately cheap: element-pair RDF channels plus
 hashed CGenFF-type pair spectra. Optional SOAP descriptors add angular and
 many-body resolution when DScribe is installed.
 
 ```bash
-mmml pes-design \
+karml pes-design \
   --input candidate_pool.npz \
   --output selected_20000.npz \
   --n-select 20000 \
@@ -119,7 +119,7 @@ force variance whenever an ensemble is available.
 2. Apply physical contact, energy, force, and convergence filters.
 3. Compute pair-RDF/type-pair descriptors; add SOAP where angular resolution is
    worth its cost.
-4. Run `mmml pes-design` for a compact initial D-optimal batch.
+4. Run `karml pes-design` for a compact initial D-optimal batch.
 5. Label that batch at the chosen consistent reference level.
 6. Train three to five independently seeded PhysNet models.
 7. Sample biased MD and distance windows with the ensemble.
@@ -163,4 +163,4 @@ final validation must use properties outside the selection objective.
   repeated partners and distance-region coverage for them.
 
 See also [trainable hybrid MM LJ scales](hybrid-mm-lj-scales.md) and the
-[LJ-scales numbered ladder](https://github.com/EricBoittier/mmml/tree/main/examples/lj_scales).
+[LJ-scales numbered ladder](https://github.com/EricBoittier/karml/tree/main/examples/lj_scales).

@@ -2,14 +2,14 @@
 
 ## Status and scope
 
-This document proposes the supported MMML interface for rigid one-dimensional
+This document proposes the supported KARML interface for rigid one-dimensional
 dimer scans. The feature accepts a residue or residue pair, a calculator type,
 a checkpoint when required, and a scan definition. It produces tabular data, a
 plot, and an ASE-readable trajectory containing energies and forces.
 
 The design deliberately separates scientific definitions from execution and
 presentation. A scan must mean the same thing when called from Python, the
-`mmml` CLI, a workflow, or a test.
+`karml` CLI, a workflow, or a test.
 
 ## Goals
 
@@ -31,16 +31,16 @@ presentation. A scan must mean the same thing when called from Python, the
 
 ## Existing pieces to retain
 
-MMML already contains useful package-level components:
+KARML already contains useful package-level components:
 
-- `mmml.analysis.dimer_scans` builds deterministic dimer geometries, records
+- `karml.analysis.dimer_scans` builds deterministic dimer geometries, records
   fragments, checks minimum contacts, and evaluates total or
   monomer-decomposed energies.
-- `mmml.analysis.dimer_molecules` holds campaign monomers and chemically
+- `karml.analysis.dimer_molecules` holds campaign monomers and chemically
   motivated orientations, and resolves any other CGenFF RESI via
-  `mmml.analysis.residue_geometry` (bundled/cwd/`make-res` PDBs) with a
+  `karml.analysis.residue_geometry` (bundled/cwd/`make-res` PDBs) with a
   generic centroid–centroid fallback orientation.
-- `mmml.interfaces.calculators.checkpoint_loading` centralizes supported
+- `karml.interfaces.calculators.checkpoint_loading` centralizes supported
   checkpoint loading.
 - ASE calculators provide a common energy/force interface.
 
@@ -60,7 +60,7 @@ The primary interface is a frozen configuration passed to one function:
 ```python
 from pathlib import Path
 
-from mmml.dimer_scan import DimerScanConfig, run_dimer_scan
+from karml.dimer_scan import DimerScanConfig, run_dimer_scan
 
 config = DimerScanConfig(
     residues=("MEOH", "MEOH"),
@@ -79,7 +79,7 @@ The corresponding CLI constructs the same configuration and calls the same
 function:
 
 ```bash
-mmml dimer-scan MEOH \
+karml dimer-scan MEOH \
   --calculator physnet \
   --checkpoint checkpoints/model.json \
   --distance 2.5:6.0:0.1 \
@@ -99,7 +99,7 @@ Residue arguments accept:
 - **Campaign labels** with chemically motivated orientations in
   `PAIR_SCAN_CONFIG`: `DCM`, `ACE`, `BENZ`, `TIP3`, `MEOH` (CGenFF acetone is
   `ACO` and reuses the `ACE` campaign orientation).
-- **Any other CGenFF RESI** (list with `mmml make-res --list-residues`). Geometry
+- **Any other CGenFF RESI** (list with `karml make-res --list-residues`). Geometry
   comes from bundled templates, a working-directory `pdb/<resi>.pdb`, or
   `make-res`. Pairs outside the campaign set use a generic
   centroid–centroid approach along +Z (no special chemical pre-orientation).
@@ -109,18 +109,18 @@ with `make-box --solvent`.
 
 ```bash
 # Campaign pair (chemically motivated orientation)
-mmml dimer-scan TIP3 MEOH --calculator xtb --distance 2.5:4.0:0.5 \
+karml dimer-scan TIP3 MEOH --calculator xtb --distance 2.5:4.0:0.5 \
   --energy-definition total --output results/tip3_meoh
 
 # Arbitrary CGenFF residues (generic orientation)
-mmml dimer-scan ACO CYBZ --calculator xtb --distance 3.5:5.0:0.5 \
+karml dimer-scan ACO CYBZ --calculator xtb --distance 3.5:5.0:0.5 \
   --energy-definition total --output results/aco_cybz
 ```
 
 ## Proposed package layout
 
 ```text
-mmml/dimer_scan/
+karml/dimer_scan/
     __init__.py       # Small supported public surface
     config.py         # Frozen config types and validation
     geometries.py     # Residue lookup, orientation, scan construction
@@ -244,7 +244,7 @@ must not construct geometries, load checkpoints, or run calculations.
 
 At minimum, `manifest.json` records:
 
-- a result-schema version and MMML version;
+- a result-schema version and KARML version;
 - the complete resolved configuration;
 - checkpoint path, file format, size, and SHA-256 digest;
 - residue template/orientation identifiers and content digests;
@@ -295,8 +295,8 @@ campaign results do not belong in the unit-test suite.
 
 The feature is complete only when it has all of the following:
 
-- `from mmml.dimer_scan import DimerScanConfig, run_dimer_scan`;
-- `mmml dimer-scan --help` and an entry in `mmml commands`;
+- `from karml.dimer_scan import DimerScanConfig, run_dimer_scan`;
+- `karml dimer-scan --help` and an entry in `karml commands`;
 - generated CLI documentation;
 - a runnable example under `examples/dimer_scan/`;
 - unit tests for the supported path;

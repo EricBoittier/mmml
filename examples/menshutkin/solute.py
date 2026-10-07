@@ -142,18 +142,18 @@ def load_model(checkpoint: Path | str | None = None):
         "MENSH_CKPT", REPO_ROOT / "model_ext.json"))
 
     try:
-        from mmml.interfaces.calculators.simple_inference import (
+        from karml.interfaces.calculators.simple_inference import (
             create_calculator_from_checkpoint,
         )
 
         calc = create_calculator_from_checkpoint(str(checkpoint))
-        model = getattr(calc, "model", None) or calc._mmml_physnet_model
-        params = getattr(calc, "params", None) or calc._mmml_physnet_params
+        model = getattr(calc, "model", None) or calc._karml_physnet_model
+        params = getattr(calc, "params", None) or calc._karml_physnet_params
         return model, params
     except ValueError as exc:
         if "sharding" not in str(exc):
             raise
-        from mmml.cli.misc.physnet_evaluate import _load_physnet_checkpoint
+        from karml.cli.misc.physnet_evaluate import _load_physnet_checkpoint
 
         _path, params, model = _load_physnet_checkpoint(
             checkpoint, SOLUTE_N_ATOMS)

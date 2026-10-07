@@ -45,8 +45,8 @@ class MlChunkLayout:
 
 
 def ml_chunk_budget_enabled() -> bool:
-    """``MMML_MLPOT_CHUNK_BUDGET=0`` evaluates every chunk (A/B parity checks)."""
-    raw = (os.environ.get("MMML_MLPOT_CHUNK_BUDGET") or "1").strip().lower()
+    """``KARML_MLPOT_CHUNK_BUDGET=0`` evaluates every chunk (A/B parity checks)."""
+    raw = (os.environ.get("KARML_MLPOT_CHUNK_BUDGET") or "1").strip().lower()
     return raw not in ("0", "false", "no", "off")
 
 
@@ -93,7 +93,7 @@ class MlChunkBudget:
         ``jnp.nonzero(..., size=cap)`` would otherwise drop interacting pairs
         and change the forces. Chunk-budget growth cannot recover those pairs.
         """
-        from mmml.interfaces.pycharmmInterface.mlpot.mlpot_sparse_dimer_policy import (
+        from karml.interfaces.pycharmmInterface.mlpot.mlpot_sparse_dimer_policy import (
             raise_if_sparse_cap_saturated,
         )
 

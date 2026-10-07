@@ -4,7 +4,7 @@
 # Runtime paths (from_psf, from_crd, checkpoint, output_dir, composition, box_size)
 # are passed on the CLI by the workflow script.
 #
-# Preset docs: mmml/cli/run/presets/README.md
+# Preset docs: karml/cli/run/presets/README.md
 
 include:
   - presets/base-dt0.25.yaml

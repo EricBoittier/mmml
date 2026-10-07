@@ -1,5 +1,5 @@
 #!/bin/bash
-# ORCA ProgExt wrapper: forward to mmml orca-client using this repo's venv.
+# ORCA ProgExt wrapper: forward to karml orca-client using this repo's venv.
 set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-exec "${REPO_ROOT}/.venv/bin/mmml" orca-client "$@"
+exec "${REPO_ROOT}/.venv/bin/karml" orca-client "$@"

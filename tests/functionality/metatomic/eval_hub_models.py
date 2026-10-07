@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Evaluate exported PET-MAD / UPET metatomic models through MMML (no CHARMM/MD)."""
+"""Evaluate exported PET-MAD / UPET metatomic models through KARML (no CHARMM/MD)."""
 
 from __future__ import annotations
 
@@ -12,17 +12,17 @@ import numpy as np
 from ase import Atoms
 from ase.build import molecule
 
-from mmml.data.units import EV_TO_KCAL_MOL
-from mmml.interfaces.calculators.ase_fragment_hybrid import (
+from karml.data.units import EV_TO_KCAL_MOL
+from karml.interfaces.calculators.ase_fragment_hybrid import (
     evaluate_fragment_hybrid,
     evaluate_whole_system,
 )
-from mmml.interfaces.calculators.metatomic import (
+from karml.interfaces.calculators.metatomic import (
     have_metatomic,
     is_metatomic_checkpoint,
     load_metatomic_calculator,
 )
-from mmml.interfaces.pycharmmInterface.mlpot.metatomic_mlpot import (
+from karml.interfaces.pycharmmInterface.mlpot.metatomic_mlpot import (
     MetatomicMlpotCalculator,
     build_metatomic_mlpot_model,
 )
@@ -124,7 +124,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--model-dir",
         type=Path,
-        default=Path("/tmp/mmml-metatomic-models"),
+        default=Path("/tmp/karml-metatomic-models"),
         help="Directory of exported .pt files",
     )
     parser.add_argument(

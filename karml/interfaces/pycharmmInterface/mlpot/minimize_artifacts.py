@@ -13,7 +13,7 @@ PathLike = str | Path
 MinimizeKind = Literal[
     "packmol",
     "MM",
-    "MMML",
+    "KARML",
     "bonded_MM",
     "overlap_rescue",
     "intra_rescue",
@@ -40,8 +40,8 @@ PACKMOL_CLUSTER = MinimizeSnapshotSpec(
 CHARMM_MM_PRE = MinimizeSnapshotSpec(
     1, "mm", "CHARMM CGENFF SD/ABNR before MLpot (MM only)", "MM"
 )
-MLPOT_MMML = MinimizeSnapshotSpec(
-    2, "mini", "MLpot PhysNet steepest descent (USER / MMML)", "MMML"
+MLPOT_KARML = MinimizeSnapshotSpec(
+    2, "mini", "MLpot PhysNet steepest descent (USER / KARML)", "KARML"
 )
 BONDED_MM_AFTER_MINI = MinimizeSnapshotSpec(
     3,
@@ -74,7 +74,7 @@ def snapshot_file_paths(out_dir: PathLike, spec: MinimizeSnapshotSpec, tag: str)
 
 def legacy_mlpot_mini_paths(out_dir: PathLike, tag: str = "") -> dict[str, Path]:
     """Short mini-stage mirror paths (``mini.*``)."""
-    from mmml.interfaces.pycharmmInterface.mlpot.artifact_paths import mini_paths
+    from karml.interfaces.pycharmmInterface.mlpot.artifact_paths import mini_paths
 
     return mini_paths(out_dir)
 
@@ -107,7 +107,7 @@ class MinimizeArtifactRegistry:
 
     @property
     def manifest_path(self) -> Path:
-        from mmml.interfaces.pycharmmInterface.mlpot.artifact_paths import SNAPSHOTS_JSON
+        from karml.interfaces.pycharmmInterface.mlpot.artifact_paths import SNAPSHOTS_JSON
 
         return self.out_dir / SNAPSHOTS_JSON
 
@@ -160,7 +160,7 @@ def mirror_legacy_mlpot_files(
     written: dict[str, Path],
     legacy: dict[str, Path],
 ) -> dict[str, Path]:
-    """Copy numbered MMML outputs to short ``mini.*`` mirror names."""
+    """Copy numbered KARML outputs to short ``mini.*`` mirror names."""
     mapping = {
         "pdb": "mini_pdb",
         "crd": "mini_crd",
@@ -195,7 +195,7 @@ def save_snapshot_from_charmm(
     include_psf: bool = True,
 ) -> dict[str, Path]:
     """Write PDB/CRD (+ optional PSF/energy) from current CHARMM coordinates."""
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import save_minimization_results
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import save_minimization_results
 
     paths = snapshot_file_paths(out_dir, spec, tag)
     written = save_minimization_results(

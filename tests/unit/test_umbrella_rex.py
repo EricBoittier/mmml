@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from mmml.umbrella.rex import (
+from karml.umbrella.rex import (
     RexStats,
     attempt_replica_exchanges,
     bias_energy_matrix,
@@ -98,7 +98,7 @@ def test_attempt_exchanges_writable_from_readonly_view():
 
 
 def test_cli_replica_exchange_flag():
-    from mmml.cli.misc.umbrella_sample import _config_from_args, build_parser
+    from karml.cli.misc.umbrella_sample import _config_from_args, build_parser
 
     parser = build_parser()
     args = parser.parse_args(

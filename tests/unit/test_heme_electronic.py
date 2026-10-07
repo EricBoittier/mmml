@@ -8,15 +8,15 @@ import numpy as np
 import pytest
 from ase.calculators.calculator import Calculator, all_changes
 
-from mmml.data.units import EV_TO_KCAL_MOL
-from mmml.interfaces.calculators.ase_fragment_hybrid import evaluate_whole_system
-from mmml.interfaces.calculators.link_atoms import (
+from karml.data.units import EV_TO_KCAL_MOL
+from karml.interfaces.calculators.ase_fragment_hybrid import evaluate_whole_system
+from karml.interfaces.calculators.link_atoms import (
     LinkAtom,
     link_atom_position,
     project_link_force,
 )
-from mmml.interfaces.pycharmmInterface.cgenff_residues import require_cgenff_residue_name
-from mmml.interfaces.pycharmmInterface.heme_electronic import (
+from karml.interfaces.pycharmmInterface.cgenff_residues import require_cgenff_residue_name
+from karml.interfaces.pycharmmInterface.heme_electronic import (
     HEME_FORMAL_CHARGE,
     HEME_SPIN_MULTIPLICITY,
     PROPIONATE_MM_NAMES,
@@ -25,12 +25,12 @@ from mmml.interfaces.pycharmmInterface.heme_electronic import (
     resolve_metatomic_electronic_state,
     seat_heme_counterions,
 )
-from mmml.interfaces.pycharmmInterface.heme_library import (
+from karml.interfaces.pycharmmInterface.heme_library import (
     heme_reference_coordinate_table,
     heme_reference_positions,
     topology_family,
 )
-from mmml.interfaces.pycharmmInterface.mlpot.metatomic_mlpot import (
+from karml.interfaces.pycharmmInterface.mlpot.metatomic_mlpot import (
     MetatomicMlpotCalculator,
     build_metatomic_mlpot_model,
 )

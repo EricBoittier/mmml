@@ -1,18 +1,18 @@
 """Molecular Mechanics and Machine Learned Force Fields"""
 
 # Add imports here
-from .mmml import *
+from .karml import *
 
 import sys
 
-if "mmml.models.physnetjax" not in sys.modules:
-    from mmml.models import physnetjax
-    sys.modules["mmml.models.physnetjax"] = physnetjax
+if "karml.models.physnetjax" not in sys.modules:
+    from karml.models import physnetjax
+    sys.modules["karml.models.physnetjax"] = physnetjax
 
-# Compatibility: mmml.dcmnet -> mmml.models.dcmnet
-if "mmml.dcmnet" not in sys.modules:
-    from mmml.models import dcmnet
-    sys.modules["mmml.dcmnet"] = dcmnet
+# Compatibility: karml.dcmnet -> karml.models.dcmnet
+if "karml.dcmnet" not in sys.modules:
+    from karml.models import dcmnet
+    sys.modules["karml.dcmnet"] = dcmnet
 
 # Handle version import gracefully
 try:

@@ -1,4 +1,4 @@
-# `mmml umbrella-mbar`
+# `karml umbrella-mbar`
 
 MBAR post-processing for umbrella-sample runs.
 
@@ -6,13 +6,13 @@ MBAR post-processing for umbrella-sample runs.
 ## Usage
 
 ```bash
-mmml umbrella-mbar --help
+karml umbrella-mbar --help
 ```
 
 ## Options
 
 ```text
-usage: mmml umbrella-mbar [-h] --run-dir RUN_DIR [--checkpoint CHECKPOINT]
+usage: karml umbrella-mbar [-h] --run-dir RUN_DIR [--checkpoint CHECKPOINT]
                           [--temperature-K TEMPERATURE_K] [--mbar-verbose]
                           [--ml-batch-size ML_BATCH_SIZE]
 
@@ -38,9 +38,9 @@ Diagnostics & safety:
   --mbar-verbose        Verbose pymbar output
 
 Other options:
-  --run-dir RUN_DIR     Output directory from mmml umbrella-sample
+  --run-dir RUN_DIR     Output directory from karml umbrella-sample
 
-CLI for MBAR post-processing of umbrella sampling runs. Usage: mmml umbrella-
+CLI for MBAR post-processing of umbrella sampling runs. Usage: karml umbrella-
 mbar --run-dir out/umbrella [--checkpoint PATH] [--temperature-K 300]
 ```
 

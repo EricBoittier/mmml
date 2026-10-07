@@ -1,8 +1,8 @@
 # Training NPZ contract
 
-What `mmml physnet-train` actually consumes. This is **not** the same as the
-Molpro/PySCF **ingest** schema used by `mmml validate` and
-[`mmml/data/npz_schema.py`](https://github.com/EricBoittier/mmml/blob/main/mmml/data/npz_schema.py).
+What `karml physnet-train` actually consumes. This is **not** the same as the
+Molpro/PySCF **ingest** schema used by `karml validate` and
+[`karml/data/npz_schema.py`](https://github.com/EricBoittier/karml/blob/main/karml/data/npz_schema.py).
 
 Units tables: [Units summary](UNITS_SUMMARY.md). Hybrid extras:
 [Preparing hybrid ML/MM datasets](hybrid-mm-dataset-preparation.md).
@@ -10,19 +10,19 @@ Teacher-labeled acetone NPZ: [`pet-physnet-distill`](cli/commands/pet-physnet-di
 
 ## Two schemas
 
-| | Ingest (`mmml validate`, GUI, `xml2npz`) | Train (`physnet-train`, distill export) |
+| | Ingest (`karml validate`, GUI, `xml2npz`) | Train (`physnet-train`, distill export) |
 |---|---|---|
 | `R` | Å | Å |
 | `E` | Hartree (PySCF/Molpro default) | **eV** |
 | `F` | Hartree/Bohr, force = −∇E | **eV/Å**, force = −∇E |
 | `D` / `Dxyz` | Debye | **e·Å** |
-| Record | optional | `_mmml_units` or `units_manifest.json` |
+| Record | optional | `_karml_units` or `units_manifest.json` |
 
 `fix-and-split` **defaults** convert ingest → train. If the file is already eV
 (SPICE-α, `pet-physnet-distill`, rMD17 after conversion), split only:
 
 ```bash
-mmml fix-and-split --efd data.npz -o ./splits --preserve-units
+karml fix-and-split --efd data.npz -o ./splits --preserve-units
 ```
 
 `--conversion` on `physnet-train` scales **printed MAE only**. It does not
@@ -66,7 +66,7 @@ metadata (`kind` 0=monomer, 1=dimer). Treat missing `E_int` as total-E.
 stores **gradients** (`dft_total_gradient`, Psi4 `dft total gradient`):
 
 ```bash
-mmml fix-and-split --efd raw.npz -o ./out --flip-forces   # ingest units
+karml fix-and-split --efd raw.npz -o ./out --flip-forces   # ingest units
 # already eV: negate in the converter, then --preserve-units
 ```
 
@@ -75,15 +75,15 @@ mmml fix-and-split --efd raw.npz -o ./out --flip-forces   # ingest units
 `--hybrid-mm` needs two covalent monomers per frame plus
 `mol_id`, `cgenff_type_idx`, `cgenff_charge`, `cgenff_master_sigmas`,
 `cgenff_master_epsilons`. Raw QM NPZs do not have these — run
-`mmml prepare-mm-dataset`. Droplets / water shells / 30-mers are **not**
+`karml prepare-mm-dataset`. Droplets / water shells / 30-mers are **not**
 dimers and **not** PBC boxes unless a lattice is present.
 
 ## HDF5
 
-`mmml.models.physnetjax.physnetjax.data.read_h5` loads groups named `mol_*`
+`karml.models.physnetjax.physnetjax.data.read_h5` loads groups named `mol_*`
 with `positions`, `formation_energy`, `total_forces`. SPICE-style files
 (one group per molecule, `conformations` of shape `(M, N, 3)`) match
-**zero** groups — convert first with `mmml.data.spice_alpha`
+**zero** groups — convert first with `karml.data.spice_alpha`
 ([SPICE-α](spice-alpha.md)). `pytest -m data_loading` covers the converter
 and this contract on synthetic HDF5 only.
 
@@ -98,7 +98,7 @@ and this contract on synthetic HDF5 only.
 
 ## Check before train
 
-1. `units_manifest.json` or `_mmml_units` says `ev` / `ev_angstrom` / `e_angstrom`.
+1. `units_manifest.json` or `_karml_units` says `ev` / `ev_angstrom` / `e_angstrom`.
 2. Bond lengths in `R` are ~0.8–2.5 Å.
 3. `|E|` for a small organic is hundreds of eV (total) or ≲ 1 eV (interaction),
    not ~40 (Hartree mistaken for eV) and not 10⁴ after a double conversion.

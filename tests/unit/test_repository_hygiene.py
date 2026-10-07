@@ -28,7 +28,7 @@ def test_cleaned_exploration_notebook_is_named_and_has_no_outputs() -> None:
 
 
 def test_active_workflow_code_has_no_personal_checkpoint_fallback() -> None:
-    needle = "/mmhome/boittier/home/mmml_tutorial/acodcm/ckpts"
+    needle = "/mmhome/boittier/home/karml_tutorial/acodcm/ckpts"
     offenders: list[str] = []
     for relative in _tracked_files():
         path = Path(relative)

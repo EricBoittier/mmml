@@ -1,18 +1,18 @@
-"""MMML MCP server — FastMCP tools over the mmml CLI."""
+"""KARML MCP server — FastMCP tools over the karml CLI."""
 
 from __future__ import annotations
 
 import json
 from typing import Any
 
-from mmml.cli.configure_presets import PRESETS, list_presets_text
-from mmml.cli.registry import COMMAND_REGISTRY
-from mmml.cli.run.health_check import run_health_check
-from mmml.mcp.allowlist import ALLOWED_COMMANDS, ALLOWED_CONSOLE_SCRIPTS
-from mmml.mcp.env import default_checkpoint, repo_root, runs_root
-from mmml.mcp.recipes import configure_run, list_recipe_names, load_recipe, run_recipe_stage
-from mmml.mcp.runner import run_console_script, run_mmml
-from mmml.mcp.status import get_run_status, list_runs, tail_log
+from karml.cli.configure_presets import PRESETS, list_presets_text
+from karml.cli.registry import COMMAND_REGISTRY
+from karml.cli.run.health_check import run_health_check
+from karml.mcp.allowlist import ALLOWED_COMMANDS, ALLOWED_CONSOLE_SCRIPTS
+from karml.mcp.env import default_checkpoint, repo_root, runs_root
+from karml.mcp.recipes import configure_run, list_recipe_names, load_recipe, run_recipe_stage
+from karml.mcp.runner import run_console_script, run_karml
+from karml.mcp.status import get_run_status, list_runs, tail_log
 
 
 try:
@@ -34,18 +34,18 @@ except ModuleNotFoundError as exc:
 
         def run(self) -> None:
             raise RuntimeError(
-                "The MMML MCP server requires the optional 'mcp' dependency. "
-                "Install with `pip install 'mmml[mcp]'` or `pip install 'mmml[dev]'`."
+                "The KARML MCP server requires the optional 'mcp' dependency. "
+                "Install with `pip install 'karml[mcp]'` or `pip install 'karml[dev]'`."
             ) from _FASTMCP_IMPORT_ERROR
 
 
 mcp = FastMCP(
-    "mmml",
+    "karml",
     instructions=(
-        "Orchestrate MMML molecular simulations: residue/box builds (make-res, liquid-box), "
+        "Orchestrate KARML molecular simulations: residue/box builds (make-res, liquid-box), "
         "hybrid MD (ASE / JAX-MD / PyCHARMM via setup_calculator), QM labeling, "
         "PhysNet training, MD campaigns, and IR analysis. Prefer configure_run + "
-        "run_recipe_stage for pipelines; use submit_mmml_command for individual steps. "
+        "run_recipe_stage for pipelines; use submit_karml_command for individual steps. "
         "Recipes: dimer_smoke (MD→IR), build_smoke (geometry + hybrid backends). "
         "All run artifacts live under artifacts/mcp_runs/<run_id>/."
     ),
@@ -54,7 +54,7 @@ mcp = FastMCP(
 
 @mcp.tool()
 def list_capabilities() -> str:
-    """List MCP recipes, configure presets, and allowlisted mmml commands."""
+    """List MCP recipes, configure presets, and allowlisted karml commands."""
     recipes = list_recipe_names()
     preset_lines = [f"  - {p.key}: {p.title}" for p in PRESETS]
     allowed = sorted(ALLOWED_COMMANDS)
@@ -70,7 +70,7 @@ def list_capabilities() -> str:
         "default_checkpoint": str(default_checkpoint()),
         "recipes": recipes,
         "presets": preset_lines,
-        "allowed_mmml_commands": allowed,
+        "allowed_karml_commands": allowed,
         "allowed_console_scripts": console,
         "active_command_summaries": active_cmds,
         "configure_presets_help": list_presets_text(),
@@ -83,7 +83,7 @@ def health_check(
     skip_live: bool = True,
     checkpoint: str | None = None,
 ) -> str:
-    """Run mmml health-check (core, jax, charmm, mlpot, packmol, checkpoint, mpi)."""
+    """Run karml health-check (core, jax, charmm, mlpot, packmol, checkpoint, mpi)."""
     ckpt = None
     if checkpoint:
         from pathlib import Path
@@ -136,18 +136,18 @@ def run_recipe_stage_tool(
 
 
 @mcp.tool()
-def submit_mmml_command(
+def submit_karml_command(
     command: str,
     args: list[str] | None = None,
     run_id: str | None = None,
     dry_run: bool = False,
     background: bool = False,
 ) -> str:
-    """Run an allowlisted mmml subcommand (e.g. md-system, physnet-train)."""
-    from mmml.mcp.env import ensure_run_dir
+    """Run an allowlisted karml subcommand (e.g. md-system, physnet-train)."""
+    from karml.mcp.env import ensure_run_dir
 
     run_dir = ensure_run_dir(run_id) if run_id else None
-    result = run_mmml(
+    result = run_karml(
         command,
         args=args,
         run_dir=run_dir,
@@ -165,8 +165,8 @@ def submit_console_script(
     dry_run: bool = False,
     background: bool = False,
 ) -> str:
-    """Run an allowlisted console script (currently mmml-spectra-md)."""
-    from mmml.mcp.env import ensure_run_dir
+    """Run an allowlisted console script (currently karml-spectra-md)."""
+    from karml.mcp.env import ensure_run_dir
 
     run_dir = ensure_run_dir(run_id) if run_id else None
     result = run_console_script(

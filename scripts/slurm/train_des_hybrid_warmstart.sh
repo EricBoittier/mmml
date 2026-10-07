@@ -13,7 +13,7 @@
 
 set -uo pipefail
 
-REPO="${MMML_REPO:-$HOME/mmml}"
+REPO="${KARML_REPO:-$HOME/karml}"
 cd "$REPO"
 
 # SciCORE compute nodes have no outbound network. Without these, every `uv run`
@@ -24,8 +24,8 @@ cd "$REPO"
 export UV_NO_SYNC=1
 export UV_OFFLINE=1
 
-export MMML_SCICORE_CMAKE="${MMML_SCICORE_CMAKE:-CMake/3.31.8-GCCcore-14.3.0}"
-export MMML_SCICORE_TOOLCHAIN="${MMML_SCICORE_TOOLCHAIN:-foss/2025a}"
+export KARML_SCICORE_CMAKE="${KARML_SCICORE_CMAKE:-CMake/3.31.8-GCCcore-14.3.0}"
+export KARML_SCICORE_TOOLCHAIN="${KARML_SCICORE_TOOLCHAIN:-foss/2025a}"
 source scripts/scicore_env.sh
 source .venv/bin/activate
 set -e
@@ -54,7 +54,7 @@ python -c "import jax; print('JAX devices:', jax.devices())"
 # after a timeout instead of rebuilding the 5.5 GB source dataset.
 bash examples/lj_scales/12_des_dataset.sh
 
-uv run mmml physnet-train \
+uv run karml physnet-train \
   --config examples/lj_scales/train_des_warmstart.yaml \
   --data "$LJ_ENRICHED" \
   --valid-data "" \

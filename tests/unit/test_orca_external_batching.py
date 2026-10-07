@@ -10,20 +10,20 @@ import pytest
 import e3x
 from ase import Atoms
 
-from mmml.interfaces.orca_external.batch_inference import (
+from karml.interfaces.orca_external.batch_inference import (
     OrcaStructureJob,
     _build_padded_batch,
     _build_pair_indices_per_structure,
     evaluate_structures_batched,
 )
-from mmml.interfaces.orca_external.runner import (
+from karml.interfaces.orca_external.runner import (
     OrcaPreparedJob,
     clear_calculator_cache,
     prepare_orca_job,
     run_prepared_jobs,
 )
-from mmml.interfaces.orca_external.server import MmmlOrcaServer
-from mmml.interfaces.orca_external.settings import MmmlOrcaSettings
+from karml.interfaces.orca_external.server import KarmlOrcaServer
+from karml.interfaces.orca_external.settings import KarmlOrcaSettings
 
 
 def _write_orca_job(tmp_path: Path, basename: str, positions: list[list[float]]) -> Path:
@@ -87,7 +87,7 @@ def test_run_prepared_jobs_calls_batch_evaluator(tmp_path: Path, monkeypatch) ->
     checkpoint.write_bytes(b"")
     ext_a = _write_orca_job(tmp_path, "a_EXT", ["O 0 0 0", "H 0.96 0 0"])
     ext_b = _write_orca_job(tmp_path, "b_EXT", ["O 0 0 0", "H 0.96 0 0"])
-    settings = MmmlOrcaSettings(checkpoint=checkpoint)
+    settings = KarmlOrcaSettings(checkpoint=checkpoint)
 
     job_a = prepare_orca_job(ext_a, settings=settings)
     job_b = prepare_orca_job(ext_b, settings=settings)
@@ -102,11 +102,11 @@ def test_run_prepared_jobs_calls_batch_evaluator(tmp_path: Path, monkeypatch) ->
         pass
 
     monkeypatch.setattr(
-        "mmml.interfaces.orca_external.runner.get_calculator",
+        "karml.interfaces.orca_external.runner.get_calculator",
         lambda settings: _MockCalc(),
     )
     monkeypatch.setattr(
-        "mmml.interfaces.orca_external.batch_inference.evaluate_structures_batched",
+        "karml.interfaces.orca_external.batch_inference.evaluate_structures_batched",
         _fake_batch,
     )
 
@@ -123,7 +123,7 @@ def test_run_prepared_jobs_survives_deleted_xyz(tmp_path: Path, monkeypatch) -> 
     checkpoint.write_bytes(b"")
     ext_a = _write_orca_job(tmp_path, "snap0_EXT", ["O 0 0 0", "H 0.96 0 0"])
     ext_b = _write_orca_job(tmp_path, "snap1_EXT", ["O 0 0 0", "H 0.96 0 0"])
-    settings = MmmlOrcaSettings(checkpoint=checkpoint)
+    settings = KarmlOrcaSettings(checkpoint=checkpoint)
     job_a = prepare_orca_job(ext_a, settings=settings)
     job_b = prepare_orca_job(ext_b, settings=settings)
     job_a.extinp.xyz_path.unlink()
@@ -139,11 +139,11 @@ def test_run_prepared_jobs_survives_deleted_xyz(tmp_path: Path, monkeypatch) -> 
         pass
 
     monkeypatch.setattr(
-        "mmml.interfaces.orca_external.runner.get_calculator",
+        "karml.interfaces.orca_external.runner.get_calculator",
         lambda settings: _MockCalc(),
     )
     monkeypatch.setattr(
-        "mmml.interfaces.orca_external.batch_inference.evaluate_structures_batched",
+        "karml.interfaces.orca_external.batch_inference.evaluate_structures_batched",
         _fake_batch,
     )
 
@@ -159,7 +159,7 @@ def test_server_batches_concurrent_requests(tmp_path: Path, monkeypatch) -> None
     checkpoint.write_bytes(b"")
     ext_a = _write_orca_job(tmp_path, "w0_EXT", ["O 0 0 0", "H 0.96 0 0"])
     ext_b = _write_orca_job(tmp_path, "w1_EXT", ["O 0 0 0", "H 0.96 0 0"])
-    settings = MmmlOrcaSettings(checkpoint=checkpoint)
+    settings = KarmlOrcaSettings(checkpoint=checkpoint)
 
     batch_sizes: list[int] = []
     gate = threading.Event()
@@ -171,11 +171,11 @@ def test_server_batches_concurrent_requests(tmp_path: Path, monkeypatch) -> None
         return [job.input_path.parent / f"{job.extinp.xyz_path.stem}.engrad" for job in jobs]
 
     monkeypatch.setattr(
-        "mmml.interfaces.orca_external.server.run_prepared_jobs",
+        "karml.interfaces.orca_external.server.run_prepared_jobs",
         _fake_run_prepared_jobs,
     )
 
-    server = MmmlOrcaServer(default_settings=settings, max_batch_size=8, batch_wait_ms=100)
+    server = KarmlOrcaServer(default_settings=settings, max_batch_size=8, batch_wait_ms=100)
 
     results: list[dict] = []
     errors: list[Exception] = []

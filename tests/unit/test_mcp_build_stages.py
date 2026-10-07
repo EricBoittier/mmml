@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from mmml.mcp.recipes import (
+from karml.mcp.recipes import (
     _recipe_stage_names,
     configure_run,
     load_recipe,
@@ -28,7 +28,7 @@ def test_build_smoke_recipe_stages() -> None:
 
 
 def test_configure_build_smoke(tmp_path, monkeypatch) -> None:
-    monkeypatch.setenv("MMML_MCP_RUNS_ROOT", str(tmp_path / "runs"))
+    monkeypatch.setenv("KARML_MCP_RUNS_ROOT", str(tmp_path / "runs"))
     result = configure_run("build_test_001", recipe="build_smoke", mode="smoke")
     run_dir = Path(result["run_dir"])
     assert (run_dir / "manifest.json").is_file()
@@ -53,7 +53,7 @@ def test_configure_build_smoke(tmp_path, monkeypatch) -> None:
     ],
 )
 def test_build_smoke_stage_dry_run(tmp_path, monkeypatch, stage: str) -> None:
-    monkeypatch.setenv("MMML_MCP_RUNS_ROOT", str(tmp_path / "runs"))
+    monkeypatch.setenv("KARML_MCP_RUNS_ROOT", str(tmp_path / "runs"))
     configure_run("build_dry", recipe="build_smoke", mode="smoke")
     result = run_recipe_stage("build_dry", stage, mode="smoke", dry_run=True)
     assert result["state"] == "done"
@@ -61,7 +61,7 @@ def test_build_smoke_stage_dry_run(tmp_path, monkeypatch, stage: str) -> None:
 
 
 def test_build_smoke_minimal_skips_box(tmp_path, monkeypatch) -> None:
-    monkeypatch.setenv("MMML_MCP_RUNS_ROOT", str(tmp_path / "runs"))
+    monkeypatch.setenv("KARML_MCP_RUNS_ROOT", str(tmp_path / "runs"))
     configure_run("build_min", recipe="build_smoke", mode="minimal")
     result = run_recipe_stage("build_min", "box_build", mode="minimal")
     assert result["state"] == "skipped"

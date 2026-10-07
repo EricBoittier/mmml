@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from mmml.acquisition.splits import (
+from karml.acquisition.splits import (
     SPLIT_CANDIDATE,
     SPLIT_SEED,
     SPLIT_TEST,
@@ -15,7 +15,7 @@ from mmml.acquisition.splits import (
     deduplicate,
     records_from_npz,
 )
-from mmml.acquisition.synthetic import default_seed_groups, make_smoke_pool
+from karml.acquisition.synthetic import default_seed_groups, make_smoke_pool
 
 
 def _two_traj_npz():

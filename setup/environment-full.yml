@@ -1,6 +1,6 @@
-# Full conda environment for MMML with all optional dependencies (GPU + quantum chemistry + ML + viz)
+# Full conda environment for KARML with all optional dependencies (GPU + quantum chemistry + ML + viz)
 # Default: CUDA 13
-name: mmml-full
+name: karml-full
 channels:
   - conda-forge
   - nvidia
@@ -141,6 +141,6 @@ dependencies:
       - typing-extensions
       - pint
       
-      # Install mmml in editable mode (pip runs from setup/, so use .. for project root)
+      # Install karml in editable mode (pip runs from setup/, so use .. for project root)
       - -e ..
 

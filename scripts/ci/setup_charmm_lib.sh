@@ -69,5 +69,5 @@ fi
   echo "export OPENMPI_ROOT=$OPENMPI_ROOT"
 } >"$CHARMMSETUP"
 
-echo "Wrote optional $CHARMMSETUP (not required; mmml auto-discovers setup/charmm)"
+echo "Wrote optional $CHARMMSETUP (not required; karml auto-discovers setup/charmm)"
 echo "libcharmm.so: $CHARMM_HOME/libcharmm.so ($(du -h "$CHARMM_HOME/libcharmm.so" | awk '{print $1}'))"

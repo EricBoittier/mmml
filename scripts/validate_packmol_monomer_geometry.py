@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """Measure how far a real Packmol + CHARMM MM cluster relax moves monomer skeletons.
 
-Builds a Packmol cluster exactly as ``mmml liquid-box`` does (same builder, same
+Builds a Packmol cluster exactly as ``karml liquid-box`` does (same builder, same
 SD/ABNR defaults), then reports the per-monomer change in 1-2/1-3 distances
 versus the monomer template Packmol placed. That distribution is what sets
 ``DEFAULT_MAX_MONOMER_INTERNAL_DEVIATION_A`` in
-``mmml/utils/monomer_internal_geometry.py``: the threshold must sit well above a
+``karml/utils/monomer_internal_geometry.py``: the threshold must sit well above a
 genuine relaxation and far below the >1 Å distortions a broken CHARMM build
 produces.
 
@@ -98,18 +98,18 @@ def main(argv: list[str] | None = None) -> int:
     placement = "sphere" if args.radius is not None else "cube"
     if not args.enforce:
         # Measure the distribution even when it would trip the gate.
-        os.environ["MMML_MAX_MONOMER_INTERNAL_DEVIATION_A"] = "0"
+        os.environ["KARML_MAX_MONOMER_INTERNAL_DEVIATION_A"] = "0"
 
     # CHARMM must be live before ``cluster`` is imported: that module binds
     # ``pycharmm`` at import time and captures None while the session is cold.
-    from mmml.interfaces.pycharmmInterface.cluster_geometry import (
+    from karml.interfaces.pycharmmInterface.cluster_geometry import (
         ensure_charmm_session_ready,
     )
 
     ensure_charmm_session_ready()
 
-    from mmml.cli.run.md_pbc_suite.cluster import build_packmol_composition_cluster
-    from mmml.utils.monomer_internal_geometry import (
+    from karml.cli.run.md_pbc_suite.cluster import build_packmol_composition_cluster
+    from karml.utils.monomer_internal_geometry import (
         DEFAULT_MAX_MONOMER_INTERNAL_DEVIATION_A,
         scan_monomer_internal_geometry,
     )

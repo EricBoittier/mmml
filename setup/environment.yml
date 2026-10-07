@@ -1,6 +1,6 @@
-# Main conda environment for MMML (CPU version)
+# Main conda environment for KARML (CPU version)
 # For GPU support, use environment-gpu.yml instead
-name: mmml
+name: karml
 channels:
   - conda-forge
   - defaults
@@ -62,6 +62,6 @@ dependencies:
       - typing-extensions
       - pint
       
-      # Install mmml in editable mode (pip runs from setup/, so use .. for project root)
+      # Install karml in editable mode (pip runs from setup/, so use .. for project root)
       - -e ..
 

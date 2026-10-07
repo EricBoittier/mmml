@@ -19,7 +19,7 @@ from typing import Literal, Protocol, Sequence
 
 import numpy as np
 
-from mmml.interfaces.pycharmmInterface.nl_reference import (
+from karml.interfaces.pycharmmInterface.nl_reference import (
     cell_matrix_3x3,
     have_vesin,
     monomer_id_from_offsets,
@@ -29,7 +29,7 @@ from mmml.interfaces.pycharmmInterface.nl_reference import (
 MmNlBackendName = Literal["auto", "vesin", "cell_list", "jax_md"]
 
 try:
-    from mmml.interfaces.pycharmmInterface.cell_list import (
+    from karml.interfaces.pycharmmInterface.cell_list import (
         PairListTruncationError,
         cell_list_pairs,
         estimate_max_pairs,
@@ -40,21 +40,21 @@ except Exception:
     estimate_max_pairs = None  # type: ignore[assignment]
 
 try:
-    from mmml.interfaces.pycharmmInterface.jax_md_neighbor_list import have_jax_md
+    from karml.interfaces.pycharmmInterface.jax_md_neighbor_list import have_jax_md
 except Exception:
     def have_jax_md() -> bool:
         return False
 
 
 def resolve_mm_nl_backend(name: str | None = None) -> MmNlBackendName:
-    """Resolve backend: explicit non-auto arg > ``MMML_MM_NL_BACKEND`` > ``auto``.
+    """Resolve backend: explicit non-auto arg > ``KARML_MM_NL_BACKEND`` > ``auto``.
 
     Passing ``\"auto\"`` (the common call-site default) must still honor the
     env override; previously ``name or env`` short-circuited and ignored it.
     """
     raw = (name or "").strip().lower()
     if not raw or raw == "auto":
-        env_raw = (os.environ.get("MMML_MM_NL_BACKEND") or "").strip().lower()
+        env_raw = (os.environ.get("KARML_MM_NL_BACKEND") or "").strip().lower()
         raw = env_raw if env_raw else "auto"
     if raw in ("auto", "vesin", "cell_list", "jax_md"):
         return raw  # type: ignore[return-value]
@@ -145,7 +145,7 @@ def _resolve_max_pairs(
         return int(max_pairs)
     if estimate_max_pairs is None:
         return max(256, total_atoms * 32)
-    from mmml.interfaces.pycharmmInterface.cell_list import cubic_box_side_from_cell_matrix
+    from karml.interfaces.pycharmmInterface.cell_list import cubic_box_side_from_cell_matrix
 
     side = cubic_box_side_from_cell_matrix(np.asarray(box))
     return int(
@@ -253,7 +253,7 @@ class CellListBackend:
                 )
                 mask = np.asarray(cl_mask, dtype=bool)
                 if mm_r_min is not None:
-                    from mmml.interfaces.pycharmmInterface.mm_energy_forces import (
+                    from karml.interfaces.pycharmmInterface.mm_energy_forces import (
                         _filter_pairs_by_com_min,
                     )
 

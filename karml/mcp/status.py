@@ -6,8 +6,8 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-from mmml.mcp.env import ensure_run_dir, runs_root, repo_root
-from mmml.mcp.manifest import load_manifest
+from karml.mcp.env import ensure_run_dir, runs_root, repo_root
+from karml.mcp.manifest import load_manifest
 
 
 def list_runs() -> list[dict[str, Any]]:
@@ -147,7 +147,7 @@ def tail_log(path: str, *, lines: int = 40) -> dict[str, Any]:
         try:
             log.resolve().relative_to(repo_root().resolve())
         except ValueError as exc:
-            raise ValueError("log path must be under repo artifacts or mmml root") from exc
+            raise ValueError("log path must be under repo artifacts or karml root") from exc
     text = log.read_text(encoding="utf-8", errors="replace")
     chunk = "\n".join(text.splitlines()[-lines:])
     return {"path": str(log), "lines": lines, "tail": chunk}

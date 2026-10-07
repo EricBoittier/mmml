@@ -3,7 +3,7 @@
 # Same compositions / ensembles / lengths as config.yaml, but backend=pycharmm
 # so energies come from CHARMM rather than the JAX CGenFF bonded clone.
 #
-# From mmml_cursor:
+# From karml_cursor:
 #   bash workflows/jaxmd_cgenff_spoof_smoke/scripts/run_all_native.sh
 #   python workflows/jaxmd_cgenff_spoof_smoke/scripts/report_charmm_compare.py
 

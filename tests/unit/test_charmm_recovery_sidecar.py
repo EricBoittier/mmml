@@ -9,12 +9,12 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 import pytest
 
-from mmml.interfaces.pycharmmInterface.mlpot.charmm_recovery_sidecar import (
+from karml.interfaces.pycharmmInterface.mlpot.charmm_recovery_sidecar import (
     SidecarRecoveryManifest,
     build_sidecar_manifest,
     run_charmm_recovery_sidecar,
 )
-from mmml.interfaces.pycharmmInterface.mlpot.dynamics import BondedMmMiniConfig
+from karml.interfaces.pycharmmInterface.mlpot.dynamics import BondedMmMiniConfig
 
 
 def test_sidecar_manifest_round_trip(tmp_path: Path) -> None:
@@ -59,7 +59,7 @@ def test_build_sidecar_manifest_exports_psf_and_crd(tmp_path: Path) -> None:
         },
     ):
         with patch(
-            "mmml.interfaces.pycharmmInterface.mlpot.bonded_jax_recovery.resolve_recovery_psf_source",
+            "karml.interfaces.pycharmmInterface.mlpot.bonded_jax_recovery.resolve_recovery_psf_source",
             return_value=MagicMock(path=psf, temporary=False, cleanup=lambda: None),
         ):
             manifest = build_sidecar_manifest(ctx, cfg, tmp_path)
@@ -90,11 +90,11 @@ def test_run_charmm_recovery_sidecar_applies_output_crd(tmp_path: Path) -> None:
         return MagicMock(returncode=0, stdout="", stderr="")
 
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         side_effect=[pos, out_pos],
     ):
         with patch(
-            "mmml.interfaces.pycharmmInterface.mlpot.charmm_recovery_sidecar.build_sidecar_manifest",
+            "karml.interfaces.pycharmmInterface.mlpot.charmm_recovery_sidecar.build_sidecar_manifest",
             wraps=lambda ctx, config, work_dir, topology_psf=None: SidecarRecoveryManifest(
                 psf=str(tmp_path / "box.psf"),
                 input_crd=str(work_dir / "input.crd"),
@@ -111,14 +111,14 @@ def test_run_charmm_recovery_sidecar_applies_output_crd(tmp_path: Path) -> None:
             ),
         ):
             with patch(
-                "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.read_crd_coordinates",
+                "karml.interfaces.pycharmmInterface.mlpot.dynamics_validation.read_crd_coordinates",
                 return_value=out_pos,
             ):
                 with patch(
-                    "mmml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
+                    "karml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
                 ) as sync_pos:
                     with patch(
-                        "mmml.interfaces.pycharmmInterface.mlpot.charmm_recovery_sidecar.subprocess.run",
+                        "karml.interfaces.pycharmmInterface.mlpot.charmm_recovery_sidecar.subprocess.run",
                         side_effect=_fake_run,
                     ):
                         grms = run_charmm_recovery_sidecar(

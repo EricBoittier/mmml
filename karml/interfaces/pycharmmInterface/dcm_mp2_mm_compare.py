@@ -9,8 +9,8 @@ from typing import Any
 
 import numpy as np
 
-from mmml.analysis.npz_comparison import compute_scalar_metrics
-from mmml.data.units import (
+from karml.analysis.npz_comparison import compute_scalar_metrics
+from karml.data.units import (
     convert_forces,
     energy_to_ev,
     infer_reference_energy_unit,
@@ -40,7 +40,7 @@ def dcm_dimer_com_distance_A(
 
 
 def default_model_cutoff_from_checkpoint(checkpoint: Path | str) -> float:
-    from mmml.interfaces.calculators.checkpoint_loading import load_checkpoint_bundle
+    from karml.interfaces.calculators.checkpoint_loading import load_checkpoint_bundle
 
     bundle = load_checkpoint_bundle(resolve_hybrid_checkpoint(checkpoint))
     return float(bundle.config.get("physnet_config", {}).get("cutoff", 6.0))
@@ -53,8 +53,8 @@ def resolve_hybrid_checkpoint(path: Path | str | None) -> Path:
     text = str(path).strip()
     if not text:
         raise ValueError(
-            "Empty --checkpoint path. Set MMML_CKPT, e.g. "
-            "export MMML_CKPT=~/mmml/examples/ckpts_json/DESdimers_params.json"
+            "Empty --checkpoint path. Set KARML_CKPT, e.g. "
+            "export KARML_CKPT=~/karml/examples/ckpts_json/DESdimers_params.json"
         )
     ckpt = Path(text).expanduser().resolve()
     if not ckpt.exists():
@@ -93,7 +93,7 @@ class DcmHybridEvaluator:
 
     def _checkpoint_calculator(self) -> Any:
         if self._checkpoint_calc is None:
-            from mmml.interfaces.calculators.checkpoint_loading import (
+            from karml.interfaces.calculators.checkpoint_loading import (
                 create_calculator_from_checkpoint,
             )
 
@@ -111,8 +111,8 @@ class DcmHybridEvaluator:
             )
         key = (n_monomers, bool(do_ml_dimer))
         if key not in self._hybrid_cache:
-            from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
-            from mmml.interfaces.pycharmmInterface.mmml_calculator import setup_calculator
+            from karml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
+            from karml.interfaces.pycharmmInterface.karml_calculator import setup_calculator
 
             factory = setup_calculator(
                 ATOMS_PER_MONOMER=[ATOMS_PER_DCM] * n_monomers,
@@ -362,24 +362,24 @@ class DcmVacuumMmSession:
 def _charmm_mm_unavailable_message() -> str:
     import os
 
-    from mmml.interfaces.pycharmmInterface.charmm_mpi import charmm_lib_available
+    from karml.interfaces.pycharmmInterface.charmm_mpi import charmm_lib_available
 
     lib_dir = (os.environ.get("CHARMM_LIB_DIR") or "").strip()
     if charmm_lib_available():
         return (
-            "PyCHARMM failed to initialize. Run via ./scripts/mmml-charmm-mpirun.sh "
+            "PyCHARMM failed to initialize. Run via ./scripts/karml-charmm-mpirun.sh "
             f"(CHARMM_LIB_DIR={lib_dir!r})."
         )
     return (
         "CHARMM is not available for MM evaluation "
         f"(CHARMM_LIB_DIR={lib_dir!r}; libcharmm.so not found). "
-        "Export CHARMM_LIB_DIR and use ./scripts/mmml-charmm-mpirun.sh for MM, "
+        "Export CHARMM_LIB_DIR and use ./scripts/karml-charmm-mpirun.sh for MM, "
         "or pass --hybrid-only to compare ML without CHARMM."
     )
 
 
 def _require_charmm_for_mm() -> None:
-    from mmml.interfaces.pycharmmInterface import import_pycharmm as ipy
+    from karml.interfaces.pycharmmInterface import import_pycharmm as ipy
 
     if not ipy.ensure_pycharmm_loaded():
         raise RuntimeError(_charmm_mm_unavailable_message())
@@ -396,11 +396,11 @@ def activate_dcm_vacuum_mm_session(session: DcmVacuumMmSession) -> None:
     if _active_mm_session_psf == psf_key:
         return
 
-    from mmml.interfaces.pycharmmInterface import import_pycharmm as ipy
-    from mmml.interfaces.pycharmmInterface.cgenff_bonded_reference import read_psf_card_file
-    from mmml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap import mark_cgenff_params_full
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import prepare_charmm_vacuum
-    from mmml.interfaces.pycharmmInterface.nbonds_config import (
+    from karml.interfaces.pycharmmInterface import import_pycharmm as ipy
+    from karml.interfaces.pycharmmInterface.cgenff_bonded_reference import read_psf_card_file
+    from karml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap import mark_cgenff_params_full
+    from karml.interfaces.pycharmmInterface.mlpot.setup import prepare_charmm_vacuum
+    from karml.interfaces.pycharmmInterface.nbonds_config import (
         apply_nbonds_kwargs,
         vacuum_nbond_kwargs,
     )
@@ -430,11 +430,11 @@ def build_dcm_vacuum_mm_session(
     """Build a vacuum DCM cluster PSF for MM evaluation (no MLpot)."""
     _require_charmm_for_mm()
 
-    from mmml.cli.run.md_pbc_suite.ase import _build_cluster_from_composition
-    from mmml.interfaces.pycharmmInterface import import_pycharmm as ipy
-    from mmml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap import mark_cgenff_params_full
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import prepare_charmm_vacuum
-    from mmml.interfaces.pycharmmInterface.nbonds_config import (
+    from karml.cli.run.md_pbc_suite.ase import _build_cluster_from_composition
+    from karml.interfaces.pycharmmInterface import import_pycharmm as ipy
+    from karml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap import mark_cgenff_params_full
+    from karml.interfaces.pycharmmInterface.mlpot.setup import prepare_charmm_vacuum
+    from karml.interfaces.pycharmmInterface.nbonds_config import (
         VACUUM_CTONNB,
         VACUUM_CTOFNB,
         VACUUM_CUTNB,
@@ -505,19 +505,19 @@ def evaluate_mm_at_positions(
     mp2_interaction_eV: float | None = None,
 ) -> MmFrameResult:
     """Evaluate JAX + CHARMM MM at PSF-ordered positions (kcal/mol, kcal/mol/Å)."""
-    from mmml.interfaces.pycharmmInterface.cgenff_bonded_reference import (
+    from karml.interfaces.pycharmmInterface.cgenff_bonded_reference import (
         run_charmm_bonded_ener_force,
         set_charmm_positions,
     )
-    from mmml.interfaces.pycharmmInterface.jax_x64_config import ensure_jax_x64
-    from mmml.interfaces.pycharmmInterface.mm_system_energy import (
+    from karml.interfaces.pycharmmInterface.jax_x64_config import ensure_jax_x64
+    from karml.interfaces.pycharmmInterface.mm_system_energy import (
         CharmmNbondSettings,
         load_bonded_system_from_psf,
         load_nonbonded_system_from_charmm,
         mm_system_energy_and_forces,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.block_terms import apply_charmm_mm_block
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_total_forces_kcalmol_A
+    from karml.interfaces.pycharmmInterface.mlpot.block_terms import apply_charmm_mm_block
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_total_forces_kcalmol_A
     import pycharmm.energy as energy
 
     ensure_jax_x64(context="evaluate_mm_at_positions")
@@ -611,7 +611,7 @@ def compare_mm_to_mp2_frame(
             out["mp2_jax_force_mae_ev_A"] = float(np.mean(np.abs(d_jax)))
             out["mp2_charmm_force_mae_ev_A"] = float(np.mean(np.abs(d_ch)))
         if mm.interaction_energy_kcal is not None and mm.mp2_interaction_eV is not None:
-            from mmml.data.units import convert_energy
+            from karml.data.units import convert_energy
 
             mm_int_ev = float(convert_energy(mm.interaction_energy_kcal, "kcal_mol", "ev"))
             out["jax_interaction_eV"] = mm_int_ev
@@ -775,7 +775,7 @@ def aggregate_comparison(rows: list[dict[str, Any]]) -> dict[str, Any]:
     if rows and "jax_energy_kcal" in rows[0]:
         e_mp2 = np.asarray([r["mp2_energy_eV"] for r in rows], dtype=np.float64)
         e_jax = np.asarray([r["jax_energy_kcal"] for r in rows], dtype=np.float64)
-        from mmml.data.units import convert_energy
+        from karml.data.units import convert_energy
 
         e_jax_ev = convert_energy(e_jax, "kcal_mol", "ev")
         summary["total_energy_vs_mp2"] = compute_scalar_metrics(e_jax_ev, e_mp2).to_dict()
@@ -866,7 +866,7 @@ def run_dcm_mp2_mm_comparison(
     hybrid_eval: DcmHybridEvaluator | None = None
     ckpt_path: Path | None = None
     if checkpoint is not None:
-        from mmml.interfaces.pycharmmInterface.jax_x64_config import ensure_jax_x64
+        from karml.interfaces.pycharmmInterface.jax_x64_config import ensure_jax_x64
 
         ckpt_path = resolve_hybrid_checkpoint(checkpoint)
         ensure_jax_x64(context="run_dcm_mp2_mm_comparison")

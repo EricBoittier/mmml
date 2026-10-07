@@ -35,7 +35,7 @@ from _common import (
     print_header,
     print_pass,
 )
-from mmml.interfaces.pycharmmInterface.nl_reference import compare_pair_sets, reference_mic_pairs
+from karml.interfaces.pycharmmInterface.nl_reference import compare_pair_sets, reference_mic_pairs
 
 _DIR = Path(__file__).resolve().parent
 

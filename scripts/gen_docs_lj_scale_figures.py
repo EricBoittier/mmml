@@ -29,7 +29,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
-from mmml.utils.plotting.styles import apply_plot_style
+from karml.utils.plotting.styles import apply_plot_style
 
 REPO = Path(__file__).resolve().parents[1]
 DATA = REPO / "artifacts" / "des_chemspace" / "lj_scale_bounds_sweep.json"

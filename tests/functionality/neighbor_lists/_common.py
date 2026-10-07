@@ -18,13 +18,13 @@ def print_header(title: str) -> None:
 
 
 def print_pass(msg: str) -> None:
-    from mmml.utils.rich_report import emit_status
+    from karml.utils.rich_report import emit_status
 
     emit_status(True, msg)
 
 
 def print_fail(msg: str) -> None:
-    from mmml.utils.rich_report import emit_status
+    from karml.utils.rich_report import emit_status
 
     emit_status(False, msg)
 
@@ -80,15 +80,15 @@ def setup_charmm_composition_cluster(
     """
     import pandas as pd
 
-    from mmml.cli.run.md_pbc_suite.ase import (
+    from karml.cli.run.md_pbc_suite.ase import (
         _build_cluster_from_composition,
         _parse_composition,
     )
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import (
+    from karml.interfaces.pycharmmInterface.import_pycharmm import (
         CGENFF_PRM,
         coor,
     )
-    from mmml.interfaces.pycharmmInterface.nl_reference import monomer_id_from_offsets
+    from karml.interfaces.pycharmmInterface.nl_reference import monomer_id_from_offsets
 
     if CGENFF_PRM is None:
         raise RuntimeError("PyCHARMM/CGENFF not available")
@@ -125,7 +125,7 @@ def synthetic_monomer_cluster(
 
     ``monomer_atom_offsets`` may be one (N,3) array for all monomers or a per-monomer list.
     """
-    from mmml.interfaces.pycharmmInterface.nl_reference import (
+    from karml.interfaces.pycharmmInterface.nl_reference import (
         cell_matrix_3x3 as _cell_matrix_3x3,
         monomer_id_from_offsets as _monomer_id_from_offsets,
     )
@@ -163,13 +163,13 @@ def synthetic_monomer_cluster(
 
 def cell_matrix_3x3(cell: np.ndarray) -> np.ndarray:
     """Normalize scalar, (3,), or (3,3) cell spec to a 3×3 matrix (Å)."""
-    from mmml.interfaces.pycharmmInterface.nl_reference import cell_matrix_3x3 as _cm
+    from karml.interfaces.pycharmmInterface.nl_reference import cell_matrix_3x3 as _cm
 
     return _cm(cell)
 
 
 def monomer_id_from_offsets(monomer_offsets: np.ndarray, n_atoms: int) -> np.ndarray:
-    from mmml.interfaces.pycharmmInterface.nl_reference import monomer_id_from_offsets as _mid
+    from karml.interfaces.pycharmmInterface.nl_reference import monomer_id_from_offsets as _mid
 
     return _mid(monomer_offsets, n_atoms)
 
@@ -340,7 +340,7 @@ def charmm_extreme_pbc_cases() -> list[dict[str, object]]:
 def have_charmm_nl() -> bool:
     """Return True when PyCHARMM + CGENFF are available for NL scripts."""
     try:
-        from mmml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_PRM
+        from karml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_PRM
 
         return CGENFF_PRM is not None
     except Exception:
@@ -396,7 +396,7 @@ def _resolve_liquid_target_density_g_cm3(
     bulk_density_fraction: float = 1.0,
     target_density_g_cm3: float | None = None,
 ) -> float:
-    from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import SOLVENT_BULK_PROPS
+    from karml.interfaces.pycharmmInterface.mlpot.box_sizing import SOLVENT_BULK_PROPS
 
     if target_density_g_cm3 is not None:
         rho = float(target_density_g_cm3)
@@ -428,7 +428,7 @@ def liquid_density_box_side_for_composition(
     min_side_A: float | None = None,
 ) -> tuple[float, float]:
     """Return ``(box_side_A, target_density_g_cm3)`` for a liquid-density cubic box."""
-    from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import (
+    from karml.interfaces.pycharmmInterface.mlpot.box_sizing import (
         cubic_box_side_from_target_density,
         total_mass_g_for_composition,
     )
@@ -459,7 +459,7 @@ def liquid_density_spacing(box_side: float, n_monomers: int) -> float:
 
 def effective_mass_density_g_cm3(composition: dict[str, int], box_side: float) -> float:
     """Actual mass density (g/cm³) for a composition in a cubic box."""
-    from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import total_mass_g_for_composition
+    from karml.interfaces.pycharmmInterface.mlpot.box_sizing import total_mass_g_for_composition
 
     vol_cm3 = float(box_side) ** 3 * 1e-24
     mass_g = total_mass_g_for_composition(composition)
@@ -468,7 +468,7 @@ def effective_mass_density_g_cm3(composition: dict[str, int], box_side: float) -
 
 def apply_mic_wrap_positions(positions: np.ndarray, cell: np.ndarray) -> np.ndarray:
     """Wrap Cartesian positions into the primary unit cell."""
-    from mmml.interfaces.pycharmmInterface.nl_reference import cell_matrix_3x3
+    from karml.interfaces.pycharmmInterface.nl_reference import cell_matrix_3x3
 
     R = np.asarray(positions, dtype=np.float64)
     cell_mat = cell_matrix_3x3(cell)
@@ -787,7 +787,7 @@ def charmm_liquid_density_cases() -> list[dict[str, object]]:
 
 
 def _composition_dict_from_liquid_case(case: dict[str, object]) -> dict[str, int]:
-    from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import parse_composition_dict
+    from karml.interfaces.pycharmmInterface.mlpot.box_sizing import parse_composition_dict
 
     if "composition" in case:
         if isinstance(case["composition"], dict):
@@ -842,7 +842,7 @@ def setup_charmm_liquid_density_cluster(
     Returns ``(positions, cell, offsets, monomer_id, atomic_numbers, eff_cutoff,
     box_side, target_density_g_cm3)``.
     """
-    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+    from karml.interfaces.pycharmmInterface.mlpot.pbc_env import (
         apply_pbc_nbonds,
         prepare_charmm_pbc,
     )

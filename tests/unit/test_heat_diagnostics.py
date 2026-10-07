@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import argparse
 
-from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
     build_hoover_heat_dynamics,
     describe_heat_dynamics_setup,
     format_heat_dynamics_diagnostics,
@@ -82,7 +82,7 @@ def test_format_heat_diagnostics_includes_sections(capsys):
 
 
 def test_infer_heat_velocity_init_post_assign_scale_path():
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import _infer_heat_velocity_init_label
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import _infer_heat_velocity_init_label
 
     kw = {
         "start": True,
@@ -96,7 +96,7 @@ def test_infer_heat_velocity_init_post_assign_scale_path():
 
 
 def test_infer_iasors_meaning_hoover_cpt_unused():
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _infer_iasors_meaning,
         describe_heat_dynamics_setup,
     )
@@ -143,7 +143,7 @@ def test_build_heat_dynamics_dashboard_sections():
         segment_index=0,
         n_segments=4,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         build_heat_dynamics_dashboard_sections,
     )
 

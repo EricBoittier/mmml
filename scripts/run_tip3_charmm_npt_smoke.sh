@@ -149,7 +149,7 @@ echo "  lr-solver:  ewald --ewald-omit-self --mlpot-pbc"
 echo "  ml-gpus:    $ML_GPU_COUNT  batch=${ML_BATCH_SIZE:-auto}  CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-unset}"
 
 set +e
-mmml md-system \
+karml md-system \
   --backend pycharmm \
   --setup pbc_npt \
   --md-stages "$MD_STAGES" \

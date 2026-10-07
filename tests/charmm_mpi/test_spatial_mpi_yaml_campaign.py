@@ -10,10 +10,10 @@ from unittest import mock
 import pytest
 import yaml
 
-from mmml.cli.run.md_campaign import apply_campaign_cli_overrides, namespace_from_merged
-from mmml.cli.run.md_config import load_yaml_config, merge_campaign_job_config
-from mmml.cli.run.md_system import build_pycharmm_command, parse_md_system_args
-from mmml.interfaces.pycharmmInterface.mlpot.spatial_mpi_policy import (
+from karml.cli.run.md_campaign import apply_campaign_cli_overrides, namespace_from_merged
+from karml.cli.run.md_config import load_yaml_config, merge_campaign_job_config
+from karml.cli.run.md_system import build_pycharmm_command, parse_md_system_args
+from karml.interfaces.pycharmmInterface.mlpot.spatial_mpi_policy import (
     spatial_mpi_enabled,
     sync_spatial_mpi_env_from_campaign,
     sync_spatial_mpi_env_from_args,
@@ -23,7 +23,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.spatial_mpi_policy import (
 def test_spatial_mpi_example_yaml_parses(tmp_path: Path) -> None:
     example = (
         Path(__file__).resolve().parents[2]
-        / "mmml/cli/run/md_system.spatial_mpi.example.yaml"
+        / "karml/cli/run/md_system.spatial_mpi.example.yaml"
     )
     raw = load_yaml_config(example)
     assert raw["ml_spatial_mpi"] is True
@@ -32,7 +32,7 @@ def test_spatial_mpi_example_yaml_parses(tmp_path: Path) -> None:
 
 
 def test_parse_md_system_config_sets_spatial_mpi_env(monkeypatch, tmp_path: Path) -> None:
-    monkeypatch.delenv("MMML_MLPOT_SPATIAL_MPI", raising=False)
+    monkeypatch.delenv("KARML_MLPOT_SPATIAL_MPI", raising=False)
     cfg = tmp_path / "spatial.yaml"
     cfg.write_text(
         yaml.safe_dump(
@@ -47,7 +47,7 @@ def test_parse_md_system_config_sets_spatial_mpi_env(monkeypatch, tmp_path: Path
     )
     args = parse_md_system_args(["--config", str(cfg)])
     assert args.ml_spatial_mpi is True
-    assert os.environ.get("MMML_MLPOT_SPATIAL_MPI") == "1"
+    assert os.environ.get("KARML_MLPOT_SPATIAL_MPI") == "1"
     assert spatial_mpi_enabled(args.ml_spatial_mpi)
 
 
@@ -113,19 +113,19 @@ def test_campaign_cli_override_spatial_mpi() -> None:
 
 
 def test_sync_spatial_mpi_env_from_campaign_defaults(monkeypatch) -> None:
-    monkeypatch.delenv("MMML_MLPOT_SPATIAL_MPI", raising=False)
+    monkeypatch.delenv("KARML_MLPOT_SPATIAL_MPI", raising=False)
     campaign = {
         "defaults": {"ml_spatial_mpi": True},
         "runs": {"a": {"backend": "pycharmm"}},
     }
     assert sync_spatial_mpi_env_from_campaign(campaign, None) is True
-    assert os.environ["MMML_MLPOT_SPATIAL_MPI"] == "1"
+    assert os.environ["KARML_MLPOT_SPATIAL_MPI"] == "1"
 
 
 def test_sync_spatial_mpi_env_from_args_false_does_not_set(monkeypatch) -> None:
-    monkeypatch.delenv("MMML_MLPOT_SPATIAL_MPI", raising=False)
+    monkeypatch.delenv("KARML_MLPOT_SPATIAL_MPI", raising=False)
     assert sync_spatial_mpi_env_from_args(Namespace(ml_spatial_mpi=False)) is False
-    assert "MMML_MLPOT_SPATIAL_MPI" not in os.environ
+    assert "KARML_MLPOT_SPATIAL_MPI" not in os.environ
 
 
 def test_md_system_spatial_mpi_mini_dry_run_script() -> None:

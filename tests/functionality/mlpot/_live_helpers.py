@@ -11,7 +11,7 @@ import numpy as np
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
 DCM1_CKPT = Path(
-    "/mmhome/boittier/home/mmml_tutorial/acodcm/ckpts/dcm1/dcm1_params.json"
+    "/mmhome/boittier/home/karml_tutorial/acodcm/ckpts/dcm1/dcm1_params.json"
 )
 TIMESTEP_PS = 0.00025
 
@@ -34,14 +34,14 @@ def subset_positions(pos: np.ndarray, charmm_indexes: Sequence[int]) -> np.ndarr
 def resolve_live_checkpoint() -> Path | None:
     """Best-effort PhysNet JSON / bundle for live MLpot tests."""
     candidates: list[Path] = []
-    env = os.environ.get("MMML_CKPT", "").strip()
+    env = os.environ.get("KARML_CKPT", "").strip()
     if env:
         candidates.append(Path(env).expanduser())
     candidates.extend(
         [
             DCM1_CKPT,
             REPO_ROOT / "examples/ckpts_json/DESdimers_params.json",
-            REPO_ROOT / "mmml/models/physnetjax/ckpts/DESdimers",
+            REPO_ROOT / "karml/models/physnetjax/ckpts/DESdimers",
         ]
     )
     for path in candidates:
@@ -68,16 +68,16 @@ def setup_aco_mlpot(
     """Build ACO cluster, register MLpot; return ``(ctx, z, r, n_atoms)``."""
     import ase
 
-    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+    import karml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
 
-    from mmml.interfaces.pycharmmInterface.mlpot import (
+    from karml.interfaces.pycharmmInterface.mlpot import (
         load_physnet_mlpot_bundle,
         register_mlpot,
         select_all_atoms,
         setup_default_nbonds,
         sync_charmm_positions,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import build_ase_cluster
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import build_ase_cluster
 
     z, r = build_ase_cluster("ACO", n_molecules, spacing)
     n_atoms = len(z)
@@ -99,16 +99,16 @@ def setup_dcm_mlpot(
     """Build DCM cluster, register MLpot; return ``(ctx, z, r, n_atoms)``."""
     import ase
 
-    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+    import karml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
 
-    from mmml.interfaces.pycharmmInterface.mlpot import (
+    from karml.interfaces.pycharmmInterface.mlpot import (
         load_physnet_mlpot_bundle,
         register_mlpot,
         select_all_atoms,
         setup_default_nbonds,
         sync_charmm_positions,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import build_ase_cluster
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import build_ase_cluster
 
     z, r = build_ase_cluster("DCM", n_molecules, spacing)
     n_atoms = len(z)
@@ -123,7 +123,7 @@ def setup_dcm_mlpot(
 
 def positions_for_resids(resids: Sequence[int]) -> np.ndarray:
     """Current CHARMM coordinates for the given residue IDs."""
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+    from karml.interfaces.pycharmmInterface.mlpot.setup import (
         get_charmm_positions_array,
         select_by_resids,
     )
@@ -135,7 +135,7 @@ def positions_for_resids(resids: Sequence[int]) -> np.ndarray:
 
 def translate_resid_and_sync(resids: Sequence[int], delta: Sequence[float]) -> None:
     """Translate one or more monomers in place and push coordinates to CHARMM."""
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+    from karml.interfaces.pycharmmInterface.mlpot.setup import (
         get_charmm_positions_array,
         select_by_resids,
         sync_charmm_positions,

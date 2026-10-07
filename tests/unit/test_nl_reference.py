@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from mmml.interfaces.pycharmmInterface.nl_reference import (
+from karml.interfaces.pycharmmInterface.nl_reference import (
     brute_force_mic_pairs,
     compare_pair_sets,
     filter_pairs_under_cutoff,
@@ -52,7 +52,7 @@ def test_compare_pair_sets_symmetric_diff() -> None:
 
 
 def test_walk_charmm_primary_jnb_pair_set() -> None:
-    from mmml.interfaces.pycharmmInterface.nl_reference import (
+    from karml.interfaces.pycharmmInterface.nl_reference import (
         inter_monomer_pair_set,
         walk_charmm_primary_jnb_pair_set,
     )
@@ -68,7 +68,7 @@ def test_walk_charmm_primary_jnb_pair_set() -> None:
 
 
 def test_classify_inter_monomer_diff_cutoff_skew() -> None:
-    from mmml.interfaces.pycharmmInterface.nl_reference import classify_inter_monomer_diff
+    from karml.interfaces.pycharmmInterface.nl_reference import classify_inter_monomer_diff
 
     pos = np.array(
         [
@@ -96,7 +96,7 @@ def test_classify_inter_monomer_diff_cutoff_skew() -> None:
 
 
 def test_callback_mlmm_pairs_to_half_set_maps_primary_indices() -> None:
-    from mmml.interfaces.pycharmmInterface.nl_reference import (
+    from karml.interfaces.pycharmmInterface.nl_reference import (
         callback_mlmm_pairs_to_half_set,
         callback_pairs_to_padded_arrays,
     )
@@ -112,7 +112,7 @@ def test_callback_mlmm_pairs_to_half_set_maps_primary_indices() -> None:
 
 
 def test_callback_pairs_to_padded_arrays_honors_min_capacity() -> None:
-    from mmml.interfaces.pycharmmInterface.nl_reference import (
+    from karml.interfaces.pycharmmInterface.nl_reference import (
         callback_pairs_to_padded_arrays,
     )
 
@@ -125,7 +125,7 @@ def test_callback_pairs_to_padded_arrays_honors_min_capacity() -> None:
 
 
 def test_pbc_nbond_cutoffs_from_mlpot_switches_aligns_outer_radius() -> None:
-    from mmml.interfaces.pycharmmInterface.nbonds_config import (
+    from karml.interfaces.pycharmmInterface.nbonds_config import (
         mlpot_mm_nl_cutoff_A,
         pbc_nbond_cutoffs_from_mlpot_switches,
         pbc_nbond_cutoffs_invariant_ok,
@@ -148,11 +148,11 @@ def test_pbc_nbond_cutoffs_from_mlpot_switches_aligns_outer_radius() -> None:
 
 def test_pbc_nbond_cutoffs_density_sized_tip3_90_box() -> None:
     """TIP3:90 @ ρ=1 → L≈13.9 Å must still satisfy cutnb < L/2."""
-    from mmml.interfaces.pycharmmInterface.cutoffs import (
+    from karml.interfaces.pycharmmInterface.cutoffs import (
         DEFAULT_MM_SWITCH_ON,
         DEFAULT_MM_SWITCH_WIDTH,
     )
-    from mmml.interfaces.pycharmmInterface.nbonds_config import (
+    from karml.interfaces.pycharmmInterface.nbonds_config import (
         pbc_nbond_cutoffs_from_mlpot_switches,
         pbc_nbond_cutoffs_invariant_ok,
         resolve_pbc_nbond_cutoffs,
@@ -172,7 +172,7 @@ def test_pbc_nbond_cutoffs_density_sized_tip3_90_box() -> None:
 
 
 def test_cell_matrix_3x3_normalizes_and_rejects_bad_shapes() -> None:
-    from mmml.interfaces.pycharmmInterface.nl_reference import cell_matrix_3x3
+    from karml.interfaces.pycharmmInterface.nl_reference import cell_matrix_3x3
 
     assert np.allclose(cell_matrix_3x3(12.0), np.eye(3) * 12.0)
     assert np.allclose(cell_matrix_3x3(np.array([10.0, 11.0, 12.0])), np.diag([10.0, 11.0, 12.0]))
@@ -185,7 +185,7 @@ def test_cell_matrix_3x3_normalizes_and_rejects_bad_shapes() -> None:
 
 
 def test_apply_mm_pair_filters_empty_and_compare_summary() -> None:
-    from mmml.interfaces.pycharmmInterface.nl_reference import (
+    from karml.interfaces.pycharmmInterface.nl_reference import (
         apply_mm_pair_filters,
         compare_pair_sets,
     )
@@ -201,7 +201,7 @@ def test_apply_mm_pair_filters_empty_and_compare_summary() -> None:
 
 
 def test_classify_inter_monomer_diff_tags_com_handoff() -> None:
-    from mmml.interfaces.pycharmmInterface.nl_reference import classify_inter_monomer_diff
+    from karml.interfaces.pycharmmInterface.nl_reference import classify_inter_monomer_diff
 
     pos = np.array(
         [

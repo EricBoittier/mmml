@@ -32,7 +32,7 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 
-from mmml.utils.plotting.styles import apply_plot_style, legend_outside, seed_symbol
+from karml.utils.plotting.styles import apply_plot_style, legend_outside, seed_symbol
 
 _STYLE_NAME = "icml"  # see docs/plot-style-gallery.md
 

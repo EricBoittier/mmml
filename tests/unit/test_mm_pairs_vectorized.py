@@ -5,8 +5,8 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from mmml.interfaces.pycharmmInterface.mm_energy_forces import decompose_mlpot_mm_nb_eterms_kcalmol
-from mmml.interfaces.pycharmmInterface.nl_reference import (
+from karml.interfaces.pycharmmInterface.mm_energy_forces import decompose_mlpot_mm_nb_eterms_kcalmol
+from karml.interfaces.pycharmmInterface.nl_reference import (
     apply_mm_pair_filters,
     mm_pair_filter_mask,
     unique_mic_orthorhombic,
@@ -56,7 +56,7 @@ def test_eterm_split_matches_per_pair_reference(complementary):
               mm_switch_width=5.0, ml_switch_width=1.5, complementary_handoff=complementary)
     got = decompose_mlpot_mm_nb_eterms_kcalmol(R, pidx, mask, np.eye(3) * L, **kw)
 
-    from mmml.interfaces.pycharmmInterface.cutoffs import GAMMA_OFF, GAMMA_ON
+    from karml.interfaces.pycharmmInterface.cutoffs import GAMMA_OFF, GAMMA_ON
 
     ref = dict(vdw_primary=0.0, vdw_image=0.0, elec_primary=0.0, elec_image=0.0)
     for a, b in zip(i, j):
@@ -85,7 +85,7 @@ def _step(r, x0, x1, g):
 @pytest.mark.parametrize("complementary", [True, False])
 def test_eterm_split_com_weighted_matches_per_pair_reference(complementary):
     """Production path: switch at the dimer COM distance, atom-distance fallback for dimer index -1."""
-    from mmml.interfaces.pycharmmInterface.cutoffs import GAMMA_OFF, GAMMA_ON
+    from karml.interfaces.pycharmmInterface.cutoffs import GAMMA_OFF, GAMMA_ON
 
     rng = np.random.default_rng(2)
     n_mol = 16
@@ -157,7 +157,7 @@ def test_unique_mic_orthorhombic_is_strict_at_two_cutoff():
 def test_vesin_mic_pair_arrays_sorted_unique_and_complete(cutoff):
     """5 Å: unique-MIC (L > 2c). 6 Å: L == 2c boundary. 7 Å: two-image box."""
     pytest.importorskip("vesin")
-    from mmml.interfaces.pycharmmInterface.nl_reference import vesin_mic_pair_arrays
+    from karml.interfaces.pycharmmInterface.nl_reference import vesin_mic_pair_arrays
 
     _, R, mid, offs, i, j = _system(seed=3)
     d = np.linalg.norm(_mic(R[j] - R[i]), axis=1)
@@ -172,7 +172,7 @@ def test_vesin_mic_pair_arrays_sorted_unique_and_complete(cutoff):
 def test_vesin_excludes_pair_exactly_at_cutoff_on_L_equals_2c_boundary():
     """L = 2*cutoff: atoms L/2 apart have d == cutoff and must stay out (strict <)."""
     pytest.importorskip("vesin")
-    from mmml.interfaces.pycharmmInterface.nl_reference import vesin_mic_pair_arrays
+    from karml.interfaces.pycharmmInterface.nl_reference import vesin_mic_pair_arrays
 
     cutoff = 6.0
     R = np.array(
@@ -231,7 +231,7 @@ def _brute_intermonomer_pairs(R, mid, L, cutoff):
 def test_vesin_etoh181_26A_rebuild_matches_bruteforce(cutoff):
     """Rebuilt pair set on an ETOH:181 26 Å frame, including the L=2c boundary."""
     pytest.importorskip("vesin")
-    from mmml.interfaces.pycharmmInterface.nl_reference import (
+    from karml.interfaces.pycharmmInterface.nl_reference import (
         unique_mic_orthorhombic,
         vesin_mic_pair_arrays,
     )
@@ -307,7 +307,7 @@ def _gpu_pairlist_or_skip():
     pytest.importorskip("cupy")
     import jax
 
-    from mmml.interfaces.pycharmmInterface import nl_gpu
+    from karml.interfaces.pycharmmInterface import nl_gpu
 
     try:
         if not jax.devices("gpu"):
@@ -337,7 +337,7 @@ def test_gpu_rebuild_identical_to_cpu(frame, cutoff, mm_r_min):
     nl_gpu = _gpu_pairlist_or_skip()
     import jax
 
-    from mmml.interfaces.pycharmmInterface.nl_backend import build_mm_pairs_with_backend
+    from karml.interfaces.pycharmmInterface.nl_backend import build_mm_pairs_with_backend
 
     L_box = 26.0
     R, mid, offs = _etoh_like_liquid_frame() if frame == "etoh181" else _mixed_size_frame()
@@ -370,7 +370,7 @@ def test_gpu_rebuild_identical_to_cpu(frame, cutoff, mm_r_min):
 
 def test_gpu_rebuild_truncation_raises():
     nl_gpu = _gpu_pairlist_or_skip()
-    from mmml.interfaces.pycharmmInterface.cell_list import PairListTruncationError
+    from karml.interfaces.pycharmmInterface.cell_list import PairListTruncationError
 
     R, _, offs = _etoh_like_liquid_frame()
     with pytest.raises(PairListTruncationError):
@@ -378,16 +378,16 @@ def test_gpu_rebuild_truncation_raises():
 
 
 def test_mm_nl_device_request_resolution(monkeypatch):
-    from mmml.interfaces.pycharmmInterface import nl_gpu
+    from karml.interfaces.pycharmmInterface import nl_gpu
 
-    monkeypatch.delenv("MMML_MM_NL_DEVICE", raising=False)
+    monkeypatch.delenv("KARML_MM_NL_DEVICE", raising=False)
     assert nl_gpu.resolve_mm_nl_device_request() == "auto"
-    monkeypatch.setenv("MMML_MM_NL_DEVICE", "CPU")
+    monkeypatch.setenv("KARML_MM_NL_DEVICE", "CPU")
     assert nl_gpu.resolve_mm_nl_device_request() == "cpu"
     assert nl_gpu.resolve_mm_nl_device() == "cpu"
     assert not nl_gpu.gpu_nl_path_available()  # never probes CuPy
     assert nl_gpu.resolve_mm_nl_device_request("gpu") == "gpu"
-    monkeypatch.setenv("MMML_MM_NL_DEVICE", "tpu")
+    monkeypatch.setenv("KARML_MM_NL_DEVICE", "tpu")
     with pytest.raises(ValueError):
         nl_gpu.resolve_mm_nl_device_request()
 
@@ -395,9 +395,9 @@ def test_mm_nl_device_request_resolution(monkeypatch):
 def test_auto_falls_back_to_cpu_without_cupy_or_jax_gpu(monkeypatch):
     import jax
 
-    from mmml.interfaces.pycharmmInterface import nl_gpu
+    from karml.interfaces.pycharmmInterface import nl_gpu
 
-    monkeypatch.delenv("MMML_MM_NL_DEVICE", raising=False)
+    monkeypatch.delenv("KARML_MM_NL_DEVICE", raising=False)
     monkeypatch.setattr(nl_gpu, "have_cupy", lambda: False)
     assert not nl_gpu.gpu_nl_path_available()
     assert nl_gpu.resolve_mm_nl_device() == "cpu"
@@ -430,7 +430,7 @@ def test_float32_roundtrip_crosses_pair_and_com_thresholds():
 
 
 def test_is_device_positions_rejects_numpy_host():
-    from mmml.interfaces.pycharmmInterface.mm_energy_forces import _is_device_positions
+    from karml.interfaces.pycharmmInterface.mm_energy_forces import _is_device_positions
 
     host = np.zeros((3, 3), dtype=np.float64)
     assert hasattr(host, "__dlpack_device__")
@@ -460,7 +460,7 @@ def _fake_charmm_mm_fn(R, *, mm_r_min=4.05, mm_switch_on=10.5, mm_switch_width=2
     """Minimal mocked-CHARMM MM pair-list builder (host numpy in, no live CHARMM)."""
     from unittest.mock import MagicMock, patch
 
-    from mmml.interfaces.pycharmmInterface.mm_energy_forces import build_mm_energy_forces_fn
+    from karml.interfaces.pycharmmInterface.mm_energy_forces import build_mm_energy_forces_fn
 
     n = len(R)
     n_mono = n // 3
@@ -474,7 +474,7 @@ def _fake_charmm_mm_fn(R, *, mm_r_min=4.05, mm_switch_on=10.5, mm_switch_width=2
     rtf.readlines.return_value = ["ATOM C1 CG321 -0.1\n"]
     prm = MagicMock()
     prm.readlines.return_value = ["CG321 0.0 -0.05 1.6 0.0 -0.01 1.9\n"]
-    mod = "mmml.interfaces.pycharmmInterface.mm_energy_forces"
+    mod = "karml.interfaces.pycharmmInterface.mm_energy_forces"
     with patch("pycharmm.psf", fake_psf), patch("pycharmm.param", fake_param), patch(
         f"{mod}.open", side_effect=[rtf, prm]
     ), patch(f"{mod}._get_actual_psf_charges", return_value=charges), patch(
@@ -504,7 +504,7 @@ def _fake_charmm_mm_fn(R, *, mm_r_min=4.05, mm_switch_on=10.5, mm_switch_width=2
 def test_update_mm_pairs_host_numpy_is_not_a_device_sync(monkeypatch):
     """Host NumPy (MLpot callback) must not be classified as a JAX device array."""
     pytest.importorskip("vesin")
-    monkeypatch.setenv("MMML_MM_NL_DEVICE", "cpu")
+    monkeypatch.setenv("KARML_MM_NL_DEVICE", "cpu")
     R, _, _ = _threshold_probe_frame()
     _, update = _fake_charmm_mm_fn(R)
     update(R, force_rebuild=True)
@@ -530,8 +530,8 @@ def _check_gpu_host_float64_near_thresholds():
     import jax
     import jax.numpy as jnp
 
-    from mmml.interfaces.pycharmmInterface.nl_backend import build_mm_pairs_with_backend
-    from mmml.interfaces.pycharmmInterface.nl_reference import vesin_mic_pair_arrays
+    from karml.interfaces.pycharmmInterface.nl_backend import build_mm_pairs_with_backend
+    from karml.interfaces.pycharmmInterface.nl_reference import vesin_mic_pair_arrays
 
     jax.config.update("jax_enable_x64", False)
     lost = float(np.asarray(jnp.asarray(np.array([12.4699999], dtype=np.float64)))[0])
@@ -566,7 +566,7 @@ def _check_gpu_host_float64_near_thresholds():
     gpu = jax.devices("gpu")[0]
     listed = {}
     for device in ("cpu", "auto"):
-        os.environ["MMML_MM_NL_DEVICE"] = device
+        os.environ["KARML_MM_NL_DEVICE"] = device
         with jax.default_device(gpu):
             _, update = _fake_charmm_mm_fn(R, mm_r_min=mm_r_min)
             pidx, pmask = update(R, force_rebuild=True)  # host NumPy, as MLpot
@@ -591,7 +591,7 @@ def test_gpu_host_float64_near_thresholds_with_x64_disabled(monkeypatch):
     The check turns x64 off itself and asserts the float32 rounding took effect."""
     import jax
 
-    monkeypatch.setenv("MMML_MM_NL_DEVICE", "auto")  # direct GPU rebuild needs auto|gpu; restored at teardown
+    monkeypatch.setenv("KARML_MM_NL_DEVICE", "auto")  # direct GPU rebuild needs auto|gpu; restored at teardown
     prev = jax.config.jax_enable_x64
     try:
         _check_gpu_host_float64_near_thresholds()

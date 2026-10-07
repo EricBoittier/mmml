@@ -48,7 +48,7 @@ def c_api_string_buffer(text: str) -> tuple[ctypes.Array, ctypes.c_int]:
 
 def _resolve_charmm_fortran_path(file_name, *, read_only, append):
     try:
-        from mmml.interfaces.pycharmmInterface.charmm_paths import charmm_fortran_path
+        from karml.interfaces.pycharmmInterface.charmm_paths import charmm_fortran_path
     except ImportError:
         return file_name, None
     return charmm_fortran_path(

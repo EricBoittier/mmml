@@ -1,23 +1,23 @@
-# PDB → `mmml md-system` examples
+# PDB → `karml md-system` examples
 
 Smoke-sized copy-paste workflows for loading a **CGenFF-named PDB** into
 `md-system` across backends (`ase`, `jaxmd`, `pycharmm`) and common settings.
 
-PDB inputs must use CGenFF residue/atom names (e.g. from `mmml make-res`).
+PDB inputs must use CGenFF residue/atom names (e.g. from `karml make-res`).
 Protein CHARMM36 paths are separate — see `docs/protein-force-fields.md`.
 
 ## Prerequisites
 
 ```bash
-cd /path/to/mmml
+cd /path/to/karml
 source examples/md_system_from_pdb/_env.sh
 # Optional for pycharmm / PSF builds:
 #   export CHARMM_HOME=... CHARMM_LIB_DIR=...
 # Checkpoint (default: bundled DESdimers JSON):
-#   echo "$MMML_CKPT"
+#   echo "$KARML_CKPT"
 ```
 
-Default geometry: `mmml/generate/sample/pdb/aco_monomer.pdb` (acetone ACO).
+Default geometry: `karml/generate/sample/pdb/aco_monomer.pdb` (acetone ACO).
 
 Artifacts: `artifacts/md_system_from_pdb/`.
 
@@ -27,7 +27,7 @@ Artifacts: `artifacts/md_system_from_pdb/`.
 |------|-------|----------|
 | Full-system PDB | `--from-pdb system.pdb` | Already have a multi-residue CGenFF PDB |
 | Monomer PDB + Packmol | `--composition monomer.pdb:N[,DCM:M]` | Build a cluster/box from a template PDB |
-| Certified box | `--from-psf model.psf --from-crd model.crd` | After `mmml liquid-box` (sibling `box.json` sets L) |
+| Certified box | `--from-psf model.psf --from-crd model.crd` | After `karml liquid-box` (sibling `box.json` sets L) |
 
 `--from-pdb` is mutually exclusive with `--from-psf`/`--from-crd` and with
 multi-token Packmol compositions. A lone `composition: "system.pdb"` is
@@ -58,7 +58,7 @@ Extra campaigns:
 
 ```bash
 bash examples/md_system_from_pdb/run_all.sh
-uv run mmml md-system --config examples/md_system_from_pdb/yaml/01_from_pdb_pycharmm_minimize.yaml
+uv run karml md-system --config examples/md_system_from_pdb/yaml/01_from_pdb_pycharmm_minimize.yaml
 bash examples/md_system_from_pdb/01_from_pdb_pycharmm_minimize.sh   # same job via wrapper
 ```
 
@@ -67,19 +67,19 @@ bash examples/md_system_from_pdb/01_from_pdb_pycharmm_minimize.sh   # same job v
 ### 1. Full-system PDB → PyCHARMM minimize
 
 ```bash
-uv run mmml md-system \
+uv run karml md-system \
   --config examples/md_system_from_pdb/yaml/01_from_pdb_pycharmm_minimize.yaml
 ```
 
 ### 2. Same PDB → vacuum NVE (ASE / JAX-MD / PyCHARMM)
 
 ```bash
-uv run mmml md-system --config examples/md_system_from_pdb/yaml/02_from_pdb_free_nve_ase.yaml
-uv run mmml md-system --config examples/md_system_from_pdb/yaml/03_from_pdb_free_nve_jaxmd.yaml
-uv run mmml md-system --config examples/md_system_from_pdb/yaml/04_from_pdb_free_nve_pycharmm.yaml
+uv run karml md-system --config examples/md_system_from_pdb/yaml/02_from_pdb_free_nve_ase.yaml
+uv run karml md-system --config examples/md_system_from_pdb/yaml/03_from_pdb_free_nve_jaxmd.yaml
+uv run karml md-system --config examples/md_system_from_pdb/yaml/04_from_pdb_free_nve_pycharmm.yaml
 
 # Or all three:
-uv run mmml md-system \
+uv run karml md-system \
   --config examples/md_system_from_pdb/yaml/from_pdb_backends_campaign.yaml \
   --run-all
 ```
@@ -87,14 +87,14 @@ uv run mmml md-system \
 ### 3. Monomer PDB + Packmol (build N copies)
 
 ```bash
-uv run mmml md-system \
+uv run karml md-system \
   --config examples/md_system_from_pdb/yaml/05_packmol_mix_pdb_monomer.yaml
 ```
 
 Mix a custom solute PDB with CGenFF solvent (edit the YAML `composition`, or override):
 
 ```bash
-uv run mmml md-system \
+uv run karml md-system \
   --config examples/md_system_from_pdb/yaml/05_packmol_mix_pdb_monomer.yaml \
   --composition /path/to/solute.pdb:1,DCM:20 \
   --setup pbc_nvt --box-size 28 --md-stages mini \
@@ -104,7 +104,7 @@ uv run mmml md-system \
 ### 4. Constraints / NVT settings
 
 ```bash
-uv run mmml md-system \
+uv run karml md-system \
   --config examples/md_system_from_pdb/yaml/06_from_pdb_nvt_fix_resids.yaml
 ```
 
@@ -117,7 +117,7 @@ Runs free-form CHARMM lingo once after mini/constraints and before NVE
 (e.g. `CONS` / `UMBR` / `ADUMB`). Smoke uses `cons fix` on resid 1:
 
 ```bash
-uv run mmml md-system \
+uv run karml md-system \
   --config examples/md_system_from_pdb/yaml/08_from_pdb_pre_dynamics_lingo.yaml
 # or:
 bash examples/md_system_from_pdb/08_from_pdb_pre_dynamics_lingo.sh
@@ -139,18 +139,18 @@ into the lingo block:
 PSF+CRD for PBC MD so the cell comes from `box.json`:
 
 ```bash
-uv run mmml liquid-box \
+uv run karml liquid-box \
   --composition DCM:8 \
   --output-dir artifacts/md_system_from_pdb/box_dcm8
 
 # Edit from_psf / from_crd in the YAML, or override on the CLI:
-uv run mmml md-system \
+uv run karml md-system \
   --config examples/md_system_from_pdb/yaml/07_certified_psf_crd_pbc.yaml \
   --from-psf artifacts/md_system_from_pdb/box_dcm8/model.psf \
   --from-crd artifacts/md_system_from_pdb/box_dcm8/model.crd
 
 # NVT → NVE campaign (edit paths in the YAML first):
-uv run mmml md-system \
+uv run karml md-system \
   --config examples/md_system_from_pdb/yaml/pbc_certified_jaxmd.yaml \
   --run-all
 ```
@@ -158,7 +158,7 @@ uv run mmml md-system \
 If you have the tutorial DCM:206 box:
 
 ```bash
-export CERTIFIED_BOX_DIR=/path/to/mmml_tutorial/example_systems/acodcm/boxes/dcm206
+export CERTIFIED_BOX_DIR=/path/to/karml_tutorial/example_systems/acodcm/boxes/dcm206
 bash examples/md_system_from_pdb/07_certified_psf_crd_pbc.sh
 ```
 
@@ -173,8 +173,8 @@ CLI flags override YAML (`--ps`, `--seed`, `--from-pdb`, …).
 | `pycharmm` | CHARMM MLpot stages | mini/heat/equi/prod, DCD, `cons_fix` |
 | `auto` | ASE (vacuum/fixed PBC) or JAX-MD (NPT) | Convenience default |
 
-Set `--checkpoint` (or `$MMML_CKPT`) for hybrid ML+MM. CHARMM FF-only box
-build is `mmml liquid-box` (no checkpoint); hybrid MD still wants a PhysNet ckpt.
+Set `--checkpoint` (or `$KARML_CKPT`) for hybrid ML+MM. CHARMM FF-only box
+build is `karml liquid-box` (no checkpoint); hybrid MD still wants a PhysNet ckpt.
 
 ## Related
 

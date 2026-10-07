@@ -10,7 +10,7 @@ CFG="${ROOT}/examples/md_system_from_pdb/yaml/05_packmol_mix_pdb_monomer.yaml"
 OUT="${ARTIFACTS_DIR}/05_packmol_4mer"
 
 echo "=== config $(basename "${CFG}") (${PDB_MONOMER}:4) ==="
-uv run mmml md-system \
+uv run karml md-system \
   --config "${CFG}" \
   --composition "${PDB_MONOMER}:4" \
   --checkpoint "${CKPT_JSON}" \

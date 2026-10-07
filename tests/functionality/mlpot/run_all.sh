@@ -7,7 +7,7 @@ cd "$ROOT"
 DIR="tests/functionality/mlpot"
 
 echo "Repo root: $ROOT"
-echo "MMML_CKPT=${MMML_CKPT:-<not set>}"
+echo "KARML_CKPT=${KARML_CKPT:-<not set>}"
 
 run() {
   echo ""

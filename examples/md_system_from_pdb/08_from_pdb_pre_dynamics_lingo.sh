@@ -11,7 +11,7 @@ OUT="${ARTIFACTS_DIR}/08_pre_dynamics_lingo"
 LINGO_INP="${OUT}/pycharmm_pre_dynamics_lingo.inp"
 
 echo "=== config $(basename "${CFG}") (pre-dynamics lingo) ==="
-uv run mmml md-system \
+uv run karml md-system \
   --config "${CFG}" \
   --from-pdb "${PDB_MONOMER}" \
   --checkpoint "${CKPT_JSON}" \

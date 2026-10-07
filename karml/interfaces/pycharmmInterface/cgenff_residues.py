@@ -22,9 +22,9 @@ CGENFF_RESIDUE_ALIASES: dict[str, str] = {
 }
 
 # Colon- or comma-separated append RTF paths (extra RESI records + CHARMM append).
-_EXTRA_RTF_ENV = "MMML_CGENFF_EXTRA_RTF"
+_EXTRA_RTF_ENV = "KARML_CGENFF_EXTRA_RTF"
 # Colon- or comma-separated append PRM paths (bonded params for append residues).
-_EXTRA_PRM_ENV = "MMML_CGENFF_EXTRA_PRM"
+_EXTRA_PRM_ENV = "KARML_CGENFF_EXTRA_PRM"
 
 # Repo-bundled append topology for chloromethane (not in stock CGenFF).
 _BUNDLED_CH3CL_RTF = "examples/m/top_ch3cl.rtf"
@@ -43,7 +43,7 @@ def default_cgenff_rtf_path() -> Path:
 
 
 def _repo_root() -> Path:
-    # …/mmml/interfaces/pycharmmInterface/cgenff_residues.py → repo root
+    # …/karml/interfaces/pycharmmInterface/cgenff_residues.py → repo root
     return Path(__file__).resolve().parents[3]
 
 
@@ -88,7 +88,7 @@ def _merge_unique_paths(*groups: tuple[Path, ...]) -> tuple[Path, ...]:
 
 
 def extra_cgenff_rtf_paths(*, env: os._Environ | None = None) -> tuple[Path, ...]:
-    """Append-topology RTF paths from ``MMML_CGENFF_EXTRA_RTF`` plus bundled extras.
+    """Append-topology RTF paths from ``KARML_CGENFF_EXTRA_RTF`` plus bundled extras.
 
     When ``examples/m/top_ch3cl.rtf`` is present in the checkout, it is included
     automatically so ``CH3CL`` compositions work without sourcing ``_env.sh``.
@@ -100,7 +100,7 @@ def extra_cgenff_rtf_paths(*, env: os._Environ | None = None) -> tuple[Path, ...
 
 
 def extra_cgenff_prm_paths(*, env: os._Environ | None = None) -> tuple[Path, ...]:
-    """Append-parameter PRM paths from ``MMML_CGENFF_EXTRA_PRM`` plus bundled extras."""
+    """Append-parameter PRM paths from ``KARML_CGENFF_EXTRA_PRM`` plus bundled extras."""
     return _merge_unique_paths(
         _extra_paths_from_env(_EXTRA_PRM_ENV, env=env),
         _bundled_example_extra_paths(_BUNDLED_CH3CL_PRM),
@@ -139,8 +139,8 @@ def is_cgenff_residue_name(name: str, *, rtf_path: Path | str | None = None) -> 
 def require_cgenff_residue_name(name: str, *, rtf_path: Path | str | None = None) -> str:
     """Normalize and validate a CGenFF residue name; raise ``ValueError`` if unknown."""
     key = normalize_cgenff_residue_name(name)
-    from mmml.interfaces.pycharmmInterface.heme_electronic import is_protein_ion
-    from mmml.interfaces.pycharmmInterface.heme_library import is_heme_library_residue
+    from karml.interfaces.pycharmmInterface.heme_electronic import is_protein_ion
+    from karml.interfaces.pycharmmInterface.heme_library import is_heme_library_residue
 
     if is_heme_library_residue(key) or is_protein_ion(key):
         return key
@@ -153,7 +153,7 @@ def require_cgenff_residue_name(name: str, *, rtf_path: Path | str | None = None
             )
         raise ValueError(
             f"Unknown CGenFF residue {name!r} (normalized {key!r}). "
-            "List valid names with: mmml make-res --list-residues "
+            "List valid names with: karml make-res --list-residues "
             f"{hint}"
         )
     return key
@@ -213,7 +213,7 @@ def format_cgenff_residue_list(
             f"{residue.name:<{name_w}}  {residue.charge:>{charge_w}}  {desc}"
         )
     lines.append("")
-    lines.append("Usage: mmml make-res --res RESIDUE")
+    lines.append("Usage: karml make-res --res RESIDUE")
     return "\n".join(lines) + "\n"
 
 

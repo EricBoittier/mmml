@@ -14,7 +14,7 @@ Optional **DualFFNet** (`--architecture dual`) is ABCC-only (H–C–O–H dihed
 ## Evaluate an existing PhysNet teacher
 
 ```bash
-mmml physnet-evaluate \
+karml physnet-evaluate \
   --checkpoint ckpts/run/params_acem1_....json \
   --data splits/acem/energies_forces_dipoles_test.npz \
   -o artifacts/physnet_acem_eval \
@@ -25,7 +25,7 @@ mmml physnet-evaluate \
 
 ```bash
 # ACEM from prepared splits (recommended)
-mmml kernnn-train \
+karml kernnn-train \
   --distance-scheme acem \
   --train-npz splits/acem/energies_forces_dipoles_train.npz \
   --valid-npz splits/acem/energies_forces_dipoles_valid.npz \
@@ -33,14 +33,14 @@ mmml kernnn-train \
   --n-hidden 64 --batch-size 64 --epochs 500 \
   --workdir artifacts/kernnn/acem_gt
 
-mmml kernnn-evaluate \
+karml kernnn-evaluate \
   --checkpoint artifacts/kernnn/acem_gt/best.json \
   --data splits/acem/energies_forces_dipoles_test.npz \
   --split all \
   --output-dir artifacts/kernnn/acem_gt/eval_test
 
 # FORM from a single full NPZ (KerNN random-splits)
-mmml kernnn-train \
+karml kernnn-train \
   --distance-scheme form \
   --data form_mp2_aug-cc-pvtz_4000.npz \
   --ntrain 3200 --nvalid 400 --seed 42 \
@@ -53,7 +53,7 @@ Copy-paste workflows: [`examples/kernnn/train_acem_form.sh`](../../../examples/k
 ## Distill from a PhysNet teacher
 
 ```bash
-mmml kernnn-train \
+karml kernnn-train \
   --distance-scheme acem \
   --train-npz splits/acem/energies_forces_dipoles_train.npz \
   --valid-npz splits/acem/energies_forces_dipoles_valid.npz \
@@ -79,10 +79,10 @@ print **RMSE** in eV and eV/Å.
 bash examples/kernnn/acem_dihedral_scan_compare.sh
 # → ~/abirh/artifacts/ic_scan/acem_dihedrals/compare/compare_{energy,maxforce}_*.png
 
-mmml dimer-scan --calculator kernnn --checkpoint artifacts/kernnn/best.json ...
-mmml neb --calculator kernnn --checkpoint ... --initial a.xyz --final b.xyz ...
-mmml umbrella-sample --model kernnn --checkpoint ...
-mmml dmc --model kernnn --natm 9 --checkpoint artifacts/kernnn/acem_gt/best.json ...
+karml dimer-scan --calculator kernnn --checkpoint artifacts/kernnn/best.json ...
+karml neb --calculator kernnn --checkpoint ... --initial a.xyz --final b.xyz ...
+karml umbrella-sample --model kernnn --checkpoint ...
+karml dmc --model kernnn --natm 9 --checkpoint artifacts/kernnn/acem_gt/best.json ...
 ```
 
 ## Hybrid MLpot / md-system

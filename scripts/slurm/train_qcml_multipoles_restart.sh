@@ -10,8 +10,8 @@
 
 set -euo pipefail
 
-ROOT="${MMML_ROOT:-$HOME/mmml}"
-PY="${MMML_PYTHON:-$ROOT/.venv/bin/python}"
+ROOT="${KARML_ROOT:-$HOME/karml}"
+PY="${KARML_PYTHON:-$ROOT/.venv/bin/python}"
 CACHE="${CACHE:-$HOME/orbax_cache/qcml_multipoles_traceless}"
 RUN_TAG="${RUN_TAG:-$(date +%Y%m%d-%H%M%S)}"
 WORKDIR="${MULTIPOLE_WORKDIR:-${WORKDIR:-$HOME/qcml_runs/multipoles_restart_${RUN_TAG}}}"

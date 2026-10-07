@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from mmml.models.physnetjax.physnetjax.training.validation import (
+from karml.models.physnetjax.physnetjax.training.validation import (
     validate_atomic_numbers,
 )
 

@@ -8,7 +8,7 @@ import argparse
 
 import numpy as np
 
-from mmml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array, sync_charmm_positions
+from karml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array, sync_charmm_positions
 
 # Lattice ABNR and Hoover mini-equil share the same MM-only stress ceiling.
 MAX_MM_PRETREAT_DYNAMICS_GRMS = 500.0
@@ -18,7 +18,7 @@ DEFAULT_MINI_BOX_EQUIL_PS = 200.0
 
 def measure_mm_pretreat_grms() -> float:
     """Fresh CHARMM GRMS (kcal/mol/Å) after ``ENER FORCE``."""
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_grms_after_ener_force
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_grms_after_ener_force
 
     return float(charmm_grms_after_ener_force(silent=True))
 
@@ -188,23 +188,23 @@ def _run_mini_box_equil_heat_leg(
     restart_read_key: str | None = None,
     overlap_context: str,
 ) -> None:
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
         apply_dynamics_print_kwargs,
         apply_pretreat_dyn_freq_kwargs,
         resolve_dcd_nsavc,
         resolve_heat_ihtfrq,
         resolve_pretreat_dynamics_print_kwargs,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         CharmmTrajectoryFiles,
         apply_heat_ramp_frequencies,
         build_heat_dynamics,
         run_dynamics_with_io,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         assert_stage_dynamics_completed,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.staged_workflow import (
+    from karml.interfaces.pycharmmInterface.mlpot.staged_workflow import (
         _configure_heat_dynamics_start,
         _reset_stage_trajectory,
     )
@@ -212,7 +212,7 @@ def _run_mini_box_equil_heat_leg(
     nstep = max(1, int(round(float(duration_ps) / float(timestep_ps))))
     heat_echeck = echeck
     if getattr(args, "no_echeck", False) or getattr(args, "no_echeck_heat", False):
-        from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+        from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
             disabled_charmm_echeck_kcal,
         )
 
@@ -300,12 +300,12 @@ def run_mini_box_equilibration(
     box_side: float | None,
 ) -> None:
     """Run MM hot→cold pretreat dynamics between CHARMM MM mini and MLpot registration."""
-    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_quiet_output
-    from mmml.interfaces.pycharmmInterface.mlpot.block_terms import apply_charmm_mm_block
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+    from karml.interfaces.pycharmmInterface.charmm_levels import charmm_quiet_output
+    from karml.interfaces.pycharmmInterface.mlpot.block_terms import apply_charmm_mm_block
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
         resolve_charmm_mm_pretreat_settings,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.run_workflow import (
+    from karml.interfaces.pycharmmInterface.mlpot.run_workflow import (
         _pretreat_use_fixed_box_nvt,
     )
 

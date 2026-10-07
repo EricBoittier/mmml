@@ -9,9 +9,9 @@ RUN_TAG="${1:?usage: diag_cell.sh RUN_TAG}"
 
 cd "$REPO_ROOT"
 
-# shellcheck source=../../../scripts/resolve_mmml_env.sh
-source "$REPO_ROOT/scripts/resolve_mmml_env.sh"
-mmml_resolve_env "$REPO_ROOT"
+# shellcheck source=../../../scripts/resolve_karml_env.sh
+source "$REPO_ROOT/scripts/resolve_karml_env.sh"
+karml_resolve_env "$REPO_ROOT"
 
-exec "${MMML_PYTHON}" "$WORKFLOW_ROOT/scripts/diag_cell.py" "$RUN_TAG" \
+exec "${KARML_PYTHON}" "$WORKFLOW_ROOT/scripts/diag_cell.py" "$RUN_TAG" \
   --config "$WORKFLOW_ROOT/config.yaml"

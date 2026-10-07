@@ -17,7 +17,7 @@ def _wrap_frame_by_monomer(
     masses: Optional[np.ndarray] = None,
 ) -> np.ndarray:
     """Wrap positions so each monomer stays intact (no atoms in another cell)."""
-    from mmml.interfaces.pycharmmInterface.cell_list import _wrap_groups_np
+    from karml.interfaces.pycharmmInterface.cell_list import _wrap_groups_np
 
     cell_matrix = np.asarray(cell, dtype=np.float64)
     if cell_matrix.ndim == 1 and cell_matrix.size >= 3:
@@ -91,7 +91,7 @@ def save_trajectory(
         return
 
     if format == "dcd":
-        from mmml.utils.dcd_writer import save_trajectory_dcd
+        from karml.utils.dcd_writer import save_trajectory_dcd
 
         path = f"{filename}.dcd"
         save_trajectory_dcd(

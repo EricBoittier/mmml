@@ -38,7 +38,7 @@ def test_write_solute_pdb_amm1_ch3cl(tmp_path: Path) -> None:
     assert any("N1" in ln for ln in atom_lines)
     assert any("CL1" in ln for ln in atom_lines)
     # Full CH3CL (5 chars) must survive whitespace parse — not truncated to CH3C
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+    from karml.interfaces.pycharmmInterface.mlpot.setup import (
         _residue_sequence_from_pdb,
     )
 

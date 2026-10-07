@@ -22,7 +22,7 @@ from pathlib import Path
 
 import pytest
 
-from tests import conftest as mmml_conftest
+from tests import conftest as karml_conftest
 
 _TESTS_UNIT = Path(__file__).resolve().parent
 _REPO_ROOT = _TESTS_UNIT.parents[1]
@@ -32,55 +32,55 @@ _REPO_ROOT = _TESTS_UNIT.parents[1]
 
 
 def test_a_failing_session_is_recorded():
-    mmml_conftest._FORCED_EXIT_STATUS.clear()
+    karml_conftest._FORCED_EXIT_STATUS.clear()
     try:
-        mmml_conftest.pytest_sessionfinish(session=None, exitstatus=1)
-        assert mmml_conftest._FORCED_EXIT_STATUS.get("code") == 1
+        karml_conftest.pytest_sessionfinish(session=None, exitstatus=1)
+        assert karml_conftest._FORCED_EXIT_STATUS.get("code") == 1
     finally:
-        mmml_conftest._FORCED_EXIT_STATUS.clear()
+        karml_conftest._FORCED_EXIT_STATUS.clear()
 
 
 def test_a_clean_session_records_nothing():
-    mmml_conftest._FORCED_EXIT_STATUS.clear()
+    karml_conftest._FORCED_EXIT_STATUS.clear()
     try:
-        mmml_conftest.pytest_sessionfinish(session=None, exitstatus=0)
-        assert "code" not in mmml_conftest._FORCED_EXIT_STATUS
+        karml_conftest.pytest_sessionfinish(session=None, exitstatus=0)
+        assert "code" not in karml_conftest._FORCED_EXIT_STATUS
     finally:
-        mmml_conftest._FORCED_EXIT_STATUS.clear()
+        karml_conftest._FORCED_EXIT_STATUS.clear()
 
 
 def test_a_non_integer_status_is_treated_as_failure():
-    mmml_conftest._FORCED_EXIT_STATUS.clear()
+    karml_conftest._FORCED_EXIT_STATUS.clear()
     try:
-        mmml_conftest.pytest_sessionfinish(session=None, exitstatus="boom")
-        assert mmml_conftest._FORCED_EXIT_STATUS.get("code") == 1
+        karml_conftest.pytest_sessionfinish(session=None, exitstatus="boom")
+        assert karml_conftest._FORCED_EXIT_STATUS.get("code") == 1
     finally:
-        mmml_conftest._FORCED_EXIT_STATUS.clear()
+        karml_conftest._FORCED_EXIT_STATUS.clear()
 
 
 def test_unconfigure_is_inert_without_charmm():
-    """Under MMML_DISABLE_CHARMM (and in CI) pycharmm is never imported, so the
+    """Under KARML_DISABLE_CHARMM (and in CI) pycharmm is never imported, so the
     hook must return rather than kill the interpreter -- if this were wrong the
     test session running it would die here."""
-    mmml_conftest._FORCED_EXIT_STATUS.clear()
-    mmml_conftest._FORCED_EXIT_STATUS["code"] = 1
+    karml_conftest._FORCED_EXIT_STATUS.clear()
+    karml_conftest._FORCED_EXIT_STATUS["code"] = 1
     try:
-        assert not mmml_conftest._pycharmm_was_loaded()
-        mmml_conftest.pytest_unconfigure(config=None)  # must simply return
+        assert not karml_conftest._pycharmm_was_loaded()
+        karml_conftest.pytest_unconfigure(config=None)  # must simply return
     finally:
-        mmml_conftest._FORCED_EXIT_STATUS.clear()
+        karml_conftest._FORCED_EXIT_STATUS.clear()
 
 
 def test_the_escape_hatch_disables_the_hook(monkeypatch):
-    """MMML_NO_FORCE_PYTEST_EXIT exists for debugging a shutdown problem."""
-    monkeypatch.setenv("MMML_NO_FORCE_PYTEST_EXIT", "1")
-    monkeypatch.setattr(mmml_conftest, "_pycharmm_was_loaded", lambda: True)
-    mmml_conftest._FORCED_EXIT_STATUS.clear()
-    mmml_conftest._FORCED_EXIT_STATUS["code"] = 1
+    """KARML_NO_FORCE_PYTEST_EXIT exists for debugging a shutdown problem."""
+    monkeypatch.setenv("KARML_NO_FORCE_PYTEST_EXIT", "1")
+    monkeypatch.setattr(karml_conftest, "_pycharmm_was_loaded", lambda: True)
+    karml_conftest._FORCED_EXIT_STATUS.clear()
+    karml_conftest._FORCED_EXIT_STATUS["code"] = 1
     try:
-        mmml_conftest.pytest_unconfigure(config=None)  # must not os._exit
+        karml_conftest.pytest_unconfigure(config=None)  # must not os._exit
     finally:
-        mmml_conftest._FORCED_EXIT_STATUS.clear()
+        karml_conftest._FORCED_EXIT_STATUS.clear()
 
 
 def test_loaded_detection_requires_init_charmm(monkeypatch):
@@ -89,22 +89,22 @@ def test_loaded_detection_requires_init_charmm(monkeypatch):
 
     monkeypatch.setitem(sys.modules, "pycharmm.energy", object())
     monkeypatch.setitem(sys.modules, "pycharmm.dimens", object())
-    assert not mmml_conftest._pycharmm_was_loaded()
+    assert not karml_conftest._pycharmm_was_loaded()
 
     loader = types.ModuleType("pycharmm.loader")
     loader.is_initialized = lambda: False
     monkeypatch.setitem(sys.modules, "pycharmm.loader", loader)
-    assert not mmml_conftest._pycharmm_was_loaded()
+    assert not karml_conftest._pycharmm_was_loaded()
 
     loader.is_initialized = lambda: True
-    assert mmml_conftest._pycharmm_was_loaded()
+    assert karml_conftest._pycharmm_was_loaded()
 
 
 # --- end to end (the part that actually calls os._exit) ---------------------
 
 
 def _charmm_available() -> bool:
-    return mmml_conftest.can_import_pycharmm()
+    return karml_conftest.can_import_pycharmm()
 
 
 def _run_probe(body: str) -> int:
@@ -123,7 +123,7 @@ def _run_probe(body: str) -> int:
             capture_output=True,
             text=True,
             timeout=900,
-            env={**os.environ, "MMML_QUIET": "1"},
+            env={**os.environ, "KARML_QUIET": "1"},
         )
         return proc.returncode
     finally:
@@ -131,7 +131,7 @@ def _run_probe(body: str) -> int:
 
 
 _LOAD_CHARMM = (
-    "from mmml.interfaces.pycharmmInterface.import_pycharmm import "
+    "from karml.interfaces.pycharmmInterface.import_pycharmm import "
     "ensure_pycharmm_loaded\n"
 )
 

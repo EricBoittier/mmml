@@ -8,12 +8,12 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from mmml.cli.misc.fix_and_split import (
+from karml.cli.misc.fix_and_split import (
     convert_energy_array,
     convert_force_array,
     UnitsManifest,
 )
-from mmml.data.units import UnitsManifestV2, load_units_manifest
+from karml.data.units import UnitsManifestV2, load_units_manifest
 
 pytestmark = pytest.mark.data_loading
 
@@ -52,7 +52,7 @@ def test_units_manifest_v2_from_v1_fields() -> None:
 
 def test_fix_and_split_writes_manifest_v2(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Smoke test manifest v2 emission via minimal synthetic NPZ."""
-    from mmml.cli.misc import fix_and_split as fas
+    from karml.cli.misc import fix_and_split as fas
 
     n_samples = 4
     n_atoms = 2
@@ -88,6 +88,6 @@ def test_fix_and_split_writes_manifest_v2(tmp_path: Path, monkeypatch: pytest.Mo
     train_npz = out_dir / "energies_forces_dipoles_train.npz"
     if train_npz.is_file():
         with np.load(train_npz, allow_pickle=True) as data:
-            assert "_mmml_units" in data.files
-            arrays = json.loads(str(data["_mmml_units"].item()))
+            assert "_karml_units" in data.files
+            arrays = json.loads(str(data["_karml_units"].item()))
             assert arrays["E"] == "ev"

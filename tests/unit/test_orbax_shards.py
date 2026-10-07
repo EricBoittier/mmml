@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from mmml.data.orbax_shards import (
+from karml.data.orbax_shards import (
     iter_restored_shards,
     partition_shards,
     read_manifest,

@@ -6,8 +6,8 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from mmml.interfaces.pycharmmInterface.cgenff_bonded import bonded_energy_and_forces
-from mmml.interfaces.pycharmmInterface.cgenff_bonded_reference import (
+from karml.interfaces.pycharmmInterface.cgenff_bonded import bonded_energy_and_forces
+from karml.interfaces.pycharmmInterface.cgenff_bonded_reference import (
     charmm_cmap_is_active,
     compare_bonded_to_charmm,
     compare_mm_system_to_charmm,
@@ -18,15 +18,15 @@ from mmml.interfaces.pycharmmInterface.cgenff_bonded_reference import (
     setup_nonbonded_only_charmm,
     summarize_mm_system_charmm_delta,
 )
-from mmml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_PRM
-from mmml.interfaces.pycharmmInterface.mm_system_energy import (
+from karml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_PRM
+from karml.interfaces.pycharmmInterface.mm_system_energy import (
     CharmmNbondSettings,
     load_bonded_system_from_psf,
     load_nonbonded_system_from_charmm,
     mm_system_energy_and_forces,
     nonbonded_energy_and_forces,
 )
-from mmml.interfaces.pycharmmInterface.trialanine_water_box import (
+from karml.interfaces.pycharmmInterface.trialanine_water_box import (
     build_trialanine_water_box_in_charmm,
     have_trialanine_cgenff,
     have_trialanine_cmap_prm,
@@ -65,7 +65,7 @@ def _nbond_settings_from_box(box) -> CharmmNbondSettings:
 
 @pytest.fixture(scope="module")
 def trialanine_water_box(tmp_path_factory):
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import ensure_pycharmm_loaded
+    from karml.interfaces.pycharmmInterface.import_pycharmm import ensure_pycharmm_loaded
 
     if not ensure_pycharmm_loaded():
         pytest.skip("PyCHARMM not available (libcharmm / deferred import)")
@@ -144,7 +144,7 @@ def test_trialanine_water_total_mm_matches_pycharmm(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Full MM energy: bonded + truncated MIC Coulomb (``lr_solver=mic``)."""
-    monkeypatch.setenv("MMML_LR_SOLVER", lr_solver)
+    monkeypatch.setenv("KARML_LR_SOLVER", lr_solver)
 
     box = trialanine_water_box
     positions = _perturb_positions(box.positions, seed=31)

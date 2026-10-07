@@ -25,11 +25,11 @@ REPO = Path(__file__).resolve().parents[2]
 ART = REPO / "artifacts" / "nh3_ch3cl"
 IMG = REPO / "docs" / "images" / "examples" / "nh3-ch3cl"
 RESULTS_MD = REPO / "docs" / "examples" / "nh3-ch3cl-results.md"
-# Mirror examples/m/_env.sh: a pre-set MMML_CKPT / MMML_DATA wins, otherwise the
+# Mirror examples/m/_env.sh: a pre-set KARML_CKPT / KARML_DATA wins, otherwise the
 # example defaults apply. Hard-coding kl.json here made the report claim a
 # different model than 01_evaluate.sh actually evaluated.
-CKPT = Path(os.environ.get("MMML_CKPT") or REPO / "examples" / "m" / "model_ext.json")
-DATA = Path(os.environ.get("MMML_DATA") or REPO / "examples" / "m" / "nh3_ch3cl_filtered.npz")
+CKPT = Path(os.environ.get("KARML_CKPT") or REPO / "examples" / "m" / "model_ext.json")
+DATA = Path(os.environ.get("KARML_DATA") or REPO / "examples" / "m" / "nh3_ch3cl_filtered.npz")
 
 
 def _repo_rel(path: Path) -> str:
@@ -61,7 +61,7 @@ def _parity_plots(pred_npz: Path, out_png: Path) -> Path | None:
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
-    from mmml.utils.plotting.styles import apply_plot_style, comparison_colors
+    from karml.utils.plotting.styles import apply_plot_style, comparison_colors
 
     style = apply_plot_style("icml")
     colors = comparison_colors(style, n=2)
@@ -96,7 +96,7 @@ def _md_trace_plot(summaries: list[dict], out_png: Path) -> Path | None:
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
-    from mmml.utils.plotting.styles import apply_plot_style, comparison_colors, legend_outside
+    from karml.utils.plotting.styles import apply_plot_style, comparison_colors, legend_outside
 
     style = apply_plot_style("icml")
     colors = comparison_colors(style, n=max(len(summaries), 1))

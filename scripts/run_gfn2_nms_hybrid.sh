@@ -12,9 +12,9 @@
 
 set -euo pipefail
 
-ACODCM=/mmhome/boittier/home/mmml_tutorial/acodcm
-MMML=/mmhome/boittier/home/mmml
-PY="$MMML/.venv/bin/python"
+ACODCM=/mmhome/boittier/home/karml_tutorial/acodcm
+KARML=/mmhome/boittier/home/karml
+PY="$KARML/.venv/bin/python"
 CFG="${1:-$ACODCM/gfn2_nms_hybrid.yaml}"
 
 cd "$ACODCM"
@@ -22,7 +22,7 @@ export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0}"
 export XLA_PYTHON_CLIENT_MEM_FRACTION="${XLA_PYTHON_CLIENT_MEM_FRACTION:-0.9}"
 
 echo "=== training: $CFG ==="
-"$MMML/.venv/bin/mmml" physnet-train --config "$CFG"
+"$KARML/.venv/bin/karml" physnet-train --config "$CFG"
 
 CKPT=$(ls -dt "$ACODCM"/ckpts/gfn2_nms/gfn2nms-*/ 2>/dev/null | head -1)
 if [ -z "$CKPT" ]; then
@@ -56,7 +56,7 @@ for RES in DCM ACO; do
   # extrapolation region (measured: DCM spurious fraction 12.5% -> 8.3% between
   # adjacent epochs on live params, flat at 4.2% on ema_params, same checkpoints).
   # Gate on ema_params for a reproducible verdict.
-  "$PY" "$MMML/scripts/scan_dimer_orientations.py" \
+  "$PY" "$KARML/scripts/scan_dimer_orientations.py" \
       --checkpoint "$FROZEN" \
       --data "$ACODCM/out_combined_dedup/energies_forces_dipoles_test.npz" \
       --resid "$RES" --n-directions 10 --n-orientations 24 --n-r 36 \
@@ -85,6 +85,6 @@ echo "same recipe at MP2 is the production run. If it does not, coverage was not
 echo "the problem and the architecture/loss is next."
 echo
 echo "Then confirm the deepest wells against an INDEPENDENT potential:"
-echo "  $PY $MMML/scripts/validate_dimer_rays.py --checkpoint $FROZEN \\"
+echo "  $PY $KARML/scripts/validate_dimer_rays.py --checkpoint $FROZEN \\"
 echo "      --data $ACODCM/gfn2_nms_test.npz --resid DCM --rays <deepest> \\"
 echo "      --mm-switch-on 6.0 --with-xtb --out validate_gate"

@@ -26,8 +26,8 @@ def test_charmm_import():
     not can_import_pycharmm(),
     reason="pycharmm not available in this environment",
 )
-def test_mmml_calculator_charmm_flag():
-    """CHARMM is loadable under mpirun even when collection used MMML_WARMUP_MLPOT_JAX_ONLY."""
+def test_karml_calculator_charmm_flag():
+    """CHARMM is loadable under mpirun even when collection used KARML_WARMUP_MLPOT_JAX_ONLY."""
     import pycharmm  # noqa: F401
 
     assert can_import_pycharmm()

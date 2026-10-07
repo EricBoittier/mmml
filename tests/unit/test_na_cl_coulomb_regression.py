@@ -31,13 +31,13 @@ os.environ.setdefault("JAX_PLATFORMS", "cpu")
 # Skip entire module if pyscf not available
 pyscf = pytest.importorskip("pyscf")
 
-from mmml.data.units import (
+from karml.data.units import (
     ANGSTROM_TO_BOHR,
     HARTREE_TO_EV,
     DEBYE_TO_EANGSTROM,
     EANGSTROM_TO_DEBYE,
 )
-from mmml.models.dcmnet.dcmnet.electrostatics import calc_esp
+from karml.models.dcmnet.dcmnet.electrostatics import calc_esp
 
 
 # Geometry: Na+ at origin, Cl- at (10, 0, 0) Angstrom

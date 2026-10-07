@@ -6,9 +6,9 @@ from pathlib import Path
 
 import pytest
 
-from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import parse_composition_dict
-from mmml.interfaces.pycharmmInterface.mlpot.cli_common import parse_composition
-from mmml.interfaces.pycharmmInterface.mlpot.composition_spec import (
+from karml.interfaces.pycharmmInterface.mlpot.box_sizing import parse_composition_dict
+from karml.interfaces.pycharmmInterface.mlpot.cli_common import parse_composition
+from karml.interfaces.pycharmmInterface.mlpot.composition_spec import (
     CompositionEntry,
     composition_mode,
     is_composition_pdb_token,
@@ -16,7 +16,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.composition_spec import (
     reject_pdb_composition_for_builder,
     resolve_composition_plan,
 )
-from mmml.paths import bundled_file
+from karml.paths import bundled_file
 
 
 DCM_MONOMER = bundled_file("data", "molecules", "dcm_monomer.pdb")

@@ -4,10 +4,10 @@ Pairwise ABCC (or ABCC_sym) distances → 1D kernels (k33) → Softplus MLP → 
 optional DualFFNet dihedral branch. Forces via autodiff.
 """
 
-from mmml.models.kernnn.adapter import KerNNApplyAdapter
-from mmml.models.kernnn.batch_apply import build_kernnn_batch_apply, is_kernnn_checkpoint
-from mmml.models.kernnn.calculator import KerNNCalculator
-from mmml.models.kernnn.checkpoint import (
+from karml.models.kernnn.adapter import KerNNApplyAdapter
+from karml.models.kernnn.batch_apply import build_kernnn_batch_apply, is_kernnn_checkpoint
+from karml.models.kernnn.calculator import KerNNCalculator
+from karml.models.kernnn.checkpoint import (
     H2CO_CALCULATOR_STATS,
     import_torch_state_dict,
     init_params,
@@ -15,14 +15,14 @@ from mmml.models.kernnn.checkpoint import (
     load_kernnn_model,
     save_checkpoint,
 )
-from mmml.models.kernnn.distances import (
+from karml.models.kernnn.distances import (
     get_bond_length_abcc,
     get_bond_length_abcc_sym,
     get_bond_length_acem,
     get_bond_length_form,
 )
-from mmml.models.kernnn.kernels import get_1d_kernels_k33, print_kernel_table
-from mmml.models.kernnn.model import (
+from karml.models.kernnn.kernels import get_1d_kernels_k33, print_kernel_table
+from karml.models.kernnn.model import (
     DualFFNet,
     FFNet,
     KerNNConfig,

@@ -6,7 +6,7 @@ argparse CLI and the ``cg_jaxmd`` Snakemake JSON. ``EnsembleSpec`` captures the
 thermodynamic ensemble, orthogonal to the energy definition (constraint 6).
 
 Scaffolding only — the argparse/JSON lowering adapters land in later steps and
-will live alongside the existing ``mmml.cli.run.md_config`` helpers.
+will live alongside the existing ``karml.cli.run.md_config`` helpers.
 """
 
 from __future__ import annotations
@@ -15,8 +15,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Mapping
 
-from mmml.md.system import SystemSpec
-from mmml.md.temperature import TemperatureSchedule
+from karml.md.system import SystemSpec
+from karml.md.temperature import TemperatureSchedule
 
 __all__ = ["EnsembleSpec", "RunConfig"]
 
@@ -49,7 +49,7 @@ class RunConfig:
 
     Target of both the ``md-system`` CLI and the ``cg_jaxmd`` Snakemake JSON.
     ``terms`` selects registered energy terms by name (see
-    :mod:`mmml.md.energy.registry`); ``backend`` selects the driver engine and
+    :mod:`karml.md.energy.registry`); ``backend`` selects the driver engine and
     ``sampler`` selects MD vs. rigid-body sampling.
     """
 

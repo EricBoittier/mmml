@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from mmml.interfaces.pycharmmInterface.packmol_cache import (
+from karml.interfaces.pycharmmInterface.packmol_cache import (
     CACHE_VERSION,
     packmol_cache_fingerprint,
     packmol_cache_key,

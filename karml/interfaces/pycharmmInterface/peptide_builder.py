@@ -15,16 +15,16 @@ import numpy as np
 import pandas as pd
 from ase import Atoms
 
-from mmml.interfaces.pycharmmInterface.import_pycharmm import (
+from karml.interfaces.pycharmmInterface.import_pycharmm import (
     ensure_pycharmm_loaded,
 )
-from mmml.interfaces.pycharmmInterface.protein_charmm_build import (
+from karml.interfaces.pycharmmInterface.protein_charmm_build import (
     ProteinToppar,
     protein_toppar_paths,
 )
-from mmml.interfaces.pycharmmInterface.nbonds_config import PbcNbondCutoffs
-from mmml.interfaces.pycharmmInterface.utils import get_Z_from_psf
-from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
+from karml.interfaces.pycharmmInterface.nbonds_config import PbcNbondCutoffs
+from karml.interfaces.pycharmmInterface.utils import get_Z_from_psf
+from karml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
 
 ONE_TO_THREE = {
     "A": "ALA", "R": "ARG", "N": "ASN", "D": "ASP", "C": "CYS",
@@ -402,8 +402,8 @@ def build_peptide_in_charmm(
     # Load parameters & generate segment under relaxed bomlev to prevent termination on toppar warnings
     with charmm_relaxed_bomlev(-5):
         # 1. Load CGENFF topology and parameters first
-        from mmml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_RTF
-        from mmml.interfaces.pycharmmInterface.nbonds_config import (
+        from karml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_RTF
+        from karml.interfaces.pycharmmInterface.nbonds_config import (
             read_cgenff_prm,
             _rtf_path_without_drude_autogen,
         )
@@ -446,7 +446,7 @@ def build_peptide_in_charmm(
         ic.seed(1, "N", 1, "CA", 1, "C")
 
     # Fill ICs from parameters and build coordinates
-    from mmml.interfaces.pycharmmInterface.nbonds_config import ic_prm_fill
+    from karml.interfaces.pycharmmInterface.nbonds_config import ic_prm_fill
     ic_prm_fill(replace_all=True)
     ic.build()
 
@@ -461,7 +461,7 @@ def build_peptide_in_charmm(
 
     # Optional vacuum minimization to relax IC layout
     if minimize:
-        from mmml.interfaces.pycharmmInterface.nbonds_config import (
+        from karml.interfaces.pycharmmInterface.nbonds_config import (
             apply_nbonds_kwargs,
             vacuum_nbond_kwargs,
         )
@@ -513,11 +513,11 @@ def solvate_peptide_in_charmm(
     import pycharmm.read as read
     import pycharmm.write as write
 
-    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+    from karml.interfaces.pycharmmInterface.mlpot.pbc_env import (
         apply_pbc_nbonds,
         prepare_charmm_pbc,
     )
-    from mmml.interfaces.pycharmmInterface.trialanine_water_box import (
+    from karml.interfaces.pycharmmInterface.trialanine_water_box import (
         _grid_oxygen_sites,
         _tip3_template,
     )
@@ -557,10 +557,10 @@ def solvate_peptide_in_charmm(
     use_grid_fallback = not use_packmol
 
     if use_packmol:
-        from mmml.interfaces.pycharmmInterface.packmol_placement import packmol_executable
+        from karml.interfaces.pycharmmInterface.packmol_placement import packmol_executable
         from ase.io import write as ase_write
         from ase.io import read as ase_read
-        from mmml.paths import bundled_file
+        from karml.paths import bundled_file
 
         try:
             packmol_bin = packmol_executable()
@@ -918,7 +918,7 @@ def qc_built_system(
     # 7. Check current energy in active PyCHARMM session if desired and active
     if check_energy and ensure_pycharmm_loaded():
         try:
-            from mmml.interfaces.pycharmmInterface.protein_charmm_build import charmm_total_energy_kcalmol
+            from karml.interfaces.pycharmmInterface.protein_charmm_build import charmm_total_energy_kcalmol
             e_tot = charmm_total_energy_kcalmol()
             details["charmm_energy"] = e_tot
             if np.isnan(e_tot) or np.isinf(e_tot) or e_tot > 1e6:

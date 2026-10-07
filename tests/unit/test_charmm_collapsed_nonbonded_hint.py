@@ -11,7 +11,7 @@ import types
 
 import pytest
 
-from mmml.utils.monomer_internal_geometry import (
+from karml.utils.monomer_internal_geometry import (
     COLLAPSED_ELEC_PER_ATOM_KCAL,
     charmm_collapsed_nonbonded_hint,
 )

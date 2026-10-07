@@ -15,7 +15,7 @@ datasets use. ``formation_energy`` is already referenced against
 Downstream::
 
     scripts/des_h5_to_npz.py qcell_dimers.h5 -o des_dimers.npz --pad 34
-    mmml prepare-mm-dataset --data des_dimers.npz --output des_dimers_cgenff.npz
+    karml prepare-mm-dataset --data des_dimers.npz --output des_dimers_cgenff.npz
     scripts/filter_mm_dataset_by_residue.py des_dimers_cgenff.npz \\
         --top 40 -o des_top40.npz
 """

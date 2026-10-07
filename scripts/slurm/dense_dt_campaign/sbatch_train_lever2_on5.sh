@@ -19,8 +19,8 @@ set -euo pipefail
 
 if [[ -n "${SLURM_SUBMIT_DIR:-}" && -d "${SLURM_SUBMIT_DIR}" ]]; then
   ROOT="$(cd "${SLURM_SUBMIT_DIR}" && pwd)"
-elif [[ -n "${MMML_ROOT:-}" && -d "${MMML_ROOT}" ]]; then
-  ROOT="$(cd "${MMML_ROOT}" && pwd)"
+elif [[ -n "${KARML_ROOT:-}" && -d "${KARML_ROOT}" ]]; then
+  ROOT="$(cd "${KARML_ROOT}" && pwd)"
 else
   ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 fi

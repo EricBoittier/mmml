@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT="${MMML_ROOT:-$HOME/mmml}"
+ROOT="${KARML_ROOT:-$HOME/karml}"
 cd "$ROOT"
 mkdir -p logs
 

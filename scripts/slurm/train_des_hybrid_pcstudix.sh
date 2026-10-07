@@ -6,12 +6,12 @@
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64G
-#SBATCH --output=/mmhome/boittier/home/mmml/artifacts/lj_scales_des/logs/slurm-%j.out
-#SBATCH --error=/mmhome/boittier/home/mmml/artifacts/lj_scales_des/logs/slurm-%j.err
+#SBATCH --output=/mmhome/boittier/home/karml/artifacts/lj_scales_des/logs/slurm-%j.out
+#SBATCH --error=/mmhome/boittier/home/karml/artifacts/lj_scales_des/logs/slurm-%j.err
 
 set -euo pipefail
 
-REPO="${MMML_REPO:-$HOME/mmml}"
+REPO="${KARML_REPO:-$HOME/karml}"
 cd "$REPO"
 source .venv/bin/activate
 
@@ -39,7 +39,7 @@ python -c "import jax; print('JAX devices:', jax.devices())"
 
 bash examples/lj_scales/12_des_dataset.sh
 
-uv run mmml physnet-train \
+uv run karml physnet-train \
   --config examples/lj_scales/train_des_warmstart.yaml \
   --data "$LJ_ENRICHED" \
   --valid-data "" \

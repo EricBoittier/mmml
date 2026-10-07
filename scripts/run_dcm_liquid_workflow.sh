@@ -2,8 +2,8 @@
 # End-to-end liquid DCM workflow on a GPU node (A100 / scicore-style).
 #
 # Phase 0 (optional): health-check --require-gpu --live
-# Phase A: mmml liquid-box  — MM-only certification (Packmol → MC → SD/ABNR → optional mini-NPT)
-# Phase B: mmml md-system   — hybrid MLpot mini → heat → equi from certified box
+# Phase A: karml liquid-box  — MM-only certification (Packmol → MC → SD/ABNR → optional mini-NPT)
+# Phase B: karml md-system   — hybrid MLpot mini → heat → equi from certified box
 #
 # MIC + liquid density (read this before changing N_DCM):
 #   Bulk DCM @ ρ=1.326 g/cm³ gives L ≈ (N × 106 Å³)^(1/3).
@@ -27,36 +27,36 @@
 #   module load GCC/14.2.0 OpenMPI/5.0.7-GCC-14.2.0 CMake/3.31.3-GCCcore-14.2.0
 #   export OPENMPI_ROOT=$EBROOTOPENMPI
 #   ./scripts/rebuild_charmm_mlpot.sh
-#   export MMML_CKPT=/path/to/checkpoint.json
+#   export KARML_CKPT=/path/to/checkpoint.json
 #   uv sync --extra gpu
 #
 # Examples (any cwd):
-#   export MMML_CKPT=~/mmml/mmml/models/physnetjax/defaults/hf_json/<ckpt>.json
-#   ~/mmml/scripts/run_dcm_liquid_workflow.sh
-#   N_DCM=90 BOX_SIZE=32 ~/mmml/scripts/run_dcm_liquid_workflow.sh
-#   MD_PROFILE=smoke N_DCM=20 BOX_SIZE=45 SKIP_HEALTH=1 ~/mmml/scripts/run_dcm_liquid_workflow.sh
-#   MINI_BOX_EQUIL_PS=10 REBUILD_BOX=1 ~/mmml/scripts/run_dcm_liquid_workflow.sh
-#   SKIP_HEALTH=1 SKIP_LIQUID_BOX=1 BOX_DIR=~/tests/boxes/dcm60_l32 ~/mmml/scripts/run_dcm_liquid_workflow.sh
-#   LIQUID_BOX_VERBOSE=1 ~/mmml/scripts/run_dcm_liquid_workflow.sh  # drop --quiet on liquid-box
+#   export KARML_CKPT=~/karml/karml/models/physnetjax/defaults/hf_json/<ckpt>.json
+#   ~/karml/scripts/run_dcm_liquid_workflow.sh
+#   N_DCM=90 BOX_SIZE=32 ~/karml/scripts/run_dcm_liquid_workflow.sh
+#   MD_PROFILE=smoke N_DCM=20 BOX_SIZE=45 SKIP_HEALTH=1 ~/karml/scripts/run_dcm_liquid_workflow.sh
+#   MINI_BOX_EQUIL_PS=10 REBUILD_BOX=1 ~/karml/scripts/run_dcm_liquid_workflow.sh
+#   SKIP_HEALTH=1 SKIP_LIQUID_BOX=1 BOX_DIR=~/tests/boxes/dcm60_l32 ~/karml/scripts/run_dcm_liquid_workflow.sh
+#   LIQUID_BOX_VERBOSE=1 ~/karml/scripts/run_dcm_liquid_workflow.sh  # drop --quiet on liquid-box
 #
 # Long-range Coulomb solver comparison (MIC / jax-pme / ScaFaCoS):
-#   ~/mmml/scripts/run_dcm_long_range_workflow.sh
+#   ~/karml/scripts/run_dcm_long_range_workflow.sh
 #   See docs/long-range-solver-tutorial.md
 #
 # Note: CHARMM Fortran I/O fails on paths with uppercase letters (e.g. dcm60_L32).
-# mmml stages I/O under $TMPDIR/mmml-charmm-io/ automatically; prefer lowercase box dirs.
+# karml stages I/O under $TMPDIR/karml-charmm-io/ automatically; prefer lowercase box dirs.
 #
 set -euo pipefail
 
-MMML_ROOT="${MMML_ROOT:-$HOME/mmml}"
+KARML_ROOT="${KARML_ROOT:-$HOME/karml}"
 TESTS_ROOT="${TESTS_ROOT:-$HOME/tests}"
-MPIRUN="${MMML_MPIRUN_WRAPPER:-$MMML_ROOT/scripts/mmml-charmm-mpirun.sh}"
-RESILIENT_MD_CONFIG="$MMML_ROOT/mmml/cli/run/dcm_liquid_workflow.resilient.example.yaml"
+MPIRUN="${KARML_MPIRUN_WRAPPER:-$KARML_ROOT/scripts/karml-charmm-mpirun.sh}"
+RESILIENT_MD_CONFIG="$KARML_ROOT/karml/cli/run/dcm_liquid_workflow.resilient.example.yaml"
 
-# shellcheck source=scripts/resolve_mmml_env.sh
-source "$MMML_ROOT/scripts/resolve_mmml_env.sh"
-mmml_resolve_env "$MMML_ROOT"
-PY="${MMML_PYTHON}"
+# shellcheck source=scripts/resolve_karml_env.sh
+source "$KARML_ROOT/scripts/resolve_karml_env.sh"
+karml_resolve_env "$KARML_ROOT"
+PY="${KARML_PYTHON}"
 
 # --- sizing (override with N_DCM=..., BOX_SIZE=...) -------------------------
 N_DCM="${N_DCM:-60}"
@@ -109,8 +109,8 @@ BOX_JSON="$BOX_DIR/box.json"
 PSF="$BOX_DIR/model.psf"
 CRD="$BOX_DIR/model.crd"
 
-if [[ ! -d "$MMML_ROOT" ]]; then
-  echo "MMML_ROOT not found: $MMML_ROOT" >&2
+if [[ ! -d "$KARML_ROOT" ]]; then
+  echo "KARML_ROOT not found: $KARML_ROOT" >&2
   exit 1
 fi
 if [[ ! -x "$MPIRUN" ]]; then
@@ -123,9 +123,9 @@ if [[ "$MD_PROFILE" == "resilient" && ! -f "$RESILIENT_MD_CONFIG" ]]; then
 fi
 
 # shellcheck source=scripts/setup_jax_cuda_env.sh
-source "$MMML_ROOT/scripts/setup_jax_cuda_env.sh"
+source "$KARML_ROOT/scripts/setup_jax_cuda_env.sh"
 export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0}"
-export MMML_MPI_NP="${MMML_MPI_NP:-1}"
+export KARML_MPI_NP="${KARML_MPI_NP:-1}"
 
 # OpenMPI for MPI-linked libcharmm (ldd may show libmpi => not found without modules).
 if command -v module >/dev/null 2>&1; then
@@ -137,15 +137,15 @@ if [[ -n "$OPENMPI_ROOT" && -d "$OPENMPI_ROOT/lib" ]]; then
   export LD_LIBRARY_PATH="$OPENMPI_ROOT/lib:${LD_LIBRARY_PATH:-}"
 fi
 
-if [[ -z "${MMML_CKPT:-}" ]]; then
+if [[ -z "${KARML_CKPT:-}" ]]; then
   DEFAULT_CKPT="$(
-    find "$MMML_ROOT/mmml/models/physnetjax/defaults/hf_json" -maxdepth 1 -name '*_portable.json' 2>/dev/null | head -n 1
+    find "$KARML_ROOT/karml/models/physnetjax/defaults/hf_json" -maxdepth 1 -name '*_portable.json' 2>/dev/null | head -n 1
   )"
   if [[ -n "$DEFAULT_CKPT" ]]; then
-    export MMML_CKPT="$DEFAULT_CKPT"
-    echo "Using MMML_CKPT=$MMML_CKPT"
+    export KARML_CKPT="$DEFAULT_CKPT"
+    echo "Using KARML_CKPT=$KARML_CKPT"
   else
-    echo "Set MMML_CKPT to a PhysNet portable JSON checkpoint." >&2
+    echo "Set KARML_CKPT to a PhysNet portable JSON checkpoint." >&2
     exit 1
   fi
 fi
@@ -153,7 +153,7 @@ fi
 read -r BULK_L N_ATOMS EFF_RHO MIC_OK <<EOF
 $(
   "$PY" - <<PY
-from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import (
+from karml.interfaces.pycharmmInterface.mlpot.box_sizing import (
     cubic_box_side_from_target_density,
     total_mass_g_for_composition,
 )
@@ -184,7 +184,7 @@ EOF
 echo "================================================================"
 echo " DCM liquid workflow (MIC-aware)"
 echo "================================================================"
-echo " MMML_ROOT:      $MMML_ROOT"
+echo " KARML_ROOT:      $KARML_ROOT"
 echo " TESTS_ROOT:     $TESTS_ROOT"
 echo " Composition:    DCM:${N_DCM} (${N_ATOMS} ML atoms)"
 echo " Box side:       ${BOX_SIZE} Å  (bulk-ρ L would be ≈${BULK_L} Å only)"
@@ -194,7 +194,7 @@ echo " Box dir:        $BOX_DIR"
 echo " Run dir:        $RUN_DIR"
 echo " MD profile:     $MD_PROFILE"
 echo " MD stages:      $MD_STAGES"
-echo " Checkpoint:     $MMML_CKPT"
+echo " Checkpoint:     $KARML_CKPT"
 echo "================================================================"
 
 if [[ "$MIC_OK" != "1" ]]; then
@@ -210,7 +210,7 @@ fi
 
 if [[ "$SKIP_HEALTH" != "1" ]]; then
   echo "[phase 0] health-check (GPU + live MLpot DCM:2) ..."
-  "$MPIRUN" health-check --require-gpu --live --checkpoint "$MMML_CKPT"
+  "$MPIRUN" health-check --require-gpu --live --checkpoint "$KARML_CKPT"
 fi
 
 if [[ "$SKIP_LIQUID_BOX" != "1" ]]; then
@@ -290,7 +290,7 @@ if [[ "$SKIP_MD" != "1" ]]; then
       --from-crd "$CRD"
       --box-size "$BOX_SIZE"
       --skip-cluster-build
-      --checkpoint "$MMML_CKPT"
+      --checkpoint "$KARML_CKPT"
       --output-dir "$RUN_DIR"
       --md-stages "$MD_STAGES"
       --mini-nstep "$MINI_NSTEP"
@@ -313,7 +313,7 @@ if [[ "$SKIP_MD" != "1" ]]; then
       --from-psf "$PSF"
       --from-crd "$CRD"
       --skip-cluster-build
-      --checkpoint "$MMML_CKPT"
+      --checkpoint "$KARML_CKPT"
       --output-dir "$RUN_DIR"
       --md-stages "$MD_STAGES"
       --mini-nstep "$MINI_NSTEP"

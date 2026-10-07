@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# DCM:90 free-space heating from an existing MLpot mini (CGENFF + hybrid MMML MLpot).
+# DCM:90 free-space heating from an existing MLpot mini (CGENFF + hybrid KARML MLpot).
 #
 # Hybrid force field (both on by default in DecomposedMlpotModel):
 #   doML=True   — PhysNet monomer/dimer ML (USER term via MLpot)
@@ -24,7 +24,7 @@ OUT_DIR="${OUT_DIR:-artifacts/pycharmm_mlpot/dcm90_nvt}"
 TAG="${TAG:-dcm_90}"
 FB_RAD="${FB_RAD:-32.0}"
 PS_HEAT="${PS_HEAT:-20}"
-MPIRUN="${MMML_MPIRUN_WRAPPER:-$REPO_ROOT/scripts/mmml-charmm-mpirun.sh}"
+MPIRUN="${KARML_MPIRUN_WRAPPER:-$REPO_ROOT/scripts/karml-charmm-mpirun.sh}"
 
 TOPO_PSF="$OUT_DIR/cluster_for_vmd_${TAG}.psf"
 MINI_CRD="$OUT_DIR/mini_full_mlpot_${TAG}.crd"

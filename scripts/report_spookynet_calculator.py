@@ -7,7 +7,7 @@ import argparse
 import json
 from pathlib import Path
 
-from mmml.models.spookynet_calc import SpookyNetCalculator
+from karml.models.spookynet_calc import SpookyNetCalculator
 
 
 def _markdown(report: dict) -> str:

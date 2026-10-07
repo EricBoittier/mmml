@@ -8,7 +8,7 @@
 
 set -euo pipefail
 
-MMML_ROOT="${MMML_ROOT:-$HOME/mmml}"
+KARML_ROOT="${KARML_ROOT:-$HOME/karml}"
 TESTS_ROOT="${TESTS_ROOT:-$HOME/tests}"
 N_DCM="${N_DCM:-10}"
 BOX_SIZE="${BOX_SIZE:-40}"
@@ -33,12 +33,12 @@ if [[ -z "$PSF" ]]; then
 fi
 _box_tag="$(basename "${BOX_DIR:-domdec_dcm${N_DCM}_l${BOX_SIZE}}")"
 RUN_DIR="${RUN_DIR:-$TESTS_ROOT/runs/${_box_tag}_native}"
-MPIRUN="${MMML_MPIRUN_WRAPPER:-$MMML_ROOT/scripts/mmml-charmm-mpirun.sh}"
-CHARMM_HOME="${CHARMM_HOME:-$MMML_ROOT/setup/charmm}"
+MPIRUN="${KARML_MPIRUN_WRAPPER:-$KARML_ROOT/scripts/karml-charmm-mpirun.sh}"
+CHARMM_HOME="${CHARMM_HOME:-$KARML_ROOT/setup/charmm}"
 CHARMM_LIB_DIR="${CHARMM_LIB_DIR:-$CHARMM_HOME}"
 CHARMM_BUILD_DIR="${CHARMM_BUILD_DIR:-}"
-RTF="${RTF:-$MMML_ROOT/mmml/data/charmm/top_all36_cgenff.rtf}"
-PRM="${PRM:-$MMML_ROOT/mmml/data/charmm/par_all36_cgenff.prm}"
+RTF="${RTF:-$KARML_ROOT/karml/data/charmm/top_all36_cgenff.rtf}"
+PRM="${PRM:-$KARML_ROOT/karml/data/charmm/par_all36_cgenff.prm}"
 CHARMM_EXE="${CHARMM_EXE:-}"
 
 platform_tag() {
@@ -66,12 +66,12 @@ find_charmm_exe() {
     "$CHARMM_HOME/bin/charmm" \
     "$CHARMM_HOME/exec/charmm" \
     "$CHARMM_HOME/exec/gnu/charmm" \
-    "$HOME/.cache/mmml-charmm-build/$(platform_tag)-exec/charmm" \
-    "$HOME/.cache/mmml-charmm-build/$(platform_tag)-exec/bin/charmm" \
-    "$HOME/.cache/mmml-charmm-build/$(platform_tag)-exec/exec/charmm" \
-    "$HOME/.cache/mmml-charmm-build/$(platform_tag)/charmm" \
-    "$HOME/.cache/mmml-charmm-build/$(platform_tag)/bin/charmm" \
-    "$HOME/.cache/mmml-charmm-build/$(platform_tag)/exec/charmm"
+    "$HOME/.cache/karml-charmm-build/$(platform_tag)-exec/charmm" \
+    "$HOME/.cache/karml-charmm-build/$(platform_tag)-exec/bin/charmm" \
+    "$HOME/.cache/karml-charmm-build/$(platform_tag)-exec/exec/charmm" \
+    "$HOME/.cache/karml-charmm-build/$(platform_tag)/charmm" \
+    "$HOME/.cache/karml-charmm-build/$(platform_tag)/bin/charmm" \
+    "$HOME/.cache/karml-charmm-build/$(platform_tag)/exec/charmm"
   do
     if [[ -n "$candidate" && -x "$candidate" ]]; then
       echo "$candidate"
@@ -80,8 +80,8 @@ find_charmm_exe() {
   done
   for build_root in \
     "$CHARMM_BUILD_DIR" \
-    "$HOME/.cache/mmml-charmm-build/$(platform_tag)-exec" \
-    "$HOME/.cache/mmml-charmm-build/$(platform_tag)" \
+    "$HOME/.cache/karml-charmm-build/$(platform_tag)-exec" \
+    "$HOME/.cache/karml-charmm-build/$(platform_tag)" \
     "$CHARMM_HOME/build/cmake"
   do
     if [[ -d "$build_root" ]]; then
@@ -105,15 +105,15 @@ Set CHARMM_EXE=/path/to/charmm and retry.
 Tried common paths under:
   CHARMM_HOME=$CHARMM_HOME
   CHARMM_BUILD_DIR=${CHARMM_BUILD_DIR:-<unset>}
-  $HOME/.cache/mmml-charmm-build/$(platform_tag)
+  $HOME/.cache/karml-charmm-build/$(platform_tag)
 
 Quick locate:
-  command find "$HOME/.cache/mmml-charmm-build" "$CHARMM_HOME" -type f -name charmm -perm -111 2>/dev/null
+  command find "$HOME/.cache/karml-charmm-build" "$CHARMM_HOME" -type f -name charmm -perm -111 2>/dev/null
 
 If no executable exists, this CHARMM build may be library-only. Build one with:
   bash scripts/rebuild_charmm_native_exec.sh
 Then rerun:
-  CHARMM_EXE=$MMML_ROOT/setup/charmm/charmm bash scripts/run_domdec_dcm10_smoke.sh tier3
+  CHARMM_EXE=$KARML_ROOT/setup/charmm/charmm bash scripts/run_domdec_dcm10_smoke.sh tier3
 EOF
   exit 1
 fi
@@ -125,10 +125,10 @@ test -s "$PRM" || { echo "Missing PRM: $PRM" >&2; exit 1; }
 test -x "$MPIRUN" || { echo "Missing mpirun wrapper: $MPIRUN" >&2; exit 1; }
 
 _resolve_python() {
-  if [[ -n "${MMML_PYTHON:-}" && -x "${MMML_PYTHON}" ]]; then
-    echo "$MMML_PYTHON"
-  elif [[ -x "${MMML_ROOT}/.venv/bin/python" ]]; then
-    echo "${MMML_ROOT}/.venv/bin/python"
+  if [[ -n "${KARML_PYTHON:-}" && -x "${KARML_PYTHON}" ]]; then
+    echo "$KARML_PYTHON"
+  elif [[ -x "${KARML_ROOT}/.venv/bin/python" ]]; then
+    echo "${KARML_ROOT}/.venv/bin/python"
   else
     command -v python3 || command -v python
   fi
@@ -171,18 +171,18 @@ if [[ "$CHARMM_EXE" == *c47* ]]; then
   SITE_C47=1
 fi
 
-MMML_MPI_NP="${MMML_MPI_NP:-2}"
-if ! [[ "$MMML_MPI_NP" =~ ^[1-9][0-9]*$ ]]; then
-  echo "MMML_MPI_NP must be a positive integer (got: ${MMML_MPI_NP})" >&2
+KARML_MPI_NP="${KARML_MPI_NP:-2}"
+if ! [[ "$KARML_MPI_NP" =~ ^[1-9][0-9]*$ ]]; then
+  echo "KARML_MPI_NP must be a positive integer (got: ${KARML_MPI_NP})" >&2
   exit 1
 fi
 
-if [[ "$SITE_C47" == 1 && "$MMML_MPI_NP" -gt 1 && "$MMML_MPI_NP" -lt 8 ]]; then
+if [[ "$SITE_C47" == 1 && "$KARML_MPI_NP" -gt 1 && "$KARML_MPI_NP" -lt 8 ]]; then
   cat >&2 <<EOF
 Note: site c47 ($CHARMM_EXE) often rejects DOMDEC NDIR 2 1 1 at runtime.
-Tier 3 will still attempt np=${MMML_MPI_NP} on the dense l40 prep; for a clean gate use MMML native CHARMM:
+Tier 3 will still attempt np=${KARML_MPI_NP} on the dense l40 prep; for a clean gate use KARML native CHARMM:
 
-  CHARMM_EXE=/path/to/mmml/native/charmm bash scripts/run_domdec_dcm10_smoke.sh tier3
+  CHARMM_EXE=/path/to/karml/native/charmm bash scripts/run_domdec_dcm10_smoke.sh tier3
 EOF
 fi
 
@@ -190,13 +190,13 @@ fi
 
 if [[ -z "${DOMDEC_NDIR:-}" ]]; then
   if ! DOMDEC_NDIR="$("$PY" -c "
-from mmml.utils.domdec_ndir import format_domdec_ndir
-print(format_domdec_ndir(${MMML_MPI_NP}, strict_c47_axis_rule=bool(int('${DOMDEC_STRICT_C47}'))))
+from karml.utils.domdec_ndir import format_domdec_ndir
+print(format_domdec_ndir(${KARML_MPI_NP}, strict_c47_axis_rule=bool(int('${DOMDEC_STRICT_C47}'))))
 " 2>&1)"; then
     cat >&2 <<EOF
 ${DOMDEC_NDIR}
 
-Could not choose DOMDEC NDIR for MMML_MPI_NP=${MMML_MPI_NP}.
+Could not choose DOMDEC NDIR for KARML_MPI_NP=${KARML_MPI_NP}.
 c47 requires each NDIR axis to be 1 or >=8; minimum MPI count is 8.
 Box constraint: L >= 2·RCUT·N/(N-1) ≈ 43 Å for N=8, RCUT=19 Å.
 EOF
@@ -205,9 +205,9 @@ EOF
 fi
 
 _min_box="$("$PY" -c "
-from mmml.utils.domdec_ndir import min_domdec_crystal_side_A
+from karml.utils.domdec_ndir import min_domdec_crystal_side_A
 print(min_domdec_crystal_side_A(
-    ${MMML_MPI_NP}, ${DOMDEC_CUTNB}, ${DOMDEC_GROUP_HALO},
+    ${KARML_MPI_NP}, ${DOMDEC_CUTNB}, ${DOMDEC_GROUP_HALO},
     strict_c47_axis_rule=bool(int('${DOMDEC_STRICT_C47}')),
 ))
 ")"
@@ -220,7 +220,7 @@ sys.exit(0 if side + 1e-6 >= min_box else 1)
 PY
 then
   cat >&2 <<EOF
-Prep lattice ${DOMDEC_BOX_SIZE}Å is too small for MMML_MPI_NP=${MMML_MPI_NP} DOMDEC domains (need >= ${_min_box}Å per-axis split).
+Prep lattice ${DOMDEC_BOX_SIZE}Å is too small for KARML_MPI_NP=${KARML_MPI_NP} DOMDEC domains (need >= ${_min_box}Å per-axis split).
 
 Use a dense liquid-box prep large enough for the domain split (typically BOX_SIZE=40 for np=2).
 Do not inflate crystal without re-prepping — that removes PBC images ("IMAGES NEED TO BE PRESENT").
@@ -242,9 +242,9 @@ elif [[ -n "${DOMDEC_ENERGY:-}" ]]; then
   _domdec_energy_block="$DOMDEC_ENERGY"
 else
   _domdec_energy_block="$("$PY" -c "
-from mmml.utils.domdec_ndir import format_domdec_tier3_energy_block
+from karml.utils.domdec_ndir import format_domdec_tier3_energy_block
 print(format_domdec_tier3_energy_block(
-    ${MMML_MPI_NP},
+    ${KARML_MPI_NP},
     cutnb=${DOMDEC_CUTNB},
     strict_c47_axis_rule=bool(int('${DOMDEC_STRICT_C47}')),
 ))
@@ -280,7 +280,7 @@ echo "== Native CHARMM DOMDEC DCM:${N_DCM} smoke =="
 echo "CHARMM_EXE: $CHARMM_EXE"
 echo "PSF:        $PSF"
 echo "CRD:        $CRD"
-echo "DOMDEC:     MMML_MPI_NP=${MMML_MPI_NP} ndir=${DOMDEC_NDIR} crystal=${DOMDEC_BOX_SIZE}Å"
+echo "DOMDEC:     KARML_MPI_NP=${KARML_MPI_NP} ndir=${DOMDEC_NDIR} crystal=${DOMDEC_BOX_SIZE}Å"
 echo "INP:        $INP"
 echo "OUT:        $OUT"
 echo "== INP energy block =="
@@ -301,14 +301,14 @@ if [[ "$_rc" -ne 0 ]] || grep -qE 'ABNORMAL TERMINATION|BOMLEV \( -2\) IS REACHE
   if grep -qiE 'must have 1 or >=8|number of nodes|invalid.*ndir|domdec.*error' "$OUT" 2>/dev/null; then
     cat >&2 <<EOF
 Likely c47 DOMDEC axis rule: site CHARMM rejects np=2 NDIR 2 1 1.
-Build MMML native CHARMM (as_library=OFF) and rerun tier3:
+Build KARML native CHARMM (as_library=OFF) and rerun tier3:
 
   bash scripts/rebuild_charmm_native_exec.sh
   CHARMM_EXE=$CHARMM_HOME/charmm bash scripts/run_domdec_dcm10_smoke.sh tier3
 EOF
-  elif [[ "$SITE_C47" == 1 && "$MMML_MPI_NP" -gt 1 && "$MMML_MPI_NP" -lt 8 ]]; then
+  elif [[ "$SITE_C47" == 1 && "$KARML_MPI_NP" -gt 1 && "$KARML_MPI_NP" -lt 8 ]]; then
     cat >&2 <<EOF
-Site c47 ($CHARMM_EXE) often fails np=${MMML_MPI_NP} DOMDEC. Try MMML native CHARMM:
+Site c47 ($CHARMM_EXE) often fails np=${KARML_MPI_NP} DOMDEC. Try KARML native CHARMM:
 
   bash scripts/rebuild_charmm_native_exec.sh
   CHARMM_EXE=$CHARMM_HOME/charmm bash scripts/run_domdec_dcm10_smoke.sh tier3
@@ -325,7 +325,7 @@ fi
 # Mode B: "DOMDEC node number limitation" / "must have (a) 1 node or (b) at least 8"
 #   → KEY_DOMDEC==1 (compiled in and activating!) but np<8 violates c47 axis rule.
 #   Fix: use np>=8 — box constraint L >= 2·RCUT·8/7 ≈ 43 Å (a ~45 Å box suffices).
-#   Or use MMML spatial MPI for liquid-density MLPot scaling.
+#   Or use KARML spatial MPI for liquid-density MLPot scaling.
 
 if grep -q 'extraneous characters' "$OUT" 2>/dev/null; then
   echo "" >&2
@@ -340,21 +340,21 @@ fi
 if grep -qiE 'DOMDEC node number limitation|must have.*1 node.*at least.*8 node' "$OUT" 2>/dev/null; then
   echo "" >&2
   echo "PARTIAL PASS: KEY_DOMDEC==1 confirmed (DOMDEC compiled in and activating)." >&2
-  echo "  CHARMM correctly rejected np=${MMML_MPI_NP} NDIR ${DOMDEC_NDIR}:" >&2
+  echo "  CHARMM correctly rejected np=${KARML_MPI_NP} NDIR ${DOMDEC_NDIR}:" >&2
   echo "  c47 domdec.F90 requires each NDIR axis to be 1 or >=8 nodes." >&2
   echo "  Minimum for real DOMDEC: np=8 with NDIR 8 1 1." >&2
   echo "  Box constraint: L >= 2·RCUT·8/7 ≈ 43 Å (RCUT=cutnb+group_radius≈19 Å)." >&2
   echo "  A ~45 Å liquid-density DCM box (~700 molecules) is sufficient." >&2
   echo "" >&2
-  echo "  For MLPot at liquid density: use MMML spatial MPI instead of DOMDEC." >&2
+  echo "  For MLPot at liquid density: use KARML spatial MPI instead of DOMDEC." >&2
   echo "  DOMDEC parallelises MM nonbonds; MLPot evaluates as a user-energy term" >&2
   echo "  (serial inside DOMDEC). Spatial MPI parallelises the MLPot evaluation itself." >&2
   echo "  See docs/pycharmm-mpi.md for the spatial-MPI tier-2 workflow." >&2
   exit 2
 fi
 
-if [[ "$MMML_MPI_NP" -gt 1 ]] && ! grep -qiE 'NDIR\s*=' "$OUT" 2>/dev/null; then
-  echo "DOMDEC did not activate at np=${MMML_MPI_NP} (no NDIR= line in $OUT)." >&2
+if [[ "$KARML_MPI_NP" -gt 1 ]] && ! grep -qiE 'NDIR\s*=' "$OUT" 2>/dev/null; then
+  echo "DOMDEC did not activate at np=${KARML_MPI_NP} (no NDIR= line in $OUT)." >&2
   echo "Check ${INP}: energy cutnb ... - / domdec ndir ${DOMDEC_NDIR}" >&2
   exit 1
 fi

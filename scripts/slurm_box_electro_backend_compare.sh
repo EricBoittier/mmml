@@ -2,7 +2,7 @@
 # GPU Slurm job: DCM:5 reference box — MM on/off, electrostatics methods, NVE backends.
 #
 # Submit:
-#   sbatch ~/mmml/scripts/slurm_box_electro_backend_compare.sh
+#   sbatch ~/karml/scripts/slurm_box_electro_backend_compare.sh
 #
 # Monitor:
 #   tail -f ~/tests/runs/dcm5_l25_electro_compare_*/slurm-*.out
@@ -20,17 +20,17 @@
 
 set -euo pipefail
 
-REPO_ROOT="${REPO_ROOT:-$HOME/mmml}"
+REPO_ROOT="${REPO_ROOT:-$HOME/karml}"
 RUN_TAG="slurm${SLURM_JOB_ID:-local}"
 export RUN_TAG
 export RUN_ROOT="${RUN_ROOT:-$HOME/tests/runs/dcm5_l25_electro_compare_${RUN_TAG}}"
 export TESTS_ROOT="${TESTS_ROOT:-$HOME/tests}"
-export MMML_CKPT="${MMML_CKPT:-$HOME/mmml_tutorial/acodcm/ckpts/dcm1-c137fb42-1f65-4748-880b-8f8184a20f70}"
+export KARML_CKPT="${KARML_CKPT:-$HOME/karml_tutorial/acodcm/ckpts/dcm1-c137fb42-1f65-4748-880b-8f8184a20f70}"
 export JAX_PLATFORMS="${JAX_PLATFORMS:-cuda,cpu}"
 export JAX_ENABLE_X64="${JAX_ENABLE_X64:-true}"
-export MMML_JAX_PME_DEVICE="${MMML_JAX_PME_DEVICE:-cpu}"
+export KARML_JAX_PME_DEVICE="${KARML_JAX_PME_DEVICE:-cpu}"
 export OMP_NUM_THREADS="${OMP_NUM_THREADS:-1}"
-export MMML_MPI_NP="${MMML_MPI_NP:-1}"
+export KARML_MPI_NP="${KARML_MPI_NP:-1}"
 export SKIP_BOX_BUILD="${SKIP_BOX_BUILD:-1}"
 
 mkdir -p "$RUN_ROOT"
@@ -42,7 +42,7 @@ cd "$REPO_ROOT"
   echo "host:  $(hostname)"
   echo "job:   ${SLURM_JOB_ID:-local}"
   echo "RUN_ROOT: $RUN_ROOT"
-  echo "MMML_CKPT: $MMML_CKPT"
+  echo "KARML_CKPT: $KARML_CKPT"
   nvidia-smi -L 2>/dev/null || true
   echo "====================================="
 } | tee "$RUN_ROOT/job_header.txt"

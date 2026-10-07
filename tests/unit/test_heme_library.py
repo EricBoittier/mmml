@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import pytest
 
-from mmml.interfaces.pycharmmInterface.cgenff_residues import (
+from karml.interfaces.pycharmmInterface.cgenff_residues import (
     is_cgenff_residue_name,
     require_cgenff_residue_name,
 )
-from mmml.interfaces.pycharmmInterface.heme_library import (
+from karml.interfaces.pycharmmInterface.heme_library import (
     heme_library_residue_names,
     heme_reference_coordinate_table,
     heme_reference_positions,
@@ -19,7 +19,7 @@ from mmml.interfaces.pycharmmInterface.heme_library import (
     topology_family,
     topology_residue_context,
 )
-from mmml.interfaces.pycharmmInterface.nbonds_config import _rtf_path_for_append
+from karml.interfaces.pycharmmInterface.nbonds_config import _rtf_path_for_append
 
 
 def test_heme_stream_is_the_protein_library() -> None:

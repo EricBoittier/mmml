@@ -6,10 +6,10 @@ WORKFLOW_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 REPO_ROOT="$(cd "$WORKFLOW_ROOT/../.." && pwd)"
 cd "$REPO_ROOT"
 
-source "$REPO_ROOT/scripts/resolve_mmml_env.sh"
-mmml_resolve_env "$REPO_ROOT"
+source "$REPO_ROOT/scripts/resolve_karml_env.sh"
+karml_resolve_env "$REPO_ROOT"
 
-"${MMML_PYTHON}" - <<'PY'
+"${KARML_PYTHON}" - <<'PY'
 import shutil
 import sys
 from pathlib import Path

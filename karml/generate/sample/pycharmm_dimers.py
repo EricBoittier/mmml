@@ -2,10 +2,10 @@
 # coding: utf-8
 
 
-from mmml.interfaces.pycharmmInterface.import_pycharmm import reset_block, pycharmm_quiet, pycharmm_soft
+from karml.interfaces.pycharmmInterface.import_pycharmm import reset_block, pycharmm_quiet, pycharmm_soft
 pycharmm_quiet()
-from mmml.interfaces.pycharmmInterface import setupRes
-from mmml.interfaces.pycharmmInterface.utils import view_pycharmm_state, get_Z_from_psf
+from karml.interfaces.pycharmmInterface import setupRes
+from karml.interfaces.pycharmmInterface.utils import view_pycharmm_state, get_Z_from_psf
 import ase
 import pandas as pd
 import numpy as np
@@ -13,8 +13,8 @@ import numpy as np
 import pycharmm
 
 
-from mmml.interfaces.chemcoordInterface.interface import patch_chemcoord_for_pandas3
-from mmml.generate.sample import sample_cc
+from karml.interfaces.chemcoordInterface.interface import patch_chemcoord_for_pandas3
+from karml.generate.sample import sample_cc
 
 patch_chemcoord_for_pandas3()
 

@@ -1,4 +1,4 @@
-"""Regression coverage for the jaxmd-unified stack (``mmml.md`` pipeline).
+"""Regression coverage for the jaxmd-unified stack (``karml.md`` pipeline).
 
 These exercise the real ``assemble_and_run`` -> ``JaxmdDriver`` path end to end
 on a synthetic TIP3-like water box, with **no CHARMM build and no ML
@@ -21,8 +21,8 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from mmml.md import EnsembleSpec, RunConfig, SystemSpec, assemble_and_run
-from mmml.md.results import energy_drift_metrics
+from karml.md import EnsembleSpec, RunConfig, SystemSpec, assemble_and_run
+from karml.md.results import energy_drift_metrics
 
 pytestmark = pytest.mark.unit
 
@@ -49,7 +49,7 @@ def _run(system, *, term="mm_nonbonded", ensemble="nve", n_steps=20, dt_fs=0.5,
     )
     driver = None
     if record_every is not None:
-        from mmml.md.drivers import JaxmdDriver
+        from karml.md.drivers import JaxmdDriver
 
         driver = JaxmdDriver(record_every=record_every)
     return assemble_and_run(cfg, system=system, term_kwargs=term_kwargs, driver=driver)
@@ -202,8 +202,8 @@ def test_trajectory_schema_and_npz(synthetic_water_box, tmp_path):
 
 def test_record_every_controls_frame_count(synthetic_water_box, tmp_path):
     """Frame count must track record_every, not silently record every step."""
-    from mmml.md.drivers import JaxmdDriver
-    from mmml.md.assemble import build_hybrid_energy, _auto_neighbor_fn
+    from karml.md.drivers import JaxmdDriver
+    from karml.md.assemble import build_hybrid_energy, _auto_neighbor_fn
 
     system = synthetic_water_box(seed=0)
     cfg = RunConfig(system=SystemSpec(builder="psf"), terms=("mm_nonbonded",),

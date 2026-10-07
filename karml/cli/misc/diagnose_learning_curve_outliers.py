@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """Diagnose learning-curve sweep outliers: seeds, training spikes, and NPZ samples.
 
-``mmml diagnose-lc-outliers`` combines:
+``karml diagnose-lc-outliers`` combines:
   1. Run-level test metrics vs sibling repeats at the same n_train.
   2. Training-curve spike detection on validation metrics.
   3. NPZ sample enrichment: structures exclusive to outlier train splits.
 
 Example:
-  mmml diagnose-lc-outliers \\
+  karml diagnose-lc-outliers \\
     --eval-root out/eval/learning_curve/e1000 \\
     --dataset aco \\
     --train-npz out/splits/aco/energies_forces_dipoles_train.npz \\
@@ -41,8 +41,8 @@ try:
 except ImportError:
     HAS_MATPLOTLIB = False
 
-from mmml.utils.plotting.styles import DEFAULT_PLOT_STYLE, apply_plot_style, comparison_colors
-from mmml.utils.structure_align import (
+from karml.utils.plotting.styles import DEFAULT_PLOT_STYLE, apply_plot_style, comparison_colors
+from karml.utils.structure_align import (
     plot_aligned_structures,
     select_structure_indices,
 )
@@ -804,7 +804,7 @@ def build_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
             "Example:\n"
-            "  mmml diagnose-lc-outliers \\\n"
+            "  karml diagnose-lc-outliers \\\n"
             "    --eval-root out/eval/learning_curve/e1000 \\\n"
             "    --dataset aco \\\n"
             "    --train-npz out/splits/aco/energies_forces_dipoles_train.npz\n"

@@ -1,12 +1,12 @@
 """Pure scatter/weighted-average core for Mode E (``latent_dynamic``) charges.
 
-See :mod:`mmml.models.mm_charge_mode` (Mode E) for the physical picture: for
+See :mod:`karml.models.mm_charge_mode` (Mode E) for the physical picture: for
 each MD step, a monomer with several currently-active ML-dimer partners has
 several independent per-atom ``q_ML`` estimates (one per pairwise AB forward),
 weighted by that pair's ``ml_switch_scale`` and averaged.
 
 This module holds only the generic "weighted scatter-average" arithmetic,
-factored out of :mod:`mmml.interfaces.pycharmmInterface.mmml_calculator`
+factored out of :mod:`karml.interfaces.pycharmmInterface.karml_calculator`
 (``_aggregate_dynamic_latent_charges``) so it can be unit-tested without a
 live model/CHARMM session -- that function does the geometry (COM
 separations -> weights) and padding/index bookkeeping specific to the MD

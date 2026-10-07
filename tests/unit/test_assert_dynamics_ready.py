@@ -7,7 +7,7 @@ import types
 
 import pytest
 
-from mmml.interfaces.pycharmmInterface.mlpot.cli_common import assert_dynamics_ready
+from karml.interfaces.pycharmmInterface.mlpot.cli_common import assert_dynamics_ready
 
 
 def _install_fake_pycharmm(
@@ -24,7 +24,7 @@ def _install_fake_pycharmm(
         yield
 
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.charmm_levels.charmm_silent_command",
+        "karml.interfaces.pycharmmInterface.charmm_levels.charmm_silent_command",
         _noop_silent,
     )
 
@@ -85,7 +85,7 @@ def test_assert_dynamics_ready_calls_ener_force_when_mlpot_required(monkeypatch)
     monkeypatch.setitem(sys.modules, "pycharmm.energy", fake_energy)
     monkeypatch.setitem(sys.modules, "pycharmm.lingo", fake_lingo)
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.refresh_mlpot_energy_and_grms",
+        "karml.interfaces.pycharmmInterface.mlpot.cli_common.refresh_mlpot_energy_and_grms",
         _fake_refresh,
     )
 
@@ -122,7 +122,7 @@ def test_assert_dynamics_ready_retries_stale_mm_grms(monkeypatch):
     monkeypatch.setitem(sys.modules, "pycharmm.energy", fake_energy)
     monkeypatch.setitem(sys.modules, "pycharmm.lingo", fake_lingo)
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.refresh_mlpot_energy_and_grms",
+        "karml.interfaces.pycharmmInterface.mlpot.cli_common.refresh_mlpot_energy_and_grms",
         _fake_refresh,
     )
 

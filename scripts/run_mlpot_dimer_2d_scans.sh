@@ -4,10 +4,10 @@
 # Each run writes:
 #   <OUT_ROOT>/<checkpoint_basename>/<composition_tag>/scan_2d.npz
 #
-# Prerequisites: same as mmml md-system --backend pycharmm (OpenMPI, libcharmm, MMML_CKPT).
+# Prerequisites: same as karml md-system --backend pycharmm (OpenMPI, libcharmm, KARML_CKPT).
 #
 # Examples:
-#   export MMML_CKPT=/path/to/dcm1-.../ckpts/dcm1-...
+#   export KARML_CKPT=/path/to/dcm1-.../ckpts/dcm1-...
 #   ./scripts/run_mlpot_dimer_2d_scans.sh
 #
 #   COMPOSITIONS="DCM:3 ACO:3" CHECKPOINTS="/ckpt/a /ckpt/b" ./scripts/run_mlpot_dimer_2d_scans.sh
@@ -18,12 +18,12 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 
-if [[ -z "${MMML_CKPT:-}" && -z "${CHECKPOINTS:-}" ]]; then
-  echo "Set MMML_CKPT or CHECKPOINTS (space-separated checkpoint paths)." >&2
+if [[ -z "${KARML_CKPT:-}" && -z "${CHECKPOINTS:-}" ]]; then
+  echo "Set KARML_CKPT or CHECKPOINTS (space-separated checkpoint paths)." >&2
   exit 1
 fi
 
-MPIRUN="${MMML_MPIRUN_WRAPPER:-$REPO_ROOT/scripts/mmml-charmm-mpirun.sh}"
+MPIRUN="${KARML_MPIRUN_WRAPPER:-$REPO_ROOT/scripts/karml-charmm-mpirun.sh}"
 OUT_ROOT="${OUT_ROOT:-artifacts/pycharmm_mlpot/dimer_2d_scan}"
 SCAN_2D_MIN="${SCAN_2D_MIN:-3.0}"
 SCAN_2D_MAX="${SCAN_2D_MAX:-10.0}"
@@ -39,7 +39,7 @@ if [[ -n "${CHECKPOINTS:-}" ]]; then
   # shellcheck disable=SC2206
   CKPT_LIST=($CHECKPOINTS)
 else
-  CKPT_LIST=("$MMML_CKPT")
+  CKPT_LIST=("$KARML_CKPT")
 fi
 
 if [[ $# -ge 1 ]]; then

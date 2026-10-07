@@ -84,7 +84,7 @@ python tests/functionality/neighbor_lists/04_update_mm_pairs_integration.py
 
 ## Production backend selection
 
-Set `MMML_MM_NL_BACKEND` or pass `mm_nl_backend` to `build_mm_energy_forces_fn`:
+Set `KARML_MM_NL_BACKEND` or pass `mm_nl_backend` to `build_mm_energy_forces_fn`:
 
 | Value | Behavior |
 |-------|----------|
@@ -93,10 +93,10 @@ Set `MMML_MM_NL_BACKEND` or pass `mm_nl_backend` to `build_mm_energy_forces_fn`:
 | `cell_list` | NumPy cell-list only |
 | `jax_md` | jax-md primary (fallback prefers Vesin when available) |
 
-See [`NONBOND_LISTS.md`](../../mmml/interfaces/pycharmmInterface/mlpot/NONBOND_LISTS.md).
+See [`NONBOND_LISTS.md`](../../karml/interfaces/pycharmmInterface/mlpot/NONBOND_LISTS.md).
 
 ## Related tools
 
-- [`scripts/dump_neighbor_lists.py`](../../scripts/dump_neighbor_lists.py) — save CHARMM DMAT + MMML pairs (JSON/CSV/PNG) from CRD or campaign artifacts
+- [`scripts/dump_neighbor_lists.py`](../../scripts/dump_neighbor_lists.py) — save CHARMM DMAT + KARML pairs (JSON/CSV/PNG) from CRD or campaign artifacts
 - [`scripts/validate_mlpot_pair_lists.py`](../../scripts/validate_mlpot_pair_lists.py) — post-MD geometry audit (CRD/DCD)
-- [`tests/functionality/mmml_tests/test_ase_jaxmd_pbc_consistency.py`](../mmml_tests/test_ase_jaxmd_pbc_consistency.py) — pytest integration
+- [`tests/functionality/karml_tests/test_ase_jaxmd_pbc_consistency.py`](../karml_tests/test_ase_jaxmd_pbc_consistency.py) — pytest integration

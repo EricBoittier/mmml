@@ -1,4 +1,4 @@
-"""Shared Rich console helpers for MMML CLI and calculator setup (not for JAX-jitted code)."""
+"""Shared Rich console helpers for KARML CLI and calculator setup (not for JAX-jitted code)."""
 
 from __future__ import annotations
 
@@ -330,23 +330,23 @@ def get_reporter(
 
 
 def is_quiet() -> bool:
-    return (os.environ.get("MMML_QUIET") or "").strip().lower() in ("1", "yes", "true")
+    return (os.environ.get("KARML_QUIET") or "").strip().lower() in ("1", "yes", "true")
 
 
 def is_verbose() -> bool:
-    return (os.environ.get("MMML_VERBOSE") or "").strip().lower() in ("1", "yes", "true")
+    return (os.environ.get("KARML_VERBOSE") or "").strip().lower() in ("1", "yes", "true")
 
 
 def rich_enabled(*, quiet: bool = False) -> bool:
     if quiet or is_quiet():
         return False
-    if (os.environ.get("MMML_NO_RICH") or "").strip().lower() in ("1", "yes", "true"):
+    if (os.environ.get("KARML_NO_RICH") or "").strip().lower() in ("1", "yes", "true"):
         return False
     return True
 
 
 def force_rich() -> bool:
-    return (os.environ.get("MMML_RICH") or "").strip().lower() in ("1", "yes", "true")
+    return (os.environ.get("KARML_RICH") or "").strip().lower() in ("1", "yes", "true")
 
 
 @lru_cache(maxsize=1)
@@ -626,7 +626,7 @@ def collect_short_range_wall_mapping(enabled: bool = True) -> dict[str, Any]:
     handoff parameter and is outside the region probed by the usual 2D dimer
     scan (COM ≥ ~3.5 Å).
     """
-    from mmml.models.short_range_wall import (
+    from karml.models.short_range_wall import (
         DEFAULT_WALL_K_EV_A2,
         DEFAULT_WALL_R_ON_A,
     )
@@ -778,7 +778,7 @@ def emit_md_system_calculator_report(
     """Unified md-system calculator report: Track A dashboard + Track B ruler/NL + PSF.
 
     Track A (:func:`emit_hybrid_ml_setup`) covers system/handoff/model/runtime flags.
-    Track B (:func:`mmml.cli.run.summaries.print_calculator_summary`) draws the
+    Track B (:func:`karml.cli.run.summaries.print_calculator_summary`) draws the
     COM-distance cutoff ruler and optional neighbor-list capacities.
     PSF/CGenFF topology is appended when CHARMM has a loaded PSF.
     """
@@ -807,7 +807,7 @@ def emit_md_system_calculator_report(
         )
 
     if include_calculator_summary and cutoff_params is not None:
-        from mmml.cli.run.summaries import print_calculator_summary
+        from karml.cli.run.summaries import print_calculator_summary
 
         print_calculator_summary(
             cutoff_params,
@@ -853,7 +853,7 @@ def emit_md_system_calculator_report(
             )
         )
         if has_nl_detail or (neighbor_lists and any(neighbor_lists.values())):
-            from mmml.cli.run.summaries import print_neighbor_list_summary
+            from karml.cli.run.summaries import print_neighbor_list_summary
 
             extra: dict[str, Any] = {}
             if neighbor_lists:
@@ -896,7 +896,7 @@ def collect_psf_topology_mapping(
 ) -> dict[str, Any] | None:
     """Summarize in-memory CHARMM PSF when PyCHARMM is loaded."""
     try:
-        from mmml.interfaces.pycharmmInterface.charmm_mpi import charmm_lib_available
+        from karml.interfaces.pycharmmInterface.charmm_mpi import charmm_lib_available
 
         if not charmm_lib_available():
             return None
@@ -1196,7 +1196,7 @@ def emit_jax_compile_pass(
 ) -> None:
     phase = "compile+run" if pass_index == 0 else "run"
     message = (
-        f"mmml: JAX compile timer [{label}] pass {pass_index + 1} ({phase}): "
+        f"karml: JAX compile timer [{label}] pass {pass_index + 1} ({phase}): "
         f"{wall_seconds:.2f}s"
     )
     use_styled = rich_enabled(quiet=quiet) and (force_rich() or sys.stdout.isatty())
@@ -1205,7 +1205,7 @@ def emit_jax_compile_pass(
         return
     try:
         _console().print(
-            f"[bold magenta]mmml[/bold magenta]: JAX compile timer "
+            f"[bold magenta]karml[/bold magenta]: JAX compile timer "
             f"[cyan]{label}[/cyan] pass {pass_index + 1} "
             f"([dim]{phase}[/dim]): [bold]{wall_seconds:.2f}s[/bold]"
         )
@@ -1221,7 +1221,7 @@ def emit_jax_compile_label_summary(
     quiet: bool = False,
 ) -> None:
     message = (
-        f"mmml: JAX compile timer [{label}] summary: "
+        f"karml: JAX compile timer [{label}] summary: "
         f"compile≈{compile_s:.2f}s, run≈{run_s:.2f}s"
     )
     use_styled = rich_enabled(quiet=quiet) and (force_rich() or sys.stdout.isatty())
@@ -1230,7 +1230,7 @@ def emit_jax_compile_label_summary(
         return
     try:
         _console().print(
-            f"[bold magenta]mmml[/bold magenta]: JAX compile timer "
+            f"[bold magenta]karml[/bold magenta]: JAX compile timer "
             f"[cyan]{label}[/cyan] summary: "
             f"compile≈[yellow]{compile_s:.2f}s[/yellow], "
             f"run≈[green]{run_s:.2f}s[/green]"

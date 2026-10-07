@@ -6,7 +6,7 @@ import argparse
 from pathlib import Path
 from typing import Union
 
-from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+from karml.interfaces.pycharmmInterface.mlpot.setup import (
     get_charmm_positions_array,
     sync_charmm_positions,
 )
@@ -98,8 +98,8 @@ def run_charmm_lattice_abnr(
     if int(nstep) <= 0:
         return None
 
-    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_quiet_output
-    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+    from karml.interfaces.pycharmmInterface.charmm_levels import charmm_quiet_output
+    from karml.interfaces.pycharmmInterface.mlpot.pbc_env import (
         apply_pbc_nbonds,
         charmm_crystal_abnr_ready,
         charmm_crystal_is_active,
@@ -167,7 +167,7 @@ def run_mini_lattice_abnr(
     """
     if not use_pbc:
         raise ValueError("mini lattice ABNR requires PBC")
-    from mmml.interfaces.pycharmmInterface.mlpot.box_equil import (
+    from karml.interfaces.pycharmmInterface.mlpot.box_equil import (
         measure_mm_pretreat_grms,
         mm_geometry_safe_for_pretreat_dynamics,
     )

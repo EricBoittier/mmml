@@ -12,8 +12,8 @@ import pytest
 jax = pytest.importorskip("jax")
 import jax.numpy as jnp
 
-from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
-from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
+from karml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
+from karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
     DecomposedMlpotCalculator,
     DecomposedMlpotModel,
     build_decomposed_mlpot_model,
@@ -29,7 +29,7 @@ def _mock_mm_pair_buffers() -> tuple[np.ndarray, np.ndarray]:
 
 def _hybrid_compat_patch():
     return patch(
-        "mmml.interfaces.energy_forces.ml.assert_hybrid_ml_compatible",
+        "karml.interfaces.energy_forces.ml.assert_hybrid_ml_compatible",
         return_value=MagicMock(),
     )
 
@@ -45,13 +45,13 @@ def test_build_decomposed_mlpot_verbose_with_cell_does_not_crash():
         {"mm_nonbond_mode": "jax_mic", "ml_spatial_mpi": None, "max_pairs": None},
     )()
     with _hybrid_compat_patch(), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.setup_calculator",
+        "karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.setup_calculator",
         return_value=factory,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.unpack_factory_result",
+        "karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.unpack_factory_result",
         return_value=(None, MagicMock(), None),
     ), patch(
-        "mmml.interfaces.pycharmmInterface.jax_device_policy.mlpot_jax_device_context",
+        "karml.interfaces.pycharmmInterface.jax_device_policy.mlpot_jax_device_context",
         return_value=MagicMock(__enter__=MagicMock(), __exit__=MagicMock()),
     ):
         model = build_decomposed_mlpot_model(
@@ -77,13 +77,13 @@ def test_build_decomposed_mlpot_passes_cell_to_setup_calculator():
         )
     )
     with _hybrid_compat_patch(), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.setup_calculator",
+        "karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.setup_calculator",
         return_value=factory,
     ) as mock_setup, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.unpack_factory_result",
+        "karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.unpack_factory_result",
         return_value=(None, MagicMock(), None),
     ), patch(
-        "mmml.interfaces.pycharmmInterface.jax_device_policy.mlpot_jax_device_context",
+        "karml.interfaces.pycharmmInterface.jax_device_policy.mlpot_jax_device_context",
         return_value=MagicMock(__enter__=MagicMock(), __exit__=MagicMock()),
     ):
         model = build_decomposed_mlpot_model(
@@ -104,13 +104,13 @@ def test_build_decomposed_mlpot_vacuum_cell_false():
     get_update_fn = MagicMock()
     factory = MagicMock(return_value=(None, MagicMock(), None))
     with _hybrid_compat_patch(), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.setup_calculator",
+        "karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.setup_calculator",
         return_value=factory,
     ) as mock_setup, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.unpack_factory_result",
+        "karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.unpack_factory_result",
         return_value=(None, MagicMock(), get_update_fn),
     ), patch(
-        "mmml.interfaces.pycharmmInterface.jax_device_policy.mlpot_jax_device_context",
+        "karml.interfaces.pycharmmInterface.jax_device_policy.mlpot_jax_device_context",
         return_value=MagicMock(__enter__=MagicMock(), __exit__=MagicMock()),
     ):
         model = build_decomposed_mlpot_model(
@@ -144,19 +144,19 @@ def test_periodic_external_deploys_scales_and_does_not_enter_jax_mm_guard(tmp_pa
     factory = MagicMock(return_value=(None, MagicMock(), None))
 
     with _hybrid_compat_patch(), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.setup_calculator",
+        "karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.setup_calculator",
         return_value=factory,
     ) as mock_setup, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.unpack_factory_result",
+        "karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.unpack_factory_result",
         return_value=(None, MagicMock(), None),
     ), patch(
-        "mmml.interfaces.pycharmmInterface.jax_device_policy.mlpot_jax_device_context",
+        "karml.interfaces.pycharmmInterface.jax_device_policy.mlpot_jax_device_context",
         return_value=MagicMock(__enter__=MagicMock(), __exit__=MagicMock()),
     ), patch(
-        "mmml.models.mm_lj_scales.find_learnable_lj_scales_sidecar",
+        "karml.models.mm_lj_scales.find_learnable_lj_scales_sidecar",
         return_value=sidecar,
     ) as find_sidecar, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.scaled_cgenff_prm.deploy_scaled_lj_into_charmm"
+        "karml.interfaces.pycharmmInterface.mlpot.scaled_cgenff_prm.deploy_scaled_lj_into_charmm"
     ) as deploy:
         model = build_decomposed_mlpot_model(
             tmp_path / "params.json",
@@ -216,15 +216,15 @@ def test_decomposed_mlpot_defers_jax_factory_until_get_calculator():
         )
     )
     with _hybrid_compat_patch(), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.setup_calculator",
+        "karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.setup_calculator",
         return_value=factory,
     ) as mock_setup, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.unpack_factory_result",
+        "karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.unpack_factory_result",
         return_value=(None, MagicMock(), MagicMock()),
     ) as mock_unpack, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.ensure_xla_gpu_warmed",
+        "karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.ensure_xla_gpu_warmed",
     ) as mock_xla_warm, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.mlpot_jax_device_context",
+        "karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.mlpot_jax_device_context",
         return_value=MagicMock(__enter__=MagicMock(), __exit__=MagicMock()),
     ):
         model = build_decomposed_mlpot_model(
@@ -255,18 +255,18 @@ def test_decomposed_mlpot_sd_defer_uses_cpu_until_promote():
     cpu_ctx = MagicMock(__enter__=MagicMock(), __exit__=MagicMock())
     gpu_ctx = MagicMock(__enter__=MagicMock(), __exit__=MagicMock())
     with _hybrid_compat_patch(), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.setup_calculator",
+        "karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.setup_calculator",
         return_value=factory,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.unpack_factory_result",
+        "karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.unpack_factory_result",
         return_value=(None, MagicMock(), MagicMock()),
     ) as mock_unpack, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.ensure_xla_gpu_warmed",
+        "karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.ensure_xla_gpu_warmed",
     ) as mock_xla_warm, patch(
-        "mmml.interfaces.pycharmmInterface.jax_device_policy.jax_cpu_until_mlpot_registered",
+        "karml.interfaces.pycharmmInterface.jax_device_policy.jax_cpu_until_mlpot_registered",
         return_value=cpu_ctx,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.jax_device_policy.mlpot_jax_device_context",
+        "karml.interfaces.pycharmmInterface.jax_device_policy.mlpot_jax_device_context",
         return_value=gpu_ctx,
     ):
         model = build_decomposed_mlpot_model(
@@ -325,7 +325,7 @@ def test_maybe_promote_deferred_jax_on_hybrid_eval_with_jax_pme_mesh():
     # this test exercises the mesh-defer logic regardless of whether it's
     # actually installed in the test environment.
     with patch(
-        "mmml.interfaces.pycharmmInterface.long_range_backend.have_jax_pme",
+        "karml.interfaces.pycharmmInterface.long_range_backend.have_jax_pme",
         return_value=True,
     ):
         z = np.array([6, 1, 1, 6, 1, 1], dtype=int)
@@ -363,10 +363,10 @@ def test_maybe_promote_deferred_jax_on_hybrid_eval_with_jax_pme_mesh():
 
 def test_finalize_jax_factory_gpu_promote_ignores_defer_cpu_env(monkeypatch):
     """After MLpot SD, explicit ``gpu=True`` must not stay on CPU from defer registration."""
-    from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
-    from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import DecomposedMlpotModel
+    from karml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
+    from karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import DecomposedMlpotModel
 
-    monkeypatch.setenv("MMML_MLPOT_DEVICE", "cpu")
+    monkeypatch.setenv("KARML_MLPOT_DEVICE", "cpu")
     z = np.array([6, 1, 1, 6, 1, 1], dtype=int)
     model = DecomposedMlpotModel(
         None,
@@ -398,18 +398,18 @@ def test_finalize_jax_factory_gpu_promote_ignores_defer_cpu_env(monkeypatch):
             return False
 
     with patch(
-        "mmml.interfaces.pycharmmInterface.jax_device_policy.mlpot_jax_device_context",
+        "karml.interfaces.pycharmmInterface.jax_device_policy.mlpot_jax_device_context",
         return_value=_GpuCtx(),
     ), patch(
-        "mmml.interfaces.pycharmmInterface.jax_device_policy.jax_cpu_until_mlpot_registered",
+        "karml.interfaces.pycharmmInterface.jax_device_policy.jax_cpu_until_mlpot_registered",
         return_value=_CpuCtx(),
     ), patch(
-        "mmml.utils.jax_gpu_warmup.ensure_xla_gpu_warmed",
+        "karml.utils.jax_gpu_warmup.ensure_xla_gpu_warmed",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.jax_compile_threads.jax_compile_threads_context",
+        "karml.interfaces.pycharmmInterface.jax_compile_threads.jax_compile_threads_context",
         new=lambda: __import__("contextlib").nullcontext(),
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.unpack_factory_result",
+        "karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.unpack_factory_result",
         return_value=(0.0, MagicMock(), None),
     ):
         model._finalize_jax_factory(gpu=True)
@@ -424,10 +424,10 @@ def test_finalize_jax_factory_real_gpu_fallback_does_not_claim_gpu(monkeypatch, 
     callers (e.g. the "promoted JAX factory to GPU" print) never claim GPU while
     actually computing on CPU. Uses the real (unmocked) device-context function,
     with only ``jax.devices`` faked to simulate no visible GPU."""
-    from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
-    from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import DecomposedMlpotModel
+    from karml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
+    from karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import DecomposedMlpotModel
 
-    monkeypatch.setenv("MMML_MLPOT_DEVICE", "gpu")
+    monkeypatch.setenv("KARML_MLPOT_DEVICE", "gpu")
     z = np.array([6, 1, 1, 6, 1, 1], dtype=int)
     model = DecomposedMlpotModel(
         None,
@@ -448,12 +448,12 @@ def test_finalize_jax_factory_real_gpu_fallback_does_not_claim_gpu(monkeypatch, 
         return [cpu_dev]
 
     with patch("jax.devices", side_effect=devices_side_effect), patch(
-        "mmml.utils.jax_gpu_warmup.ensure_xla_gpu_warmed",
+        "karml.utils.jax_gpu_warmup.ensure_xla_gpu_warmed",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.jax_compile_threads.jax_compile_threads_context",
+        "karml.interfaces.pycharmmInterface.jax_compile_threads.jax_compile_threads_context",
         new=lambda: __import__("contextlib").nullcontext(),
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.unpack_factory_result",
+        "karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.unpack_factory_result",
         return_value=(0.0, MagicMock(), None),
     ):
         model._finalize_jax_factory(gpu=True)
@@ -493,10 +493,10 @@ def test_maybe_warmup_deferred_decomposed_mlpot_skips_when_already_on_gpu():
     r = np.zeros((8, 3), dtype=float)
 
     with patch(
-        "mmml.interfaces.pycharmmInterface.charmm_mpi.defer_jax_warmup_until_after_mlpot_sd",
+        "karml.interfaces.pycharmmInterface.charmm_mpi.defer_jax_warmup_until_after_mlpot_sd",
         return_value=True,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.warmup_decomposed_mlpot",
+        "karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.warmup_decomposed_mlpot",
     ) as mock_warmup:
         maybe_warmup_deferred_decomposed_mlpot(
             model, r, n_monomers=2, verbose=False
@@ -514,10 +514,10 @@ def test_maybe_warmup_deferred_decomposed_mlpot_calls_warmup_when_deferred():
     r = np.zeros((8, 3), dtype=float)
 
     with patch(
-        "mmml.interfaces.pycharmmInterface.charmm_mpi.defer_jax_warmup_until_after_mlpot_sd",
+        "karml.interfaces.pycharmmInterface.charmm_mpi.defer_jax_warmup_until_after_mlpot_sd",
         return_value=True,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.warmup_decomposed_mlpot",
+        "karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.warmup_decomposed_mlpot",
     ) as mock_warmup:
         maybe_warmup_deferred_decomposed_mlpot(
             model, r, cell=40.0, n_monomers=2, verbose=True
@@ -532,14 +532,14 @@ def test_setup_calculator_defer_skips_terminal_xla_gpu_warmup():
     if not ckpt.is_file():
         pytest.skip("DESdimers_params.json checkpoint missing")
 
-    from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
-    from mmml.interfaces.pycharmmInterface.mmml_calculator import setup_calculator
+    from karml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
+    from karml.interfaces.pycharmmInterface.karml_calculator import setup_calculator
 
     z = jnp.array([6, 1, 1, 1, 1, 6, 1, 1, 1, 1], dtype=jnp.int32)
     r0 = np.zeros((10, 3), dtype=np.float64)
 
     with patch(
-        "mmml.utils.jax_gpu_warmup.ensure_xla_gpu_warmed",
+        "karml.utils.jax_gpu_warmup.ensure_xla_gpu_warmed",
         return_value=False,
     ) as mock_warm:
         factory = setup_calculator(
@@ -570,7 +570,7 @@ def test_setup_calculator_defer_skips_terminal_xla_gpu_warmup():
 
 def test_runtime_box_is_forwarded_to_lazy_mm_builder():
     """Regression: deferred MLpot + JAX-PME must build MM with callback PBC box."""
-    from mmml.interfaces.pycharmmInterface.mmml_calculator import setup_calculator
+    from karml.interfaces.pycharmmInterface.karml_calculator import setup_calculator
 
     class DummyModel:
         def __init__(self, **kwargs):
@@ -620,10 +620,10 @@ def test_runtime_box_is_forwarded_to_lazy_mm_builder():
     r0 = np.zeros((8, 3), dtype=np.float64)
     box = jnp.asarray([[31.0, 0.0, 0.0], [0.0, 31.0, 0.0], [0.0, 0.0, 31.0]])
 
-    with patch("mmml.utils.model_checkpoint.load_model_checkpoint", return_value=dummy_checkpoint), patch(
-        "mmml.models.physnetjax.physnetjax.models.model.PhysNet", DummyModel
+    with patch("karml.utils.model_checkpoint.load_model_checkpoint", return_value=dummy_checkpoint), patch(
+        "karml.models.physnetjax.physnetjax.models.model.PhysNet", DummyModel
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mmml_calculator.build_mm_energy_forces_fn",
+        "karml.interfaces.pycharmmInterface.karml_calculator.build_mm_energy_forces_fn",
         side_effect=fake_build_mm,
     ):
         factory = setup_calculator(
@@ -658,7 +658,7 @@ def test_runtime_box_is_forwarded_to_lazy_mm_builder():
 
 
 def test_register_mlpot_context_forwards_cell():
-    from mmml.interfaces.pycharmmInterface.mlpot import run_workflow
+    from karml.interfaces.pycharmmInterface.mlpot import run_workflow
 
     z = np.zeros(8, dtype=int)
     r = np.zeros((8, 3), dtype=float)
@@ -676,39 +676,39 @@ def test_register_mlpot_context_forwards_cell():
         call_order.append("warmup")
 
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.run_workflow.load_physnet_mlpot_bundle",
+        "karml.interfaces.pycharmmInterface.mlpot.run_workflow.load_physnet_mlpot_bundle",
         return_value=(None, None, fake_model),
     ) as mock_load, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.run_workflow.register_mlpot",
+        "karml.interfaces.pycharmmInterface.mlpot.run_workflow.register_mlpot",
         side_effect=_register,
     ) as mock_register, patch(
         # run_workflow now resolves the ML region via
         # resolve_mlpot_selection_from_args (imported inside the function),
         # so patch it at the source module.
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.resolve_mlpot_selection_from_args",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.resolve_mlpot_selection_from_args",
         return_value=fake_sel,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.charmm_mpi.defer_jax_warmup_until_after_mlpot_sd",
+        "karml.interfaces.pycharmmInterface.charmm_mpi.defer_jax_warmup_until_after_mlpot_sd",
         return_value=False,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.warmup_decomposed_mlpot",
+        "karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.warmup_decomposed_mlpot",
         side_effect=_warmup,
     ) as mock_warmup, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.run_workflow.refresh_nbonds_after_mlpot_pbc",
+        "karml.interfaces.pycharmmInterface.mlpot.run_workflow.refresh_nbonds_after_mlpot_pbc",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.run_workflow.sync_charmm_positions",
+        "karml.interfaces.pycharmmInterface.mlpot.run_workflow.sync_charmm_positions",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.run_workflow.get_charmm_positions_array",
+        "karml.interfaces.pycharmmInterface.mlpot.run_workflow.get_charmm_positions_array",
         return_value=r,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.rebind_mlpot_calculator_from_pycmodel",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.rebind_mlpot_calculator_from_pycmodel",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.topology_recovery.attach_topology_recovery_state",
+        "karml.interfaces.pycharmmInterface.mlpot.topology_recovery.attach_topology_recovery_state",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.assert_mlpot_user_active",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.assert_mlpot_user_active",
         return_value=-1.0,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.assert_charmm_pbc_lattice_ready_for_mlpot",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.assert_charmm_pbc_lattice_ready_for_mlpot",
     ):
         ctx, model = run_workflow._register_mlpot_context(
             z,
@@ -750,14 +750,14 @@ def test_warmup_decomposed_mlpot_uses_single_callback_forward_jit():
     r = np.zeros((8, 3), dtype=float)
 
     with patch(
-        "mmml.utils.jax_gpu_warmup.warmup_hybrid_spherical_cutoff",
+        "karml.utils.jax_gpu_warmup.warmup_hybrid_spherical_cutoff",
     ) as mock_spherical_warmup, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot._warmup_mlpot_callback_forward",
+        "karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot._warmup_mlpot_callback_forward",
     ) as mock_callback_warmup, patch(
-        "mmml.utils.jax_gpu_warmup.ensure_xla_gpu_warmed",
+        "karml.utils.jax_gpu_warmup.ensure_xla_gpu_warmed",
         return_value=False,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.charmm_mpi.recover_mpi_for_charmm_after_jax",
+        "karml.interfaces.pycharmmInterface.charmm_mpi.recover_mpi_for_charmm_after_jax",
     ):
         warmup_decomposed_mlpot(model, r, verbose=False)
 
@@ -776,14 +776,14 @@ def test_warmup_decomposed_mlpot_passes_box_when_cell_set():
     r = np.zeros((8, 3), dtype=float)
 
     with patch(
-        "mmml.utils.jax_gpu_warmup.warmup_hybrid_spherical_cutoff",
+        "karml.utils.jax_gpu_warmup.warmup_hybrid_spherical_cutoff",
     ) as mock_warmup, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot._warmup_mlpot_callback_forward",
+        "karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot._warmup_mlpot_callback_forward",
     ) as mock_vg_warmup, patch(
-        "mmml.utils.jax_gpu_warmup.ensure_xla_gpu_warmed",
+        "karml.utils.jax_gpu_warmup.ensure_xla_gpu_warmed",
         return_value=False,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.charmm_mpi.recover_mpi_for_charmm_after_jax",
+        "karml.interfaces.pycharmmInterface.charmm_mpi.recover_mpi_for_charmm_after_jax",
     ):
         warmup_decomposed_mlpot(model, r, verbose=False)
 
@@ -811,14 +811,14 @@ def test_warmup_decomposed_mlpot_do_mm_uses_get_update_fn():
     r = np.zeros((8, 3), dtype=float)
 
     with patch(
-        "mmml.utils.jax_gpu_warmup.warmup_hybrid_spherical_cutoff",
+        "karml.utils.jax_gpu_warmup.warmup_hybrid_spherical_cutoff",
     ) as mock_warmup, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot._warmup_mlpot_callback_forward",
+        "karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot._warmup_mlpot_callback_forward",
     ) as mock_vg_warmup, patch(
-        "mmml.utils.jax_gpu_warmup.ensure_xla_gpu_warmed",
+        "karml.utils.jax_gpu_warmup.ensure_xla_gpu_warmed",
         return_value=False,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.charmm_mpi.recover_mpi_for_charmm_after_jax",
+        "karml.interfaces.pycharmmInterface.charmm_mpi.recover_mpi_for_charmm_after_jax",
     ):
         warmup_decomposed_mlpot(model, r, verbose=False)
 
@@ -870,7 +870,7 @@ def test_decomposed_calculator_initializes_mm_before_spherical_fn():
     dz = np.zeros(n, dtype=np.float64)
 
     with patch(
-        "mmml.interfaces.pycharmmInterface.jax_device_policy.mlpot_jax_device_context",
+        "karml.interfaces.pycharmmInterface.jax_device_policy.mlpot_jax_device_context",
         return_value=MagicMock(__enter__=MagicMock(), __exit__=MagicMock()),
     ):
         calc.calculate_charmm(
@@ -882,7 +882,7 @@ def test_decomposed_calculator_initializes_mm_before_spherical_fn():
 
 
 def test_pbc_nbond_cutoffs_small_liquid_box():
-    from mmml.interfaces.pycharmmInterface.nbonds_config import pbc_nbond_cutoffs
+    from karml.interfaces.pycharmmInterface.nbonds_config import pbc_nbond_cutoffs
 
     cuts = pbc_nbond_cutoffs(31.079)
     assert cuts.ctonnb < cuts.ctofnb < cuts.cutnb
@@ -890,7 +890,7 @@ def test_pbc_nbond_cutoffs_small_liquid_box():
 
 
 def test_pbc_nbond_cutoffs_respects_half_box():
-    from mmml.interfaces.pycharmmInterface.nbonds_config import pbc_nbond_cutoffs
+    from karml.interfaces.pycharmmInterface.nbonds_config import pbc_nbond_cutoffs
 
     cuts35 = pbc_nbond_cutoffs(35.0)
     assert cuts35.cutnb < 17.5
@@ -917,7 +917,7 @@ def test_pbc_nbond_cutoffs_respects_half_box():
 
 
 def test_pbc_nbond_kwargs_includes_ctexnb_when_capped():
-    from mmml.interfaces.pycharmmInterface.nbonds_config import pbc_nbond_cutoffs
+    from karml.interfaces.pycharmmInterface.nbonds_config import pbc_nbond_cutoffs
 
     cuts = pbc_nbond_cutoffs(35.0)
     kw = cuts.as_pbc_nbond_kwargs()
@@ -927,7 +927,7 @@ def test_pbc_nbond_kwargs_includes_ctexnb_when_capped():
 
 
 def test_pbc_nbond_kwargs_bumps_ctexnb_when_box_allows():
-    from mmml.interfaces.pycharmmInterface.nbonds_config import pbc_nbond_cutoffs
+    from karml.interfaces.pycharmmInterface.nbonds_config import pbc_nbond_cutoffs
 
     cuts = pbc_nbond_cutoffs(55.0)
     kw = cuts.as_pbc_nbond_kwargs()
@@ -935,7 +935,7 @@ def test_pbc_nbond_kwargs_bumps_ctexnb_when_box_allows():
 
 
 def test_charmm_ctypes_scalar_accepts_int_and_ctypes_wrapper():
-    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import _charmm_ctypes_scalar
+    from karml.interfaces.pycharmmInterface.mlpot.pbc_env import _charmm_ctypes_scalar
 
     assert _charmm_ctypes_scalar(1) == pytest.approx(1.0)
     wrapper = MagicMock(value=39.5)
@@ -943,7 +943,7 @@ def test_charmm_ctypes_scalar_accepts_int_and_ctypes_wrapper():
 
 
 def test_cubic_box_matrix_from_side():
-    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import cubic_box_matrix_from_side
+    from karml.interfaces.pycharmmInterface.mlpot.pbc_env import cubic_box_matrix_from_side
 
     m = cubic_box_matrix_from_side(40.0)
     assert m.shape == (3, 3)
@@ -954,8 +954,8 @@ def test_cubic_box_matrix_from_side():
 def test_box_numpy_for_update_accepts_matrix_and_vector():
     import jax.numpy as jnp
 
-    from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import _box_numpy_for_update
-    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import cubic_box_matrix_from_side
+    from karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import _box_numpy_for_update
+    from karml.interfaces.pycharmmInterface.mlpot.pbc_env import cubic_box_matrix_from_side
 
     matrix = jnp.asarray(cubic_box_matrix_from_side(28.0), dtype=jnp.float32)
     vector = jnp.array([28.0, 28.0, 28.0], dtype=jnp.float32)
@@ -970,8 +970,8 @@ def test_mlpot_spherical_forces_passes_cubic_box_matrix():
 
     import jax.numpy as jnp
 
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import mlpot_spherical_forces_ev_angstrom
-    from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import mlpot_spherical_forces_ev_angstrom
+    from karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
         DecomposedMlpotCalculator,
         DecomposedMlpotModel,
     )
@@ -1003,8 +1003,8 @@ def test_mlpot_spherical_forces_loose_pbc_jax_pme_passes_box():
 
     import jax.numpy as jnp
 
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import mlpot_spherical_forces_ev_angstrom
-    from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import mlpot_spherical_forces_ev_angstrom
+    from karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
         DecomposedMlpotCalculator,
         DecomposedMlpotModel,
     )
@@ -1071,13 +1071,13 @@ def test_decomposed_calculator_jax_pme_uses_charmm_box_fallback():
     dy = np.zeros(n, dtype=np.float64)
     dz = np.zeros(n, dtype=np.float64)
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.resolve_mlpot_mic_box_side_A",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.resolve_mlpot_mic_box_side_A",
         return_value=(31.994, "fallback"),
     ) as mock_resolve, patch(
-        "mmml.interfaces.pycharmmInterface.jax_device_policy.mlpot_jax_device_context",
+        "karml.interfaces.pycharmmInterface.jax_device_policy.mlpot_jax_device_context",
         return_value=MagicMock(__enter__=MagicMock(), __exit__=MagicMock()),
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_eterm_routing.decompose_and_route_mlpot_mm_from_callback",
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_eterm_routing.decompose_and_route_mlpot_mm_from_callback",
         return_value=0.0,
     ):
         calc.calculate_charmm(
@@ -1090,7 +1090,7 @@ def test_decomposed_calculator_jax_pme_uses_charmm_box_fallback():
 
 
 def test_is_cubic_box_sides():
-    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import _is_cubic_box_sides
+    from karml.interfaces.pycharmmInterface.mlpot.pbc_env import _is_cubic_box_sides
 
     assert _is_cubic_box_sides(40.0, 40.0, 40.0)
     assert not _is_cubic_box_sides(40.0, 41.0, 40.0)
@@ -1098,10 +1098,10 @@ def test_is_cubic_box_sides():
 
 
 def test_resolve_charmm_cubic_box_side_A_uses_fallback():
-    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import resolve_charmm_cubic_box_side_A
+    from karml.interfaces.pycharmmInterface.mlpot.pbc_env import resolve_charmm_cubic_box_side_A
 
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env._read_charmm_box_sides_A",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env._read_charmm_box_sides_A",
         return_value=(0.0, 0.0, 0.0),
     ):
         side, source = resolve_charmm_cubic_box_side_A(fallback_side_A=40.0)
@@ -1110,7 +1110,7 @@ def test_resolve_charmm_cubic_box_side_A_uses_fallback():
 
 
 def test_resolve_charmm_cubic_box_side_A_uses_restart_file():
-    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import resolve_charmm_cubic_box_side_A
+    from karml.interfaces.pycharmmInterface.mlpot.pbc_env import resolve_charmm_cubic_box_side_A
 
     heat_res = Path(
         "examples/other/notebooks/ffFIT/example-general/heat.res"
@@ -1118,7 +1118,7 @@ def test_resolve_charmm_cubic_box_side_A_uses_restart_file():
     if not heat_res.is_file():
         pytest.skip("example heat.res not available")
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env._read_charmm_box_sides_A",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env._read_charmm_box_sides_A",
         return_value=(0.0, 0.0, 0.0),
     ):
         side, source = resolve_charmm_cubic_box_side_A(restart_path=heat_res)
@@ -1127,7 +1127,7 @@ def test_resolve_charmm_cubic_box_side_A_uses_restart_file():
 
 
 def test_parse_cubic_box_side_from_charmm_restart_vacuum_returns_none():
-    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+    from karml.interfaces.pycharmmInterface.mlpot.pbc_env import (
         parse_cubic_box_side_from_charmm_restart,
     )
 
@@ -1140,10 +1140,10 @@ def test_parse_cubic_box_side_from_charmm_restart_vacuum_returns_none():
 
 
 def test_probe_charmm_cubic_box_side_A_returns_none_when_unavailable():
-    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import probe_charmm_cubic_box_side_A
+    from karml.interfaces.pycharmmInterface.mlpot.pbc_env import probe_charmm_cubic_box_side_A
 
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env._read_charmm_box_sides_A",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env._read_charmm_box_sides_A",
         return_value=(0.0, 0.0, 0.0),
     ):
         side, source = probe_charmm_cubic_box_side_A()
@@ -1152,15 +1152,15 @@ def test_probe_charmm_cubic_box_side_A_returns_none_when_unavailable():
 
 
 def test_resolve_mlpot_mic_box_side_A_skips_restart_when_crystal_active(tmp_path: Path):
-    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import resolve_mlpot_mic_box_side_A
+    from karml.interfaces.pycharmmInterface.mlpot.pbc_env import resolve_mlpot_mic_box_side_A
 
     restart = tmp_path / "prod.res"
     restart.write_text("dummy")
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.charmm_crystal_is_active",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.charmm_crystal_is_active",
         return_value=True,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.resolve_charmm_cubic_box_side_A",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.resolve_charmm_cubic_box_side_A",
         return_value=(28.0, "pbound"),
     ) as mock_resolve:
         side, source = resolve_mlpot_mic_box_side_A(
@@ -1177,12 +1177,12 @@ def test_resolve_mlpot_mic_box_side_A_skips_restart_when_crystal_active(tmp_path
 
 
 def test_sync_mlpot_pbc_cell_from_charmm_updates_model():
-    from mmml.interfaces.pycharmmInterface.mlpot import run_workflow
+    from karml.interfaces.pycharmmInterface.mlpot import run_workflow
 
     z = np.zeros(8, dtype=int)
     model = DecomposedMlpotModel(MagicMock(), CutoffParameters(), 2, z, cell=40.0)
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.resolve_mlpot_mic_box_side_A",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.resolve_mlpot_mic_box_side_A",
         return_value=(39.25, "pbound"),
     ):
         side = run_workflow.sync_mlpot_pbc_cell_from_charmm(model, verbose=False)
@@ -1227,13 +1227,13 @@ def test_decomposed_calculator_passes_charmm_box_to_spherical_fn():
     dy = np.zeros(n, dtype=np.float64)
     dz = np.zeros(n, dtype=np.float64)
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.resolve_mlpot_mic_box_side_A",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.resolve_mlpot_mic_box_side_A",
         return_value=(39.0, "pbound"),
     ), patch(
-        "mmml.interfaces.pycharmmInterface.jax_device_policy.mlpot_jax_device_context",
+        "karml.interfaces.pycharmmInterface.jax_device_policy.mlpot_jax_device_context",
         return_value=MagicMock(__enter__=MagicMock(), __exit__=MagicMock()),
     ), patch(
-        "mmml.interfaces.pycharmmInterface.charmm_mpi.recover_mpi_for_charmm_after_jax",
+        "karml.interfaces.pycharmmInterface.charmm_mpi.recover_mpi_for_charmm_after_jax",
     ):
         calc.calculate_charmm(
             n, 0, 0, None, x, y, zc, dx, dy, dz, 0, 0, None, None, None, None, None, None, None
@@ -1289,13 +1289,13 @@ def test_decomposed_calculator_queries_box_when_jax_pme_active_without_cached_ce
     dy = np.zeros(n, dtype=np.float64)
     dz = np.zeros(n, dtype=np.float64)
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.resolve_mlpot_mic_box_side_A",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.resolve_mlpot_mic_box_side_A",
         return_value=(37.5, "pbound"),
     ) as mock_resolve, patch(
-        "mmml.interfaces.pycharmmInterface.jax_device_policy.mlpot_jax_device_context",
+        "karml.interfaces.pycharmmInterface.jax_device_policy.mlpot_jax_device_context",
         return_value=MagicMock(__enter__=MagicMock(), __exit__=MagicMock()),
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_eterm_routing.decompose_and_route_mlpot_mm_from_callback",
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_eterm_routing.decompose_and_route_mlpot_mm_from_callback",
         return_value=0.0,
     ):
         calc.calculate_charmm(
@@ -1356,7 +1356,7 @@ def _call_zero_pair_callback(calc):
     n = 8
     bufs = [np.zeros(n, dtype=np.float64) for _ in range(6)]
     with patch(
-        "mmml.interfaces.pycharmmInterface.jax_device_policy.mlpot_jax_device_context",
+        "karml.interfaces.pycharmmInterface.jax_device_policy.mlpot_jax_device_context",
         return_value=MagicMock(__enter__=MagicMock(), __exit__=MagicMock()),
     ):
         return calc.calculate_charmm(
@@ -1366,12 +1366,12 @@ def _call_zero_pair_callback(calc):
 
 def test_charmm_callback_zero_pairs_fails_closed_inside_callback(monkeypatch):
     """Armed (dynamics): missing ML/MM pairs raise into the exit-86 guard."""
-    from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
+    from karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
         ALLOW_MISSING_CALLBACK_PAIRS_ENV,
         _CallbackPairListUnavailable,
     )
 
-    from mmml.interfaces.pycharmmInterface.mlpot.callback_failstop import (
+    from karml.interfaces.pycharmmInterface.mlpot.callback_failstop import (
         MlpotCallbackAborted,
         set_mlpot_dynamics_armed,
     )
@@ -1388,11 +1388,11 @@ def test_charmm_callback_zero_pairs_fails_closed_inside_callback(monkeypatch):
 
 def test_charmm_callback_zero_pairs_disarmed_returns_zero_for_setup(monkeypatch):
     """Disarmed (setup): assert_mlpot_user_active's recovery ladder needs USER = 0."""
-    from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
+    from karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
         ALLOW_MISSING_CALLBACK_PAIRS_ENV,
     )
 
-    from mmml.interfaces.pycharmmInterface.mlpot.callback_failstop import (
+    from karml.interfaces.pycharmmInterface.mlpot.callback_failstop import (
         set_mlpot_dynamics_armed,
     )
 
@@ -1407,11 +1407,11 @@ def test_charmm_callback_zero_pairs_disarmed_returns_zero_for_setup(monkeypatch)
 
 
 def test_charmm_callback_zero_pairs_test_opt_out_returns_zero(monkeypatch):
-    from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
+    from karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
         ALLOW_MISSING_CALLBACK_PAIRS_ENV,
     )
 
-    from mmml.interfaces.pycharmmInterface.mlpot.callback_failstop import (
+    from karml.interfaces.pycharmmInterface.mlpot.callback_failstop import (
         set_mlpot_dynamics_armed,
     )
 
@@ -1467,10 +1467,10 @@ def test_decomposed_calculator_propagates_box_sync_failure():
     dy = np.zeros(n, dtype=np.float64)
     dz = np.zeros(n, dtype=np.float64)
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.resolve_mlpot_mic_box_side_A",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.resolve_mlpot_mic_box_side_A",
         side_effect=RuntimeError("CHARMM box is not cubic"),
     ), patch(
-        "mmml.interfaces.pycharmmInterface.jax_device_policy.mlpot_jax_device_context",
+        "karml.interfaces.pycharmmInterface.jax_device_policy.mlpot_jax_device_context",
         return_value=MagicMock(__enter__=MagicMock(), __exit__=MagicMock()),
     ):
         with pytest.raises(RuntimeError, match="not cubic"):
@@ -1481,7 +1481,7 @@ def test_decomposed_calculator_propagates_box_sync_failure():
 
 
 def test_spherical_forward_fn_cached_across_callbacks(monkeypatch):
-    monkeypatch.setenv("MMML_MLPOT_DEVICE", "cpu")
+    monkeypatch.setenv("KARML_MLPOT_DEVICE", "cpu")
     z = np.zeros(8, dtype=int)
 
     def spherical_fn(**kwargs):
@@ -1525,7 +1525,7 @@ def test_spherical_forward_fn_cached_across_callbacks(monkeypatch):
 
 
 def test_build_ml_exclusion_lists_upper_triangle():
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+    from karml.interfaces.pycharmmInterface.mlpot.setup import (
         _build_ml_exclusion_lists,
         _expected_ml_ml_exclusion_pairs,
     )
@@ -1538,7 +1538,7 @@ def test_build_ml_exclusion_lists_upper_triangle():
 
 
 def test_ensure_ml_exclusions_before_mlpot_charmm_energy_reinstalls_when_short():
-    from mmml.interfaces.pycharmmInterface.mlpot import setup as mlpot_setup
+    from karml.interfaces.pycharmmInterface.mlpot import setup as mlpot_setup
 
     fake_sel = MagicMock()
     fake_sel.get_atom_indexes.return_value = list(range(4))
@@ -1563,13 +1563,13 @@ def test_ensure_ml_exclusions_before_mlpot_charmm_energy_reinstalls_when_short()
         "_resolve_mlpot_ctx_pbc_box_side",
         return_value=40.0,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.prepare_charmm_pbc",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.prepare_charmm_pbc",
     ) as prep_pbc, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.apply_pbc_nbonds",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.apply_pbc_nbonds",
     ) as apply_nb, patch(
-        "mmml.interfaces.pycharmmInterface.charmm_mpi.recover_mpi_for_charmm_after_jax",
+        "karml.interfaces.pycharmmInterface.charmm_mpi.recover_mpi_for_charmm_after_jax",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.charmm_levels.charmm_relaxed_bomlev",
+        "karml.interfaces.pycharmmInterface.charmm_levels.charmm_relaxed_bomlev",
     ):
         fake_pycharmm = MagicMock()
         fake_pycharmm.psf = fake_psf
@@ -1592,7 +1592,7 @@ def test_ensure_ml_exclusions_before_mlpot_charmm_energy_reinstalls_when_short()
 
 
 def test_ensure_ml_exclusions_before_mlpot_charmm_energy_force_rebuild_when_nnb_ok():
-    from mmml.interfaces.pycharmmInterface.mlpot import setup as mlpot_setup
+    from karml.interfaces.pycharmmInterface.mlpot import setup as mlpot_setup
 
     fake_sel = MagicMock()
     fake_sel.get_atom_indexes.return_value = list(range(4))
@@ -1618,13 +1618,13 @@ def test_ensure_ml_exclusions_before_mlpot_charmm_energy_force_rebuild_when_nnb_
         "_resolve_mlpot_ctx_pbc_box_side",
         return_value=42.0,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.prepare_charmm_pbc",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.prepare_charmm_pbc",
     ) as prep_pbc, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.apply_pbc_nbonds",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.apply_pbc_nbonds",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.charmm_mpi.recover_mpi_for_charmm_after_jax",
+        "karml.interfaces.pycharmmInterface.charmm_mpi.recover_mpi_for_charmm_after_jax",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.charmm_levels.charmm_relaxed_bomlev",
+        "karml.interfaces.pycharmmInterface.charmm_levels.charmm_relaxed_bomlev",
     ):
         fake_pycharmm = MagicMock()
         fake_pycharmm.psf = fake_psf
@@ -1644,7 +1644,7 @@ def test_ensure_ml_exclusions_before_mlpot_charmm_energy_force_rebuild_when_nnb_
 
 
 def test_ensure_ml_exclusions_skips_second_upinb_when_already_done():
-    from mmml.interfaces.pycharmmInterface.mlpot import setup as mlpot_setup
+    from karml.interfaces.pycharmmInterface.mlpot import setup as mlpot_setup
 
     fake_sel = MagicMock()
     fake_sel.get_atom_indexes.return_value = list(range(4))
@@ -1661,7 +1661,7 @@ def test_ensure_ml_exclusions_skips_second_upinb_when_already_done():
         mlpot_setup,
         "_install_ml_exclusions",
     ) as install, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.prepare_charmm_pbc",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.prepare_charmm_pbc",
     ) as prep_pbc:
         fake_pycharmm = MagicMock()
         fake_pycharmm.psf = fake_psf
@@ -1679,7 +1679,7 @@ def test_ensure_ml_exclusions_skips_second_upinb_when_already_done():
 
 
 def test_apply_nbonds_kwargs_can_defer_rebuild():
-    from mmml.interfaces.pycharmmInterface.nbonds_config import apply_nbonds_kwargs
+    from karml.interfaces.pycharmmInterface.nbonds_config import apply_nbonds_kwargs
 
     with patch("pycharmm.nbonds.configure") as configure, patch(
         "pycharmm.nbonds.update_bnbnd"
@@ -1694,19 +1694,19 @@ def test_apply_nbonds_kwargs_can_defer_rebuild():
 
 
 def test_charmm_nbond_cutoffs_orderly():
-    from mmml.interfaces.pycharmmInterface.nbonds_config import charmm_nbond_cutoffs_orderly
+    from karml.interfaces.pycharmmInterface.nbonds_config import charmm_nbond_cutoffs_orderly
 
     assert charmm_nbond_cutoffs_orderly(13.0, 9.0, 12.28)
     assert not charmm_nbond_cutoffs_orderly(13.0, 13.0, 17.0)
 
 
 def test_apply_switch_nbond_cutoffs_before_cutnb():
-    from mmml.interfaces.pycharmmInterface.nbonds_config import (
+    from karml.interfaces.pycharmmInterface.nbonds_config import (
         apply_switch_nbond_cutoffs_before_cutnb,
     )
 
     with patch(
-        "mmml.interfaces.pycharmmInterface.nbonds_config.apply_nbonds_kwargs"
+        "karml.interfaces.pycharmmInterface.nbonds_config.apply_nbonds_kwargs"
     ) as apply_kw:
         apply_switch_nbond_cutoffs_before_cutnb(9.0, 12.28, rebuild=False)
     apply_kw.assert_called_once_with(
@@ -1716,11 +1716,11 @@ def test_apply_switch_nbond_cutoffs_before_cutnb():
 
 
 def test_pbc_nbond_cutoffs_l38_matches_mlpot_switches():
-    from mmml.interfaces.pycharmmInterface.cutoffs import (
+    from karml.interfaces.pycharmmInterface.cutoffs import (
         DEFAULT_MM_SWITCH_ON,
         DEFAULT_MM_SWITCH_WIDTH,
     )
-    from mmml.interfaces.pycharmmInterface.nbonds_config import (
+    from karml.interfaces.pycharmmInterface.nbonds_config import (
         PBC_NBOND_SKIN_A,
         ctofnb_max_for_cutnb,
         mlpot_mm_nl_cutoff_A,
@@ -1745,11 +1745,11 @@ def test_pbc_nbond_cutoffs_l38_matches_mlpot_switches():
 def test_resolve_pbc_nbond_cutoffs_prefers_stashed_pretreat_caps():
     import argparse
 
-    from mmml.interfaces.pycharmmInterface.cutoffs import (
+    from karml.interfaces.pycharmmInterface.cutoffs import (
         DEFAULT_MM_SWITCH_ON,
         DEFAULT_MM_SWITCH_WIDTH,
     )
-    from mmml.interfaces.pycharmmInterface.nbonds_config import (
+    from karml.interfaces.pycharmmInterface.nbonds_config import (
         pbc_nbond_cutoffs_from_mlpot_switches,
         resolve_pbc_nbond_cutoffs,
         stash_pbc_nbond_cutoffs,
@@ -1770,7 +1770,7 @@ def test_resolve_pbc_nbond_cutoffs_prefers_stashed_pretreat_caps():
 
 
 def test_pbc_nbond_cutoffs_invariant_requires_ordering():
-    from mmml.interfaces.pycharmmInterface.nbonds_config import (
+    from karml.interfaces.pycharmmInterface.nbonds_config import (
         PbcNbondCutoffs,
         pbc_nbond_cutoffs_invariant_ok,
     )
@@ -1797,15 +1797,15 @@ def test_pbc_nbond_cutoffs_invariant_requires_ordering():
 
 
 def test_ensure_headroom_bumps_cutnb_when_stuck():
-    from mmml.interfaces.pycharmmInterface.nbonds_config import (
+    from karml.interfaces.pycharmmInterface.nbonds_config import (
         _ensure_headroom_before_switch_apply,
     )
 
     with patch(
-        "mmml.interfaces.pycharmmInterface.nbonds_config.read_charmm_switch_cutoffs",
+        "karml.interfaces.pycharmmInterface.nbonds_config.read_charmm_switch_cutoffs",
         return_value=(13.0, 17.0),
     ), patch(
-        "mmml.interfaces.pycharmmInterface.nbonds_config.try_get_charmm_cutnb",
+        "karml.interfaces.pycharmmInterface.nbonds_config.try_get_charmm_cutnb",
         return_value=13.0,
     ), patch("pycharmm.nbonds.set_cutnb") as set_cutnb:
         _ensure_headroom_before_switch_apply(cutnb=18.0, ctonnb=13.0, ctofnb=17.0)
@@ -1816,7 +1816,7 @@ def test_ensure_headroom_bumps_cutnb_when_stuck():
 def test_try_get_charmm_cutnb_missing_symbol():
     import math
 
-    from mmml.interfaces.pycharmmInterface.nbonds_config import try_get_charmm_cutnb
+    from karml.interfaces.pycharmmInterface.nbonds_config import try_get_charmm_cutnb
 
     fake_lib = type("Lib", (), {})()
     fake_charmm = type("Charmm", (), {})()
@@ -1826,31 +1826,31 @@ def test_try_get_charmm_cutnb_missing_symbol():
 
 
 def test_charmm_has_vacuum_nbond_preset_detects_defaults():
-    from mmml.interfaces.pycharmmInterface.nbonds_config import (
+    from karml.interfaces.pycharmmInterface.nbonds_config import (
         VACUUM_CTONNB,
         VACUUM_CTOFNB,
         charmm_has_vacuum_nbond_preset,
     )
 
     with patch(
-        "mmml.interfaces.pycharmmInterface.nbonds_config.read_charmm_switch_cutoffs",
+        "karml.interfaces.pycharmmInterface.nbonds_config.read_charmm_switch_cutoffs",
         return_value=(VACUUM_CTONNB, VACUUM_CTOFNB),
     ):
         assert charmm_has_vacuum_nbond_preset()
     with patch(
-        "mmml.interfaces.pycharmmInterface.nbonds_config.read_charmm_switch_cutoffs",
+        "karml.interfaces.pycharmmInterface.nbonds_config.read_charmm_switch_cutoffs",
         return_value=(9.0, 12.28),
     ):
         assert not charmm_has_vacuum_nbond_preset()
 
 
 def test_apply_nbonds_kwargs_uses_update_script_for_nbxmod():
-    from mmml.interfaces.pycharmmInterface.nbonds_config import apply_nbonds_kwargs
+    from karml.interfaces.pycharmmInterface.nbonds_config import apply_nbonds_kwargs
 
     with patch("pycharmm.nbonds.configure"), patch(
         "pycharmm.nbonds.update_bnbnd"
     ) as rebuild, patch(
-        "mmml.interfaces.pycharmmInterface.nbonds_config._resolve_update_nonbonded_script"
+        "karml.interfaces.pycharmmInterface.nbonds_config._resolve_update_nonbonded_script"
     ) as resolve:
         update_script = MagicMock()
         resolve.return_value = update_script
@@ -1862,12 +1862,12 @@ def test_apply_nbonds_kwargs_uses_update_script_for_nbxmod():
 
 def test_apply_nbonds_kwargs_falls_back_without_update_script():
     """Cluster KEY_LIBRARY builds may lack UpdateNonBondedScript."""
-    from mmml.interfaces.pycharmmInterface.nbonds_config import apply_nbonds_kwargs
+    from karml.interfaces.pycharmmInterface.nbonds_config import apply_nbonds_kwargs
 
     with patch("pycharmm.nbonds.configure"), patch(
         "pycharmm.nbonds.update_bnbnd"
     ) as rebuild, patch(
-        "mmml.interfaces.pycharmmInterface.nbonds_config._resolve_update_nonbonded_script",
+        "karml.interfaces.pycharmmInterface.nbonds_config._resolve_update_nonbonded_script",
         return_value=None,
     ):
         apply_nbonds_kwargs({"cutnb": 12.0, "nbxmod": 5})
@@ -1880,18 +1880,18 @@ def test_calculator_dimer_wrap_detaches_lattice_shift():
 
     src = (
         Path(__file__).resolve().parents[2]
-        / "mmml"
+        / "karml"
         / "interfaces"
         / "pycharmmInterface"
-        / "mmml_calculator.py"
+        / "karml_calculator.py"
     ).read_text(encoding="utf-8")
     assert "stop_gradient" in src
     assert "piecewise-constant" in src or "±L/2" in src
 
 
 def test_calculator_wrapping_translation_invariance():
-    from mmml.interfaces.pycharmmInterface.mmml_calculator import setup_calculator
-    from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
+    from karml.interfaces.pycharmmInterface.karml_calculator import setup_calculator
+    from karml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
 
     # 1. Setup a dummy model that computes a distance-based energy
     class DummyModel:
@@ -1957,8 +1957,8 @@ def test_calculator_wrapping_translation_invariance():
     restart_path.suffix = ".json"
     restart_path.resolve.return_value = restart_path
 
-    with patch("mmml.utils.model_checkpoint.load_model_checkpoint", return_value=dummy_checkpoint), \
-         patch("mmml.models.physnetjax.physnetjax.models.model.PhysNet", DummyModel):
+    with patch("karml.utils.model_checkpoint.load_model_checkpoint", return_value=dummy_checkpoint), \
+         patch("karml.models.physnetjax.physnetjax.models.model.PhysNet", DummyModel):
         factory = setup_calculator(
             ATOMS_PER_MONOMER=[4, 4],
             N_MONOMERS=2,

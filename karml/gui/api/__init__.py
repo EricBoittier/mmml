@@ -1,5 +1,5 @@
 """
-MMML GUI API - FastAPI backend for molecular visualization.
+KARML GUI API - FastAPI backend for molecular visualization.
 """
 
 from .main import app, create_app

@@ -7,7 +7,7 @@ import pytest
 
 e3x = pytest.importorskip("e3x")
 
-from mmml.interfaces.pycharmmInterface.ml_batching import prepare_batches_md
+from karml.interfaces.pycharmmInterface.ml_batching import prepare_batches_md
 
 
 def test_prepare_batches_md_chunk_size_smaller_than_data():

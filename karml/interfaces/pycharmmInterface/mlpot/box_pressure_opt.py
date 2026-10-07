@@ -19,12 +19,12 @@ from typing import Any, Callable, Mapping, Sequence
 
 import numpy as np
 
-from mmml.interfaces.pycharmmInterface.mlpot.mc_density import (
+from karml.interfaces.pycharmmInterface.mlpot.mc_density import (
     density_g_cm3_for_box,
     monomer_offsets_from_atoms_per,
     scale_molecule_coms_with_cubic_box,
 )
-from mmml.utils.geometry_checks import find_worst_intermonomer_overlap
+from karml.utils.geometry_checks import find_worst_intermonomer_overlap
 
 # --- Defaults (named; override via BoxPressureOptConfig) ---------------------
 
@@ -55,7 +55,7 @@ DEFAULT_BOX_PRESSURE_CPT_ECHECK = 500.0
 # Geometry guard during volume proposals.
 DEFAULT_BOX_PRESSURE_MIN_INTERMONOMER_A = 0.8
 
-BOX_PRESSURE_OPT_SCHEMA = "mmml.box_pressure_opt.v1"
+BOX_PRESSURE_OPT_SCHEMA = "karml.box_pressure_opt.v1"
 
 PressureFn = Callable[[np.ndarray, float], float]
 CptRefineFn = Callable[
@@ -197,7 +197,7 @@ def build_cpt_box_refine_dynamics_kw(
     config: BoxPressureOptConfig,
 ) -> dict[str, Any]:
     """Serializable CHARMM CPT keyword plan for a short pressure refine."""
-    from mmml.interfaces.pycharmmInterface.mlpot.pressure_tensor import (
+    from karml.interfaces.pycharmmInterface.mlpot.pressure_tensor import (
         apply_npt_pressure_reference,
     )
 
@@ -516,7 +516,7 @@ def run_box_pressure_opt(
     comp_dict: dict[str, int] | None
     if isinstance(composition, str):
         comp_str = composition
-        from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import (
+        from karml.interfaces.pycharmmInterface.mlpot.box_sizing import (
             parse_composition_dict,
         )
 
@@ -621,7 +621,7 @@ def run_box_pressure_opt_from_box_json(
     n_mol = int(payload.get("n_molecules") or 0)
     composition = payload.get("composition")
     if n_mol <= 0 and isinstance(composition, str) and ":" in composition:
-        from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import (
+        from karml.interfaces.pycharmmInterface.mlpot.box_sizing import (
             parse_composition_dict,
         )
 
@@ -647,7 +647,7 @@ def run_box_pressure_opt_from_box_json(
             crd = Path(str(crd_raw))
     if crd.is_file():
         try:
-            from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+            from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
                 read_crd_coordinates,
             )
 
@@ -724,13 +724,13 @@ def charmm_pressure_fn(
     """
 
     def _fn(positions: np.ndarray, box_side_A: float) -> float:
-        from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+        from karml.interfaces.pycharmmInterface.mlpot.pbc_env import (
             push_charmm_cubic_box_side_A,
         )
-        from mmml.interfaces.pycharmmInterface.mlpot.pressure_tensor import (
+        from karml.interfaces.pycharmmInterface.mlpot.pressure_tensor import (
             read_instantaneous_scalar_pressure_atm,
         )
-        from mmml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
+        from karml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
 
         push_charmm_cubic_box_side_A(float(box_side_A), quiet=True)
         sync_charmm_positions(np.asarray(positions, dtype=np.float64))
@@ -763,15 +763,15 @@ def make_charmm_cpt_box_refine_fn(
     def _refine(
         positions: np.ndarray, box_side_A: float
     ) -> tuple[np.ndarray, float, Mapping[str, Any]]:
-        from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
             build_cpt_equilibration_dynamics,
             run_dynamics,
         )
-        from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+        from karml.interfaces.pycharmmInterface.mlpot.pbc_env import (
             get_charmm_cubic_box_side_A,
             push_charmm_cubic_box_side_A,
         )
-        from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+        from karml.interfaces.pycharmmInterface.mlpot.setup import (
             get_charmm_positions_array,
             sync_charmm_positions,
         )
@@ -868,13 +868,13 @@ def open_charmm_mm_pbc_from_liquid_box(
     """
     from types import SimpleNamespace
 
-    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import setup_charmm_environment
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+    from karml.interfaces.pycharmmInterface.mlpot.pbc_env import setup_charmm_environment
+    from karml.interfaces.pycharmmInterface.mlpot.setup import (
         get_charmm_positions_array,
         load_cluster_from_artifacts,
         sync_charmm_positions,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.trimer_scan import (
+    from karml.interfaces.pycharmmInterface.mlpot.trimer_scan import (
         atoms_per_monomer_from_psf,
     )
 
@@ -947,7 +947,7 @@ def write_box_pressure_opt_handoff(
     """Write certified ``box.json`` + ``model.crd`` and copy ``model.psf`` for smoke."""
     import shutil
 
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import write_charmm_crd_from_charmm
+    from karml.interfaces.pycharmmInterface.mlpot.setup import write_charmm_crd_from_charmm
 
     out = Path(output_dir).expanduser().resolve()
     out.mkdir(parents=True, exist_ok=True)
@@ -1010,10 +1010,10 @@ def run_box_pressure_opt_charmm_live(
     )
     result.pressure_source = "charmm_prsi"
     # Sync final frame into CHARMM before CRD write (CPT path already synced).
-    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+    from karml.interfaces.pycharmmInterface.mlpot.pbc_env import (
         push_charmm_cubic_box_side_A,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
+    from karml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
 
     push_charmm_cubic_box_side_A(float(L), quiet=True)
     sync_charmm_positions(np.asarray(pos, dtype=np.float64))

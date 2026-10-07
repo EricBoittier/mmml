@@ -10,8 +10,8 @@
 
 set -euo pipefail
 
-ROOT="${MMML_ROOT:-$HOME/mmml}"
-PY="${MMML_PYTHON:-$ROOT/.venv/bin/python}"
+ROOT="${KARML_ROOT:-$HOME/karml}"
+PY="${KARML_PYTHON:-$ROOT/.venv/bin/python}"
 CACHE="${CACHE:-$HOME/orbax_cache/qcml_mbd}"
 RUN_TAG="${RUN_TAG:-$(date +%Y%m%d-%H%M%S)}"
 WORKDIR="${MBD_WORKDIR:-${WORKDIR:-$HOME/qcml_runs/mbd_restart_${RUN_TAG}}}"

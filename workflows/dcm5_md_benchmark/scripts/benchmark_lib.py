@@ -31,11 +31,11 @@ def load_config(config_path: Path | None = None) -> dict[str, Any]:
 
 
 def resolve_checkpoint(raw: str) -> Path:
-    if raw == "${MMML_CKPT}":
-        env = os.environ.get("MMML_CKPT", "").strip()
+    if raw == "${KARML_CKPT}":
+        env = os.environ.get("KARML_CKPT", "").strip()
         if not env:
             raise RuntimeError(
-                "MMML_CKPT is not set (config checkpoint: ${MMML_CKPT}). "
+                "KARML_CKPT is not set (config checkpoint: ${KARML_CKPT}). "
                 "Export your DCM PhysNet checkpoint directory before running Snakemake."
             )
         path = Path(env).expanduser().resolve()
@@ -46,19 +46,19 @@ def resolve_checkpoint(raw: str) -> Path:
 
 
 def validate_checkpoint(path: Path) -> None:
-    """Fail fast when MMML_CKPT is missing or still a README placeholder."""
+    """Fail fast when KARML_CKPT is missing or still a README placeholder."""
     text = str(path)
     placeholders = ("/path/to", "/path/to/dcm", "your/checkpoint", "REPLACE_ME")
     if any(p in text for p in placeholders):
         raise RuntimeError(
             f"Checkpoint path looks like a placeholder: {path}\n"
             "Set a real directory, e.g.\n"
-            "  export MMML_CKPT=$HOME/mmml_tutorial/acodcm/ckpts/dcm1-..."
+            "  export KARML_CKPT=$HOME/karml_tutorial/acodcm/ckpts/dcm1-..."
         )
     if not path.exists():
         raise RuntimeError(
             f"Checkpoint not found: {path}\n"
-            "Verify MMML_CKPT points at your DCM PhysNet ckpt directory."
+            "Verify KARML_CKPT points at your DCM PhysNet ckpt directory."
         )
 
 
@@ -85,9 +85,9 @@ def build_md_system_argv(
     *,
     output_dir: Path | None = None,
 ) -> list[str]:
-    """Build flat ``mmml md-system`` CLI argv for one benchmark job."""
+    """Build flat ``karml md-system`` CLI argv for one benchmark job."""
     _ensure_repo_on_path()
-    from mmml.cli.run.md_campaign import build_benchmark_md_system_argv
+    from karml.cli.run.md_campaign import build_benchmark_md_system_argv
 
     return build_benchmark_md_system_argv(
         cfg,
@@ -106,7 +106,7 @@ def namespace_for_job(
 ) -> tuple[str, list[str], Any]:
     """Return (backend, backend_argv, argparse.Namespace) for a benchmark job."""
     _ensure_repo_on_path()
-    from mmml.cli.run import md_system
+    from karml.cli.run import md_system
 
     argv = build_md_system_argv(cfg, job_id, output_dir=output_dir)
     old_argv = sys.argv[:]

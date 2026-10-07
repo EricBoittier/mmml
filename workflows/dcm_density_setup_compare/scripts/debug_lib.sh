@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Shared helpers for dcm_density_setup_compare debug scripts (pc-studix / Slurm).
 # Run from the workflow directory on the login node:
-#   cd ~/mmml/workflows/dcm_density_setup_compare
+#   cd ~/karml/workflows/dcm_density_setup_compare
 # shellcheck shell=bash
 
 set -euo pipefail
@@ -19,16 +19,16 @@ debug_repo_root() {
 debug_bootstrap_cluster() {
   local repo
   repo="$(debug_repo_root)"
-  if [[ -f "$repo/scripts/resolve_mmml_env.sh" ]]; then
-    # shellcheck source=../../../scripts/resolve_mmml_env.sh
-    source "$repo/scripts/resolve_mmml_env.sh"
-    mmml_resolve_env "$repo"
+  if [[ -f "$repo/scripts/resolve_karml_env.sh" ]]; then
+    # shellcheck source=../../../scripts/resolve_karml_env.sh
+    source "$repo/scripts/resolve_karml_env.sh"
+    karml_resolve_env "$repo"
   fi
 }
 
 debug_python() {
-  if [[ -n "${MMML_PYTHON:-}" ]]; then
-    echo "$MMML_PYTHON"
+  if [[ -n "${KARML_PYTHON:-}" ]]; then
+    echo "$KARML_PYTHON"
   elif command -v python3 >/dev/null 2>&1; then
     command -v python3
   else
@@ -40,7 +40,7 @@ debug_artifact_root() {
   local wf repo cfg raw py
   wf="$(debug_workflow_root)"
   repo="$(debug_repo_root)"
-  cfg_raw="${MMML_WORKFLOW_CONFIG:-config.yaml}"
+  cfg_raw="${KARML_WORKFLOW_CONFIG:-config.yaml}"
   if [[ "$cfg_raw" = /* ]]; then
     cfg="$cfg_raw"
   else
@@ -154,7 +154,7 @@ debug_user_gpu_queue() {
     return 0
   fi
   squeue -u "${USER:?USER unset}" -o '%.18i %.9P %.30j %.8u %.2t %.10M %.6D %R' 2>/dev/null \
-    | grep -E 'setup_compare|md-system|mmml|JOBID' || true
+    | grep -E 'setup_compare|md-system|karml|JOBID' || true
 }
 
 debug_find_slurm_log() {

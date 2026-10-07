@@ -6,8 +6,8 @@ has a QM dimer dataset and wants intermolecular MM LJ to adjust during hybrid
 training — without replacing CGenFF types or inventing a new force field from
 scratch.
 
-Implementation: [`mmml/models/mm_lj_scales.py`](https://github.com/EricBoittier/mmml/blob/main/mmml/models/mm_lj_scales.py).
-Energy assembly: [`mmml/models/hybrid_energy.py`](https://github.com/EricBoittier/mmml/blob/main/mmml/models/hybrid_energy.py).
+Implementation: [`karml/models/mm_lj_scales.py`](https://github.com/EricBoittier/karml/blob/main/karml/models/mm_lj_scales.py).
+Energy assembly: [`karml/models/hybrid_energy.py`](https://github.com/EricBoittier/karml/blob/main/karml/models/hybrid_energy.py).
 
 !!! note "Related pages"
     [Hybrid MM charges (q in E_MM Coulomb)](hybrid-mm-charges.md) ·
@@ -103,7 +103,7 @@ LJ scales, as long as `mm_include_lj: true` (any of `mic`, `ewald`,
 - Not a free σ/ε head that invents types. Types still come from CGenFF assignment
   ([prepare-mm-dataset](hybrid-mm-dataset-preparation.md)).
 - Not applied by CHARMM IMAGE VDW. Under `mm_nonbond_mode: periodic_external` the
-  JAX MM term is off, so nothing consumes `hybrid_mm.json` ([#139](https://github.com/EricBoittier/mmml/issues/139)
+  JAX MM term is off, so nothing consumes `hybrid_mm.json` ([#139](https://github.com/EricBoittier/karml/issues/139)
   step 2). Scales affect hybrid `E_MM` under `mic`, `ewald` and
   `nvalchemiops_pme` (with `mm_include_lj: true`), and MD `jax_mic` /
   native-`ewald` switched MM.
@@ -154,7 +154,7 @@ Three things keep it bounded — do all three:
 | You want to… | Use | Why |
 |---|---|---|
 | Learn σ/ε (MIC Stage 1) | `lr_solver: mic`, `mm_include_lj: true`, `learn_mm_lj_scales: true` | Differentiable LJ under MIC |
-| Learn σ/ε under Ewald | `lr_solver: ewald`, `mm_include_lj: true`, `learn_mm_lj_scales: true`, `pme_box_length: …` | Same split operator; Coulomb is untapered full-box ([#139](https://github.com/EricBoittier/mmml/issues/139)) |
+| Learn σ/ε under Ewald | `lr_solver: ewald`, `mm_include_lj: true`, `learn_mm_lj_scales: true`, `pme_box_length: …` | Same split operator; Coulomb is untapered full-box ([#139](https://github.com/EricBoittier/karml/issues/139)) |
 | Train / TL with Ewald + frozen LJ scales | `lr_solver: ewald`, `mm_include_lj: true`, `learn_mm_lj_scales: false` | Untapered Coulomb + COM-switched LJ |
 | Refine ML with Coulomb-only Ewald | `lr_solver: ewald`, `mm_include_lj: false` | Classic Stage 2 TL |
 | Deploy scales + LR Coulomb (large box) | `include_mm: true`, `jax_mic` + `lr_solver: jax_pme` | Pair LJ reads scales; jax-pme k-space Coulomb |
@@ -171,7 +171,7 @@ python scripts/check_ewald_train_md_pme_parity.py \
 Runnable full-box deployment demo:
 
 ```bash
-mmml md-system \
+karml md-system \
   --config examples/hybrid_mm_charges/md_fixed_lj_scales.yaml \
   --job-id liquid_nvt_full_box_ewald
 ```
@@ -203,7 +203,7 @@ mm_charge_mode: fixed
 ```
 
 ```bash
-mmml physnet-train --config examples/hybrid_mm_charges/train_fixed_lj_scales.yaml
+karml physnet-train --config examples/hybrid_mm_charges/train_fixed_lj_scales.yaml
 ```
 
 Keep the run’s `hybrid_mm.json` (scale vectors) next to the Orbax/JSON checkpoint.
@@ -221,7 +221,7 @@ learn_mm_lj_scales: false     # or true to continue learning under Ewald
 ```
 
 ```bash
-mmml physnet-train --config path/to/train_ewald_tl.yaml \
+karml physnet-train --config path/to/train_ewald_tl.yaml \
   --restart /path/to/stage1/checkpoint
 ```
 
@@ -262,13 +262,13 @@ IMAGE VDW, but a CHARMM process may deploy only one distinct sidecar.
 
 ## Prerequisites
 
-1. **Environment** — working `mmml` install with JAX; for MD later, PyCHARMM as usual.
+1. **Environment** — working `karml` install with JAX; for MD later, PyCHARMM as usual.
 2. **Hybrid-ready NPZ** — train/valid splits with:
    - `R`, `Z`, `E`, `F`, (optional `D`)
    - `cgenff_type_idx`, `mol_id`, `cgenff_charge`
    - `cgenff_master_sigmas`, `cgenff_master_epsilons`
 3. How to build that NPZ: [Preparing hybrid ML/MM datasets](hybrid-mm-dataset-preparation.md)
-   (`mmml prepare-mm-dataset` or the combined-dataset recipe).
+   (`karml prepare-mm-dataset` or the combined-dataset recipe).
 
 Quick check:
 
@@ -293,8 +293,8 @@ PY
 
 Copy the example YAML and point `data` / `valid_data` at your NPZs:
 
-- Train: [`examples/hybrid_mm_charges/train_fixed_lj_scales.yaml`](https://github.com/EricBoittier/mmml/blob/main/examples/hybrid_mm_charges/train_fixed_lj_scales.yaml)
-- Companion MD: [`examples/hybrid_mm_charges/md_fixed_lj_scales.yaml`](https://github.com/EricBoittier/mmml/blob/main/examples/hybrid_mm_charges/md_fixed_lj_scales.yaml)
+- Train: [`examples/hybrid_mm_charges/train_fixed_lj_scales.yaml`](https://github.com/EricBoittier/karml/blob/main/examples/hybrid_mm_charges/train_fixed_lj_scales.yaml)
+- Companion MD: [`examples/hybrid_mm_charges/md_fixed_lj_scales.yaml`](https://github.com/EricBoittier/karml/blob/main/examples/hybrid_mm_charges/md_fixed_lj_scales.yaml)
 
 Essential keys:
 
@@ -309,7 +309,7 @@ lr_solver: mic                 # required for LJ (+ scales)
 CLI equivalent:
 
 ```bash
-mmml physnet-train \
+karml physnet-train \
   --config examples/hybrid_mm_charges/train_fixed_lj_scales.yaml
 # or flags:
 #   --hybrid-mm --learn-mm-lj-scales --lr-solver mic --mm-include-lj \
@@ -372,7 +372,7 @@ mm_charge_mode: fixed
 
 ```bash
 # Prefer the Packmol liquid campaign (jaxmd settle before PyCHARMM heat):
-mmml md-system \
+karml md-system \
   --config examples/hybrid_mm_charges/md_fixed_lj_scales_liquid_campaign.yaml \
   --run-all --checkpoint CKPT --mm-lj-scales-file SIDECAR
 
@@ -380,7 +380,7 @@ mmml md-system \
 #   LJ_DEVICE=gpu bash examples/lj_scales/07_deploy_md.sh
 #
 # Vacuum dimer smoke only:
-#   mmml md-system --config examples/hybrid_mm_charges/md_fixed_lj_scales.yaml \
+#   karml md-system --config examples/hybrid_mm_charges/md_fixed_lj_scales.yaml \
 #     --job-id dimer_nve --checkpoint CKPT
 ```
 
@@ -392,7 +392,7 @@ Resolution order for scales:
 
 With `verbose`, MLpot prints that ATC-length scales were loaded. Under the hood
 this is the same `ep_scale` / `sig_scale` path
-[`mm_energy_forces`](https://github.com/EricBoittier/mmml/blob/main/mmml/interfaces/pycharmmInterface/mm_energy_forces.py)
+[`mm_energy_forces`](https://github.com/EricBoittier/karml/blob/main/karml/interfaces/pycharmmInterface/mm_energy_forces.py)
 already used.
 
 Start with a **vacuum dimer smoke** (`composition: "DCM:2"`, short NVE) before
@@ -515,12 +515,12 @@ where the volume was actually measured. See
 
 | Piece | Path |
 |-------|------|
-| Scale helpers | `mmml/models/mm_lj_scales.py` |
-| Hybrid assembly | `mmml/models/hybrid_energy.py` (`learn_mm_lj_scales`) |
-| Train CLI | `mmml/cli/make/make_training.py` (`--learn-mm-lj-scales`) |
-| Train loop attach / write sidecar | `mmml/models/physnetjax/.../training/training.py` |
-| MD load → calculator | `mmml/interfaces/pycharmmInterface/mlpot/hybrid_mlpot.py` |
-| MM multiply | `mmml/interfaces/pycharmmInterface/mm_energy_forces.py` (`ep_scale`, `sig_scale`) |
+| Scale helpers | `karml/models/mm_lj_scales.py` |
+| Hybrid assembly | `karml/models/hybrid_energy.py` (`learn_mm_lj_scales`) |
+| Train CLI | `karml/cli/make/make_training.py` (`--learn-mm-lj-scales`) |
+| Train loop attach / write sidecar | `karml/models/physnetjax/.../training/training.py` |
+| MD load → calculator | `karml/interfaces/pycharmmInterface/mlpot/hybrid_mlpot.py` |
+| MM multiply | `karml/interfaces/pycharmmInterface/mm_energy_forces.py` (`ep_scale`, `sig_scale`) |
 | Example YAMLs | `examples/hybrid_mm_charges/train_fixed_lj_scales.yaml`, `md_fixed_lj_scales.yaml`, `md_fixed_lj_scales_liquid_campaign.yaml` |
 | Mechanics tests | `tests/unit/test_mm_lj_scales.py` |
 | Convergence + deploy-continuity tests | `tests/unit/test_mm_lj_scales_learning.py` |

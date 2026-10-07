@@ -12,7 +12,7 @@ from pathlib import Path
 
 import numpy as np
 
-from mmml.utils.intermonomer_geometry import (
+from karml.utils.intermonomer_geometry import (
     DEFAULT_CHARMM_IMAGE_MLPOT_MIN_A,
     DEFAULT_PRE_MLPOT_OVERLAP_MIN_A,
 )
@@ -61,7 +61,7 @@ def fetch_charmm_image_nb_stats() -> CharmmImageNbStats | None:
         import pycharmm.image as charmm_image
     except (ImportError, OSError):
         return None
-    # ``get_iminb_stats`` is an MMML-patched addition; a stock/older pycharmm
+    # ``get_iminb_stats`` is an KARML-patched addition; a stock/older pycharmm
     # build won't have it. Treat that like an unavailable image module.
     get_iminb_stats = getattr(charmm_image, "get_iminb_stats", None)
     if get_iminb_stats is None:
@@ -191,8 +191,8 @@ def _resolve_atoms_per_for_image_gate(
         if atoms_per is not None:
             return [int(x) for x in atoms_per]
     try:
-        import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
-        from mmml.interfaces.pycharmmInterface.mlpot.trimer_scan import (
+        import karml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+        from karml.interfaces.pycharmmInterface.mlpot.trimer_scan import (
             atoms_per_monomer_from_psf,
         )
 
@@ -213,8 +213,8 @@ def _resolve_atomic_numbers_for_image_gate(
         if z is not None:
             return np.asarray(z, dtype=int).reshape(-1)
     try:
-        import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
-        from mmml.interfaces.pycharmmInterface.utils import get_Z_from_psf
+        import karml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+        from karml.interfaces.pycharmmInterface.utils import get_Z_from_psf
 
         return np.asarray(get_Z_from_psf(), dtype=int).reshape(-1)
     except Exception:
@@ -229,8 +229,8 @@ def assert_charmm_image_mic_fallback(
     context: str,
 ) -> float:
 
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
-    from mmml.utils.intermonomer_geometry import (
+    from karml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
+    from karml.utils.intermonomer_geometry import (
         find_worst_pre_mlpot_mic_violation,
         summarize_worst_intermonomer_contact,
     )
@@ -327,7 +327,7 @@ def _image_probe_skip_hybrid_ener(
 
 def _force_charmm_image_remap_for_probe() -> None:
     """Re-run ``image byres`` so the next UPDATE/ENER rebuilds ``<MKIMAT2>`` tables."""
-    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import _image_setup_byres_all
+    from karml.interfaces.pycharmmInterface.mlpot.pbc_env import _image_setup_byres_all
 
     _image_setup_byres_all(0.0, 0.0, 0.0)
 
@@ -339,10 +339,10 @@ def capture_charmm_script_output(script: str, *, replay: bool = True) -> str:
 
 def _run_charmm_script_capture_fortran(script: str, *, replay: bool = True) -> str:
     """Run a CHARMM script and return captured Fortran stdout/stderr (fd-level)."""
-    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+    import karml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
     import pycharmm
 
-    from mmml.interfaces.pycharmmInterface.charmm_levels import (
+    from karml.interfaces.pycharmmInterface.charmm_levels import (
         _restore_charmm_levels,
         _set_charmm_levels,
         capture_fortran_stdio,
@@ -368,10 +368,10 @@ def _run_charmm_script_capture_fortran(script: str, *, replay: bool = True) -> s
 
 def _probe_command_via_charmm_log_file(command: str) -> str:
     """Run one CHARMM command with ``OUTU`` redirected to a temp file (MPI-safe)."""
-    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+    import karml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
     import pycharmm
 
-    from mmml.interfaces.pycharmmInterface.charmm_levels import (
+    from karml.interfaces.pycharmmInterface.charmm_levels import (
         _restore_charmm_levels,
         _set_charmm_levels,
         charmm_relaxed_bomlev,
@@ -379,7 +379,7 @@ def _probe_command_via_charmm_log_file(command: str) -> str:
 
     log_path = (
         Path(os.environ.get("TMPDIR", "/tmp"))
-        / f"mmml-mkimat-{os.getpid()}-{uuid.uuid4().hex[:8]}.log"
+        / f"karml-mkimat-{os.getpid()}-{uuid.uuid4().hex[:8]}.log"
     )
     path_quoted = str(log_path)
     script = (
@@ -473,7 +473,7 @@ def resolve_charmm_image_min_distance_A(
 ) -> float:
     if workflow_args is None:
         return float(DEFAULT_PRE_MLPOT_OVERLAP_MIN_A)
-    from mmml.utils.intermonomer_geometry import resolve_pre_mlpot_overlap_min_distance
+    from karml.utils.intermonomer_geometry import resolve_pre_mlpot_overlap_min_distance
 
     return float(resolve_pre_mlpot_overlap_min_distance(workflow_args))
 
@@ -509,11 +509,11 @@ def run_mlpot_pbc_image_registration_gate(
     verbose: bool = False,
 ) -> float:
     """IMAGE gate after MLpot USER is registered (MKIMAT2 tables are built)."""
-    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+    import karml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
     import pycharmm
 
-    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+    from karml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
+    from karml.interfaces.pycharmmInterface.mlpot.setup import (
         rewrap_charmm_coords_for_mlpot_pbc,
     )
 

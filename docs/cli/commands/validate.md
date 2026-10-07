@@ -1,4 +1,4 @@
-# `mmml validate`
+# `karml validate`
 
 Validate NPZ against schema.
 
@@ -6,15 +6,15 @@ Validate NPZ against schema.
 ## Usage
 
 ```bash
-mmml validate --help
+karml validate --help
 ```
 
 ## Options
 
 ```text
-usage: mmml validate [-h] [--quiet] npz_files [npz_files ...]
+usage: karml validate [-h] [--quiet] npz_files [npz_files ...]
 
-Validate NPZ files against the MMML schema.
+Validate NPZ files against the KARML schema.
 
 positional arguments:
   npz_files   One or more NPZ files to validate

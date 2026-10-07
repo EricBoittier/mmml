@@ -1,6 +1,6 @@
 {
-  "checkpoint": "/mmhome/boittier/home/mmml_tutorial/aaa.ama/ama_model/ckpts/test01/test01-73bcaa5e-f811-4b06-a09d-6be83b621227/epoch-2770",
-  "data": "/mmhome/boittier/home/mmml_tutorial/aaa.ama/ama_model/output/energies_forces_dipoles_test.npz",
+  "checkpoint": "/mmhome/boittier/home/karml_tutorial/aaa.ama/ama_model/ckpts/test01/test01-73bcaa5e-f811-4b06-a09d-6be83b621227/epoch-2770",
+  "data": "/mmhome/boittier/home/karml_tutorial/aaa.ama/ama_model/output/energies_forces_dipoles_test.npz",
   "natoms": 40,
   "n_batches": 15,
   "batch_size": 200,

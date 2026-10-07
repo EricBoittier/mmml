@@ -3,7 +3,7 @@
 #
 # Usage:
 #   cd workflows/pbc_liquid_density_dyn
-#   MMML_WORKFLOW_CONFIG=config.pc-bach.cpu.yaml \
+#   KARML_WORKFLOW_CONFIG=config.pc-bach.cpu.yaml \
 #     nohup bash scripts/hourly_status_watch.sh >> results/hourly_status.log 2>&1 &
 #
 #   tail -f results/hourly_status.log
@@ -14,7 +14,7 @@ REPO_ROOT="$(cd "$WORKFLOW_ROOT/../.." && pwd)"
 cd "$WORKFLOW_ROOT"
 
 INTERVAL="${HOURLY_STATUS_INTERVAL_SEC:-3600}"
-CFG="${MMML_WORKFLOW_CONFIG:-config.pc-bach.cpu.yaml}"
+CFG="${KARML_WORKFLOW_CONFIG:-config.pc-bach.cpu.yaml}"
 if [[ "$CFG" == */* ]]; then
   CFG_PATH="$(cd "$(dirname "$CFG")" && pwd)/$(basename "$CFG")"
 else
@@ -39,7 +39,7 @@ _snapshot() {
     echo ""
     echo "--- campaign status ---"
     if [[ -f "$WORKFLOW_ROOT/scripts/status.sh" ]]; then
-      MMML_WORKFLOW_CONFIG="$CFG" bash "$WORKFLOW_ROOT/scripts/status.sh" 2>&1 || true
+      KARML_WORKFLOW_CONFIG="$CFG" bash "$WORKFLOW_ROOT/scripts/status.sh" 2>&1 || true
     fi
     echo ""
     echo "--- snakemake driver (last 8 lines) ---"

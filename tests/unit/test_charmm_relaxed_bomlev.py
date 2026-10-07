@@ -32,7 +32,7 @@ def test_charmm_silent_command_restores_prior_levels(monkeypatch):
     fake.settings = mock_settings
     monkeypatch.setitem(sys.modules, "pycharmm", fake)
     monkeypatch.setitem(sys.modules, "pycharmm.settings", mock_settings)
-    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_silent_command
+    from karml.interfaces.pycharmmInterface.charmm_levels import charmm_silent_command
 
     with charmm_silent_command():
         pass
@@ -45,7 +45,7 @@ def test_charmm_silent_command_restores_prior_levels(monkeypatch):
 
 def test_charmm_relaxed_bomlev_restores_prior_level(monkeypatch):
     _, mock_settings = _stub_pycharmm(monkeypatch)
-    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
+    from karml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
 
     with charmm_relaxed_bomlev():
         pass
@@ -65,7 +65,7 @@ def test_run_charmm_script_quiet_does_not_echo_level_commands(monkeypatch):
     monkeypatch.setitem(sys.modules, "pycharmm", fake)
     monkeypatch.setitem(sys.modules, "pycharmm.settings", mock_settings)
     monkeypatch.setitem(sys.modules, "pycharmm.lingo", mock_lingo)
-    from mmml.interfaces.pycharmmInterface.charmm_levels import run_charmm_script_quiet
+    from karml.interfaces.pycharmmInterface.charmm_levels import run_charmm_script_quiet
 
     run_charmm_script_quiet("ENER\n")
 
@@ -74,7 +74,7 @@ def test_run_charmm_script_quiet_does_not_echo_level_commands(monkeypatch):
 
 
 def test_suppress_charmm_fortran_io_redirects_stdout_stderr(capfd):
-    from mmml.interfaces.pycharmmInterface.charmm_levels import suppress_charmm_fortran_io
+    from karml.interfaces.pycharmmInterface.charmm_levels import suppress_charmm_fortran_io
 
     # CHARMM's Fortran runtime writes unbuffered to fd 1/2, so exercise the
     # fd level directly (a buffered Python ``print`` would flush only after the
@@ -89,7 +89,7 @@ def test_suppress_charmm_fortran_io_redirects_stdout_stderr(capfd):
 
 
 def test_topology_loaders_do_not_pin_bomlev_zero():
-    root = Path(__file__).resolve().parents[2] / "mmml/interfaces/pycharmmInterface"
+    root = Path(__file__).resolve().parents[2] / "karml/interfaces/pycharmmInterface"
     for name in ("nbonds_config.py", "mm_energy_forces.py"):
         text = (root / name).read_text(encoding="utf-8")
         assert 'charmm_script("bomlev 0")' not in text

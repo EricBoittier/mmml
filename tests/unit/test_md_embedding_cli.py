@@ -1,4 +1,4 @@
-"""Unit tests for ``mmml md-embedding`` (no CHARMM)."""
+"""Unit tests for ``karml md-embedding`` (no CHARMM)."""
 
 from __future__ import annotations
 
@@ -7,8 +7,8 @@ from pathlib import Path
 
 import numpy as np
 
-from mmml.cli.run import md_embedding
-from mmml.interfaces.pycharmmInterface.mlpot.embedding_workflow import (
+from karml.cli.run import md_embedding
+from karml.interfaces.pycharmmInterface.mlpot.embedding_workflow import (
     TRAINING_N_ATOMS_AAA,
     default_train_config_dict,
     run_train_phase,
@@ -62,11 +62,11 @@ def test_cmd_run_mpi_rerun_forwards_mini_nstep(monkeypatch):
         return 0
 
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.charmm_mpi.maybe_rerun_mmml_under_mpirun",
+        "karml.interfaces.pycharmmInterface.charmm_mpi.maybe_rerun_karml_under_mpirun",
         _fake_rerun,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.charmm_mpi.prepare_serial_charmm_mpi_env",
+        "karml.interfaces.pycharmmInterface.charmm_mpi.prepare_serial_charmm_mpi_env",
         lambda: None,
     )
     argv = [
@@ -119,7 +119,7 @@ def test_run_train_phase_skip_train_writes_manifest(tmp_path: Path, monkeypatch)
         return npz
 
     monkeypatch.setattr(
-        "mmml.data.external.aaa_ama.download_dataset_aaa",
+        "karml.data.external.aaa_ama.download_dataset_aaa",
         _no_download,
     )
     result = run_train_phase(
@@ -144,7 +144,7 @@ def test_main_train_dispatch(tmp_path: Path, monkeypatch):
     _minimal_aaa_npz(npz, n_frames=8)
 
     monkeypatch.setattr(
-        "mmml.data.external.aaa_ama.download_dataset_aaa",
+        "karml.data.external.aaa_ama.download_dataset_aaa",
         lambda dest: npz,
     )
     code = md_embedding.main(
@@ -186,11 +186,11 @@ def test_prepare_train_valid_npz_fix_and_split(tmp_path: Path, monkeypatch):
         return True
 
     monkeypatch.setattr(
-        "mmml.cli.misc.fix_and_split.fix_and_split_data",
+        "karml.cli.misc.fix_and_split.fix_and_split_data",
         _fake_fix_and_split,
     )
 
-    from mmml.interfaces.pycharmmInterface.mlpot.embedding_workflow import (
+    from karml.interfaces.pycharmmInterface.mlpot.embedding_workflow import (
         prepare_train_valid_npz,
     )
 

@@ -24,7 +24,7 @@
 
 set -uo pipefail
 
-REPO="${MMML_REPO:-$HOME/mmml}"
+REPO="${KARML_REPO:-$HOME/karml}"
 cd "$REPO"
 
 EW_LIST=(10 30 100)
@@ -63,8 +63,8 @@ export TERM=dumb
 export UV_NO_SYNC=1
 export UV_OFFLINE=1
 
-export MMML_SCICORE_CMAKE="${MMML_SCICORE_CMAKE:-CMake/3.31.8-GCCcore-14.3.0}"
-export MMML_SCICORE_TOOLCHAIN="${MMML_SCICORE_TOOLCHAIN:-foss/2025a}"
+export KARML_SCICORE_CMAKE="${KARML_SCICORE_CMAKE:-CMake/3.31.8-GCCcore-14.3.0}"
+export KARML_SCICORE_TOOLCHAIN="${KARML_SCICORE_TOOLCHAIN:-foss/2025a}"
 source scripts/scicore_env.sh
 source .venv/bin/activate
 set -e
@@ -84,7 +84,7 @@ fi
 # NOTE: deliberately no --physnet-checkpoint. Warm starting would re-impose the
 # checkpoint's features=32 / num_iterations=2 and silently undo the capacity
 # increase this whole run exists to test.
-uv run mmml physnet-train \
+uv run karml physnet-train \
   --config examples/lj_scales/train_des_bigmodel.yaml \
   --data "$DATA" \
   --valid-data "" \
@@ -102,7 +102,7 @@ echo "=== training done (energy_weight=$EW); scoring against target ==="
 PARAMS=$(ls -t "$CKPT_DIR"/params_*.json 2>/dev/null | head -1)
 SIDECAR=$(ls -t "$CKPT_DIR"/*/hybrid_mm.json 2>/dev/null | head -1)
 if [[ -n "$PARAMS" && -n "$SIDECAR" ]]; then
-  uv run python -m mmml.cli.misc.eval_hybrid_accuracy \
+  uv run python -m karml.cli.misc.eval_hybrid_accuracy \
     --params "$PARAMS" \
     --hybrid-mm-json "$SIDECAR" \
     --data "$DATA" \

@@ -32,24 +32,24 @@ sbatch workflows/validation_campaign/launch/pcstudix_smoke_matrix.slurm.sh
 Run a subset by tag or exact case:
 
 ```bash
-MMML_SMOKE_TAG=calculator \
+KARML_SMOKE_TAG=calculator \
   sbatch workflows/validation_campaign/launch/pcstudix_smoke_matrix.slurm.sh
 
-MMML_SMOKE_CASE=jaxmd_nve \
+KARML_SMOKE_CASE=jaxmd_nve \
   sbatch workflows/validation_campaign/launch/pcstudix_smoke_matrix.slurm.sh
 ```
 
 List the matrix without running calculations:
 
 ```bash
-.venv/bin/python -m mmml.validation.smoke_matrix \
+.venv/bin/python -m karml.validation.smoke_matrix \
   workflows/validation_campaign/pcstudix_smoke_matrix.yaml \
-  --output-root /tmp/mmml-smoke --list
+  --output-root /tmp/karml-smoke --list
 ```
 
 Results are stored under
 `artifacts/validation_campaign/<run-id>/pcstudix/calculator_backend_matrix/`.
-Runs never overwrite one another unless `MMML_SMOKE_RUN_ID` is explicitly
+Runs never overwrite one another unless `KARML_SMOKE_RUN_ID` is explicitly
 reused.
 
 ## Optional dependencies
@@ -58,14 +58,14 @@ Cases declare requirements and become `BLOCKED` when they are absent. Supply
 these paths before submission when applicable:
 
 ```bash
-export MMML_SMOKE_EFIELD_CHECKPOINT=/path/to/efield-params
-export MMML_SMOKE_EFIELD_CONFIG=/path/to/efield-config.json
-export MMML_SMOKE_DFTB_SLAKO_DIR=/path/to/3ob-3-1
+export KARML_SMOKE_EFIELD_CHECKPOINT=/path/to/efield-params
+export KARML_SMOKE_EFIELD_CONFIG=/path/to/efield-config.json
+export KARML_SMOKE_DFTB_SLAKO_DIR=/path/to/3ob-3-1
 ```
 
 xTB accepts either `xtb-python` or `tblite`; PySCF requires the `pyscf` module;
 DFTB3-D4 also requires `dftb+` on `PATH`. By default, blocked optional cases are
-reported but do not make the batch job fail. Set `MMML_SMOKE_STRICT_BLOCKED=1`
+reported but do not make the batch job fail. Set `KARML_SMOKE_STRICT_BLOCKED=1`
 when the node is expected to provide the complete environment.
 
 ## Scientific contract

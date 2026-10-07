@@ -6,18 +6,18 @@ set -euo pipefail
 WORKFLOW_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$WORKFLOW_ROOT"
 REPO_ROOT="$(cd "$WORKFLOW_ROOT/../.." && pwd)"
-# shellcheck source=../../../scripts/resolve_mmml_env.sh
-source "$REPO_ROOT/scripts/resolve_mmml_env.sh"
-mmml_resolve_env "$REPO_ROOT"
+# shellcheck source=../../../scripts/resolve_karml_env.sh
+source "$REPO_ROOT/scripts/resolve_karml_env.sh"
+karml_resolve_env "$REPO_ROOT"
 
-PROFILE="${MMML_SNAKEMAKE_PROFILE:-profiles/slurm}"
-_cfg_raw="${MMML_WORKFLOW_CONFIG:-config.yaml}"
+PROFILE="${KARML_SNAKEMAKE_PROFILE:-profiles/slurm}"
+_cfg_raw="${KARML_WORKFLOW_CONFIG:-config.yaml}"
 if [[ "$_cfg_raw" = /* ]]; then
   CFG_PATH="$_cfg_raw"
 else
   CFG_PATH="$WORKFLOW_ROOT/$_cfg_raw"
 fi
-export MMML_WORKFLOW_CONFIG="$CFG_PATH"
+export KARML_WORKFLOW_CONFIG="$CFG_PATH"
 export JAX_ENABLE_X64="${JAX_ENABLE_X64:-1}"
 CONFIG_ARGS=()
 if [[ "$CFG_PATH" != "$WORKFLOW_ROOT/config.yaml" ]]; then

@@ -6,14 +6,14 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from mmml.interfaces.pyxtal_placement import (
+from karml.interfaces.pyxtal_placement import (
     MolecularCrystalBuildRequest,
     build_molecular_crystal_random,
     crystal_mass_density_g_cm3,
     have_pyxtal,
     scale_atoms_cell_to_density,
 )
-from mmml.paths import (
+from karml.paths import (
     default_acetone_crystal_cif,
     default_benzene_crystal_cif,
     default_dcm_crystal_cif,
@@ -279,7 +279,7 @@ def _pyxtal_built_benzene(seed: int = 7) -> CrystalMetrics:
 
 def literature_comparison_markdown(*, use_live_pyxtal: bool = False) -> str:
     """Full markdown section comparing bundled COD structures to CHARMM + PyXtal."""
-    from mmml.interfaces.crystal_charmm import charmm_crystal_metrics_from_preset
+    from karml.interfaces.crystal_charmm import charmm_crystal_metrics_from_preset
 
     dcm_lit = metrics_from_cif(
         default_dcm_crystal_cif(), space_group=60, label="COD 2100015"
@@ -322,7 +322,7 @@ def literature_comparison_markdown(*, use_live_pyxtal: bool = False) -> str:
                 "Pbcn, Z=4, 1.63 GPa / 293 K."
             ),
             charmm_caption=(
-                "make-res+CIF: `mmml build-crystal --literature dcm` (unit cell)."
+                "make-res+CIF: `karml build-crystal --literature dcm` (unit cell)."
             ),
             built_caption=(
                 "PyXtal: `-m default_dcm_molecule_xyz()`, `--spg 60 --z 4 --seed 42`, "
@@ -341,7 +341,7 @@ def literature_comparison_markdown(*, use_live_pyxtal: bool = False) -> str:
                 "P2₁/c, Z=2, ~0.97 GPa / 295 K."
             ),
             charmm_caption=(
-                "make-res+CIF: `mmml build-crystal --literature benz` (unit cell)."
+                "make-res+CIF: `karml build-crystal --literature benz` (unit cell)."
             ),
             built_caption=(
                 "PyXtal: `-m benzene` (not `c1ccccc1`), `--spg 14 --z 2 --seed 7`, "
@@ -363,7 +363,7 @@ def literature_comparison_markdown(*, use_live_pyxtal: bool = False) -> str:
                 "`examples/acetone_crystal/01_phases.py`."
             ),
             charmm_caption=(
-                "make-res+CIF: `mmml build-crystal --literature aco` (unit cell)."
+                "make-res+CIF: `karml build-crystal --literature aco` (unit cell)."
             ),
             built_caption=(
                 "No PyXtal column: acetone is used here as an experimental "

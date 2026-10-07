@@ -1,4 +1,4 @@
-# `mmml pes-design`
+# `karml pes-design`
 
 Bayesian physical/diverse PES subset design + validation plots.
 
@@ -6,13 +6,13 @@ Bayesian physical/diverse PES subset design + validation plots.
 ## Usage
 
 ```bash
-mmml pes-design --help
+karml pes-design --help
 ```
 
 ## Options
 
 ```text
-usage: mmml pes-design [-h] --input INPUT --output OUTPUT
+usage: karml pes-design [-h] --input INPUT --output OUTPUT
                        [--report-dir REPORT_DIR] --n-select N_SELECT
                        [--descriptor {pair-rdf,soap,combined}] [--cutoff CUTOFF]
                        [--rdf-bins RDF_BINS] [--type-hash-bins TYPE_HASH_BINS]

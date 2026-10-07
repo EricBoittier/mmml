@@ -3,7 +3,7 @@
 A :class:`Sampler` peer of the MD drivers (decision, §10): whole monomers move as
 rigid bodies — a COM translation plus a rotation represented as a **unit
 quaternion** — and moves are accepted with the Metropolis criterion under the
-system's :class:`~mmml.md.energy.registry.HybridEnergy`. Rigid moves preserve
+system's :class:`~karml.md.energy.registry.HybridEnergy`. Rigid moves preserve
 every intramolecular distance exactly, so this samples configurational space
 without intramolecular forces.
 
@@ -21,10 +21,10 @@ from typing import Any, Callable, Mapping
 
 import numpy as np
 
-from mmml.md.config import RunConfig
-from mmml.md.energy.registry import HybridEnergy
-from mmml.md.results import Trajectory
-from mmml.md.system import MolecularSystem
+from karml.md.config import RunConfig
+from karml.md.energy.registry import HybridEnergy
+from karml.md.results import Trajectory
+from karml.md.system import MolecularSystem
 
 __all__ = ["RigidBodySampler", "quat_from_axis_angle", "quat_to_matrix"]
 
@@ -57,11 +57,11 @@ def quat_to_matrix(q: np.ndarray) -> np.ndarray:
 class RigidBodySampler:
     """Metropolis MC over rigid-body translation + rotation of each monomer.
 
-    ``neighbor_fn`` mirrors :class:`~mmml.md.drivers.JaxmdDriver`'s: called as
+    ``neighbor_fn`` mirrors :class:`~karml.md.drivers.JaxmdDriver`'s: called as
     ``fn(position, box)`` at ``neighbor_refresh_every``-sweep boundaries,
     returning keyword arrays routed into the energy (e.g. ``pair_i`` /
     ``pair_j`` / ``pair_mask`` for ``mm_nonbonded``). Required for any term that
-    declares an intermolecular :class:`~mmml.md.energy.registry.NeighborRequest`
+    declares an intermolecular :class:`~karml.md.energy.registry.NeighborRequest`
     — without it, the term's host pair-build path is not jit-compatible and
     raises under ``jax.jit`` (decision B: terms own their pair-list capacity,
     the sampler/driver only owns the rebuild cadence). Rebuilt once per

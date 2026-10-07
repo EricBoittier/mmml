@@ -5,7 +5,7 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-from mmml.cli.registry import COMMAND_REGISTRY
+from karml.cli.registry import COMMAND_REGISTRY
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -15,7 +15,7 @@ def test_production_code_does_not_import_operational_trees() -> None:
     """Keep scripts, workflows, and tests out of the distributable API."""
     forbidden = ("scripts", "workflows", "tests")
     violations: list[str] = []
-    for path in (ROOT / "mmml").rglob("*.py"):
+    for path in (ROOT / "karml").rglob("*.py"):
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):

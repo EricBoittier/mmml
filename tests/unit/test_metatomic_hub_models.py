@@ -1,4 +1,4 @@
-"""Optional live PET-MAD / UPET smoke when MMML_METATOMIC_MODEL_DIR is set."""
+"""Optional live PET-MAD / UPET smoke when KARML_METATOMIC_MODEL_DIR is set."""
 
 from __future__ import annotations
 
@@ -9,18 +9,18 @@ import numpy as np
 import pytest
 from ase.build import molecule
 
-from mmml.data.units import EV_TO_KCAL_MOL
-from mmml.interfaces.calculators.ase_fragment_hybrid import evaluate_fragment_hybrid
-from mmml.interfaces.calculators.metatomic import have_metatomic, load_metatomic_calculator
-from mmml.interfaces.pycharmmInterface.mlpot.metatomic_mlpot import build_metatomic_mlpot_model
+from karml.data.units import EV_TO_KCAL_MOL
+from karml.interfaces.calculators.ase_fragment_hybrid import evaluate_fragment_hybrid
+from karml.interfaces.calculators.metatomic import have_metatomic, load_metatomic_calculator
+from karml.interfaces.pycharmmInterface.mlpot.metatomic_mlpot import build_metatomic_mlpot_model
 
-_raw_dir = os.environ.get("MMML_METATOMIC_MODEL_DIR", "").strip()
+_raw_dir = os.environ.get("KARML_METATOMIC_MODEL_DIR", "").strip()
 MODEL_DIR = Path(_raw_dir) if _raw_dir else None
 PET_MAD = (MODEL_DIR / "pet-mad-s-v1.0.2.pt") if MODEL_DIR is not None else None
 
 pytestmark = pytest.mark.skipif(
     not have_metatomic() or PET_MAD is None or not PET_MAD.is_file(),
-    reason="needs uv extra metatomic and MMML_METATOMIC_MODEL_DIR/pet-mad-s-v1.0.2.pt",
+    reason="needs uv extra metatomic and KARML_METATOMIC_MODEL_DIR/pet-mad-s-v1.0.2.pt",
 )
 
 

@@ -1,20 +1,20 @@
 #!/usr/bin/env python3
-"""``mmml npz2traj`` — convert MMML NPZ datasets to ASE trajectories.
+"""``karml npz2traj`` — convert KARML NPZ datasets to ASE trajectories.
 
 Attaches energy, forces, dipole, charges, and other NPZ fields so they are
-visible in ASE / MMML GUIs (``SinglePointCalculator`` + ``atoms.info`` /
+visible in ASE / KARML GUIs (``SinglePointCalculator`` + ``atoms.info`` /
 ``atoms.arrays``).
 
 CLI::
 
-    mmml npz2traj data.npz -o trajectory.traj
-    mmml npz2traj data.npz -o subset.traj --max-structures 100 --stride 10
-    mmml npz2traj data.npz -o frames.extxyz
+    karml npz2traj data.npz -o trajectory.traj
+    karml npz2traj data.npz -o subset.traj --max-structures 100 --stride 10
+    karml npz2traj data.npz -o frames.extxyz
 
     # jaxmd-unified trajectory.npz → CHARMM PSF+DCD (full / selections)
-    mmml npz2traj nvt/trajectory.npz -o nvt/all.dcd --psf model.psf
-    mmml npz2traj nvt/trajectory.npz -o nvt/tria.dcd --psf model.psf --resnames TRIA
-    mmml npz2traj nvt/trajectory.npz -o nvt/all.dcd --psf model.psf \\
+    karml npz2traj nvt/trajectory.npz -o nvt/all.dcd --psf model.psf
+    karml npz2traj nvt/trajectory.npz -o nvt/tria.dcd --psf model.psf --resnames TRIA
+    karml npz2traj nvt/trajectory.npz -o nvt/all.dcd --psf model.psf \\
         --split-resnames TRIA,TIP3
 """
 
@@ -27,7 +27,7 @@ from typing import Any
 
 import numpy as np
 
-from mmml.data.units import (
+from karml.data.units import (
     DEBYE_TO_EANGSTROM,
     HARTREE_BOHR_TO_EV_ANGSTROM,
     HARTREE_TO_EV,
@@ -63,7 +63,7 @@ _METADATA_KEYS = (
     "units",
     "source_files",
     "conversion_info",
-    "_mmml_units",
+    "_karml_units",
 )
 
 _R_ALIASES = ("R", "coordinates", "positions", "coords")
@@ -77,20 +77,20 @@ _CELL_ALIASES = ("cell", "cells", "lattice", "lattices", "box", "boxes")
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="mmml npz2traj",
+        prog="karml npz2traj",
         description=(
-            "Convert MMML NPZ datasets to ASE trajectories with energy, forces, "
+            "Convert KARML NPZ datasets to ASE trajectories with energy, forces, "
             "dipole, charges, and extra fields attached for GUI inspection."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
             "Examples:\n"
-            "  mmml npz2traj data.npz -o trajectory.traj\n"
-            "  mmml npz2traj data.npz -o subset.traj --max-structures 100 --stride 10\n"
-            "  mmml npz2traj data.npz -o frames.extxyz\n"
-            "  mmml npz2traj data.npz -o ase.traj --ase-units\n"
-            "  mmml npz2traj nvt/trajectory.npz -o nvt/all.dcd --psf model.psf\n"
-            "  mmml npz2traj nvt/trajectory.npz -o nvt/all.dcd --psf model.psf "
+            "  karml npz2traj data.npz -o trajectory.traj\n"
+            "  karml npz2traj data.npz -o subset.traj --max-structures 100 --stride 10\n"
+            "  karml npz2traj data.npz -o frames.extxyz\n"
+            "  karml npz2traj data.npz -o ase.traj --ase-units\n"
+            "  karml npz2traj nvt/trajectory.npz -o nvt/all.dcd --psf model.psf\n"
+            "  karml npz2traj nvt/trajectory.npz -o nvt/all.dcd --psf model.psf "
             "--split-resnames TRIA,TIP3\n"
             "\n"
             "Schema keys: R/Z or positions/Z required; E, F, D, cell/boxes optional.\n"
@@ -316,10 +316,10 @@ def npz_to_atoms_list(
         if D.shape != (n_structures, 3):
             raise ValueError(f"D must have shape (n_structures, 3), got {D.shape}")
 
-    # Infer units from NPZ metadata when present; else MMML schema defaults.
+    # Infer units from NPZ metadata when present; else KARML schema defaults.
     units_meta: dict[str, Any] = {}
     files = set(getattr(data, "files", data.keys()))
-    for ukey in ("units", "_mmml_units"):
+    for ukey in ("units", "_karml_units"):
         if ukey not in files:
             continue
         raw = data[ukey]
@@ -669,8 +669,8 @@ def _write_dcd_bundle(
 ) -> int:
     from ase import Atoms
 
-    from mmml.utils.dcd_writer import save_trajectory_dcd
-    from mmml.utils.psf_subset import copy_or_link_psf, write_subset_psf
+    from karml.utils.dcd_writer import save_trajectory_dcd
+    from karml.utils.psf_subset import copy_or_link_psf, write_subset_psf
 
     pos = np.asarray(positions, dtype=np.float64)
     box_list = None
@@ -726,7 +726,7 @@ def export_md_npz(
     verbose: bool = True,
 ) -> int:
     """Export MD ``trajectory.npz`` to ASE ``.traj`` / ``.dcd`` (+ optional splits)."""
-    from mmml.utils.psf_subset import indices_for_resnames, parse_resname_list
+    from karml.utils.psf_subset import indices_for_resnames, parse_resname_list
 
     output_file = Path(output_file)
     psf_path = Path(psf) if psf is not None else None

@@ -2,7 +2,7 @@
 
 Run on a reserved GPU compute node::
 
-    export MMML_CKPT=/path/to/dcm1_params.json
+    export KARML_CKPT=/path/to/dcm1_params.json
     export JAX_ENABLE_X64=1
     ./scripts/run_pycharmm_pytest_gpu.sh live -q
     # or the full live file:
@@ -38,17 +38,17 @@ pytestmark = [
 def live_ckpt() -> Path:
     ckpt = resolve_live_checkpoint()
     if ckpt is None:
-        pytest.skip("No PhysNet checkpoint (set MMML_CKPT)")
+        pytest.skip("No PhysNet checkpoint (set KARML_CKPT)")
     return ckpt
 
 
 def test_sd_minimization_lowers_hybrid_grms(live_ckpt: Path) -> None:
     """CHARMM SD pass 1 under MLpot should reduce hybrid GRMS on a relaxed dimer."""
-    from mmml.interfaces.pycharmmInterface.mlpot import (
+    from karml.interfaces.pycharmmInterface.mlpot import (
         MinimizeWithMlpotConfig,
         minimize_with_mlpot,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
         measure_hybrid_charmm_grms,
     )
 
@@ -78,14 +78,14 @@ def test_sd_minimization_lowers_hybrid_grms(live_ckpt: Path) -> None:
 
 def test_hybrid_fire_bfgs_pre_sd_lowers_grms(live_ckpt: Path) -> None:
     """ASE FIRE + BFGS on the hybrid calculator should recover from a geometry stress spike."""
-    from mmml.interfaces.pycharmmInterface.mlpot import (
+    from karml.interfaces.pycharmmInterface.mlpot import (
         MinimizeWithMlpotConfig,
         minimize_with_mlpot,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
         measure_hybrid_charmm_grms,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
+    from karml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
 
     ctx, _z, r, _n = setup_aco_mlpot(live_ckpt, n_molecules=4, spacing=4.0)
     try:
@@ -118,11 +118,11 @@ def test_hybrid_fire_bfgs_pre_sd_lowers_grms(live_ckpt: Path) -> None:
 
 def test_cons_fix_pass2_freezes_fixed_monomer(live_ckpt: Path) -> None:
     """SD pass 2 with cons_fix should not move atoms on the fixed resid."""
-    from mmml.interfaces.pycharmmInterface.mlpot import (
+    from karml.interfaces.pycharmmInterface.mlpot import (
         MinimizeWithMlpotConfig,
         minimize_with_mlpot,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
         setup_cons_fix_for_resids,
         turn_off_cons_fix,
     )
@@ -156,14 +156,14 @@ def test_cons_fix_pass2_freezes_fixed_monomer(live_ckpt: Path) -> None:
 
 def test_nve_short_run_stays_finite(live_ckpt: Path, tmp_path: Path) -> None:
     """Mini + short vacuum NVE should finish with finite coordinates and energies."""
-    from mmml.interfaces.pycharmmInterface.mlpot import (
+    from karml.interfaces.pycharmmInterface.mlpot import (
         CharmmTrajectoryFiles,
         MinimizeWithMlpotConfig,
         build_nve_dynamics,
         minimize_with_mlpot,
         run_dynamics_with_io,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         charmm_dynamics_state_is_finite,
     )
 
@@ -211,7 +211,7 @@ def test_nve_short_run_stays_finite(live_ckpt: Path, tmp_path: Path) -> None:
 
 def test_nve_cons_fix_holds_fixed_monomer(live_ckpt: Path, tmp_path: Path) -> None:
     """``cons_fix`` during NVE should keep the fixed monomer fixed."""
-    from mmml.interfaces.pycharmmInterface.mlpot import (
+    from karml.interfaces.pycharmmInterface.mlpot import (
         CharmmTrajectoryFiles,
         MinimizeWithMlpotConfig,
         build_nve_dynamics,
@@ -219,7 +219,7 @@ def test_nve_cons_fix_holds_fixed_monomer(live_ckpt: Path, tmp_path: Path) -> No
         run_dynamics_with_io,
         select_by_resids,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
         setup_cons_fix_for_resids,
         turn_off_cons_fix,
     )
@@ -272,14 +272,14 @@ def test_nve_cons_fix_holds_fixed_monomer(live_ckpt: Path, tmp_path: Path) -> No
 
 def test_dcm_dimer_mini_and_nve_smoke(live_ckpt: Path, tmp_path: Path) -> None:
     """DCM:2 smoke with the production dcm1 checkpoint (when available)."""
-    from mmml.interfaces.pycharmmInterface.mlpot import (
+    from karml.interfaces.pycharmmInterface.mlpot import (
         CharmmTrajectoryFiles,
         MinimizeWithMlpotConfig,
         build_nve_dynamics,
         minimize_with_mlpot,
         run_dynamics_with_io,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         charmm_dynamics_state_is_finite,
     )
 

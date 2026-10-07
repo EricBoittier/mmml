@@ -13,8 +13,8 @@ import jax.numpy as jnp
 import numpy as np
 from ase.io.trajectory import Trajectory
 
-from mmml.interfaces.calculators.simple_inference import create_calculator_from_checkpoint
-from mmml.utils.dcd_writer import DCDTrajectoryWriter
+from karml.interfaces.calculators.simple_inference import create_calculator_from_checkpoint
+from karml.utils.dcd_writer import DCDTrajectoryWriter
 
 
 class DualTrajectoryWriter:
@@ -159,8 +159,8 @@ def load_cg_checkpoint(checkpoint: str | Path) -> tuple[Any, Any, Any]:
     """Load a checkpoint and expose its calculator, model, and parameter tree."""
     path = Path(checkpoint).expanduser().resolve()
     calculator = create_calculator_from_checkpoint(path)
-    model = getattr(calculator, "model", getattr(calculator, "_mmml_physnet_model", None))
-    params = getattr(calculator, "params", getattr(calculator, "_mmml_physnet_params", None))
+    model = getattr(calculator, "model", getattr(calculator, "_karml_physnet_model", None))
+    params = getattr(calculator, "params", getattr(calculator, "_karml_physnet_params", None))
     if model is None or params is None:
         raise ValueError(f"Could not extract model or parameters from {path}")
     return calculator, model, params

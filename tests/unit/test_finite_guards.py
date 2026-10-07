@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from mmml.interfaces.pycharmmInterface.mlpot.finite_guards import (
+from karml.interfaces.pycharmmInterface.mlpot.finite_guards import (
     NonfinitePhysicalContribution,
     require_host_finite,
 )

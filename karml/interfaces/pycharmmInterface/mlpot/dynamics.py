@@ -23,12 +23,12 @@ DEFAULT_CPT_DYNAMICS_CHUNK_NSTEP = 250
 BUSSI_SUBCHUNK_CONTINUE_MAX_GRMS_KCALMOL_A = 50.0
 
 if TYPE_CHECKING:
-    from mmml.interfaces.pycharmmInterface.mlpot.derivative_test import TestFirstConfig
-    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+    from karml.interfaces.pycharmmInterface.mlpot.derivative_test import TestFirstConfig
+    from karml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
         DynamicsOverlapConfig,
         OverlapRescueConfig,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
+    from karml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
 
 import numpy as np
 
@@ -44,7 +44,7 @@ def _dynamics_io_fortran_path(
     """Return ``(fortran_path, io_alias_or_none)`` for dynamics file open."""
     p = Path(path)
     try:
-        from mmml.interfaces.pycharmmInterface.charmm_paths import charmm_fortran_path
+        from karml.interfaces.pycharmmInterface.charmm_paths import charmm_fortran_path
 
         fortran_path, alias = charmm_fortran_path(
             p,
@@ -99,15 +99,15 @@ def _apply_dynamics_io_setters(
     iunrea = kw.get("iunrea")
     if isinstance(iunrea, str):
         if kw.get("restart"):
-            from mmml.interfaces.pycharmmInterface.mlpot.charmm_restart_compat import (
+            from karml.interfaces.pycharmmInterface.mlpot.charmm_restart_compat import (
                 restart_with_seed_count,
             )
 
             iunrea = str(restart_with_seed_count(iunrea))
             if not charm_dyn.set_iunrea(iunrea):
                 raise RuntimeError(f"dynamics iunrea open failed: {iunrea}")
-            if os.environ.get("MMML_TRACE_DYNAMICS_COMMAND") == "1":
-                print(f"MMML CHARMM RESTART READ BOUND: {iunrea}", flush=True)
+            if os.environ.get("KARML_TRACE_DYNAMICS_COMMAND") == "1":
+                print(f"KARML CHARMM RESTART READ BOUND: {iunrea}", flush=True)
         # The path setter opens the MPI-safe alias, but CHARMM's DYNAMICS parser
         # still requires the logical read unit on the command line.  Omitting it
         # silently turns DYNA RESTART into a zero-K velocity assignment.
@@ -149,7 +149,7 @@ def _emit_overlap_log(
     context: str | None = None,
     quiet: bool = False,
 ) -> None:
-    from mmml.utils.rich_report import emit_overlap_log
+    from karml.utils.rich_report import emit_overlap_log
 
     emit_overlap_log(detail, context=context, quiet=quiet)
 
@@ -157,7 +157,7 @@ def _emit_overlap_log(
 def _maybe_show_energy(show: bool) -> None:
     if not show:
         return
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import safe_energy_show
+    from karml.interfaces.pycharmmInterface.import_pycharmm import safe_energy_show
 
     safe_energy_show()
 
@@ -184,7 +184,7 @@ class CharmmTrajectoryFiles:
         if self.restart_read is not None:
             import pycharmm
 
-            from mmml.interfaces.pycharmmInterface.mlpot.charmm_restart_compat import (
+            from karml.interfaces.pycharmmInterface.mlpot.charmm_restart_compat import (
                 restart_with_seed_count,
             )
 
@@ -206,9 +206,9 @@ class CharmmTrajectoryFiles:
             )
             open_files.append(restart_file)
             kw["iunrea"] = int(self.restart_read_unit)
-            if os.environ.get("MMML_TRACE_DYNAMICS_COMMAND") == "1":
+            if os.environ.get("KARML_TRACE_DYNAMICS_COMMAND") == "1":
                 print(
-                    "MMML CHARMM RESTART UNIT OPEN: "
+                    "KARML CHARMM RESTART UNIT OPEN: "
                     f"unit={self.restart_read_unit} path={fortran_path}",
                     flush=True,
                 )
@@ -321,7 +321,7 @@ def _charmm_grms_or_none() -> float | None:
     Read for reporting only, so a missing accessor must not break a minimization
     that would otherwise succeed.
     """
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_grms
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_grms
 
     try:
         return float(charmm_grms())
@@ -358,8 +358,8 @@ def minimize_charmm_mm_only(config: CharmmMmMinimizeConfig) -> CharmmMmMinimizeR
     Call **before** :func:`register_mlpot` so the PSF still has bonds and no ML model is loaded.
     """
     pycharmm, cons_fix, energy, minimize, *_ = _import_pycharmm_modules()
-    from mmml.interfaces.pycharmmInterface.mlpot.block_terms import apply_charmm_mm_block
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+    from karml.interfaces.pycharmmInterface.mlpot.block_terms import apply_charmm_mm_block
+    from karml.interfaces.pycharmmInterface.mlpot.setup import (
         get_charmm_positions_array,
         setup_default_nbonds,
         sync_charmm_positions,
@@ -370,7 +370,7 @@ def minimize_charmm_mm_only(config: CharmmMmMinimizeConfig) -> CharmmMmMinimizeR
 
     pbc_side_before_block: float | None = None
     if bool(config.use_pbc):
-        from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+        from karml.interfaces.pycharmmInterface.mlpot.pbc_env import (
             probe_charmm_cubic_box_side_A,
         )
 
@@ -381,13 +381,13 @@ def minimize_charmm_mm_only(config: CharmmMmMinimizeConfig) -> CharmmMmMinimizeR
         # read_cgenff_toppar(); calling apply_full_cgenff_params() would issue a bonded-only
         # READ PARAM APPEND FLEX that resets NONBONDED to zero (ε=0, VDW gone).
         # We still clear any stale BLOCK coefficients.
-        from mmml.interfaces.pycharmmInterface.import_pycharmm import reset_block
+        from karml.interfaces.pycharmmInterface.import_pycharmm import reset_block
 
         reset_block()
     else:
         apply_charmm_mm_block()
     if bool(config.use_pbc):
-        from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+        from karml.interfaces.pycharmmInterface.mlpot.pbc_env import (
             restore_charmm_cubic_crystal_lattice,
         )
 
@@ -449,14 +449,14 @@ def minimize_charmm_mm_only(config: CharmmMmMinimizeConfig) -> CharmmMmMinimizeR
         if config.nstep_sd > 0:
             if config.verbose:
                 print(f"CHARMM MM SD: nstep={config.nstep_sd}", flush=True)
-            from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_quiet_output
+            from karml.interfaces.pycharmmInterface.charmm_levels import charmm_quiet_output
 
             with charmm_quiet_output():
                 minimize.run_sd(**sd_kw)
         if config.nstep_abnr > 0:
             if config.verbose:
                 print(f"CHARMM MM ABNR: nstep={config.nstep_abnr}", flush=True)
-            from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_quiet_output
+            from karml.interfaces.pycharmmInterface.charmm_levels import charmm_quiet_output
 
             abnr_inb = _prepare_charmm_mm_minimize_list_frequencies(
                 pycharmm,
@@ -529,8 +529,8 @@ def _charmm_eterm_value(name: str) -> float | None:
     import pycharmm
     import pycharmm.lingo as lingo
 
-    lingo.charmm_script(f"SET __mmml_eterm ?{name.upper()}")
-    raw = pycharmm.get_charmm_variable("__MMML_ETERM")
+    lingo.charmm_script(f"SET __karml_eterm ?{name.upper()}")
+    raw = pycharmm.get_charmm_variable("__KARML_ETERM")
     if raw is None:
         return None
     if isinstance(raw, bytes):
@@ -619,7 +619,7 @@ def _log_bonded_term_diagnostics(*, verbose: bool) -> None:
 
 def _with_mlpot_detached(ctx: "MlpotContext", fn):
     """Unset MLpot USER, run MM work, then reattach MLpot + hybrid BLOCK."""
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
+    from karml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
 
     if not isinstance(ctx, MlpotContext) and not hasattr(ctx, "mock_calls"):
         raise TypeError("ctx must be MlpotContext")
@@ -682,7 +682,7 @@ def bonded_mm_mini_config_from_namespace(
 
 def _with_mlpot_block_restored(ctx: "MlpotContext", fn):
     """Run ``fn`` with full/bonded MM registration, then restore hybrid MLpot MM-off."""
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+    from karml.interfaces.pycharmmInterface.mlpot.setup import (
         MlpotContext,
         _apply_mlpot_psf_mm_off_and_pbc,
     )
@@ -699,10 +699,10 @@ def _with_mlpot_block_restored(ctx: "MlpotContext", fn):
 
 def measure_mm_grms_with_full_block(ctx: "MlpotContext") -> float:
     """MM bonded strain proxy: GRMS (kcal/mol/Å) with full MM BLOCK, MLpot stays on."""
-    from mmml.interfaces.pycharmmInterface.mlpot.block_terms import apply_charmm_mm_block
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_grms
+    from karml.interfaces.pycharmmInterface.mlpot.block_terms import apply_charmm_mm_block
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_grms
 
-    from mmml.interfaces.pycharmmInterface.charmm_levels import run_charmm_script_quiet
+    from karml.interfaces.pycharmmInterface.charmm_levels import run_charmm_script_quiet
 
     def _measure() -> float:
         apply_charmm_mm_block()
@@ -730,8 +730,8 @@ def _bonded_recovery_sd_kwargs(ctx: "MlpotContext", config: BondedMmMiniConfig) 
 
 def _prepare_bonded_mm_rescue_environment(ctx: "MlpotContext") -> None:
     """Refresh pair lists with UPDATE only (no upinb) after MLpot detach."""
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
-    from mmml.interfaces.pycharmmInterface.mlpot.topology_recovery import (
+    from karml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
+    from karml.interfaces.pycharmmInterface.mlpot.topology_recovery import (
         prepare_rescue_lists_safe,
     )
 
@@ -747,12 +747,12 @@ def minimize_bonded_mm_recovery(
     topology_psf: PathLike | None = None,
 ) -> float | None:
     """Bonded recovery mini (bonded+VDW CHARMM SD by default; JAX when bonded-only)."""
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
+    from karml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
 
     if not isinstance(ctx, MlpotContext) and not hasattr(ctx, "mock_calls"):
         raise TypeError("ctx must be MlpotContext")
 
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
+    from karml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
 
     pos_before = np.asarray(get_charmm_positions_array(), dtype=np.float64, copy=True)
 
@@ -761,7 +761,7 @@ def minimize_bonded_mm_recovery(
     if include_vdw and backend == "auto":
         backend = "charmm"
 
-    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+    from karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
         _mlpot_covers_all_atoms,
         _run_mlpot_recovery_mini,
     )
@@ -782,14 +782,14 @@ def minimize_bonded_mm_recovery(
             nstep=int(config.nstep_sd),
             calculator_pre_minimize=False,
         )
-        from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+        from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
             charmm_grms_after_ener_force,
         )
 
         return charmm_grms_after_ener_force()
 
     if backend in ("auto", "jax") and not include_vdw:
-        from mmml.interfaces.pycharmmInterface.mlpot.bonded_jax_recovery import (
+        from karml.interfaces.pycharmmInterface.mlpot.bonded_jax_recovery import (
             minimize_bonded_jax_recovery,
         )
 
@@ -817,7 +817,7 @@ def minimize_bonded_mm_recovery(
                 )
 
     if backend == "sidecar":
-        from mmml.interfaces.pycharmmInterface.mlpot.charmm_recovery_sidecar import (
+        from karml.interfaces.pycharmmInterface.mlpot.charmm_recovery_sidecar import (
             run_charmm_recovery_sidecar,
         )
 
@@ -853,10 +853,10 @@ def _print_bonded_recovery_geometry_diff(
     topology_psf: PathLike | None,
     label: str,
 ) -> None:
-    from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint_diagnostics import (
+    from karml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint_diagnostics import (
         print_geometry_checkpoint_diff,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
+    from karml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
 
     print_geometry_checkpoint_diff(
         pos_before,
@@ -874,11 +874,11 @@ def _minimize_bonded_charmm_recovery(
     topology_psf: PathLike | None = None,
 ) -> float | None:
     """CHARMM SD recovery with bonded+VDW (default) or bonded-only terms."""
-    from mmml.interfaces.pycharmmInterface.mlpot.block_terms import (
+    from karml.interfaces.pycharmmInterface.mlpot.block_terms import (
         apply_bonded_mm_only_block,
         apply_bonded_vdw_recovery_block,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+    from karml.interfaces.pycharmmInterface.mlpot.setup import (
         MlpotContext,
         apply_recovery_nbonds,
         get_charmm_positions_array,
@@ -899,7 +899,7 @@ def _minimize_bonded_charmm_recovery(
             apply_bonded_mm_only_block()
             _prepare_bonded_mm_rescue_environment(ctx)
         if include_vdw and bool(getattr(config, "verify_jax_parity", True)):
-            from mmml.interfaces.pycharmmInterface.mlpot.jax_charmm_parity_report import (
+            from karml.interfaces.pycharmmInterface.mlpot.jax_charmm_parity_report import (
                 maybe_emit_recovery_mm_parity,
             )
 
@@ -911,9 +911,9 @@ def _minimize_bonded_charmm_recovery(
             )
         pycharmm, cons_fix, *_ = _import_pycharmm_modules()
         minimize = _import_pycharmm_modules()[3]
-        from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_quiet_output
+        from karml.interfaces.pycharmmInterface.charmm_levels import charmm_quiet_output
 
-        from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+        from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
             charmm_grms_after_ener_force,
         )
 
@@ -973,8 +973,8 @@ def _minimize_bonded_charmm_recovery(
 
 def _prepare_overlap_rescue_lists(ctx: "MlpotContext") -> None:
     """Sync pair lists after ``apply_recovery_nbonds`` (UPDATE only; no second upinb)."""
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
-    from mmml.interfaces.pycharmmInterface.mlpot.topology_recovery import (
+    from karml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
+    from karml.interfaces.pycharmmInterface.mlpot.topology_recovery import (
         prepare_rescue_lists_safe,
     )
 
@@ -988,14 +988,14 @@ def minimize_overlap_rescue(
     config: "OverlapRescueConfig",
 ) -> float | None:
     """Bonded+VDW rescue SD/ABNR (NBXMOD 2); MLpot detached so CHARMM VDW/BOND apply."""
-    from mmml.interfaces.pycharmmInterface.mlpot.block_terms import (
+    from karml.interfaces.pycharmmInterface.mlpot.block_terms import (
         apply_bonded_vdw_recovery_block,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_grms_after_ener_force
-    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_grms_after_ener_force
+    from karml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
         OverlapRescueConfig,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+    from karml.interfaces.pycharmmInterface.mlpot.setup import (
         MlpotContext,
         apply_recovery_nbonds,
         get_charmm_positions_array,
@@ -1032,14 +1032,14 @@ def minimize_overlap_rescue(
                 ),
             )
             if config.nstep_sd > 0:
-                from mmml.interfaces.pycharmmInterface.charmm_levels import (
+                from karml.interfaces.pycharmmInterface.charmm_levels import (
                     charmm_quiet_output,
                 )
 
                 with charmm_quiet_output():
                     minimize.run_sd(**sd_kw)
             if config.nstep_abnr > 0:
-                from mmml.interfaces.pycharmmInterface.charmm_levels import (
+                from karml.interfaces.pycharmmInterface.charmm_levels import (
                     charmm_quiet_output,
                 )
 
@@ -1191,7 +1191,7 @@ def _overlap_dynamics_result(
 
 
 def _import_pycharmm_modules():
-    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+    import karml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
     import pycharmm
     import pycharmm.cons_fix as cons_fix
     import pycharmm.energy as energy
@@ -1204,7 +1204,7 @@ def _import_pycharmm_modules():
 
 def _ensure_domdec_off_for_mlpot_energy(*, context: str) -> bool:
     """Mockable domdec-off hook before MLpot SD / dynamics."""
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+    from karml.interfaces.pycharmmInterface.mlpot.setup import (
         ensure_domdec_off_for_mlpot_energy,
     )
 
@@ -1231,7 +1231,7 @@ def sync_charmm_lists_after_mini(*, quiet: bool = False) -> None:
     invokes ``upinb`` / ``UPIMNB`` on PBC builds — avoid calling this before the
     first MLpot SD step right after deferred JAX materialize).
     """
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         assert_charmm_dynamics_chunk_safe,
     )
 
@@ -1239,8 +1239,8 @@ def sync_charmm_lists_after_mini(*, quiet: bool = False) -> None:
         context="CHARMM UPDATE after mini (sync NB/MLpot lists)",
         check_grms=False,
     )
-    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_silent_command
-    from mmml.interfaces.pycharmmInterface.mlpot.charmm_nbond_diagnostics import (
+    from karml.interfaces.pycharmmInterface.charmm_levels import charmm_silent_command
+    from karml.interfaces.pycharmmInterface.mlpot.charmm_nbond_diagnostics import (
         maybe_snapshot_nbond_state,
     )
 
@@ -1296,8 +1296,8 @@ def _rewrap_mlpot_pbc_after_sd(
         return
 
     import numpy as _np
-    from mmml.cli.run.md_handoff import rewrap_charmm_pbc_molecules
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+    from karml.cli.run.md_handoff import rewrap_charmm_pbc_molecules
+    from karml.interfaces.pycharmmInterface.mlpot.setup import (
         get_charmm_positions_array,
         sync_charmm_positions,
     )
@@ -1419,7 +1419,7 @@ def _maybe_abort_sd_on_stress_grms(
     if float(current_grms) <= float(ceiling):
         return False
     if config.verbose:
-        from mmml.utils.prep_ladder_report import PrepMetrics, emit_sd_event
+        from karml.utils.prep_ladder_report import PrepMetrics, emit_sd_event
 
         emit_sd_event(
             "stress_abort",
@@ -1448,7 +1448,7 @@ def _raise_if_sd_stall_unsafe_for_dynamics(
     )
     current_grms = last_grms
     if config.mlpot_ctx is not None:
-        from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+        from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
             refresh_mlpot_energy_and_grms,
         )
 
@@ -1520,10 +1520,10 @@ def _should_stop_sd_on_converged_fmax(
     ceiling = getattr(config, "sd_converged_fmax_kcalmol_A", None)
     if ceiling is None or float(ceiling) <= 0.0:
         return False
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
         charmm_total_forces_kcalmol_A,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.grms_thresholds import (
+    from karml.interfaces.pycharmmInterface.mlpot.grms_thresholds import (
         atomic_fmax_kcalmol_A,
     )
 
@@ -1576,7 +1576,7 @@ def _maybe_abort_sd_on_grms_stall(
     if current_grms <= float(target):
         return False
     if config.verbose:
-        from mmml.utils.prep_ladder_report import PrepMetrics, emit_sd_event
+        from karml.utils.prep_ladder_report import PrepMetrics, emit_sd_event
 
         prev_txt = f"{previous_grms:.4f}" if previous_grms is not None else "?"
         emit_sd_event(
@@ -1751,7 +1751,7 @@ def dump_worst_force_atoms(
     pathology; this surfaces *which* atoms/monomers the model mispredicts so the
     geometry can be inspected offline (retraining coverage, repulsive floor, …).
     """
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
         charmm_grms_after_ener_force,
         charmm_positions_angstrom,
         charmm_total_forces_kcalmol_A,
@@ -1796,7 +1796,7 @@ def dump_worst_force_atoms(
         )
 
     if atoms_per_list and len(counts) > 1:
-        from mmml.interfaces.pycharmmInterface.mlpot.grms_thresholds import (
+        from karml.interfaces.pycharmmInterface.mlpot.grms_thresholds import (
             per_monomer_fmax_from_forces,
         )
 
@@ -1857,7 +1857,7 @@ def _maybe_abort_heat_on_temperature(
     if bool(getattr(args, "no_heat_temp_abort", False)):
         return
 
-    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+    from karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
         charmm_velocities_akma,
         estimate_kinetic_temperature_k,
     )
@@ -1927,7 +1927,7 @@ def _maybe_abort_heat_on_grms_jump(
     if args is not None and getattr(args, "_adumb_rc_guard", None) is not None:
         return
 
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
         refresh_mlpot_energy_and_grms,
     )
 
@@ -2004,7 +2004,7 @@ def _sync_mlpot_lists_after_sd_chunk(
     invalidate_mlpot_calculator_caches(config.mlpot_ctx)
     if config.mlpot_ctx is None:
         return None
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import refresh_mlpot_energy_and_grms
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import refresh_mlpot_energy_and_grms
 
     context = ""
     grms = refresh_mlpot_energy_and_grms(
@@ -2014,7 +2014,7 @@ def _sync_mlpot_lists_after_sd_chunk(
         verbose=False,
     )
     if config.verbose and n_chunks > 1:
-        from mmml.utils.prep_ladder_report import PrepMetrics, emit_sd_chunk_progress
+        from karml.utils.prep_ladder_report import PrepMetrics, emit_sd_chunk_progress
 
         emit_sd_chunk_progress(
             method,
@@ -2038,13 +2038,13 @@ def _rollback_mlpot_sd_chunk_geometry(
     good_grms: float | None,
 ) -> None:
     """Restore last good coordinates after an intra-chunk list/force blow-up."""
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
+    from karml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
 
     sync_charmm_positions(positions)
     sync_charmm_lists_after_mini(quiet=True)
     invalidate_mlpot_calculator_caches(config.mlpot_ctx)
     if config.mlpot_ctx is not None:
-        from mmml.interfaces.pycharmmInterface.mlpot.cli_common import refresh_mlpot_energy_and_grms
+        from karml.interfaces.pycharmmInterface.mlpot.cli_common import refresh_mlpot_energy_and_grms
 
         refresh_mlpot_energy_and_grms(
             config.mlpot_ctx,
@@ -2073,9 +2073,9 @@ def _run_minimize_in_chunks(
     run_attr: str,
 ) -> MlpotSdChunkResult:
     """Run ``run_sd`` or ``run_abnr`` in chunks with list sync between chunks."""
-    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_quiet_output
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import resolve_mlpot_grms_kcalmol_A
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
+    from karml.interfaces.pycharmmInterface.charmm_levels import charmm_quiet_output
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import resolve_mlpot_grms_kcalmol_A
+    from karml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
 
     remaining = max(0, int(total_nstep))
     if remaining <= 0:
@@ -2098,7 +2098,7 @@ def _run_minimize_in_chunks(
         previous_grms = initial_grms
 
     if config.verbose and n_chunks > 1:
-        from mmml.utils.prep_ladder_report import PrepMetrics, emit_sd_pass_header
+        from karml.utils.prep_ladder_report import PrepMetrics, emit_sd_pass_header
 
         baseline_metrics = None
         if config.mlpot_ctx is not None and initial_grms is not None and np.isfinite(initial_grms):
@@ -2175,7 +2175,7 @@ def _run_minimize_in_chunks(
     while remaining > 0:
         chunk_index += 1
         if chunk_index == 1 and pbc_sd:
-            from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+            from karml.interfaces.pycharmmInterface.mlpot.pbc_env import (
                 assert_charmm_pbc_lattice_ready_for_mlpot,
             )
 
@@ -2185,10 +2185,10 @@ def _run_minimize_in_chunks(
                 cubic_box_side_A=float(box_side) if box_side is not None else None,
             )
         if chunk_index == 1 and config.mlpot_ctx is not None:
-            from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
+            from karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
                 materialize_deferred_mlpot_jax_before_sd,
             )
-            from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+            from karml.interfaces.pycharmmInterface.mlpot.setup import (
                 ensure_ml_exclusions_before_mlpot_charmm_energy,
                 mlpot_skip_charmm_ener_force_before_first_sd,
                 rebind_mlpot_calculator_from_pycmodel,
@@ -2199,7 +2199,7 @@ def _run_minimize_in_chunks(
                     config.mlpot_ctx,
                     verbose=config.verbose,
                 )
-                from mmml.interfaces.pycharmmInterface.charmm_mpi import (
+                from karml.interfaces.pycharmmInterface.charmm_mpi import (
                     recover_mpi_for_charmm_after_jax,
                 )
 
@@ -2222,7 +2222,7 @@ def _run_minimize_in_chunks(
             if n_chunks > 1:
                 pass
             elif chunk_index == 1:
-                from mmml.utils.prep_ladder_report import emit_tagged
+                from karml.utils.prep_ladder_report import emit_tagged
 
                 emit_tagged(
                     "SD",
@@ -2231,10 +2231,10 @@ def _run_minimize_in_chunks(
                     quiet=False,
                 )
         if chunk_index == 1 and config.mlpot_ctx is not None:
-            from mmml.interfaces.pycharmmInterface.charmm_mpi import (
+            from karml.interfaces.pycharmmInterface.charmm_mpi import (
                 recover_mpi_for_charmm_after_jax,
             )
-            from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+            from karml.interfaces.pycharmmInterface.mlpot.setup import (
                 mlpot_skip_charmm_ener_force_before_first_sd,
             )
 
@@ -2347,7 +2347,7 @@ def apply_dyn_inbfrq_from_args(
     charmm_pbc: bool,
 ) -> None:
     """Override ``inbfrq`` (and vacuum image freqs) when ``--dyn-inbfrq`` is set."""
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import resolve_dyn_inbfrq
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import resolve_dyn_inbfrq
 
     inb = resolve_dyn_inbfrq(args)
     if inb is None:
@@ -2366,7 +2366,7 @@ def apply_dyn_imgfrq_from_args(
     charmm_pbc: bool,
 ) -> None:
     """Override PBC image/HB list cadence when ``--dyn-imgfrq`` is set."""
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import resolve_dyn_imgfrq
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import resolve_dyn_imgfrq
 
     if not charmm_pbc:
         return
@@ -3120,7 +3120,7 @@ def describe_heat_dynamics_setup(
     thermostat_forced = False
     force_reason: str | None = None
     if args is not None:
-        from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+        from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
             _requested_heat_thermostat,
             heat_thermostat_requires_hoover_after_pretreat,
             resolve_heat_thermostat,
@@ -3482,7 +3482,7 @@ def print_heat_dynamics_diagnostics(
         timestep_ps=timestep_ps,
         freq_harmonized=freq_harmonized,
     )
-    from mmml.utils.rich_report import emit_dashboard
+    from karml.utils.rich_report import emit_dashboard
 
     title = "HEAT dynamics diagnostics"
     if info.get("segment"):
@@ -3756,7 +3756,7 @@ def _apply_npt_cpt_kwargs(
     pressure_tensor: Any | None = None,
 ) -> None:
     """Attach CPT barostat + temperature control keywords to a dynamics dict."""
-    from mmml.interfaces.pycharmmInterface.mlpot.pressure_tensor import (
+    from karml.interfaces.pycharmmInterface.mlpot.pressure_tensor import (
         apply_npt_pressure_reference,
     )
 
@@ -4059,7 +4059,7 @@ def _strip_non_charmm_dynamics_keywords(
     *,
     preserve: frozenset[str] | None = None,
 ) -> None:
-    """Remove MMML-only metadata before ``DynamicsScript`` (not CHARMM ``dyna`` keys)."""
+    """Remove KARML-only metadata before ``DynamicsScript`` (not CHARMM ``dyna`` keys)."""
     keep = preserve or frozenset()
     for key in list(kw):
         if key in keep:
@@ -4096,10 +4096,10 @@ def apply_charmm_dynamics_echeck_kw(kw: dict[str, Any], echeck: float) -> None:
     reset it explicitly or short NPT legs abort at iprfrq cadence (e.g. step 240).
 
     Values ``<= 0`` (legacy ``-1``) are coerced to
-    :func:`~mmml.interfaces.pycharmmInterface.mlpot.cli_common.disabled_charmm_echeck_kcal`
+    :func:`~karml.interfaces.pycharmmInterface.mlpot.cli_common.disabled_charmm_echeck_kcal`
     so velocity-Verlet still disables the ``MAX(ECHECK, 0.1×KE)`` gate.
     """
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
         disabled_charmm_echeck_kcal,
     )
 
@@ -4120,7 +4120,7 @@ def _sync_tstruct_with_bath_kw(kw: dict[str, Any]) -> None:
     """Set ``tstruct`` explicitly for CHARMM velocity assignment.
 
     PyCHARMM default ``TSTRUC=-999`` assigns at ``1.25 * FIRSTT`` (see
-    ``pycharmm.dynamics.set_tstruc``), which can overshoot or fight ASE/MMML
+    ``pycharmm.dynamics.set_tstruc``), which can overshoot or fight ASE/KARML
     bath targets during heat handoffs and overlap chunk restarts.
     """
     if "firstt" in kw:
@@ -4245,10 +4245,10 @@ def _execute_dynamics_script(dyn: Any, *, append: str = "") -> None:
     import pycharmm.lingo as lingo
 
     script = _merge_dynamics_script_append(dyn.create_script_string(), append)
-    if os.environ.get("MMML_TRACE_DYNAMICS_COMMAND") == "1":
-        print("MMML CHARMM DYNAMICS COMMAND BEGIN", flush=True)
+    if os.environ.get("KARML_TRACE_DYNAMICS_COMMAND") == "1":
+        print("KARML CHARMM DYNAMICS COMMAND BEGIN", flush=True)
         print(script.rstrip(), flush=True)
-        print("MMML CHARMM DYNAMICS COMMAND END", flush=True)
+        print("KARML CHARMM DYNAMICS COMMAND END", flush=True)
     lingo.charmm_script(script)
 
 
@@ -4290,7 +4290,7 @@ def _dynamics_writes_dcd(kw: dict[str, Any]) -> bool:
 
 def _bussi_allows_iasvel0_continuation() -> bool:
     """Experimental in-memory ``iasvel=0`` path (COMP / C-API inject). Off by default."""
-    return os.environ.get("MMML_BUSSI_IASVEL0_CONTINUATION") == "1"
+    return os.environ.get("KARML_BUSSI_IASVEL0_CONTINUATION") == "1"
 
 
 def _cpt_hoover_keeps_in_memory_velocities_without_c_api_inject(
@@ -4324,7 +4324,7 @@ def _drop_unsafe_bussi_init_velocities_for_dcd(
     """Refuse C-API ``init_velocities`` when gfortran would still read COMP coords.
 
     Drops handoff arrays when writing DCD (dynopt segfault) **or** when Bussi heat
-    is active without ``MMML_BUSSI_IASVEL0_CONTINUATION`` (deferred-DCD micro-chunks
+    is active without ``KARML_BUSSI_IASVEL0_CONTINUATION`` (deferred-DCD micro-chunks
     previously kept inject + ``iasvel=0`` → T ≫ 10¹² K).
 
     CPT Hoover (heat/equi) with valid handoff arrays keeps ``iasvel=0`` and relies
@@ -4375,7 +4375,7 @@ def _requires_init_velocities_handoff(kw: dict[str, Any]) -> bool:
     When ``restart=True``, READYN loads velocities from the restart file; do not
     inject COMP / C-API handoff or fall back to ``iasvel=1`` Boltzmann.
 
-    Bussi heat never takes this path unless ``MMML_BUSSI_IASVEL0_CONTINUATION=1``:
+    Bussi heat never takes this path unless ``KARML_BUSSI_IASVEL0_CONTINUATION=1``:
     gfortran builds ignore injected arrays and fill velocities from COMP coordinates.
     """
     if bool(kw.get("restart")):
@@ -4440,14 +4440,14 @@ def _apply_bussi_iasvel_one_at_ramp_target(kw: dict[str, Any]) -> None:
     an explicit ``FIRSTT``, CHARMM assigns at 0 K (seen on CPT equi chunk
     continuations after ``no readable velocities``).
 
-    When ``MMML_ADUMB_IASVEL1_T_CAP`` is set (ADUMB examples), cap the assign
+    When ``KARML_ADUMB_IASVEL1_T_CAP`` is set (ADUMB examples), cap the assign
     temperature so a wall-near redraw cannot leap past umbrella ``max`` mid-dyna.
     """
     target = _bussi_ramp_target_k_for_kw(kw)
     if target is None:
         target = _bath_temperature_k_from_dyn_kw(kw)
     t_assign = float(target)
-    raw_cap = os.environ.get("MMML_ADUMB_IASVEL1_T_CAP", "").strip()
+    raw_cap = os.environ.get("KARML_ADUMB_IASVEL1_T_CAP", "").strip()
     if raw_cap:
         try:
             t_cap = float(raw_cap)
@@ -4476,7 +4476,7 @@ def _apply_bussi_iasvel_zero_continuation(kw: dict[str, Any]) -> None:
     ``iasvel=0`` / ``start=False`` so CHARMM continues its in-memory velocities,
     letting the thermostat actually control temperature.
 
-    It is gated behind ``MMML_BUSSI_IASVEL0_CONTINUATION=1`` because PyCHARMM
+    It is gated behind ``KARML_BUSSI_IASVEL0_CONTINUATION=1`` because PyCHARMM
     cannot force the START flag off via API: if START lingers from chunk 0,
     ``iasvel=0`` reads comparison COMP coordinates as velocities (T ≫ 10¹² K).
     Needs on-node validation — watch for a sudden T≈0 K chunk (COMP
@@ -4504,8 +4504,8 @@ def _configure_bussi_in_memory_continuation_iasvel(kw: dict[str, Any]) -> None:
     typical gfortran builds — even when C-API ``init_velocities`` is injected.
 
     Opt in to experimental in-memory continuation with
-    ``MMML_BUSSI_IASVEL0_CONTINUATION=1`` (optionally plus
-    ``MMML_BUSSI_INIT_VELOCITIES_HANDOFF=1``). ``MMML_BUSSI_IASVEL1_REDRAW=1``
+    ``KARML_BUSSI_IASVEL0_CONTINUATION=1`` (optionally plus
+    ``KARML_BUSSI_INIT_VELOCITIES_HANDOFF=1``). ``KARML_BUSSI_IASVEL1_REDRAW=1``
     is accepted as an explicit alias of the default.
     """
     if bool(kw.get("_adumb_forbid_iasvel0")) or bool(
@@ -4517,20 +4517,20 @@ def _configure_bussi_in_memory_continuation_iasvel(kw: dict[str, Any]) -> None:
         # One-shot: only the first post-rescue dyna may force IASVEL=1.
         _apply_bussi_iasvel_one_at_ramp_target(kw)
         return
-    if os.environ.get("MMML_BUSSI_IASVEL1_REDRAW") == "1":
+    if os.environ.get("KARML_BUSSI_IASVEL1_REDRAW") == "1":
         _apply_bussi_iasvel_one_at_ramp_target(kw)
         return
     if not _bussi_allows_iasvel0_continuation():
         _apply_bussi_iasvel_one_at_ramp_target(kw)
         return
-    use_c_api_handoff = os.environ.get("MMML_BUSSI_INIT_VELOCITIES_HANDOFF") == "1"
+    use_c_api_handoff = os.environ.get("KARML_BUSSI_INIT_VELOCITIES_HANDOFF") == "1"
     if not use_c_api_handoff or not _dynamics_c_api_available():
         _apply_bussi_iasvel_zero_continuation(kw)
         return
     # WARNING: velocity arrays via ctypes → often ignored; COMP coords → T~1e12.
     print(
-        "WARN: MMML_BUSSI_IASVEL0_CONTINUATION=1 with "
-        "MMML_BUSSI_INIT_VELOCITIES_HANDOFF=1 — C-API velocity injection enabled. "
+        "WARN: KARML_BUSSI_IASVEL0_CONTINUATION=1 with "
+        "KARML_BUSSI_INIT_VELOCITIES_HANDOFF=1 — C-API velocity injection enabled. "
         "gfortran builds often ignore init_velocities and read COMP coordinates "
         "(T ≫ 10¹² K). Unset both flags for safe iasvel=1 Boltzmann continuation.",
         flush=True,
@@ -4546,12 +4546,12 @@ def _init_velocities_handoff_looks_valid(
     init_velocities: dict[str, np.ndarray],
 ) -> bool:
     """Non-raising check for AKMA handoff arrays (positions / absurd T)."""
-    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+    from karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
         MAX_REASONABLE_VELOCITY_TEMP_K,
         charmm_masses_amu,
         estimate_kinetic_temperature_k,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
+    from karml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
         comparison_comp_looks_like_spatial_coords,
         velocity_array_matches_main_coordinates,
     )
@@ -4585,12 +4585,12 @@ def _validate_init_velocities_handoff(
     context: str = "run_dynamics",
 ) -> None:
     """Raise when AKMA handoff arrays look like positions or imply T≫target."""
-    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+    from karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
         MAX_REASONABLE_VELOCITY_TEMP_K,
         charmm_masses_amu,
         estimate_kinetic_temperature_k,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
+    from karml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
         comparison_comp_looks_like_spatial_coords,
         velocity_array_matches_main_coordinates,
     )
@@ -4640,11 +4640,11 @@ def _finalize_init_velocities_handoff(
     quiet: bool = False,
 ) -> dict[str, np.ndarray] | None:
     """Re-sync main/COMP and return a fresh ``init_velocities`` dict immediately before ``dyna``."""
-    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+    from karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
         _resolve_bussi_rescale_velocities,
         last_synced_velocities_akma_raw,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
+    from karml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
         refresh_bussi_comp_velocity_handoff,
     )
 
@@ -4669,7 +4669,7 @@ def _finalize_init_velocities_handoff(
     if out is None or not _init_velocities_handoff_looks_valid(out):
         target = _bussi_ramp_target_k_for_kw(kw)
         if target is None:
-            from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+            from karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
                 resolve_assignment_temperature_k,
             )
 
@@ -4709,7 +4709,7 @@ def _resolve_dynamics_init_velocities(
     """Warm AKMA velocities for ``iasvel=0`` continuation (bypasses COMP-as-positions)."""
     if not _requires_init_velocities_handoff(kw):
         return None
-    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+    from karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
         _resolve_bussi_rescale_velocities,
         resolve_assignment_temperature_k,
         velocities_are_cold,
@@ -4734,7 +4734,7 @@ def _resolve_dynamics_init_velocities(
         fallback_paths=fallback_paths,
     )
     v = np.asarray(v, dtype=np.float64).reshape(-1, 3)
-    from mmml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
+    from karml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
         comparison_comp_looks_like_spatial_coords,
         velocity_array_matches_main_coordinates,
     )
@@ -4748,7 +4748,7 @@ def _resolve_dynamics_init_velocities(
         or velocities_are_pathological(v)
     ):
         if _bussi_heat_ramp_active(kw) or bool(kw.get("_skip_ase_cold_velocity_assign")):
-            from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+            from karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
                 assign_bussi_fallback_velocities,
             )
 
@@ -4781,7 +4781,7 @@ def _required_handoff_init_velocities(
     quiet: bool = False,
 ) -> dict[str, np.ndarray]:
     """Load exact AKMA velocities for a strict continuation, never rethermalize."""
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         read_restart_velocities,
     )
 
@@ -4799,7 +4799,7 @@ def _required_handoff_init_velocities(
         context="NVE required handoff restart",
     )
     if not quiet:
-        from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+        from karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
             charmm_masses_amu,
             estimate_kinetic_temperature_k,
         )
@@ -4892,11 +4892,11 @@ def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
             "use start=True, iasvel=1 on the main dyna call for velocity assignment"
         )
 
-    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+    from karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
         clamp_velocity_assignment_dynamics_kw,
         maybe_assign_velocities_via_ase_if_cold,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
+    from karml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
         mirror_comparison_velocities_for_dynamics,
         sync_comparison_velocities_akma,
         sync_comparison_velocities_from_main,
@@ -5030,7 +5030,7 @@ def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
     _put_api_rngseeds_on_script_line(kw, use_c_api=use_c_api)
     _prepare_dynamics_list_frequencies(kw, nstep=nstep)
     heat_append = _dynamics_script_append_for_heat_ramp(kw)
-    from mmml.interfaces.pycharmmInterface.mlpot.strain_virial import (
+    from karml.interfaces.pycharmmInterface.mlpot.strain_virial import (
         cpt_strain_virial_scope,
     )
 
@@ -5058,7 +5058,7 @@ def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
         bool(kw.get("cpt")) and "hoover reft" in kw
     )
     if capture_for_handoff:
-        from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+        from karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
             capture_charmm_velocities_for_bussi,
         )
 
@@ -5071,7 +5071,7 @@ def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
     # inherit comparison *coordinates* left behind by iasvel=1 / cold-start legs.
     synced_comp = sync_comparison_velocities_from_main()
     if not synced_comp and int(kw.get("iasvel", 0) or 0) == 0:
-        from mmml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
+        from karml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
             sync_comparison_velocities_from_comparison,
         )
 
@@ -5125,7 +5125,7 @@ def _valid_restart_file(path: PathLike | None) -> Path | None:
 
 def _overlap_restart_slot_paths(final_restart: Path) -> tuple[Path, Path]:
     """Alternating scratch restarts so read and write are never the same file."""
-    from mmml.interfaces.pycharmmInterface.mlpot.artifact_paths import overlap_restart_slot_paths
+    from karml.interfaces.pycharmmInterface.mlpot.artifact_paths import overlap_restart_slot_paths
 
     return overlap_restart_slot_paths(final_restart)
 
@@ -5159,7 +5159,7 @@ def _refresh_restart_write_after_chunk(
         return
     if _valid_restart_file(write_path) is not None:
         return
-    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+    from karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
         rewrite_dynamics_restart_from_current_state,
     )
 
@@ -5197,10 +5197,10 @@ def _materialize_early_abort_restart_handoff(
     with ``iunrea=-1`` but CHARMM still expects barostat restart internals.
     Materialize scratch restart(s) and hand off via normal ``READYN``.
     """
-    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+    from karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
         rewrite_dynamics_restart_validated,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         patch_restart_global_step,
     )
 
@@ -5273,7 +5273,7 @@ def _salvage_overlap_segment_progress(
     total_nstep: int | None = None,
 ) -> int | None:
     """Rewind to the last good overlap handoff instead of failing the stage."""
-    from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
+    from karml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
         restore_geometry_from_ladder,
     )
 
@@ -5298,10 +5298,10 @@ def _salvage_overlap_segment_progress(
     except RuntimeError:
         return None
 
-    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+    from karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
         rewrite_dynamics_restart_validated,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         patch_restart_global_step,
     )
 
@@ -5399,7 +5399,7 @@ def _ensure_valid_overlap_scratch_restart(
 
 def _overlap_chunk_trajectory_path(trajectory: Path, chunk_index: int) -> Path:
     """Per-chunk DCD path for overlap-segmented dynamics."""
-    from mmml.interfaces.pycharmmInterface.mlpot.artifact_paths import overlap_chunk_trajectory_path
+    from karml.interfaces.pycharmmInterface.mlpot.artifact_paths import overlap_chunk_trajectory_path
 
     return overlap_chunk_trajectory_path(trajectory, chunk_index)
 
@@ -5450,7 +5450,7 @@ def _overlap_chunk_uses_memory_handoff(
     ASE Bussi heat overlap also stays in RAM: scratch ``WRIDYN`` snapshots retain
     segment-local ``!ENERGIES`` / ``JHSTRT`` counters that desync from the global
     step after many micro-chunks, and ``READYN`` loses the COMP velocity mirror
-    Bussi sub-chunks rely on.  Set ``MMML_BUSSI_READYN_OVERLAP=1`` to opt into
+    Bussi sub-chunks rely on.  Set ``KARML_BUSSI_READYN_OVERLAP=1`` to opt into
     legacy scratch ``READYN`` (debug only).
 
     ADUMB RC-guarded runs also stay in RAM: between-chunk RESD wall reinstall +
@@ -5461,7 +5461,7 @@ def _overlap_chunk_uses_memory_handoff(
     ``JHSTRT``.  ``overlap.memory_handoff`` on the config affects chunk-0
     ``start``/READYN only, not between-chunk I/O for scale-heat / NVE.
     CPT stability *sub-chunks* within one overlap chunk also stay in-memory
-    (``_run_cpt_stability_subchunked``) unless ``MMML_CPT_READYN_SUBCHUNK=1``.
+    (``_run_cpt_stability_subchunked``) unless ``KARML_CPT_READYN_SUBCHUNK=1``.
     """
     del chunk_index, overlap
     if n_chunks <= 1:
@@ -5469,9 +5469,9 @@ def _overlap_chunk_uses_memory_handoff(
     if cpt:
         return _cpt_subchunk_use_in_memory_handoff()
     if bussi_heat:
-        from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import _truthy_env
+        from karml.interfaces.pycharmmInterface.mlpot.overlap_guard import _truthy_env
 
-        if _truthy_env("MMML_BUSSI_READYN_OVERLAP"):
+        if _truthy_env("KARML_BUSSI_READYN_OVERLAP"):
             return False
         return True
     if mlpot_ctx is not None:
@@ -5489,7 +5489,7 @@ def _valid_overlap_chunk_restart_read(
     """Valid restart for overlap chunk READYN; excludes handoff/pretreat seeds."""
     if path is None:
         return None
-    from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
+    from karml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
         is_handoff_seed_restart_path,
         is_pretreat_mm_restart_path,
     )
@@ -5537,9 +5537,9 @@ def overlap_first_chunk_skips_readyn(
 
     memory_handoff = bool(overlap.memory_handoff)
     if mlpot_ctx is not None and not memory_handoff and memory_handoff_default:
-        from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import _truthy_env
+        from karml.interfaces.pycharmmInterface.mlpot.overlap_guard import _truthy_env
 
-        if not _truthy_env("MMML_NO_OVERLAP_MEMORY_HANDOFF"):
+        if not _truthy_env("KARML_NO_OVERLAP_MEMORY_HANDOFF"):
             memory_handoff = True
 
     if memory_handoff and mlpot_ctx is not None:
@@ -5745,7 +5745,7 @@ def _harmonize_dynamics_frequency(value: int, chunk_nstep: int) -> int:
 
 def _harmonize_nsavc_frequency(value: int, chunk_nstep: int) -> int:
     """Backward-compatible alias; see :func:`harmonize_nsavc_frequency` in validation."""
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         harmonize_nsavc_frequency,
     )
 
@@ -5873,7 +5873,7 @@ def _harmonize_overlap_chunk_frequencies(
     n = max(1, int(chunk_nstep))
     cadence = chunk_kw.get("_dyn_freq_cadence")
     cadence_active = cadence is not None and int(cadence) > 0
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         nsavc_for_chunk_preserving_interval,
         resolve_target_dcd_nsavc,
     )
@@ -5979,7 +5979,7 @@ def _harmonize_overlap_readyn_restart_before_readyn(
     path = Path(restart_path)
     nsavc, nsavv = _overlap_readyn_restart_frequencies(chunk_kw, chunk_nstep)
     step = max(0, int(global_step))
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         patch_restart_readyn_handoff,
     )
 
@@ -5990,14 +5990,14 @@ def _harmonize_overlap_readyn_restart_before_readyn(
             nsavc=nsavc,
             nsavv=nsavv,
         ):
-            from mmml.interfaces.pycharmmInterface.charmm_paths import charmm_io_alias
+            from karml.interfaces.pycharmmInterface.charmm_paths import charmm_io_alias
 
             try:
                 charmm_io_alias(path, for_write=False)
             except FileNotFoundError:
                 pass
             return
-    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+    from karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
         rewrite_dynamics_restart_validated,
     )
 
@@ -6076,7 +6076,7 @@ def _prepare_post_rescue_bath_and_crystal(
         mlpot_ctx is not None and bool(getattr(mlpot_ctx, "use_pbc", False))
     )
     if use_pbc and bool(chunk_kw.get("cpt")):
-        from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+        from karml.interfaces.pycharmmInterface.mlpot.pbc_env import (
             ensure_charmm_crystal_for_cpt,
             probe_charmm_cubic_box_side_A,
         )
@@ -6103,7 +6103,7 @@ def _assign_post_rescue_velocities_and_crystal(
     mlpot_ctx: Optional["MlpotContext"],
 ) -> None:
     """Assign ASE Maxwell-Boltzmann velocities and refresh bath/crystal keywords."""
-    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+    from karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
         assign_maxwell_boltzmann_velocities_via_ase,
         resolve_assignment_temperature_k,
     )
@@ -6183,7 +6183,7 @@ def _prepare_post_rescue_cold_start_overlap_handoff(
     (COMP-as-velocity / C-API inject path that yields T ≫ 10¹² K after fly-off).
     Later Bussi micro-chunks clear the flag and continue with in-memory velocities.
     """
-    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+    from karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
         assign_maxwell_boltzmann_velocities_via_ase,
         resolve_assignment_temperature_k,
     )
@@ -6219,10 +6219,10 @@ def _materialize_post_rescue_restart_handoff(
     overlap_context: str,
 ) -> CharmmTrajectoryFiles:
     """Write rescued coords+velocities to scratch restart; next chunk uses READYN."""
-    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+    from karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
         rewrite_dynamics_restart_validated,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         patch_restart_global_step,
     )
 
@@ -6232,7 +6232,7 @@ def _materialize_post_rescue_restart_handoff(
         and getattr(mlpot_ctx, "_overlap_post_rescue_cold_start", False) is True
     )
     if cold_start:
-        from mmml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
+        from karml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
             prepare_comp_for_iasvel0,
         )
 
@@ -6258,7 +6258,7 @@ def _materialize_post_rescue_restart_handoff(
         if not rewrite_dynamics_restart_validated(path):
             rescued_positions = None
             if overlap is not None:
-                from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+                from karml.interfaces.pycharmmInterface.mlpot.setup import (
                     get_charmm_positions_array,
                 )
 
@@ -6266,7 +6266,7 @@ def _materialize_post_rescue_restart_handoff(
                     get_charmm_positions_array(), dtype=float
                 ).copy()
             rescue_crd, prior_restart = _overlap_rescue_restart_fallback_paths(overlap)
-            from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+            from karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
                 restore_post_rescue_coordinates,
             )
 
@@ -6386,11 +6386,11 @@ def _refresh_segment_restart_after_overlap_rescue(
     overlap: Optional["DynamicsOverlapConfig"] = None,
 ) -> None:
     """Rewrite the segment restart after last-chunk rescue (valid READYN if needed)."""
-    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+    from karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
         restore_post_rescue_coordinates,
         rewrite_dynamics_restart_validated,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
+    from karml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
 
     rescued_positions = np.asarray(get_charmm_positions_array(), dtype=float).copy()
     rescue_crd, prior_restart = _overlap_rescue_restart_fallback_paths(overlap)
@@ -6442,7 +6442,7 @@ def _prepare_overlap_chunk_after_restart(
         pyCModel = getattr(mlpot_ctx, "pyCModel", None)
         use_pbc = bool(getattr(mlpot_ctx, "use_pbc", False))
         if use_pbc and pyCModel is not None:
-            from mmml.interfaces.pycharmmInterface.mlpot.run_workflow import (
+            from karml.interfaces.pycharmmInterface.mlpot.run_workflow import (
                 sync_mlpot_pbc_cell_from_charmm,
             )
 
@@ -6456,10 +6456,10 @@ def _prepare_overlap_chunk_after_restart(
             mlpot_ctx.charmm_cubic_box_side_A = float(side)
         return
 
-    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+    import karml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
 
-    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
-    from mmml.interfaces.pycharmmInterface.nbonds_config import (
+    from karml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
+    from karml.interfaces.pycharmmInterface.nbonds_config import (
         apply_nbonds_script_kwargs,
         vacuum_nbond_kwargs,
     )
@@ -6488,12 +6488,12 @@ def _cpt_subchunk_use_in_memory_handoff() -> bool:
     Plain ``write restart`` snapshots coordinates/velocities but **not** Hoover CPT
     barostat piston internals.  ``READYN`` on ``.cptsc_*.res`` between sub-chunks
     therefore yields garbage ``PIXX`` / ``PRESSI`` at dyna step 0.  Default is
-    in-memory continuation; set ``MMML_CPT_READYN_SUBCHUNK=1`` to opt into scratch
+    in-memory continuation; set ``KARML_CPT_READYN_SUBCHUNK=1`` to opt into scratch
     READYN (legacy / debugging only).
     """
-    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import _truthy_env
+    from karml.interfaces.pycharmmInterface.mlpot.overlap_guard import _truthy_env
 
-    if _truthy_env("MMML_CPT_READYN_SUBCHUNK"):
+    if _truthy_env("KARML_CPT_READYN_SUBCHUNK"):
         return False
     return True
 
@@ -6515,13 +6515,13 @@ def _ensure_cpt_iasvel0_comp_velocity_handoff(
     cache; if COMP cannot be made safe, fall back to ``iasvel=1`` at the bath
     target (barostat state stays in RAM).
     """
-    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+    from karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
         capture_charmm_velocities_for_bussi,
         last_synced_velocities_akma_raw,
         velocities_are_cold,
         velocities_are_pathological,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
+    from karml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
         assert_comparison_holds_velocities_not_positions,
         comparison_matches_main_positions,
         sync_comparison_velocities_akma,
@@ -6598,7 +6598,7 @@ def _apply_cpt_in_memory_continuation_kw(kw: dict[str, Any]) -> None:
 def _apply_cpt_restart_continuation_kw(kw: dict[str, Any]) -> None:
     """``READYN`` continuation for CPT sub-chunks (global step only; not barostat).
 
-    Requires a dynamics restart file with full CPT internals.  MMML scratch
+    Requires a dynamics restart file with full CPT internals.  KARML scratch
     ``write restart`` handoffs do **not** qualify — use in-memory sub-chunks instead.
     """
     kw["restart"] = True
@@ -6619,10 +6619,10 @@ def _materialize_dynamics_restart_handoff(
     label: str = "restart",
 ) -> Path:
     """Write a validated READYN restart from in-memory state with global ``JHSTRT``."""
-    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+    from karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
         rewrite_dynamics_restart_validated,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         patch_restart_global_step,
     )
 
@@ -6649,7 +6649,7 @@ def _write_overlap_chunk_numbered_restart(
     overlap_context: str,
 ) -> Path | None:
     """Write ``heat.NNNN.res`` from in-memory state for a split overlap chunk."""
-    from mmml.interfaces.pycharmmInterface.mlpot.artifact_paths import (
+    from karml.interfaces.pycharmmInterface.mlpot.artifact_paths import (
         overlap_chunk_restart_path,
     )
 
@@ -6795,7 +6795,7 @@ def _restore_bussi_velocities_after_overlap_recovery(
     spec = bussi_heat_ramp_spec_from_kw(chunk_kw)
     if spec is None:
         return
-    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+    from karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
         ensure_bussi_velocities_after_overlap_recovery,
     )
 
@@ -6918,7 +6918,7 @@ def _apply_overlap_chunk_dynamics_kw(
             chunk_kw["iasors"] = 0
         # Cap Boltzmann redraw temperature: a full 500 K kick at wall-near RCs
         # punches past soft RESD mid-dyna (UM1RXN) before the wall can act.
-        t_cap = float(os.environ.get("MMML_ADUMB_IASVEL1_T_CAP", "250") or 250.0)
+        t_cap = float(os.environ.get("KARML_ADUMB_IASVEL1_T_CAP", "250") or 250.0)
         if t_cap > 0.0:
             for key in ("firstt", "tbath", "tstruct", "finalt"):
                 if key in chunk_kw and chunk_kw[key] is not None:
@@ -7172,7 +7172,7 @@ def _integrated_step_from_restart(
     steps_before_chunk: int = 0,
 ) -> int:
     """Read global dynamics step (``JHSTRT``) from the latest restart write."""
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         read_restart_last_step,
     )
 
@@ -7283,7 +7283,7 @@ def _run_dynamics_chunk(
     _sync_dynamics_io_units(kw, iokw)
     if _bussi_heat_ramp_active(kw):
         try:
-            from mmml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
+            from karml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
 
             kw["_bussi_pos_before_dyna"] = np.asarray(
                 get_charmm_positions_array(), dtype=np.float64
@@ -7291,7 +7291,7 @@ def _run_dynamics_chunk(
         except Exception:
             pass
     try:
-        from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
+        from karml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
 
         with charmm_relaxed_bomlev(level=-2):
             return run_dynamics(kw)
@@ -7304,7 +7304,7 @@ def _run_dynamics_chunk(
             except Exception:
                 pass
         if _bussi_heat_ramp_active(kw):
-            from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+            from karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
                 capture_charmm_velocities_for_bussi,
             )
 
@@ -7355,7 +7355,7 @@ def _cpt_stability_chunk_nstep(kw: dict[str, Any], total_nstep: int) -> int | No
         # Constant-volume CPT (--pbc-ensemble nvt): no piston to stabilise, and
         # micro-chunks inside an overlap chunk drop all but one sub-chunk's DCD.
         return None
-    raw = os.environ.get("MMML_CPT_DYNAMICS_CHUNK_NSTEP")
+    raw = os.environ.get("KARML_CPT_DYNAMICS_CHUNK_NSTEP")
     chunk = (
         int(raw)
         if raw is not None and str(raw).strip() != ""
@@ -7390,7 +7390,7 @@ def _maybe_prepare_adumb_rc_before_overlap_chunk(
     guard = getattr(wf_args, "_adumb_rc_guard", None) if wf_args is not None else None
     if guard is None:
         return False
-    from mmml.interfaces.pycharmmInterface.mlpot.restraints import (
+    from karml.interfaces.pycharmmInterface.mlpot.restraints import (
         prepare_adumb_rc_before_overlap_chunk,
     )
 
@@ -7410,7 +7410,7 @@ def _dynamics_chunk_state_corrupt(
     overlap_context: str,
     restart_path: Path | None,
 ) -> bool:
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         charmm_dynamics_state_is_finite,
         restart_coordinates_are_unsafe,
         restart_has_nonfinite_coordinates,
@@ -7455,7 +7455,7 @@ def _bussi_subchunk_grms_blocks_continuation(
     if limit <= 0.0:
         return False
     try:
-        from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_grms
+        from karml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_grms
 
         grms = float(charmm_grms())
     except Exception:
@@ -7470,7 +7470,7 @@ def _bussi_subchunk_grms_blocks_continuation(
         flush=True,
     )
     try:
-        from mmml.interfaces.pycharmmInterface.mlpot.bussi_continuation_gate_diagnostics import (
+        from karml.interfaces.pycharmmInterface.mlpot.bussi_continuation_gate_diagnostics import (
             dump_bussi_continuation_gate_diagnostics,
         )
 
@@ -7557,7 +7557,7 @@ def _cpt_subchunk_trajectory_path(chunk_traj: Path, k: int) -> Path:
 
 def _remove_dcd_staging_alias(path: Path) -> None:
     try:
-        from mmml.interfaces.pycharmmInterface.charmm_paths import (
+        from karml.interfaces.pycharmmInterface.charmm_paths import (
             remove_charmm_io_write_staging_alias,
         )
 
@@ -7582,7 +7582,7 @@ def _merge_cpt_subchunk_dcds(
     ``chunk_traj`` is removed (same as a chunk that never saved).
 
     ``segments`` maps a sub-file to its planned
-    :class:`~mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.CptDcdSegment`:
+    :class:`~karml.interfaces.pycharmmInterface.mlpot.dynamics_validation.CptDcdSegment`:
     frames outside the stage's global save steps are dropped (``keep``), and the
     merged header gets ``NSAVC = target_nsavc`` and ``ISTART`` = the global step of
     the first kept frame, so ``ISTART + i * NSAVC`` is the step of frame ``i``.
@@ -7591,10 +7591,10 @@ def _merge_cpt_subchunk_dcds(
     merge; if merging raises they are kept for inspection and the error
     propagates.
     """
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         count_dcd_frames,
     )
-    from mmml.utils.dcd_writer import _dcd_header_byte_size, concat_dcd_files
+    from karml.utils.dcd_writer import _dcd_header_byte_size, concat_dcd_files
 
     chunk_traj = Path(chunk_traj)
     kept: list[Path] = []
@@ -7761,7 +7761,7 @@ def _run_cpt_stability_subchunked(
 
 def _cpt_subchunk_dcd_target(kw: dict[str, Any]) -> int | None:
     """Stage DCD save interval for CPT sub-chunk planning (``None`` = no DCD)."""
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         resolve_target_dcd_nsavc,
     )
 
@@ -7811,7 +7811,7 @@ def _run_cpt_stability_subchunk_loop(
     """
     import dataclasses
 
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         cpt_dcd_segment,
         cpt_subchunk_nstep,
     )
@@ -7831,7 +7831,7 @@ def _run_cpt_stability_subchunk_loop(
                 _emit_overlap_log(
                     f"CPT sub-chunk {k} is {n} step(s) long and cannot write DCD "
                     f"save step(s) {list(seg.dropped)} (CHARMM needs nsavc < nstep); "
-                    "raise MMML_CPT_DYNAMICS_CHUNK_NSTEP above 2 for exact saves",
+                    "raise KARML_CPT_DYNAMICS_CHUNK_NSTEP above 2 for exact saves",
                     context=overlap_context,
                 )
         sub_kw = dict(kw)
@@ -7941,17 +7941,17 @@ def _run_cpt_stability_subchunk_loop(
             rng_salt=rng_salt_base + steps_done,
         )
         if (
-            os.environ.get("MMML_TRACE_DYNAMICS_COMMAND") == "1"
+            os.environ.get("KARML_TRACE_DYNAMICS_COMMAND") == "1"
             and sub_io is not None
             and sub_io.trajectory is not None
         ):
-            from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+            from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
                 count_dcd_frames,
             )
 
             _traj = Path(sub_io.trajectory)
             print(
-                f"MMML CPT SUB-CHUNK DCD: {overlap_context} sub-chunk {k} "
+                f"KARML CPT SUB-CHUNK DCD: {overlap_context} sub-chunk {k} "
                 f"global {global_end - n}-{global_end} nsavc={sub_kw.get('nsavc')} "
                 f"-> {_traj.name} frames={count_dcd_frames(_traj)} "
                 f"bytes={_traj.stat().st_size if _traj.is_file() else -1}",
@@ -7974,7 +7974,7 @@ def _run_cpt_stability_subchunk_loop(
             break
         chunk_end = steps_done + n
         if restart_path is not None:
-            from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+            from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
                 read_restart_last_step,
             )
 
@@ -8049,10 +8049,10 @@ def _run_bussi_heat_subchunked(
     mlpot_ctx: Optional["MlpotContext"] = None,
 ) -> Any:
     """Integrate Verlet heat in short segments with ASE Bussi rescales between them."""
-    from mmml.interfaces.pycharmmInterface.mlpot.bussi_continuation_gate_diagnostics import (
+    from karml.interfaces.pycharmmInterface.mlpot.bussi_continuation_gate_diagnostics import (
         sample_bussi_microchunk_metrics,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+    from karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
         append_bussi_rescale_ase_frame,
         apply_bussi_velocity_rescale,
         charmm_masses_amu,
@@ -8061,7 +8061,7 @@ def _run_bussi_heat_subchunked(
         resolve_bussi_ase_traj_path,
         resolve_restart_velocities_read_paths,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         nsavc_for_chunk_preserving_interval,
         resolve_target_dcd_nsavc,
     )
@@ -8289,7 +8289,7 @@ def _run_bussi_heat_chunked_dynamics(
     chunk_nstep: int,
 ) -> Any:
     """Integrate Bussi heat in micro-chunks with post-segment rescales."""
-    from mmml.interfaces.pycharmmInterface.mlpot.force_checkpoint import (
+    from karml.interfaces.pycharmmInterface.mlpot.force_checkpoint import (
         maybe_record_forces,
     )
 
@@ -8321,7 +8321,7 @@ def _run_cpt_stability_chunked_dynamics(
     Each segment writes its own ``stem.cptsubNNN.dcd``; they are merged back into
     the stage DCD by :func:`_run_cpt_stability_subchunked`.
     """
-    from mmml.interfaces.pycharmmInterface.mlpot.force_checkpoint import (
+    from karml.interfaces.pycharmmInterface.mlpot.force_checkpoint import (
         maybe_record_forces,
     )
 
@@ -8361,7 +8361,7 @@ def run_dynamics_with_io(
     restarts (chunk 0 always writes scratch) so time/step counters advance
     correctly; the last chunk writes the final restart file.
     """
-    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+    from karml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
         DynamicsOverlapConfig,
         check_dynamics_overlap,
     )
@@ -8370,7 +8370,7 @@ def run_dynamics_with_io(
         _ensure_domdec_off_for_mlpot_energy(context=overlap_context)
 
     kw = dict(dynamics_kwargs)
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         install_target_dcd_metadata,
     )
 
@@ -8397,7 +8397,7 @@ def run_dynamics_with_io(
         and (overlap.enabled or overlap.intra_enabled or overlap.extent_enabled)
     )
     if guard_active and overlap is not None:
-        from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+        from karml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
             attach_prior_segment_restart,
         )
 
@@ -8427,7 +8427,7 @@ def run_dynamics_with_io(
             integrated = int(total_nstep)
             completed = True
             if io is not None and io.restart_write is not None:
-                from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+                from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
                     resolve_integrated_restart_step,
                 )
 
@@ -8455,7 +8455,7 @@ def run_dynamics_with_io(
             integrated = int(total_nstep)
             completed = True
             if io is not None and io.restart_write is not None:
-                from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+                from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
                     resolve_integrated_restart_step,
                 )
 
@@ -8481,10 +8481,10 @@ def run_dynamics_with_io(
                 steps_done=0,
             ),
         )
-        from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
             assert_charmm_dynamics_chunk_safe,
         )
-        from mmml.interfaces.pycharmmInterface.mlpot.force_checkpoint import (
+        from karml.interfaces.pycharmmInterface.mlpot.force_checkpoint import (
             maybe_record_forces,
         )
 
@@ -8535,7 +8535,7 @@ def run_dynamics_with_io(
         )
     _cleanup_overlap_restart_slots(io)
     if overlap is not None and mlpot_ctx is not None:
-        from mmml.interfaces.pycharmmInterface.mlpot.monomer_geometry_limits import (
+        from karml.interfaces.pycharmmInterface.mlpot.monomer_geometry_limits import (
             apply_geometry_limits_to_overlap_config,
         )
 
@@ -8553,7 +8553,7 @@ def run_dynamics_with_io(
         mlpot_ctx=mlpot_ctx,
     )
     if mlpot_ctx is not None and overlap is not None:
-        from mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping import (
+        from karml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping import (
             record_monomer_health_baseline,
         )
 
@@ -8663,7 +8663,7 @@ def run_dynamics_with_io(
                     verbose=bool(getattr(mlpot_ctx, "verbose", False)) if mlpot_ctx else False,
                 )
                 if _bussi_heat_ramp_active(chunk_kw):
-                    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+                    from karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
                         bussi_restart_fallback_paths_from_overlap,
                     )
 
@@ -8853,7 +8853,7 @@ def run_dynamics_with_io(
                     and getattr(chunk_io, "restart_read", None) is not None
                     and not mem_handoff
                 ):
-                    from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
+                    from karml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
                         ensure_restartable_before_overlap_chunk,
                     )
 
@@ -8965,7 +8965,7 @@ def run_dynamics_with_io(
                     and mlpot_ctx is not None
                 ):
                     _prepare_overlap_chunk_after_restart(mlpot_ctx, restart_read=None)
-                    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+                    from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
                         probe_and_light_resync_if_desync,
                     )
 
@@ -9066,7 +9066,7 @@ def run_dynamics_with_io(
                         _prepare_overlap_chunk_after_restart(
                             mlpot_ctx, restart_read=None
                         )
-                        from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+                        from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
                             probe_and_light_resync_if_desync,
                         )
 
@@ -9197,7 +9197,7 @@ def run_dynamics_with_io(
                 )
                 if "_bussi_subchunk_abort_global_step" in chunk_kw:
                     reported_steps = int(chunk_kw["_bussi_subchunk_abort_global_step"])
-                from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+                from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
                     classify_chunk_outcome,
                     patch_restart_global_step,
                     read_restart_last_step,
@@ -9220,7 +9220,7 @@ def run_dynamics_with_io(
                     and steps_done > 0
                     and "heat" in str(overlap_context).lower()
                 ):
-                    from mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping import (
+                    from karml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping import (
                         maybe_rebaseline_monomer_health_after_heat_velocities,
                     )
 
@@ -9354,7 +9354,7 @@ def run_dynamics_with_io(
                         f"{steps_done}/{total_nstep}",
                         flush=True,
                     )
-                    from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
+                    from karml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
                         attempt_overlap_blowup_geometry_rescue,
                         attempt_overlap_early_abort_recovery,
                     )
@@ -9392,7 +9392,7 @@ def run_dynamics_with_io(
                         rescued_overlap = False
                         geometry_violation = False
                         if overlap is not None:
-                            from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+                            from karml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
                                 probe_dynamics_geometry_violation,
                             )
 
@@ -9409,7 +9409,7 @@ def run_dynamics_with_io(
                             and overlap is not None
                             and getattr(overlap, "action", None) == "rescue"
                         ):
-                            from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+                            from karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
                                 finalize_overlap_rescue_for_dynamics,
                             )
 
@@ -9431,7 +9431,7 @@ def run_dynamics_with_io(
                                 global_step=steps_before_chunk,
                                 mlpot_ctx=mlpot_ctx,
                             )
-                            from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+                            from karml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
                                 save_stabilized_overlap_rescue_snapshot,
                             )
 
@@ -9539,7 +9539,7 @@ def run_dynamics_with_io(
                         flush=True,
                     )
                     if mlpot_ctx is not None:
-                        from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+                        from karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
                             write_overlap_recovery_trace,
                         )
 
@@ -9556,7 +9556,7 @@ def run_dynamics_with_io(
                     )
                     health_action = None
                     if mlpot_ctx is not None and overlap is not None:
-                        from mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping import (
+                        from karml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping import (
                             maybe_intervene_monomer_health,
                         )
 
@@ -9592,10 +9592,10 @@ def run_dynamics_with_io(
                         overlap_action = str(
                             getattr(overlap, "action", "rescue") or "rescue"
                         ).lower()
-                        from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
+                        from karml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
                             attempt_overlap_early_abort_recovery,
                         )
-                        from mmml.interfaces.pycharmmInterface.mlpot.restraints import (
+                        from karml.interfaces.pycharmmInterface.mlpot.restraints import (
                             reinstall_adumb_rxncor_walls_from_workflow_args,
                         )
 
@@ -9714,7 +9714,7 @@ def run_dynamics_with_io(
                             flush=True,
                         )
                     if not rescued and overlap is not None and overlap.extent_enabled:
-                        from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+                        from karml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
                             refresh_overlap_prior_segment_restart,
                         )
 
@@ -9732,10 +9732,10 @@ def run_dynamics_with_io(
                             restart_path=refresh_path,
                         )
                     if rescued and chunk_io is not None:
-                        from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+                        from karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
                             finalize_overlap_rescue_for_dynamics,
                         )
-                        from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+                        from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
                             patch_restart_global_step,
                         )
 
@@ -9762,7 +9762,7 @@ def run_dynamics_with_io(
                                 global_step=steps_done,
                                 mlpot_ctx=mlpot_ctx,
                             )
-                            from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+                            from karml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
                                 save_stabilized_overlap_rescue_snapshot,
                             )
 
@@ -9823,7 +9823,7 @@ def run_dynamics_with_io(
                 if mlpot_ctx is not None:
                     py_model = getattr(mlpot_ctx, "pyCModel", None)
                     ml_f = getattr(py_model, "_last_ml_forces", None)
-                from mmml.interfaces.pycharmmInterface.mlpot.force_checkpoint import (
+                from karml.interfaces.pycharmmInterface.mlpot.force_checkpoint import (
                     maybe_record_forces,
                 )
 
@@ -9844,7 +9844,7 @@ def run_dynamics_with_io(
                     and overlap_run_state_every_chunks > 0
                     and (chunk_index + 1) % int(overlap_run_state_every_chunks) == 0
                 ):
-                    from mmml.interfaces.pycharmmInterface.mlpot.run_state_checkpoint import (
+                    from karml.interfaces.pycharmmInterface.mlpot.run_state_checkpoint import (
                         maybe_save_overlap_run_state,
                     )
 
@@ -9884,7 +9884,7 @@ def run_dynamics_with_io(
             and io.restart_write is not None
             and steps_done >= total_nstep - 1
         ):
-            from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+            from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
                 patch_restart_global_step,
             )
 
@@ -9898,7 +9898,7 @@ def run_dynamics_with_io(
             and io.restart_write is not None
             and steps_done >= total_nstep - 1
         ):
-            from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+            from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
                 patch_restart_global_step,
                 read_restart_last_step,
             )
@@ -10015,7 +10015,7 @@ def _maybe_promote_mlpot_jax_after_sd(config: MinimizeWithMlpotConfig) -> None:
     if config.mlpot_ctx is None:
         return
     pyCModel = getattr(config.mlpot_ctx, "pyCModel", None)
-    from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
+    from karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
         DecomposedMlpotModel,
         maybe_warmup_deferred_decomposed_mlpot,
     )
@@ -10029,7 +10029,7 @@ def _maybe_promote_mlpot_jax_after_sd(config: MinimizeWithMlpotConfig) -> None:
     )
     if n_mono <= 1:
         return
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
+    from karml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
 
     cell = getattr(config.mlpot_ctx, "cubic_box_side_A", None)
     maybe_warmup_deferred_decomposed_mlpot(
@@ -10106,17 +10106,17 @@ def minimize_with_mlpot(
         return False
 
     if config.reference_positions is not None:
-        from mmml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
+        from karml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
 
         sync_charmm_positions(config.reference_positions)
 
     _ensure_domdec_off_for_mlpot_energy(context="MLpot SD minimize")
 
     if config.mlpot_ctx is not None:
-        from mmml.interfaces.pycharmmInterface.charmm_mpi import (
+        from karml.interfaces.pycharmmInterface.charmm_mpi import (
             assert_mpi_launcher_for_mlpot_sd,
         )
-        from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+        from karml.interfaces.pycharmmInterface.mlpot.setup import (
             mlpot_skip_charmm_ener_force_before_first_sd,
         )
 
@@ -10132,7 +10132,7 @@ def minimize_with_mlpot(
     pyC_model = (
         getattr(config.mlpot_ctx, "pyCModel", None) if config.mlpot_ctx is not None else None
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
+    from karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
         charmm_mlpot_sd_jax_cpu_guard,
         materialize_deferred_mlpot_jax_before_sd,
     )
@@ -10142,7 +10142,7 @@ def minimize_with_mlpot(
             print("CHARMM energy before minimization:")
             _maybe_show_energy(True)
         if config.mlpot_ctx is not None:
-            from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+            from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
                 prepare_mlpot_hybrid_state_for_sd,
             )
 
@@ -10180,7 +10180,7 @@ def minimize_with_mlpot(
             if baseline is not None:
                 config.sd_watchdog_initial_grms = baseline
                 if config.verbose:
-                    from mmml.utils.prep_ladder_report import PrepMetrics, emit_prep_checkpoint
+                    from karml.utils.prep_ladder_report import PrepMetrics, emit_prep_checkpoint
 
                     emit_prep_checkpoint(
                         "MLpot SD watchdog baseline",
@@ -10231,7 +10231,7 @@ def minimize_with_mlpot(
                         and config.mlpot_ctx is not None
                         and config.calculator_pre_minimize
                     ):
-                        from mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize import (
+                        from karml.interfaces.pycharmmInterface.mlpot.calculator_minimize import (
                             minimize_hybrid_calculator_fire_before_sd,
                         )
 
@@ -10269,7 +10269,7 @@ def minimize_with_mlpot(
                         config.mlpot_ctx is not None
                         and config.pre_sd_bonded_recovery_grms_kcalmol_A is not None
                     ):
-                        from mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
+                        from karml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
                             maybe_run_density_prep_ladder_for_mlpot,
                         )
 
@@ -10314,7 +10314,7 @@ def minimize_with_mlpot(
             _rewrap_mlpot_pbc_after_sd(config, verbose=config.verbose, context="Post-SD pass 1")
             invalidate_mlpot_calculator_caches(config.mlpot_ctx)
             if config.verbose and config.mlpot_ctx is not None:
-                from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+                from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
                     refresh_mlpot_energy_and_grms,
                 )
 
@@ -10359,7 +10359,7 @@ def minimize_with_mlpot(
                 _rewrap_mlpot_pbc_after_sd(config, verbose=config.verbose, context="Post-SD pass 2")
                 invalidate_mlpot_calculator_caches(config.mlpot_ctx)
                 if config.verbose and config.mlpot_ctx is not None:
-                    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+                    from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
                         refresh_mlpot_energy_and_grms,
                     )
 
@@ -10379,7 +10379,7 @@ def minimize_with_mlpot(
         _maybe_promote_mlpot_jax_after_sd(config)
 
         if config.save:
-            from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+            from karml.interfaces.pycharmmInterface.mlpot.setup import (
                 resolve_export_positions,
             )
 
@@ -10401,11 +10401,11 @@ def minimize_with_mlpot(
             _maybe_show_energy(True)
 
         if config.test_first is not None:
-            from mmml.interfaces.pycharmmInterface.mlpot.derivative_test import (
+            from karml.interfaces.pycharmmInterface.mlpot.derivative_test import (
                 run_post_minimize_derivative_tests,
             )
 
-            from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+            from karml.interfaces.pycharmmInterface.mlpot.setup import (
                 resolve_export_positions,
             )
 
@@ -10426,7 +10426,7 @@ def minimize_with_mlpot(
 
 def charmm_energy_terms() -> dict[str, float]:
     """Current CHARMM energy row as ``{term: value}`` (kcal/mol)."""
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import (
+    from karml.interfaces.pycharmmInterface.import_pycharmm import (
         should_skip_charmm_energy_show,
     )
 
@@ -10464,7 +10464,7 @@ def save_minimization_results(
     written: dict[str, Path] = {}
 
     if positions is not None:
-        from mmml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
+        from karml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
 
         sync_charmm_positions(positions)
 
@@ -10499,10 +10499,10 @@ def save_minimization_results(
         try:
             import ase
             import ase.io
-            from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+            from karml.interfaces.pycharmmInterface.mlpot.setup import (
                 get_charmm_positions_array,
             )
-            from mmml.interfaces.pycharmmInterface.utils import get_Z_from_psf
+            from karml.interfaces.pycharmmInterface.utils import get_Z_from_psf
 
             pos = (
                 np.asarray(positions, dtype=float)
@@ -10547,12 +10547,12 @@ def load_minimized_coordinates(crd_path: PathLike) -> None:
     path = Path(crd_path)
     if not path.exists():
         raise FileNotFoundError(f"CRD not found: {path}")
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         apply_crd_file_to_charmm,
     )
 
     apply_crd_file_to_charmm(path)
-    from mmml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
+    from karml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
         clear_comparison_coordinates,
     )
 

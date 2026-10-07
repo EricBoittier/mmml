@@ -6,7 +6,7 @@ import argparse
 
 import pytest
 
-from mmml.interfaces.pycharmmInterface.charmm_image_geometry import (
+from karml.interfaces.pycharmmInterface.charmm_image_geometry import (
     assert_charmm_image_min_distance,
     assert_charmm_image_min_distance_after_update,
     parse_mkimat2_min_distances,
@@ -88,7 +88,7 @@ def test_assert_charmm_image_min_distance_after_update_uses_provided_log(monkeyp
         raise AssertionError("UPDATE should not run when charmm_log is provided")
 
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.charmm_image_geometry.run_charmm_update_capture_image_log",
+        "karml.interfaces.pycharmmInterface.charmm_image_geometry.run_charmm_update_capture_image_log",
         _fail_update,
     )
     worst = assert_charmm_image_min_distance_after_update(
@@ -111,17 +111,17 @@ def test_run_charmm_post_bimag_probe_prefers_fd_capture(monkeypatch):
         return ""
 
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.charmm_image_geometry._run_charmm_script_capture_fortran",
+        "karml.interfaces.pycharmmInterface.charmm_image_geometry._run_charmm_script_capture_fortran",
         _fake_capture,
     )
     def _fail_outu_probe(_cmd: str) -> str:
         raise AssertionError("OUTU probe should not run")
 
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.charmm_image_geometry._probe_command_via_charmm_log_file",
+        "karml.interfaces.pycharmmInterface.charmm_image_geometry._probe_command_via_charmm_log_file",
         _fail_outu_probe,
     )
-    from mmml.interfaces.pycharmmInterface.charmm_image_geometry import (
+    from karml.interfaces.pycharmmInterface.charmm_image_geometry import (
         run_charmm_post_bimag_image_probe_log,
     )
 
@@ -134,11 +134,11 @@ def test_run_charmm_image_probe_log_falls_back_to_fd_capture(monkeypatch):
     calls: list[str] = []
 
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.charmm_image_geometry._force_charmm_image_remap_for_probe",
+        "karml.interfaces.pycharmmInterface.charmm_image_geometry._force_charmm_image_remap_for_probe",
         lambda: None,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.charmm_image_geometry._probe_command_via_charmm_log_file",
+        "karml.interfaces.pycharmmInterface.charmm_image_geometry._probe_command_via_charmm_log_file",
         lambda _cmd: "",
     )
 
@@ -149,10 +149,10 @@ def test_run_charmm_image_probe_log_falls_back_to_fd_capture(monkeypatch):
         return _SAMPLE_LOG
 
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.charmm_image_geometry._run_charmm_script_capture_fortran",
+        "karml.interfaces.pycharmmInterface.charmm_image_geometry._run_charmm_script_capture_fortran",
         _fake_capture,
     )
-    from mmml.interfaces.pycharmmInterface.charmm_image_geometry import (
+    from karml.interfaces.pycharmmInterface.charmm_image_geometry import (
         run_charmm_image_probe_log,
     )
 
@@ -165,11 +165,11 @@ def test_run_charmm_image_probe_log_skip_ener_never_calls_ener(monkeypatch):
     calls: list[str] = []
 
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.charmm_image_geometry._force_charmm_image_remap_for_probe",
+        "karml.interfaces.pycharmmInterface.charmm_image_geometry._force_charmm_image_remap_for_probe",
         lambda: None,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.charmm_image_geometry._probe_command_via_charmm_log_file",
+        "karml.interfaces.pycharmmInterface.charmm_image_geometry._probe_command_via_charmm_log_file",
         lambda _cmd: "",
     )
 
@@ -178,10 +178,10 @@ def test_run_charmm_image_probe_log_skip_ener_never_calls_ener(monkeypatch):
         return "UPDATE only\n"
 
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.charmm_image_geometry._run_charmm_script_capture_fortran",
+        "karml.interfaces.pycharmmInterface.charmm_image_geometry._run_charmm_script_capture_fortran",
         _fake_capture,
     )
-    from mmml.interfaces.pycharmmInterface.charmm_image_geometry import (
+    from karml.interfaces.pycharmmInterface.charmm_image_geometry import (
         run_charmm_image_probe_log,
     )
 
@@ -191,7 +191,7 @@ def test_run_charmm_image_probe_log_skip_ener_never_calls_ener(monkeypatch):
 
 
 def test_stash_mkimat2_registration_log_roundtrip():
-    from mmml.interfaces.pycharmmInterface.charmm_image_geometry import (
+    from karml.interfaces.pycharmmInterface.charmm_image_geometry import (
         _get_stashed_mkimat2_log,
         stash_mkimat2_registration_log,
     )
@@ -215,11 +215,11 @@ def test_assert_after_update_skip_ener_probe_passes_flag(monkeypatch):
         return ""
 
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.charmm_image_geometry.run_charmm_image_probe_log",
+        "karml.interfaces.pycharmmInterface.charmm_image_geometry.run_charmm_image_probe_log",
         _probe,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.charmm_image_geometry.assert_charmm_image_mic_fallback",
+        "karml.interfaces.pycharmmInterface.charmm_image_geometry.assert_charmm_image_mic_fallback",
         lambda **kwargs: 2.5,
     )
 
@@ -234,13 +234,13 @@ def test_assert_after_update_skip_ener_probe_passes_flag(monkeypatch):
 
 
 def test_image_probe_skip_hybrid_ener_when_mlpot_active(monkeypatch):
-    from mmml.interfaces.pycharmmInterface.charmm_image_geometry import (
+    from karml.interfaces.pycharmmInterface.charmm_image_geometry import (
         CharmmImageNbStats,
         _image_probe_skip_hybrid_ener,
     )
 
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.charmm_image_geometry.fetch_charmm_image_nb_stats",
+        "karml.interfaces.pycharmmInterface.charmm_image_geometry.fetch_charmm_image_nb_stats",
         lambda: CharmmImageNbStats(
             natom=260,
             natim=610,
@@ -272,23 +272,23 @@ def test_assert_charmm_image_mic_fallback_uses_registration_floor(monkeypatch):
             return "monomers 1/2, atoms H–Cl, MIC distance 2.100 Å < required 2.40 Å"
 
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         lambda: np.zeros((10, 3)),
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.charmm_image_geometry._resolve_atoms_per_for_image_gate",
+        "karml.interfaces.pycharmmInterface.charmm_image_geometry._resolve_atoms_per_for_image_gate",
         lambda _args: [5, 5],
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.charmm_image_geometry._resolve_atomic_numbers_for_image_gate",
+        "karml.interfaces.pycharmmInterface.charmm_image_geometry._resolve_atomic_numbers_for_image_gate",
         lambda _args: np.array([17, 17, 17, 17, 17, 17, 17, 17, 17, 17], dtype=int),
     )
     monkeypatch.setattr(
-        "mmml.utils.intermonomer_geometry.find_worst_pre_mlpot_mic_violation",
+        "karml.utils.intermonomer_geometry.find_worst_pre_mlpot_mic_violation",
         lambda *a, **k: _Violation(),
     )
     monkeypatch.setattr(
-        "mmml.utils.intermonomer_geometry.summarize_worst_intermonomer_contact",
+        "karml.utils.intermonomer_geometry.summarize_worst_intermonomer_contact",
         lambda *a, **k: type(
             "S",
             (),
@@ -298,7 +298,7 @@ def test_assert_charmm_image_mic_fallback_uses_registration_floor(monkeypatch):
             },
         )(),
     )
-    from mmml.interfaces.pycharmmInterface.charmm_image_geometry import (
+    from karml.interfaces.pycharmmInterface.charmm_image_geometry import (
         assert_charmm_image_min_distance_after_update,
     )
 
@@ -318,15 +318,15 @@ def test_assert_charmm_image_mic_fallback_warns_below_registration_floor(
     import numpy as np
 
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         lambda: np.zeros((10, 3)),
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.charmm_image_geometry._resolve_atoms_per_for_image_gate",
+        "karml.interfaces.pycharmmInterface.charmm_image_geometry._resolve_atoms_per_for_image_gate",
         lambda _args: [5, 5],
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.charmm_image_geometry._resolve_atomic_numbers_for_image_gate",
+        "karml.interfaces.pycharmmInterface.charmm_image_geometry._resolve_atomic_numbers_for_image_gate",
         lambda _args: np.full(10, 17, dtype=int),
     )
 
@@ -335,11 +335,11 @@ def test_assert_charmm_image_mic_fallback_warns_below_registration_floor(
             return "monomers 3/20, atoms Cl–Cl, MIC distance 2.100 Å < required 2.90 Å"
 
     monkeypatch.setattr(
-        "mmml.utils.intermonomer_geometry.find_worst_pre_mlpot_mic_violation",
+        "karml.utils.intermonomer_geometry.find_worst_pre_mlpot_mic_violation",
         lambda *a, **k: _Violation(),
     )
     monkeypatch.setattr(
-        "mmml.utils.intermonomer_geometry.summarize_worst_intermonomer_contact",
+        "karml.utils.intermonomer_geometry.summarize_worst_intermonomer_contact",
         lambda *a, **k: type(
             "S",
             (),
@@ -349,7 +349,7 @@ def test_assert_charmm_image_mic_fallback_warns_below_registration_floor(
             },
         )(),
     )
-    from mmml.interfaces.pycharmmInterface.charmm_image_geometry import (
+    from karml.interfaces.pycharmmInterface.charmm_image_geometry import (
         assert_charmm_image_mic_fallback,
     )
 
@@ -380,23 +380,23 @@ def test_assert_charmm_image_mic_fallback_uses_psf_elements(monkeypatch):
         return None
 
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         lambda: np.zeros((10, 3)),
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.charmm_image_geometry._resolve_atoms_per_for_image_gate",
+        "karml.interfaces.pycharmmInterface.charmm_image_geometry._resolve_atoms_per_for_image_gate",
         lambda _args: [5, 5],
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.charmm_image_geometry._resolve_atomic_numbers_for_image_gate",
+        "karml.interfaces.pycharmmInterface.charmm_image_geometry._resolve_atomic_numbers_for_image_gate",
         lambda _args: np.array([1, 1, 1, 1, 1, 6, 6, 6, 6, 17], dtype=int),
     )
     monkeypatch.setattr(
-        "mmml.utils.intermonomer_geometry.find_worst_pre_mlpot_mic_violation",
+        "karml.utils.intermonomer_geometry.find_worst_pre_mlpot_mic_violation",
         _fake_violation,
     )
     monkeypatch.setattr(
-        "mmml.utils.intermonomer_geometry.summarize_worst_intermonomer_contact",
+        "karml.utils.intermonomer_geometry.summarize_worst_intermonomer_contact",
         lambda *a, **k: type(
             "S",
             (),
@@ -409,7 +409,7 @@ def test_assert_charmm_image_mic_fallback_uses_psf_elements(monkeypatch):
             },
         )(),
     )
-    from mmml.interfaces.pycharmmInterface.charmm_image_geometry import (
+    from karml.interfaces.pycharmmInterface.charmm_image_geometry import (
         assert_charmm_image_mic_fallback,
     )
 
@@ -433,23 +433,23 @@ def test_assert_charmm_image_mic_fallback_calls_registration_floor(monkeypatch):
         return None
 
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         lambda: np.zeros((10, 3)),
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.charmm_image_geometry._resolve_atoms_per_for_image_gate",
+        "karml.interfaces.pycharmmInterface.charmm_image_geometry._resolve_atoms_per_for_image_gate",
         lambda _args: [5, 5],
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.charmm_image_geometry._resolve_atomic_numbers_for_image_gate",
+        "karml.interfaces.pycharmmInterface.charmm_image_geometry._resolve_atomic_numbers_for_image_gate",
         lambda _args: np.ones(10, dtype=int),
     )
     monkeypatch.setattr(
-        "mmml.utils.intermonomer_geometry.find_worst_pre_mlpot_mic_violation",
+        "karml.utils.intermonomer_geometry.find_worst_pre_mlpot_mic_violation",
         _fake_violation,
     )
     monkeypatch.setattr(
-        "mmml.utils.intermonomer_geometry.summarize_worst_intermonomer_contact",
+        "karml.utils.intermonomer_geometry.summarize_worst_intermonomer_contact",
         lambda *a, **k: type(
             "S",
             (),
@@ -459,7 +459,7 @@ def test_assert_charmm_image_mic_fallback_calls_registration_floor(monkeypatch):
             },
         )(),
     )
-    from mmml.interfaces.pycharmmInterface.charmm_image_geometry import (
+    from karml.interfaces.pycharmmInterface.charmm_image_geometry import (
         assert_charmm_image_mic_fallback,
     )
 
@@ -486,7 +486,7 @@ def test_assert_charmm_image_min_distance_aborts_on_dense_pbc_margin():
 
 
 def test_resolve_mkimat2_min_distance_default():
-    from mmml.interfaces.pycharmmInterface.charmm_image_geometry import (
+    from karml.interfaces.pycharmmInterface.charmm_image_geometry import (
         resolve_mkimat2_min_distance_A,
     )
 
@@ -499,7 +499,7 @@ def test_resolve_mkimat2_min_distance_default():
 
 
 def test_resolve_mkimat2_min_distance_dense_dcm_uses_same_default():
-    from mmml.interfaces.pycharmmInterface.charmm_image_geometry import (
+    from karml.interfaces.pycharmmInterface.charmm_image_geometry import (
         resolve_mkimat2_min_distance_A,
     )
 
@@ -524,7 +524,7 @@ def test_assert_charmm_image_min_distance_aborts_dense_dcm_mkimat_margin(monkeyp
         charmm_image_mlpot_min_distance=4.5,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.charmm_image_geometry.run_charmm_image_probe_log",
+        "karml.interfaces.pycharmmInterface.charmm_image_geometry.run_charmm_image_probe_log",
         lambda **kwargs: log,
     )
     with pytest.raises(RuntimeError, match="4.40 Å < prep floor 4.50 Å"):
@@ -542,7 +542,7 @@ def test_assert_charmm_image_min_distance_after_update_uses_mkimat_floor(monkeyp
     5  Z0Z0N1R1 has     120      24      24        3.00
 """
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.charmm_image_geometry.run_charmm_image_probe_log",
+        "karml.interfaces.pycharmmInterface.charmm_image_geometry.run_charmm_image_probe_log",
         lambda **kwargs: dense_log,
     )
     with pytest.raises(RuntimeError, match="3.00 Å < prep floor 3.50 Å"):
@@ -568,11 +568,11 @@ def test_resolve_mic_registration_fallback_uses_prep_floor_not_mkimat():
 
 def test_assert_charmm_image_min_distance_after_update_mic_fallback(monkeypatch):
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.charmm_image_geometry.run_charmm_image_probe_log",
+        "karml.interfaces.pycharmmInterface.charmm_image_geometry.run_charmm_image_probe_log",
         lambda **kwargs: "no mkimat here",
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.charmm_image_geometry.assert_charmm_image_mic_fallback",
+        "karml.interfaces.pycharmmInterface.charmm_image_geometry.assert_charmm_image_mic_fallback",
         lambda **kwargs: 2.5,
     )
     worst = assert_charmm_image_min_distance_after_update(
@@ -584,7 +584,7 @@ def test_assert_charmm_image_min_distance_after_update_mic_fallback(monkeypatch)
 
 
 def test_format_charmm_image_nb_stats_tight_buffer():
-    from mmml.interfaces.pycharmmInterface.charmm_image_geometry import (
+    from karml.interfaces.pycharmmInterface.charmm_image_geometry import (
         CharmmImageNbStats,
         format_charmm_image_nb_stats,
     )

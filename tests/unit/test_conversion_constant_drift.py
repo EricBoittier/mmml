@@ -5,7 +5,7 @@ shape: a conversion factor written as a *module-local literal*, used on both
 the write and the read side, so the value round-tripped perfectly and no
 internal check disagreed. Only physics disagreed.
 
-``mmml/data/units.py`` is anchored against CODATA by
+``karml/data/units.py`` is anchored against CODATA by
 ``tests/unit/test_units_conversions.py``, but that is not where the bugs were.
 They were in the ~50 modules that keep their own copy of a factor:
 
@@ -19,7 +19,7 @@ Neither is visible to a test of the module that holds it. Both are visible the
 moment you compare the literal to a number computed somewhere else, which is
 what this file does:
 
-1. Any module-level constant whose name matches one in ``mmml.data.units`` must
+1. Any module-level constant whose name matches one in ``karml.data.units`` must
    agree with the canonical value (``test_shadowing_definitions_*``). The tree
    holds ~33 such copies; the worst legitimate rounding among them is 1.5e-5,
    so ``_TOL`` sits at 1e-4 -- loose enough for rounded literals, tight enough
@@ -42,10 +42,10 @@ from typing import Iterator, NamedTuple
 
 import pytest
 
-from mmml.data import units as units_module
+from karml.data import units as units_module
 
-MMML_ROOT = Path(units_module.__file__).resolve().parent.parent
-CANONICAL_SOURCE = MMML_ROOT / "data" / "units.py"
+KARML_ROOT = Path(units_module.__file__).resolve().parent.parent
+CANONICAL_SOURCE = KARML_ROOT / "data" / "units.py"
 
 # Rounded literals in the tree deviate by at most ~1.5e-5 from canonical; the
 # historical transposition typo was 5.3e-4. Anything in between is a rounding
@@ -78,7 +78,7 @@ class Definition(NamedTuple):
 
     @property
     def where(self) -> str:
-        return f"{self.path.relative_to(MMML_ROOT.parent)}:{self.lineno}"
+        return f"{self.path.relative_to(KARML_ROOT.parent)}:{self.lineno}"
 
 
 def _literal_value(node: ast.expr) -> float | None:
@@ -129,7 +129,7 @@ def _iter_definitions(path: Path) -> Iterator[Definition]:
 
 
 def _package_files() -> list[Path]:
-    return sorted(p for p in MMML_ROOT.rglob("*.py") if p.resolve() != CANONICAL_SOURCE)
+    return sorted(p for p in KARML_ROOT.rglob("*.py") if p.resolve() != CANONICAL_SOURCE)
 
 
 _CANONICAL: dict[str, float] = {
@@ -194,16 +194,16 @@ def test_the_tolerance_would_have_caught_the_historical_typos():
 @pytest.mark.parametrize(
     "definition", _SHADOWING, ids=lambda d: f"{d.path.stem}:{d.name}"
 )
-def test_shadowing_definitions_agree_with_mmml_data_units(definition: Definition):
+def test_shadowing_definitions_agree_with_karml_data_units(definition: Definition):
     """A local copy of a canonical constant must not drift from it.
 
-    These copies are where the bugs lived. ``mmml/data/units.py`` was right
+    These copies are where the bugs lived. ``karml/data/units.py`` was right
     the whole time.
     """
     canonical = _CANONICAL[definition.name.upper()]
     assert definition.value == pytest.approx(canonical, rel=_TOL), (
         f"{definition.where}: {definition.name} = {definition.value!r} but "
-        f"mmml.data.units.{definition.name.upper()} = {canonical!r}. Import the "
+        f"karml.data.units.{definition.name.upper()} = {canonical!r}. Import the "
         f"canonical constant instead of restating it."
     )
 
@@ -283,7 +283,7 @@ _ANCHORED: dict[tuple[str, str], float] = {
 
 
 def _read_constant(relative_path: str, name: str) -> float:
-    path = MMML_ROOT / relative_path
+    path = KARML_ROOT / relative_path
     assert path.is_file(), (
         f"{relative_path} is gone. If it moved, move its entry in _ANCHORED "
         f"with it rather than dropping the anchor."

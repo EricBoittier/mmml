@@ -19,7 +19,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
-      - uses: ./.github/actions/setup-mmml
+      - uses: ./.github/actions/setup-karml
       - name: Lint
         id: lint
         continue-on-error: true
@@ -32,8 +32,8 @@ jobs:
         if: always()
         run: |
           uv run python -V
-          uv run python -c "import mmml; print('package imports ok')"
-          uv run python -c "import mmml.md.energy.terms; print('energy terms import ok')"
+          uv run python -c "import karml; print('package imports ok')"
+          uv run python -c "import karml.md.energy.terms; print('energy terms import ok')"
       - name: Lint gate
         if: always()
         run: |
@@ -48,7 +48,7 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v6
-      - uses: ./.github/actions/setup-mmml
+      - uses: ./.github/actions/setup-karml
         with:
           # jax-pme-solver is not part of all-cpu. Without it, 19 files skip via
           # have_jax_pme_package() and pytest still exits 0.
@@ -58,7 +58,7 @@ jobs:
       - name: Run unit tests
         run: |
           mkdir -p .ci-reports
-          uv run pytest -v --color=yes --cov=mmml --cov-report=xml \
+          uv run pytest -v --color=yes --cov=karml --cov-report=xml \
             --junitxml=.ci-reports/junit-unit.xml tests/unit
       - name: Unit suite ran for real
         if: always()
@@ -68,7 +68,7 @@ jobs:
       # Coverage floor, not a coverage target. Roughly 18.7k statements need
       # live CHARMM, 10.9k are plotting and 5.3k need PySCF/torch/GPU, so the
       # CI-reachable ceiling is near 70%. This catches a *slide*. Measured
-      # 2026-08-01 on a full MMML_DISABLE_CHARMM=1 run: 45.81%, 55706 of
+      # 2026-08-01 on a full KARML_DISABLE_CHARMM=1 run: 45.81%, 55706 of
       # 121608 lines. The floors sit ~3.8pp and ~6.6% below that.
       - name: Coverage floor
         if: always()
@@ -88,7 +88,7 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v6
-      - uses: ./.github/actions/setup-mmml
+      - uses: ./.github/actions/setup-karml
         with:
           sync-args: "--extra dev --extra all-cpu --extra jax-pme-solver"
       - name: Run functionality / misc / integration tests
@@ -110,7 +110,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v6
-      - uses: ./.github/actions/setup-mmml
+      - uses: ./.github/actions/setup-karml
         with:
           sync-args: "--extra dev --extra all-cpu --extra jax-pme-solver"
       - name: Run CHARMM MPI unit suite
@@ -155,7 +155,7 @@ jobs:
             setup/charmm/libcharmm.so
             setup/charmm/lib
             setup/charmm/.ci-charmm-build-stamp
-            ~/.cache/mmml-charmm-build
+            ~/.cache/karml-charmm-build
           # Hash every api/*.F90, not a hand-picked subset: an api_read.F90 fix
           # (sticky READ PARAM APPEND, which zeroed the VDW table) hit a stale
           # cache because that file was not on the list.

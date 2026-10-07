@@ -5,9 +5,9 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from mmml.md.energy.registry import EnergyContext
-from mmml.md.energy.terms.ml_mm_elec import COULOMB_KCAL, MLMMElectrostaticTerm
-from mmml.md.system import FFParams, MolecularSystem
+from karml.md.energy.registry import EnergyContext
+from karml.md.energy.terms.ml_mm_elec import COULOMB_KCAL, MLMMElectrostaticTerm
+from karml.md.system import FFParams, MolecularSystem
 
 KCAL_TO_EV = 1.0 / 23.060549
 
@@ -304,8 +304,8 @@ def test_minimum_image_is_used_under_pbc():
 
 
 def test_term_is_registered():
-    import mmml.md.energy.terms  # noqa: F401
-    from mmml.md.energy.registry import available_terms, get_term
+    import karml.md.energy.terms  # noqa: F401
+    from karml.md.energy.registry import available_terms, get_term
 
     assert "ml_mm_elec" in available_terms()
     assert get_term("ml_mm_elec") is MLMMElectrostaticTerm

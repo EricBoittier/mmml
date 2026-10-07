@@ -1,4 +1,4 @@
-name: Setup MMML
+name: Setup KARML
 description: Install uv, Python, and the requested extras. Run after checkout.
 
 inputs:

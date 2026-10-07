@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 from typing import Optional
 
-from mmml.interfaces.pycharmmInterface.jax_device_policy import mlpot_jax_device_name
+from karml.interfaces.pycharmmInterface.jax_device_policy import mlpot_jax_device_name
 
 
 def resolve_ml_batch_size(
@@ -20,7 +20,7 @@ def resolve_ml_batch_size(
     """
     if explicit is not None:
         return int(explicit)
-    env = (os.environ.get("MMML_MLPOT_ML_BATCH_SIZE") or "").strip()
+    env = (os.environ.get("KARML_MLPOT_ML_BATCH_SIZE") or "").strip()
     if env:
         return int(env)
     n = int(n_monomers)
@@ -41,11 +41,11 @@ DEFAULT_MLPOT_MM_SKIN_A = 0.25
 def resolve_mlpot_mm_skin_A(args: object | None = None) -> float:
     """Verlet skin for the MLpot MM pair list.
 
-    ``MMML_MLPOT_MM_SKIN_A`` wins, then an explicit ``--jax-md-skin-distance``,
+    ``KARML_MLPOT_MM_SKIN_A`` wins, then an explicit ``--jax-md-skin-distance``,
     then ``DEFAULT_MLPOT_MM_SKIN_A``. The list radius grows by the skin and the
     list is reused until some atom has moved (minimum image) more than skin/2.
     """
-    env = (os.environ.get("MMML_MLPOT_MM_SKIN_A") or "").strip()
+    env = (os.environ.get("KARML_MLPOT_MM_SKIN_A") or "").strip()
     if env:
         return max(0.0, float(env))
     explicit = getattr(args, "_cli_explicit", None) or set()

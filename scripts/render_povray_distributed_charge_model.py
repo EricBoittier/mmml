@@ -67,7 +67,7 @@ def main() -> int:
 
     # Companion ESP slice from the exact same schematic distributed sites.
     import matplotlib.pyplot as plt
-    from mmml.utils.plotting.styles import apply_plot_style, default_cmap
+    from karml.utils.plotting.styles import apply_plot_style, default_cmap
     apply_plot_style("icml")
     # Water lies in the yz plane in ASE's standard orientation.
     uu = np.linspace(-2.2, 2.2, 280); vv = np.linspace(-2.0, 2.4, 280)

@@ -47,9 +47,9 @@ from ase.io import iread
 from flax import jax_utils
 from flax.training import orbax_utils, train_state
 
-from mmml.models.physnetjax.physnetjax.models.spooky_model import SpookyPhysNet
-from mmml.models.physnetjax.physnetjax.restart.restart import save_training_checkpoint
-from mmml.models.physnetjax.physnetjax.training.spooky_distill import (
+from karml.models.physnetjax.physnetjax.models.spooky_model import SpookyPhysNet
+from karml.models.physnetjax.physnetjax.restart.restart import save_training_checkpoint
+from karml.models.physnetjax.physnetjax.training.spooky_distill import (
     EnergyAlignment,
     blend_component_loss,
     checkpoint_fingerprint,
@@ -58,16 +58,16 @@ from mmml.models.physnetjax.physnetjax.training.spooky_distill import (
     parse_spooky_distill_targets,
     teacher_architecture_from_checkpoint,
 )
-from mmml.models.physnetjax.physnetjax.training.spooky_training import (
+from karml.models.physnetjax.physnetjax.training.spooky_training import (
     build_spooky_batch_from_flat_data,
 )
-from mmml.utils.model_checkpoint import json_to_params
-from mmml.models.mbd.calculator import (
+from karml.utils.model_checkpoint import json_to_params
+from karml.models.mbd.calculator import (
     HARTREE_PER_BOHR_TO_EV_PER_ANGSTROM,
     HARTREE_TO_EV,
     load_mbd_model,
 )
-from mmml.models.mbd.model import mbd_energy_and_forces
+from karml.models.mbd.model import mbd_energy_and_forces
 
 ANGSTROM_TO_BOHR = 1.0 / 0.529177210903
 
@@ -1643,7 +1643,7 @@ def _per_fragment_charge_conservation_mse(
     ``mol_id`` is a per-atom LOCAL fragment index within its own structure (0
     for every atom of an ordinary single-molecule structure; 0..K-1 for a
     synthetic far-field composite's K fragments -- see
-    mmml/models/physnetjax/physnetjax/training/far_field_augment.py). Target
+    karml/models/physnetjax/physnetjax/training/far_field_augment.py). Target
     charge per fragment is always 0.0: far-field composites are only ever
     built from exactly-neutral source structures.
 
@@ -2140,7 +2140,7 @@ def train(args: argparse.Namespace, cache_path: Path) -> None:
         print("No CGenFF LJ data in cache — training a plain ML potential", flush=True)
 
     if args.far_field_augment_fraction > 0.0:
-        from mmml.models.physnetjax.physnetjax.training.far_field_augment import (
+        from karml.models.physnetjax.physnetjax.training.far_field_augment import (
             append_far_field_composites_to_data,
             build_far_field_composites,
             compute_safe_separation,
@@ -2393,7 +2393,7 @@ def train(args: argparse.Namespace, cache_path: Path) -> None:
     multipole_model = None
     multipole_params = None
     if args.multipole_checkpoint is not None:
-        from mmml.models.multipoles.electrostatics import load_multipole_model
+        from karml.models.multipoles.electrostatics import load_multipole_model
 
         multipole_model, multipole_params = load_multipole_model(
             Path(args.multipole_checkpoint).expanduser()

@@ -25,7 +25,7 @@ print("=== 00: environment ===")
 # --- interpreter -----------------------------------------------------------
 # The venv kernelspec uv installs uses a bare "python" in its argv, so notebooks
 # and stray shells can end up on a conda interpreter that cannot even parse
-# mmml's `tuple[float, ...]` annotations. Catch it here with a clear message.
+# karml's `tuple[float, ...]` annotations. Catch it here with a clear message.
 ok("interpreter", sys.executable)
 ok("python", ".".join(str(v) for v in sys.version_info[:3]))
 if sys.version_info < (3, 10):
@@ -41,11 +41,11 @@ try:
     ok("jax", jax.__version__)
     ok("devices", jax.devices())
     ok("x64", jax.config.jax_enable_x64)
-    want_gpu = (os.environ.get("MMML_MLPOT_DEVICE") or "cpu").lower() == "gpu"
+    want_gpu = (os.environ.get("KARML_MLPOT_DEVICE") or "cpu").lower() == "gpu"
     on_gpu = any(d.platform != "cpu" for d in jax.devices())
     if want_gpu and not on_gpu:
         WARN.append(
-            "MMML_MLPOT_DEVICE=gpu but JAX sees no GPU — training will run on "
+            "KARML_MLPOT_DEVICE=gpu but JAX sees no GPU — training will run on "
             "CPU. Install the CUDA build: make install-gpu"
         )
 except Exception as exc:  # pragma: no cover - environment dependent
@@ -55,7 +55,7 @@ except Exception as exc:  # pragma: no cover - environment dependent
 # These define the per-type scale vector length; without them nothing downstream
 # can map a trained scale back onto a CHARMM atom type.
 try:
-    from mmml.models.mm_lj_scales import cgenff_type_names_from_prm
+    from karml.models.mm_lj_scales import cgenff_type_names_from_prm
 
     names = cgenff_type_names_from_prm()
     ok("CGenFF types", f"{len(names)} (e.g. {', '.join(names[:4])} ...)")

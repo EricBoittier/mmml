@@ -20,7 +20,7 @@ from pathlib import Path
 import numpy as np
 from ase.io import read
 
-from mmml.models.multipoles import (
+from karml.models.multipoles import (
     LearnedMolecularMultipoleElectrostatics,
     plot_field_line_scan,
     plot_field_summary,

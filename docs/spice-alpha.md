@@ -13,17 +13,17 @@ Also cite Eastman et al., SPICE, *Sci. Data* 2023 / *J. Chem. Theory Comput.*
 This page is the extract → convert → `physnet-train` recipe. NPZ keys and
 units: [Training NPZ contract](training-npz-contract.md).
 
-## What fits MMML
+## What fits KARML
 
 | Goal | Path |
 |---|---|
 | Organic E/F/(D) potential | **`physnet-train`** on padded NPZ (this page) |
 | Hybrid ML/MM dimer PES | DES370K dimers + `prepare-mm-dataset` + `--hybrid-mm` |
 | PET-MAD / metatomic | Inference or `pet-physnet-distill` **teacher labels** — not training on this DFT |
-| MACE-MDP dipole/polar clone | ACEsuit `AtomicDielectricMACE` ([upstream `train.sh`](https://github.com/Nilsgoe/MACE-MDP/blob/main/reproducibility/train.sh)) — not an MMML trainer |
+| MACE-MDP dipole/polar clone | ACEsuit `AtomicDielectricMACE` ([upstream `train.sh`](https://github.com/Nilsgoe/MACE-MDP/blob/main/reproducibility/train.sh)) — not an KARML trainer |
 | IR/Raman CSVs in the zip | Evaluation only |
 
-Best MMML-shaped subset: **DES370K monomers + dimers** (3–34 atoms, isolated).
+Best KARML-shaped subset: **DES370K monomers + dimers** (3–34 atoms, isolated).
 PubChem is the large isolated-molecule pool. Solvated PubChem / water clusters /
 AA–ligand frames are **droplets**, not periodic boxes — do not pass `--use-pbc`.
 
@@ -51,7 +51,7 @@ use it at full scale.
 HDF5 layout (from the record README): one group per molecule; `atomic_numbers`
 `(N,)`; `conformations` `(M, N, 3)` **Å**; `dft_total_energy` `(M,)` **eV**;
 `dft_total_gradient` `(M, N, 3)` **eV/Å**; `scf_dipole` `(M, 3)` **e·Å**;
-`polarizability` `(M, 3, 3)` e Å²/V. These are already MMML **train** units
+`polarizability` `(M, 3, 3)` e Å²/V. These are already KARML **train** units
 except the gradient sign.
 
 `read_h5.py` looks for `mol_*` + `positions` / `total_forces` and will load
@@ -61,17 +61,17 @@ split **per subset** — those index files are not in the zip.
 ## Convert
 
 `F = −dft_total_gradient`. Use the importable converter
-(`mmml.data.spice_alpha`); then split **without** reconverting:
+(`karml.data.spice_alpha`); then split **without** reconverting:
 
 ```bash
-python -m mmml.data.spice_alpha DES370K_Monomers.hdf5 -o spice_des_mono.npz
+python -m karml.data.spice_alpha DES370K_Monomers.hdf5 -o spice_des_mono.npz
 # optional: --max-frames 64 --neutral-only --pad 22
-mmml fix-and-split --efd spice_des_mono.npz -o splits_des_mono --preserve-units \
+karml fix-and-split --efd spice_des_mono.npz -o splits_des_mono --preserve-units \
   --train-frac 0.9 --valid-frac 0.05 --test-frac 0.05
 ```
 
 ```python
-from mmml.data import convert_spice_alpha_hdf5
+from karml.data import convert_spice_alpha_hdf5
 
 convert_spice_alpha_hdf5(["DES370K_Monomers.hdf5"], "spice_des_mono.npz")
 ```
@@ -87,7 +87,7 @@ plus `--flip-forces` instead). Units metadata is resolved as:
 - empty file-level `units_map` (published DES370K) falls through to the
   **first molecule group** only (no full-file scan)
 - missing or empty at both levels: convert assumes the SPICE-α README
-  units (Å / eV / eV/Å) and writes `_mmml_units` from that
+  units (Å / eV / eV/Å) and writes `_karml_units` from that
 - a non-empty string that is not a JSON object is malformed and is an
   error, not a silent eV/Å fallback
 
@@ -101,7 +101,7 @@ flip). Useful for dipole/spectra checks, not a hybrid PES.
 ## Efield + polarizability
 
 The efield model already predicts `α = dμ/dEf`
-(`mmml.models.efield.model_functions.dipole_derivative_field_batched`).
+(`karml.models.efield.model_functions.dipole_derivative_field_batched`).
 SPICE-α is **zero-field** DFT, so train at `Ef = 0` and add a polar
 regularizer. Convert polar to Bohr³ first.
 
@@ -113,11 +113,11 @@ tar -xzf SPICE-alpha/SPICE-alpha.tar.gz --transform='s|^\./||' -C SPICE-alpha \
   ./DES370K_Monomers.hdf5 ./DES370K_Dimers.hdf5
 
 # smoke (256 frames) or drop --max-frames for the full monomer set
-python -m mmml.data.spice_alpha SPICE-alpha/DES370K_Monomers.hdf5 \
+python -m karml.data.spice_alpha SPICE-alpha/DES370K_Monomers.hdf5 \
   -o spice_des_mono.npz --efield --polar-units bohr3 --neutral-only \
   --split-dir splits_des_mono --max-frames 256
 
-mmml efield-train \
+karml efield-train \
   --train-npz splits_des_mono/energies_forces_dipoles_train.npz \
   --valid-npz splits_des_mono/energies_forces_dipoles_valid.npz \
   --output-dir ./ckpts/spice_ef_polar \
@@ -138,15 +138,15 @@ Do **not** `source scripts/scicore_env.sh` for this train. That prolog sets
 
 ```bash
 # 0. This branch (until merged)
-cd "$HOME/mmml"
+cd "$HOME/karml"
 git fetch origin cursor/spice-alpha-training-docs-f8f6
 git checkout cursor/spice-alpha-training-docs-f8f6
 git pull origin cursor/spice-alpha-training-docs-f8f6
 
 # 1. Inner HDF5 + 256-frame smoke NPZ (CPU / login is fine)
-scripts/spice_alpha/prepare_efield_dataset.sh ~/data/spicealpha ~/data/spicealpha/mmml_efield 256
+scripts/spice_alpha/prepare_efield_dataset.sh ~/data/spicealpha ~/data/spicealpha/karml_efield 256
 python scripts/spice_alpha/check_efield_npz.py \
-  ~/data/spicealpha/mmml_efield/splits_des_mono/energies_forces_dipoles_{train,valid}.npz
+  ~/data/spicealpha/karml_efield/splits_des_mono/energies_forces_dipoles_{train,valid}.npz
 
 # 2. GPU smoke (2 epochs, B=8, features=16, max_degree=1)
 mkdir -p artifacts/spice_ef_polar
@@ -161,14 +161,14 @@ sbatch --partition=rtx4090 --qos=rtx4090-6hours --time=06:00:00 \
 # 4. Full DES370K monomers (new tree). SKIP_DIMERS=1. MODE=full uses
 # POLAR_WEIGHT=100 so polar can compete with total |E| ~1e5 eV.
 SKIP_DIMERS=1 scripts/spice_alpha/prepare_efield_dataset.sh \
-  ~/data/spicealpha ~/data/spicealpha/mmml_efield_full 0
+  ~/data/spicealpha ~/data/spicealpha/karml_efield_full 0
 # or: sbatch scripts/spice_alpha/prepare_efield_dataset.sbatch
 python scripts/spice_alpha/check_efield_npz.py \
-  ~/data/spicealpha/mmml_efield_full/splits_des_mono/energies_forces_dipoles_train.npz \
-  ~/data/spicealpha/mmml_efield_full/splits_des_mono/energies_forces_dipoles_valid.npz
+  ~/data/spicealpha/karml_efield_full/splits_des_mono/energies_forces_dipoles_train.npz \
+  ~/data/spicealpha/karml_efield_full/splits_des_mono/energies_forces_dipoles_valid.npz
 # pad=22 polar JVP: B=16/64 failed XLA autotune. MODE=big default B=4.
 sbatch --partition=rtx4090 --qos=rtx4090-6hours --time=06:00:00 \
-  --export=ALL,MODE=big,EPOCHS=100,BATCH_SIZE=4,SPLITS=$HOME/data/spicealpha/mmml_efield_full/splits_des_mono,CKPT=$HOME/mmml/ckpts/spice_ef_polar_big \
+  --export=ALL,MODE=big,EPOCHS=100,BATCH_SIZE=4,SPLITS=$HOME/data/spicealpha/karml_efield_full/splits_des_mono,CKPT=$HOME/karml/ckpts/spice_ef_polar_big \
   scripts/spice_alpha/train_efield_polar.sbatch
 ```
 
@@ -200,13 +200,13 @@ conversion:
 ```
 
 ```bash
-mmml physnet-train --config physnet-spice-alpha-des-mono.yaml
-mmml physnet-evaluate --checkpoint ./ckpts/spice_des_mono \
+karml physnet-train --config physnet-spice-alpha-des-mono.yaml
+karml physnet-evaluate --checkpoint ./ckpts/spice_des_mono \
   --data splits_des_mono/energies_forces_dipoles_valid.npz --plots
 ```
 
 DES dimers as hybrid: convert dimers (pad ≥ 34),
-`mmml prepare-mm-dataset -i dimers.npz -o dimers_mm.npz`, then
+`karml prepare-mm-dataset -i dimers.npz -o dimers_mm.npz`, then
 `physnet-train --hybrid-mm`. SPICE-α does **not** ship `E_int` or monomer
 pairing — keep total E or build interaction labels yourself.
 

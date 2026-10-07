@@ -7,7 +7,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from mmml.interfaces.pycharmmInterface.peptide_builder import (
+from karml.interfaces.pycharmmInterface.peptide_builder import (
     parse_peptide_patch_spec,
     parse_pdb_chain_sequence,
     parse_pdb_ssbond_patches,
@@ -155,8 +155,8 @@ def test_qc_validation_mock() -> None:
 @pytest.mark.skipif(not can_import_pycharmm(), reason="PyCHARMM is not available")
 @pytest.mark.pycharmm
 def test_live_peptide_builder_and_qc(tmp_path: Path) -> None:
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import ensure_pycharmm_loaded
-    from mmml.interfaces.pycharmmInterface.peptide_builder import (
+    from karml.interfaces.pycharmmInterface.import_pycharmm import ensure_pycharmm_loaded
+    from karml.interfaces.pycharmmInterface.peptide_builder import (
         build_peptide_in_charmm,
         solvate_peptide_in_charmm,
     )
@@ -206,7 +206,7 @@ def test_live_peptide_builder_and_qc(tmp_path: Path) -> None:
 
 
 def test_infer_charge_and_spin() -> None:
-    from mmml.interfaces.pycharmmInterface.peptide_builder import infer_charge_and_spin_from_psf
+    from karml.interfaces.pycharmmInterface.peptide_builder import infer_charge_and_spin_from_psf
     import tempfile
     
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -247,8 +247,8 @@ def test_infer_charge_and_spin() -> None:
 
 @pytest.mark.skipif(not can_import_pycharmm(), reason="PyCHARMM is not available")
 def test_gas_phase_peptide_builder(tmp_path: Path) -> None:
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import ensure_pycharmm_loaded
-    from mmml.interfaces.pycharmmInterface.peptide_builder import build_peptide_in_charmm
+    from karml.interfaces.pycharmmInterface.import_pycharmm import ensure_pycharmm_loaded
+    from karml.interfaces.pycharmmInterface.peptide_builder import build_peptide_in_charmm
     
     assert ensure_pycharmm_loaded()
     

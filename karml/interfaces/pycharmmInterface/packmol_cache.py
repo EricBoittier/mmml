@@ -36,12 +36,12 @@ def packmol_cache_root(
     """Root directory for Packmol cluster cache entries."""
     if override is not None:
         return Path(override).expanduser().resolve()
-    env = os.environ.get("MMML_PACKMOL_CACHE", "").strip()
+    env = os.environ.get("KARML_PACKMOL_CACHE", "").strip()
     if env:
         return Path(env).expanduser().resolve()
     if output_dir is not None:
         return Path(output_dir).expanduser().resolve() / ".packmol_cache"
-    return Path.home() / ".cache" / "mmml" / "packmol"
+    return Path.home() / ".cache" / "karml" / "packmol"
 
 
 def packmol_prep_settings_from_mapping(data: Mapping[str, Any]) -> dict[str, Any]:

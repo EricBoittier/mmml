@@ -6,7 +6,7 @@ import numpy as np
 
 
 def _fn():
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         heat_grms_jump_abort_reason,
     )
 
@@ -50,7 +50,7 @@ def test_none_and_nonfinite_are_safe():
 
 
 def _temp_fn():
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         heat_temperature_abort_reason,
     )
 
@@ -96,11 +96,11 @@ def test_temp_abort_custom_factor():
 
 
 def test_iasvel0_continuation_env_flag_routes(monkeypatch):
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _configure_bussi_in_memory_continuation_iasvel,
     )
 
-    monkeypatch.setenv("MMML_BUSSI_IASVEL0_CONTINUATION", "1")
+    monkeypatch.setenv("KARML_BUSSI_IASVEL0_CONTINUATION", "1")
     kw: dict = {"firstt": 50.0}
     _configure_bussi_in_memory_continuation_iasvel(kw)
     assert int(kw["iasvel"]) == 0
@@ -112,13 +112,13 @@ def test_adumb_rc_guard_skips_heat_grms_jump_abort(monkeypatch):
     from types import SimpleNamespace
     from unittest import mock
 
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         HeatGrmsJumpAbort,
         _maybe_abort_heat_on_grms_jump,
     )
 
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.dump_worst_force_atoms",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics.dump_worst_force_atoms",
         lambda *a, **k: None,
     )
     ctx = SimpleNamespace(
@@ -133,7 +133,7 @@ def test_adumb_rc_guard_skips_heat_grms_jump_abort(monkeypatch):
         heat_grms_jump_baseline=20.0,
     )
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.refresh_mlpot_energy_and_grms",
+        "karml.interfaces.pycharmmInterface.mlpot.cli_common.refresh_mlpot_energy_and_grms",
         return_value=600.0,
     ):
         _maybe_abort_heat_on_grms_jump(
@@ -146,7 +146,7 @@ def test_adumb_rc_guard_skips_heat_grms_jump_abort(monkeypatch):
 
     ctx.workflow_args._adumb_rc_guard = None
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.refresh_mlpot_energy_and_grms",
+        "karml.interfaces.pycharmmInterface.mlpot.cli_common.refresh_mlpot_energy_and_grms",
         return_value=600.0,
     ):
         try:

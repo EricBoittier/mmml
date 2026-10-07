@@ -1,7 +1,7 @@
 # DCM:5 cross-backend MD benchmark
 
 Reproducible **2 ps** smoke benchmark on **DCM:5** comparing ASE, JAX-MD, and PyCHARMM
-(`mmml md-system`) across vacuum and PBC integrator modes.
+(`karml md-system`) across vacuum and PBC integrator modes.
 
 ## Do not commit run outputs
 
@@ -21,24 +21,24 @@ git add workflows/dcm5_md_benchmark/Snakefile \
 
 ## Prerequisites
 
-- MMML env with GPU JAX (`uv sync --extra gpu` on cluster nodes)
+- KARML env with GPU JAX (`uv sync --extra gpu` on cluster nodes)
 - DCM PhysNet checkpoint:
 
 ```bash
-export MMML_CKPT=/path/to/dcm1-.../ckpts/dcm1-...
+export KARML_CKPT=/path/to/dcm1-.../ckpts/dcm1-...
 ```
 
 - **PyCHARMM jobs**: OpenMPI-linked libcharmm (use bundled wrapper)
 - **Snakemake** (`pip install snakemake` or cluster module)
 - `packmol` on PATH (first vacuum cluster build)
 
-If Snakemake uses a Python without `mmml` installed, set:
+If Snakemake uses a Python without `karml` installed, set:
 
 ```bash
-export MMML_PYTHON="$PWD/../../.venv/bin/python"   # from workflow dir
+export KARML_PYTHON="$PWD/../../.venv/bin/python"   # from workflow dir
 ```
 
-PyCHARMM runs use [scripts/mmml-charmm-mpirun.sh](../../scripts/mmml-charmm-mpirun.sh) (1 MPI rank).
+PyCHARMM runs use [scripts/karml-charmm-mpirun.sh](../../scripts/karml-charmm-mpirun.sh) (1 MPI rank).
 
 ## Job matrix (16 jobs)
 
@@ -59,7 +59,7 @@ Shared parameters (see [config.yaml](config.yaml)):
 ## Run
 
 ```bash
-export MMML_CKPT=/path/to/your/dcm1-ckpt-directory   # real path, not this placeholder
+export KARML_CKPT=/path/to/your/dcm1-ckpt-directory   # real path, not this placeholder
 bash scripts/preflight.sh                             # fail fast if unset/invalid
 cd workflows/dcm5_md_benchmark
 
@@ -140,7 +140,7 @@ If it still aborts: try `pycharmm_vac_heat_scale` (velocity scaling) or `--no-ec
 
 ### `pycharmm_vac_heat_hoover`: `CRYStal must be used for constant pressure simulations`
 
-Loose-PBC Hoover heat uses CHARMM **CPT** (`pmass=0`). The crystal must stay active after CGENFF pre-minimize. Older code called `crystal free` during MM pre-min; current `mmml` skips that when `--box-size` is set and re-installs the box before heat.
+Loose-PBC Hoover heat uses CHARMM **CPT** (`pmass=0`). The crystal must stay active after CGENFF pre-minimize. Older code called `crystal free` during MM pre-min; current `karml` skips that when `--box-size` is set and re-installs the box before heat.
 
 ```bash
 grep -E 'CHARMM loose PBC|CHARMM crystal ready|CRYStal must be used|HEAT Hoover' \

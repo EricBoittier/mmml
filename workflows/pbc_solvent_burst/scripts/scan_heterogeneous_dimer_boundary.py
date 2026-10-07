@@ -11,9 +11,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 from ase import Atoms
 
-from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
-from mmml.interfaces.pycharmmInterface.mmml_calculator import setup_calculator
-from mmml.utils.plotting.styles import apply_plot_style, legend_outside
+from karml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
+from karml.interfaces.pycharmmInterface.karml_calculator import setup_calculator
+from karml.utils.plotting.styles import apply_plot_style, legend_outside
 
 
 def read_pdb(path: Path, resid: int | None = None) -> tuple[np.ndarray, np.ndarray]:
@@ -105,7 +105,7 @@ def main() -> None:
     legend_outside(fig, side="bottom", fontsize=9)
     fig.tight_layout()
     fig.savefig(args.output_dir / "boundary_scan.png", dpi=200, bbox_inches="tight")
-    from mmml.utils.rich_report import print_colored_json
+    from karml.utils.rich_report import print_colored_json
 
     print_colored_json({k: result[k] for k in result if k.startswith("max_")})
 

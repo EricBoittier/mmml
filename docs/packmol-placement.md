@@ -1,6 +1,6 @@
 # Packmol placement
 
-Packmol is the **default** initial-geometry builder when `mmml md-system`, `mmml liquid-box`, or backend routes receive `--composition`. It packs minimized monomer templates into a cube or sphere, then CHARMM MM refinement removes bad contacts before MLpot or ASE/JAX-MD dynamics.
+Packmol is the **default** initial-geometry builder when `karml md-system`, `karml liquid-box`, or backend routes receive `--composition`. It packs minimized monomer templates into a cube or sphere, then CHARMM MM refinement removes bad contacts before MLpot or ASE/JAX-MD dynamics.
 
 Related: [Structure building](cli/structure-building.md), [Liquid box workflow](liquid-box-workflow.md), [md-system YAML configs](md-system-configs.md#builders-for-condensed-phase), [Packmol cluster geometry gate](packmol-monomer-geometry-gate.md) (what validates the minimized cluster before it is cached).
 
@@ -17,7 +17,7 @@ Related: [Structure building](cli/structure-building.md), [Liquid box workflow](
 | Crystal | PyXtal | `--builder crystal` or `--pyxtal` |
 | Certified handoff | skip build | `--from-psf` / `--from-crd` |
 
-Resolution logic: `resolve_packmol_use()` in `mmml/interfaces/pycharmmInterface/packmol_placement.py`.
+Resolution logic: `resolve_packmol_use()` in `karml/interfaces/pycharmmInterface/packmol_placement.py`.
 
 ---
 
@@ -26,10 +26,10 @@ Resolution logic: `resolve_packmol_use()` in `mmml/interfaces/pycharmmInterface/
 ### PBC liquid cube (default)
 
 ```bash
-mmml md-system \
+karml md-system \
   --composition DCM:206 \
   --box-size 35.0 \
-  --checkpoint "$MMML_CKPT" \
+  --checkpoint "$KARML_CKPT" \
   --setup pbc_nvt \
   --md-stages mini,heat,equi \
   --output-dir results/dcm206
@@ -40,12 +40,12 @@ Packmol packs inside a `35 Å` cube centered at the origin (or `--packmol-center
 ### Spherical cluster (vacuum or flat-bottom)
 
 ```bash
-mmml md-system \
+karml md-system \
   --composition DCM:9 \
   --packmol-placement sphere \
   --packmol-radius 12.0 \
   --packmol-tolerance 1.5 \
-  --checkpoint "$MMML_CKPT" \
+  --checkpoint "$KARML_CKPT" \
   --setup free_nvt \
   --output-dir results/dcm9_sphere
 ```
@@ -55,11 +55,11 @@ mmml md-system \
 ### Mixed composition
 
 ```bash
-mmml md-system \
+karml md-system \
   --composition "DCM:40,ACO:20" \
   --box-size 32.0 \
   --packmol-tolerance 2.0 \
-  --checkpoint "$MMML_CKPT" \
+  --checkpoint "$KARML_CKPT" \
   --output-dir results/dcm_aco_mix
 ```
 
@@ -68,22 +68,22 @@ Each residue type is minimized once, written to `packmol_cluster/monomers/<res>.
 ### Rebuild placement (ignore cache)
 
 ```bash
-mmml md-system \
+karml md-system \
   --composition DCM:60 \
   --box-size 30.0 \
   --rebuild-packmol \
-  --checkpoint "$MMML_CKPT" \
+  --checkpoint "$KARML_CKPT" \
   --output-dir results/dcm60_fresh
 ```
 
 ### Grid builder instead of Packmol
 
 ```bash
-mmml md-system \
+karml md-system \
   --composition DCM:60 \
   --box-size 30.0 \
   --builder liquid \
-  --checkpoint "$MMML_CKPT" \
+  --checkpoint "$KARML_CKPT" \
   --output-dir results/dcm60_grid
 ```
 
@@ -149,10 +149,10 @@ runs:
     output_dir: results/dcm8_grid_smoke
 ```
 
-### `mmml liquid-box` (MM-only certification)
+### `karml liquid-box` (MM-only certification)
 
 ```bash
-mmml liquid-box \
+karml liquid-box \
   --composition DCM:206 \
   --target-density-g-cm3 1.326 \
   --box-size 35.0 \
@@ -167,14 +167,14 @@ Phase A always uses Packmol at a looser start density when `bulk_density_fractio
 
 ## Cache
 
-Packmol cluster builds are cached under `<output-dir>/.packmol_cache/` (or `MMML_PACKMOL_CACHE` / `--packmol-cache-dir`). The cache key hashes composition, placement geometry, tolerance, and monomer PDB content.
+Packmol cluster builds are cached under `<output-dir>/.packmol_cache/` (or `KARML_PACKMOL_CACHE` / `--packmol-cache-dir`). The cache key hashes composition, placement geometry, tolerance, and monomer PDB content.
 
 ```bash
 # Force fresh Packmol + CHARMM monomer mini
-mmml md-system ... --rebuild-packmol
+karml md-system ... --rebuild-packmol
 
 # Disable cache reads/writes
-mmml md-system ... --no-reuse-packmol-cache
+karml md-system ... --no-reuse-packmol-cache
 ```
 
 Artifacts in a cache hit:
@@ -187,13 +187,13 @@ Both the cache write and the cache hit are gated on monomer geometry: coordinate
 
 ---
 
-## `mmml make-box` (standalone)
+## `karml make-box` (standalone)
 
 Lower-level Packmol + PyCHARMM box build without MLpot:
 
 ```bash
-mmml make-res --res ACO --skip-energy-show
-mmml make-box --res ACO --n 50 --box-size 25.0
+karml make-res --res ACO --skip-energy-show
+karml make-box --res ACO --n 50 --box-size 25.0
 ```
 
 Writes `pdb/init-packmol.pdb`, builds PSF, applies PBC, minimizes contacts. See [make-box](cli/commands/make-box.md).
@@ -217,10 +217,10 @@ For dense liquids that stall in minimization, prefer `--liquid-prep` / `liquid_p
 
 ## Binary
 
-Packmol is bundled for Linux (`mmml/generate/packmol/`) or resolved from `PATH`. Check availability:
+Packmol is bundled for Linux (`karml/generate/packmol/`) or resolved from `PATH`. Check availability:
 
 ```bash
-mmml health-check --live packmol
+karml health-check --live packmol
 ```
 
 Rebuild: `bash scripts/rebuild_packmol.sh`

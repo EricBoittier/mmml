@@ -1,4 +1,4 @@
-# `mmml extract-checkpoint-metrics`
+# `karml extract-checkpoint-metrics`
 
 Plot training metrics from Orbax checkpoints.
 
@@ -6,13 +6,13 @@ Plot training metrics from Orbax checkpoints.
 ## Usage
 
 ```bash
-mmml extract-checkpoint-metrics --help
+karml extract-checkpoint-metrics --help
 ```
 
 ## Options
 
 ```text
-usage: mmml extract-checkpoint-metrics [-h] -o OUTPUT [--log-loss] [--quiet]
+usage: karml extract-checkpoint-metrics [-h] -o OUTPUT [--log-loss] [--quiet]
                                        [--stride STRIDE]
                                        [--max-epochs MAX_EPOCHS]
                                        [--metrics-json METRICS_JSON] [--ef-only]
@@ -52,10 +52,10 @@ Other options:
                         If set, write one PNG per metric into this directory.
 
 Examples: # Plot glycol training with log scale python -m
-mmml.cli.extract_checkpoint_metrics \
+karml.cli.extract_checkpoint_metrics \
 examples/glycol/checkpoints/glycol_production/glycol_production-*/ \ --output
 glycol_training.png \ --log-loss # Without log scale python -m
-mmml.cli.extract_checkpoint_metrics \ checkpoints/run/run-uuid/ \ --output
+karml.cli.extract_checkpoint_metrics \ checkpoints/run/run-uuid/ \ --output
 training.png
 ```
 

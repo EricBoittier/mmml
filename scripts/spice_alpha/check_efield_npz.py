@@ -10,7 +10,7 @@ from pathlib import Path
 
 import numpy as np
 
-from mmml.data.spice_alpha import check_efield_train_npz, max_atomic_number
+from karml.data.spice_alpha import check_efield_train_npz, max_atomic_number
 
 
 def _summarize(path: Path) -> None:
@@ -20,8 +20,8 @@ def _summarize(path: Path) -> None:
     polar = np.asarray(raw["polar"])
     finite = int(np.isfinite(polar).all(axis=(-2, -1)).sum())
     units = {}
-    if "_mmml_units" in raw.files:
-        units = json.loads(str(np.asarray(raw["_mmml_units"]).reshape(-1)[0]))
+    if "_karml_units" in raw.files:
+        units = json.loads(str(np.asarray(raw["_karml_units"]).reshape(-1)[0]))
     print(
         f"{path}: n={n} pad={raw['R'].shape[1]} Zmax={zmax} "
         f"polar_finite={finite}/{n} E[0]={float(np.asarray(raw['E']).reshape(-1)[0]):.4g} "

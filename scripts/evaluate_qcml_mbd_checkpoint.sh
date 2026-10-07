@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT="${MMML_ROOT:-$HOME/mmml}"
-PY="${MMML_PYTHON:-$ROOT/.venv/bin/python}"
+ROOT="${KARML_ROOT:-$HOME/karml}"
+PY="${KARML_PYTHON:-$ROOT/.venv/bin/python}"
 CACHE="${CACHE:-$HOME/orbax_cache/qcml_mbd}"
 CHECKPOINT="${1:-${CHECKPOINT:-}}"
 

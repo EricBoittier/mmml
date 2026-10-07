@@ -11,7 +11,7 @@
 # - xTB through the optional `xtb-python` ASE calculator
 # - placeholder hooks for SpookyNet/SpookyPhysNet and CGenFF CSV merges
 #
-# The scan builder lives in `mmml.analysis.dimer_scans` so scripts and tests use
+# The scan builder lives in `karml.analysis.dimer_scans` so scripts and tests use
 # the same geometry convention.
 
 # %%
@@ -24,15 +24,15 @@ import numpy as np
 import pandas as pd
 from ase import Atoms
 
-from mmml.analysis.dimer_scans import (
+from karml.analysis.dimer_scans import (
     DimerGeometry,
     distance_scan_geometries,
     evaluate_scan,
     make_xtb_calculator,
     molecule_pair_labels,
 )
-from mmml.models.mbd import QCMLMBDCalculator
-from mmml.models.multipoles import LearnedMolecularMultipoleElectrostatics
+from karml.models.mbd import QCMLMBDCalculator
+from karml.models.multipoles import LearnedMolecularMultipoleElectrostatics
 
 
 # %% [markdown]

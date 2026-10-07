@@ -37,7 +37,7 @@ MOVE_WITH="$(
   uv run python - <<'PY'
 from pathlib import Path
 import os
-from mmml.utils.domdec_psf_order import read_psf_atoms_and_bonds
+from karml.utils.domdec_psf_order import read_psf_atoms_and_bonds
 
 psf = Path(os.environ["PSF"])
 atoms, _ = read_psf_atoms_and_bonds(psf)
@@ -51,7 +51,7 @@ echo "=== hybrid window ${WID}: $(basename "${YAML}") → ${OUT}/windows/ ==="
 echo "  move-with=${MOVE_WITH}"
 echo "  JAX_PLATFORMS=${JAX_PLATFORMS:-} CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-}"
 
-uv run mmml umbrella-sample \
+uv run karml umbrella-sample \
   --config "${YAML}" \
   --from-pdb "${PDB}" \
   --from-psf "${PSF}" \

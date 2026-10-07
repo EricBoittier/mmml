@@ -18,7 +18,7 @@ if str(_SCRIPTS) not in sys.path:
 from benchmark_lib import load_config  # noqa: E402
 from collect_benchmark import _parse_ase, _parse_jaxmd, job_metadata  # noqa: E402
 
-from mmml.interfaces.pycharmmInterface.lr_solver_grms_compare import (  # noqa: E402
+from karml.interfaces.pycharmmInterface.lr_solver_grms_compare import (  # noqa: E402
     read_hybrid_grms_from_output_dir,
 )
 

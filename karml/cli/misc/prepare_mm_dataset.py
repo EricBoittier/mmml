@@ -16,9 +16,9 @@ CGenFF template, are dropped (all per-sample arrays are filtered consistently)
 unless ``--strict`` is given.
 
 Usage:
-    mmml prepare-mm-dataset -i mp2_nms15_clean_train.npz -o train_mm.npz
-    mmml prepare-mm-dataset --config prepare_mm.yaml
-    mmml prepare-mm-dataset --config prepare_mm.yaml -o override_out.npz
+    karml prepare-mm-dataset -i mp2_nms15_clean_train.npz -o train_mm.npz
+    karml prepare-mm-dataset --config prepare_mm.yaml
+    karml prepare-mm-dataset --config prepare_mm.yaml -o override_out.npz
 
 The YAML config keys mirror the long flag names (dashes or underscores), e.g.::
 
@@ -39,7 +39,7 @@ from typing import Any, Mapping, Optional, Sequence
 
 import numpy as np
 
-from mmml.data.cgenff_dataset import (
+from karml.data.cgenff_dataset import (
     DEF_PRM_PATH,
     DEF_RTF_PATH,
     assign_frame_cgenff,
@@ -105,7 +105,7 @@ def enrich_npz(
 
     if not quiet:
         print("=" * 66)
-        print(" mmml prepare-mm-dataset -- CGenFF assignment for hybrid ML/MM")
+        print(" karml prepare-mm-dataset -- CGenFF assignment for hybrid ML/MM")
         print(f"  input : {input_path}")
         print(f"  output: {output_path}")
         print(
@@ -239,7 +239,7 @@ def enrich_npz(
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="mmml prepare-mm-dataset",
+        prog="karml prepare-mm-dataset",
         description="Assign CGenFF atom types / charges to a dimer training NPZ.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )

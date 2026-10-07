@@ -10,11 +10,11 @@ from typing import Any, Literal
 
 import numpy as np
 
-from mmml.interfaces.pycharmmInterface.mlpot.artifact_paths import alternate_overlap_scratch
+from karml.interfaces.pycharmmInterface.mlpot.artifact_paths import alternate_overlap_scratch
 
 
 def geometry_baseline_path(out_dir: Path, tag: str) -> Path:
-    from mmml.interfaces.pycharmmInterface.mlpot.artifact_paths import geometry_baseline_res
+    from karml.interfaces.pycharmmInterface.mlpot.artifact_paths import geometry_baseline_res
 
     return geometry_baseline_res(out_dir)
 
@@ -37,7 +37,7 @@ def resolve_geometry_checkpoint_ladder(
 
     heat_paths: list[Path] = []
     if n_heat_segments > 1:
-        from mmml.interfaces.pycharmmInterface.mlpot.artifact_paths import stage_segment_restart
+        from karml.interfaces.pycharmmInterface.mlpot.artifact_paths import stage_segment_restart
 
         for seg_i in range(n_heat_segments - 1, -1, -1):
             heat_paths.append(stage_segment_restart(out_dir, "heat", seg_i))
@@ -50,7 +50,7 @@ def resolve_geometry_checkpoint_ladder(
     if baseline is not None:
         candidates.append(Path(baseline))
 
-    mlpot_crd = paths.get("mlpot_mmml_crd") or paths.get("mini_crd")
+    mlpot_crd = paths.get("mlpot_karml_crd") or paths.get("mini_crd")
     if mlpot_crd is not None:
         candidates.append(Path(mlpot_crd))
 
@@ -91,7 +91,7 @@ def resolve_geometry_checkpoint_ladder(
 
 def is_overlap_scratch_restart_path(path: Path | str) -> bool:
     """True for alternating overlap chunk scratch files (not stage segment restarts)."""
-    from mmml.interfaces.pycharmmInterface.mlpot.artifact_paths import (
+    from karml.interfaces.pycharmmInterface.mlpot.artifact_paths import (
         is_overlap_scratch_restart_path as _is_scratch,
     )
 
@@ -246,8 +246,8 @@ def iter_valid_recovery_sources(
     candidates: list[Path] | tuple[Path, ...],
 ) -> list[Path]:
     """All usable restart/CRD sources in ``candidates`` order (not just the first)."""
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import _valid_restart_file
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import _valid_restart_file
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         restart_coordinates_are_unsafe,
         restart_has_nonfinite_coordinates,
     )
@@ -298,7 +298,7 @@ def try_recovery_from_checkpoint_ladder(
     is_acceptable: Any,
 ) -> Path:
     """Load each checkpoint in order until ``is_acceptable()`` returns True."""
-    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+    from karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
         restore_charmm_state_from_crd,
         restore_charmm_state_from_restart,
     )
@@ -411,7 +411,7 @@ def build_early_abort_recovery_candidates(
                 add(alt, allow_scratch=True)
 
     if stage_final_restart is not None and chunk_index is not None and chunk_index > 0:
-        from mmml.interfaces.pycharmmInterface.mlpot.artifact_paths import (
+        from karml.interfaces.pycharmmInterface.mlpot.artifact_paths import (
             overlap_chunk_restart_path,
         )
 
@@ -437,7 +437,7 @@ def _early_abort_trust_in_memory(
     mlpot_ctx: Any | None,
 ) -> bool:
     """Whether in-memory CHARMM state is safe to continue after a mid-chunk abort."""
-    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+    from karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
         charmm_memory_coordinates_usable,
     )
 
@@ -449,7 +449,7 @@ def _early_abort_trust_in_memory(
             return False
         return integrated >= max(2, chunk_nstep // 10)
 
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
         resolve_mlpot_grms_kcalmol_A,
     )
 
@@ -475,8 +475,8 @@ def is_geometry_recovery_crd_path(path: Path | str) -> bool:
 
 
 def first_valid_restart_path(candidates: list[Path] | tuple[Path, ...]) -> Path | None:
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import _valid_restart_file
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import _valid_restart_file
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         restart_coordinates_are_unsafe,
         restart_has_nonfinite_coordinates,
     )
@@ -516,10 +516,10 @@ def first_valid_geometry_crd_path(candidates: list[Path] | tuple[Path, ...]) -> 
 
 def write_geometry_baseline_restart(out_dir: Path, tag: str) -> Path | None:
     """Persist post-pretreat/post-mini CHARMM state for extent recovery."""
-    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+    from karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
         rewrite_dynamics_restart_validated,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import _valid_restart_file
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import _valid_restart_file
 
     path = geometry_baseline_path(out_dir, tag)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -544,10 +544,10 @@ class PretreatResumeState:
 
 
 def _pretreat_expected_nstep(args: Any, *, timestep_ps: float, ps: float) -> int:
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
         resolve_charmm_mm_pretreat_settings,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import ps_to_nsteps
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import ps_to_nsteps
 
     pretreat = resolve_charmm_mm_pretreat_settings(args)
     dt_ps = float(pretreat.timestep_ps) if pretreat.timestep_ps > 0.0 else float(timestep_ps)
@@ -555,7 +555,7 @@ def _pretreat_expected_nstep(args: Any, *, timestep_ps: float, ps: float) -> int
 
 
 def _resolve_charmm_mm_pretreat_heat_nstep(args: Any, *, timestep_ps: float) -> int:
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
         resolve_charmm_mm_pretreat_heat_nstep,
         resolve_charmm_mm_pretreat_settings,
     )
@@ -581,8 +581,8 @@ def pretreat_stage_complete(
     expected_nstep: int,
     min_step_fraction: float = 0.95,
 ) -> bool:
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import _valid_restart_file
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import _valid_restart_file
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         resolve_integrated_restart_step,
     )
 
@@ -591,7 +591,7 @@ def pretreat_stage_complete(
     valid = _valid_restart_file(restart_path)
     if valid is None:
         return False
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         restart_coordinates_are_unsafe,
         restart_has_nonfinite_coordinates,
     )
@@ -660,7 +660,7 @@ def resume_charmm_mm_pretreat_if_available(
     if heat_res is not None:
         valid = first_valid_restart_path([Path(heat_res)])
         if valid is not None:
-            from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+            from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
                 read_restart_last_step,
                 resolve_integrated_restart_step,
             )
@@ -692,7 +692,7 @@ def discover_resume_restart(
 ) -> Path | None:
     """Best on-disk restart for Snakemake / staged-workflow retry."""
     if paths is None:
-        from mmml.interfaces.pycharmmInterface.mlpot.artifact_paths import (
+        from karml.interfaces.pycharmmInterface.mlpot.artifact_paths import (
             geometry_baseline_res,
             pretreat_restart,
             stage_restart,
@@ -756,7 +756,7 @@ def restore_geometry_from_ladder(
     ``03_bonded_mm_after_mini_*.crd``), then optionally the active in-memory
     CHARMM coordinates when ``allow_in_memory`` is true.
     """
-    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+    from karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
         charmm_memory_coordinates_usable,
         restore_charmm_state_from_crd,
         restore_charmm_state_from_restart,
@@ -766,10 +766,10 @@ def restore_geometry_from_ladder(
         """Reject readable restart templates with collapsed monomers."""
         if mlpot_ctx is None:
             return True
-        from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
             read_restart_coordinates,
         )
-        from mmml.interfaces.pycharmmInterface.mlpot.extent_repack_recovery import (
+        from karml.interfaces.pycharmmInterface.mlpot.extent_repack_recovery import (
             _memory_extent_reference_sources,
         )
 
@@ -973,7 +973,7 @@ def attempt_overlap_early_abort_recovery(
         return recent
 
     if mid_segment and overlap_run_state_dir is not None:
-        from mmml.interfaces.pycharmmInterface.mlpot.run_state_checkpoint import (
+        from karml.interfaces.pycharmmInterface.mlpot.run_state_checkpoint import (
             restore_positions_from_overlap_run_state,
         )
 
@@ -996,7 +996,7 @@ def attempt_overlap_early_abort_recovery(
     )
 
     if not mid_segment and overlap_run_state_dir is not None:
-        from mmml.interfaces.pycharmmInterface.mlpot.run_state_checkpoint import (
+        from karml.interfaces.pycharmmInterface.mlpot.run_state_checkpoint import (
             restore_positions_from_overlap_run_state,
         )
 
@@ -1058,7 +1058,7 @@ def attempt_overlap_blowup_geometry_rescue(
         print(f"{label}: no valid restart/CRD among {len(candidates)} candidate(s): {tried}", flush=True)
         return GeometryRecoveryResult(False)
 
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         invalidate_mlpot_calculator_caches,
         sync_charmm_lists_after_mini,
     )
@@ -1067,7 +1067,7 @@ def attempt_overlap_blowup_geometry_rescue(
     mlpot_ctx.reregister_mlpot(verbose=False, reregister_params=False)
     invalidate_mlpot_calculator_caches(mlpot_ctx)
 
-    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+    from karml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
         check_dynamics_overlap,
         probe_dynamics_geometry_violation,
     )
@@ -1099,7 +1099,7 @@ def attempt_overlap_blowup_geometry_rescue(
         return GeometryRecoveryResult(False)
 
     if rescued:
-        from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+        from karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
             finalize_overlap_rescue_for_dynamics,
         )
 
@@ -1125,8 +1125,8 @@ def ensure_restartable_before_overlap_chunk(
     mlpot_ctx: Any | None = None,
 ) -> None:
     """Reload from the geometry ladder when the latest restart is unusable."""
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import _valid_restart_file
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import _valid_restart_file
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         restart_has_nonfinite_coordinates,
     )
 
@@ -1151,7 +1151,7 @@ def ensure_restartable_before_overlap_chunk(
         pass
 
     if overlap_run_state_dir is not None:
-        from mmml.interfaces.pycharmmInterface.mlpot.run_state_checkpoint import (
+        from karml.interfaces.pycharmmInterface.mlpot.run_state_checkpoint import (
             restore_positions_from_overlap_run_state,
         )
 

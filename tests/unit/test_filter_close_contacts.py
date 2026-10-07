@@ -10,7 +10,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from mmml.cli.misc.filter_close_contacts import main, min_intermolecular_distance
+from karml.cli.misc.filter_close_contacts import main, min_intermolecular_distance
 
 
 def _frames(distances):

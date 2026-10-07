@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from mmml.md.restraints import LinearDistanceCV, harmonic_bias_energy
+from karml.md.restraints import LinearDistanceCV, harmonic_bias_energy
 
 
 # Cl(0) --- C(1) --- N(2) collinear along x: r(C-Cl)=1.8, r(C-N)=3.0

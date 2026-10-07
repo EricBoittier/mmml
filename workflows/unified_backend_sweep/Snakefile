@@ -51,7 +51,7 @@ rule run_setting:
         seed="|".join(SEEDS),
     resources:
         # gpu=0 for CPU-only submissions (see config.cpu.yaml): this cluster's
-        # mmml venv has no CUDA jaxlib, so jax already runs on CPU even on the
+        # karml venv has no CUDA jaxlib, so jax already runs on CPU even on the
         # gpu partition -- a CPU-partition run is strictly a better use of the
         # shared GPU allocation, not a capability downgrade.
         gpu=lambda wildcards: int(slurm_value("gpu", 1)),

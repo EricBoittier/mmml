@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from mmml.interfaces.pycharmmInterface.canonical_paths import CANONICAL
+from karml.interfaces.pycharmmInterface.canonical_paths import CANONICAL
 
 
 def test_canonical_paths_registry() -> None:

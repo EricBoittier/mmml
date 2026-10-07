@@ -3,7 +3,7 @@ jobs: 8
 latency-wait: 60
 retries: 1
 envvars:
-  - MMML_WORKFLOW_CONFIG
+  - KARML_WORKFLOW_CONFIG
   - ORCA
   - OMPI_MCA_orte_abort_print_stack
 default-resources:

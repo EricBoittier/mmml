@@ -12,7 +12,7 @@ import pytest
 jax = pytest.importorskip("jax")
 jnp = pytest.importorskip("jax.numpy")
 
-from mmml.md.step_batching import make_block_stepper
+from karml.md.step_batching import make_block_stepper
 
 
 def _damped_step(state, *, force_scale=1.0):

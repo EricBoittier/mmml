@@ -1,13 +1,13 @@
 """Whole-system learned MBD dispersion correction for the hybrid ML/MM calculator.
 
-The hybrid :func:`mmml.interfaces.pycharmmInterface.mmml_calculator.setup_calculator`
+The hybrid :func:`karml.interfaces.pycharmmInterface.karml_calculator.setup_calculator`
 path evaluates ML per monomer/dimer and MM (CGenFF) inter-monomer. A checkpoint
 trained with an additive MBD term expects::
 
     E = E_spooky + mbd_weight * E_mbd
 
 where ``E_mbd`` is the *whole-system*, fully-connected learned QCML MBD energy
-(same construction as :func:`mmml.models.mbd.calculator.atoms_to_mbd_batch`).
+(same construction as :func:`karml.models.mbd.calculator.atoms_to_mbd_batch`).
 This module builds a JAX energy+force function over the real atoms so the same
 correction can be added inside the hybrid calculator, matching training exactly.
 
@@ -36,7 +36,7 @@ MBDEnergyForceFn = Callable[[jnp.ndarray, jnp.ndarray], Tuple[jnp.ndarray, jnp.n
 
 
 # Re-export shared companion resolver (also used by SpookyNetCalculator).
-from mmml.models.mbd.calculator import resolve_companion_mbd  # noqa: E402,F401
+from karml.models.mbd.calculator import resolve_companion_mbd  # noqa: E402,F401
 
 
 def build_mbd_energy_force_fn(
@@ -61,8 +61,8 @@ def build_mbd_energy_force_fn(
     """
     import e3x
 
-    from mmml.models.mbd.calculator import load_mbd_model
-    from mmml.models.mbd.model import mbd_energy_and_forces
+    from karml.models.mbd.calculator import load_mbd_model
+    from karml.models.mbd.model import mbd_energy_and_forces
 
     model, params = load_mbd_model(checkpoint)
     weight_f = float(weight)

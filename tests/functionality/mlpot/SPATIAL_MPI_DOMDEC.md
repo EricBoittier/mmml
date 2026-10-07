@@ -23,8 +23,8 @@ Mode C from [Spatial ML MPI](../../../docs/mlpot-spatial-mpi.md): `np>1`, domdec
    bisect (June 2026) showed hangs inside ``eval_charmm_script`` on inline READ.
    Run native CHARMM control on the same PSF/CRD to isolate Python vs Fortran.
 2. JAX GPU warmup + active DOMDEC may segfault (`send_coord_to_recip` / `PMPI_Free_mem`) — defer JAX warmup until after MLpot registration.
-3. `domdec off` is an opt-in safety hook (`MMML_FORCE_DOMDEC_OFF=1`). Set `MMML_NO_CHARMM_DOMDEC_OFF=1` to keep DOMDEC on during MLpot ENER smoke.
-4. CPU live ENER: set `MMML_MLPOT_DEVICE=cpu`, `JAX_PLATFORMS=cpu`, `MMML_LR_SOLVER=mic` (jax-pme mesh can hang on CPU).
+3. `domdec off` is an opt-in safety hook (`KARML_FORCE_DOMDEC_OFF=1`). Set `KARML_NO_CHARMM_DOMDEC_OFF=1` to keep DOMDEC on during MLpot ENER smoke.
+4. CPU live ENER: set `KARML_MLPOT_DEVICE=cpu`, `JAX_PLATFORMS=cpu`, `KARML_LR_SOLVER=mic` (jax-pme mesh can hang on CPU).
 
 Tier 2 (`--ml-spatial-mpi`) parallelizes **ML only** with domdec still off; CHARMM integration remains replicated per rank.
 
@@ -35,8 +35,8 @@ Tier 2 (`--ml-spatial-mpi`) parallelizes **ML only** with domdec still off; CHAR
 Record the current survey output before the live spike:
 
 ```bash
-mmml mpi-check --tier3 --json | tee tier3_domdec_survey.json
-mmml mpi-check --tier3 --strict
+karml mpi-check --tier3 --json | tee tier3_domdec_survey.json
+karml mpi-check --tier3 --strict
 ```
 
 Expected while blocked: the JSON report has `tier3.blocked=true`, and the strict command exits non-zero.
@@ -44,8 +44,8 @@ Expected while blocked: the JSON report has `tier3.blocked=true`, and the strict
 ### B. Baseline Tier 2 (spatial ML, no DOMDEC metadata)
 
 ```bash
-export MMML_MLPOT_SPATIAL_MPI=1
-MMML_MPI_NP=2 ./scripts/mmml-charmm-mpirun.sh md-system \
+export KARML_MLPOT_SPATIAL_MPI=1
+KARML_MPI_NP=2 ./scripts/karml-charmm-mpirun.sh md-system \
   --composition DCM:20 --box-size 32 \
   --ml-spatial-mpi --ml-gpu-count 1 --ml-batch-size 128 \
   --md-stage mini --ps-heat 0
@@ -62,21 +62,21 @@ Start with the smallest possible active-DOMDEC check before any SD/dynamics:
 python tests/functionality/mlpot/09_domdec_mlpot_smoke.py --dry-run
 
 # Live active-DOMDEC ENER smoke. Requires DOMDEC-enabled libcharmm.so.
-export MMML_CKPT=/path/to/DESdimers_params.json
-MMML_MPI_NP=1 MMML_DOMDEC_MLPOT_SMOKE=1 \
-  ./scripts/mmml-charmm-mpirun.sh python \
+export KARML_CKPT=/path/to/DESdimers_params.json
+KARML_MPI_NP=1 KARML_DOMDEC_MLPOT_SMOKE=1 \
+  ./scripts/karml-charmm-mpirun.sh python \
   tests/functionality/mlpot/09_domdec_mlpot_smoke.py \
-  --checkpoint "$MMML_CKPT" \
+  --checkpoint "$KARML_CKPT" \
   --residue OCOH --n-molecules 1 --box-side 32
 ```
 
 Same-script off-control:
 
 ```bash
-MMML_MPI_NP=1 MMML_DOMDEC_MLPOT_SMOKE=1 \
-  ./scripts/mmml-charmm-mpirun.sh python \
+KARML_MPI_NP=1 KARML_DOMDEC_MLPOT_SMOKE=1 \
+  ./scripts/karml-charmm-mpirun.sh python \
   tests/functionality/mlpot/09_domdec_mlpot_smoke.py \
-  --checkpoint "$MMML_CKPT" \
+  --checkpoint "$KARML_CKPT" \
   --residue OCOH --n-molecules 1 --box-side 32 \
   --no-domdec-command
 ```
@@ -101,24 +101,24 @@ path with a live DCM cluster:
 
 ```bash
 # Step 1 — build prebuilt PSF/CRD (np=1, once per system size)
-MMML_MPI_NP=1 ./scripts/mmml-charmm-mpirun.sh python \
+KARML_MPI_NP=1 ./scripts/karml-charmm-mpirun.sh python \
   tests/functionality/mlpot/10_domdec_spatial_mpi_smoke.py \
   --prepare-prebuilt-only --residue DCM --n-molecules 20 --box-side 40
 
 # Step 2 — callback-only DOMDEC path check (no checkpoint, no segfault risk)
-MMML_MPI_NP=4 MMML_MLPOT_SPATIAL_MPI=1 \
-  ./scripts/mmml-charmm-mpirun.sh python \
+KARML_MPI_NP=4 KARML_MLPOT_SPATIAL_MPI=1 \
+  ./scripts/karml-charmm-mpirun.sh python \
   tests/functionality/mlpot/10_domdec_spatial_mpi_smoke.py
 
 # Step 2b — READ gate (np=4; must pass before live ENER at np>1)
-MMML_MPI_NP=4 ./scripts/run_mpi_pycharmm_read_gate.sh --mode psf-crd
+KARML_MPI_NP=4 ./scripts/run_mpi_pycharmm_read_gate.sh --mode psf-crd
 
 # Step 3 — live CHARMM ENER at np=4 (checkpoint required; CPU/MIC on node09)
-MMML_MPI_NP=4 MMML_MLPOT_SPATIAL_MPI=1 \
-  CUDA_VISIBLE_DEVICES="" MMML_MLPOT_DEVICE=cpu JAX_PLATFORMS=cpu MMML_LR_SOLVER=mic \
-  ./scripts/mmml-charmm-mpirun.sh python \
+KARML_MPI_NP=4 KARML_MLPOT_SPATIAL_MPI=1 \
+  CUDA_VISIBLE_DEVICES="" KARML_MLPOT_DEVICE=cpu JAX_PLATFORMS=cpu KARML_LR_SOLVER=mic \
+  ./scripts/karml-charmm-mpirun.sh python \
   tests/functionality/mlpot/10_domdec_spatial_mpi_smoke.py \
-  --charmm-ener --checkpoint "$MMML_CKPT" \
+  --charmm-ener --checkpoint "$KARML_CKPT" \
   --residue DCM --n-molecules 20 --box-side 40
 ```
 
@@ -129,7 +129,7 @@ Or run all three steps via the wrapper:
 bash scripts/run_domdec_spatial_mpi_smoke.sh
 
 # Full live ENER:
-MMML_CKPT=/path/to/checkpoint.json \
+KARML_CKPT=/path/to/checkpoint.json \
   bash scripts/run_domdec_spatial_mpi_smoke.sh --live
 ```
 
@@ -144,8 +144,8 @@ finite, `domdec_summary` reports `DOMDEC active: True` and `Symbols found: 8/8`.
 ```bash
 # Symbol probe on cluster (run after sourcing CHARMM env):
 python -c "
-from mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domdec_atoms import domdec_summary
-import mmml.interfaces.pycharmmInterface.import_pycharmm  # loads libcharmm.so
+from karml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domdec_atoms import domdec_summary
+import karml.interfaces.pycharmmInterface.import_pycharmm  # loads libcharmm.so
 print(domdec_summary())
 "
 ```
@@ -167,6 +167,6 @@ Until Tier 3 passes, use Tier 2 spatial MPI for ML decomposition or **Tier 1** f
 
 ```bash
 export CUDA_VISIBLE_DEVICES=0,1
-MMML_MPI_NP=1 ./scripts/mmml-charmm-mpirun.sh md-system ... \
+KARML_MPI_NP=1 ./scripts/karml-charmm-mpirun.sh md-system ... \
   --ml-batch-size 128 --ml-gpu-count 2
 ```

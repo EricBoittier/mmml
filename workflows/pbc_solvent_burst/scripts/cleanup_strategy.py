@@ -1,7 +1,7 @@
 """Map ``cleanup_strategy`` workflow YAML to md-system campaign job flags.
 
 The strategy describes the hybrid recovery ladder used when geometry or handoff
-quality breaks during a burst campaign.  On the CLI, ``mmml md-system --cleanup``
+quality breaks during a burst campaign.  On the CLI, ``karml md-system --cleanup``
 is the single switch that enables the same stack for one-shot recovery runs
 (liquid prep, density ladder, bonded-MM / overlap rescue); re-run without it for
 production trajectories.
@@ -19,7 +19,7 @@ from __future__ import annotations
 
 # Workflow-qualified so it can never collide with another workflow's
 # campaign_lib in sys.modules. See _own_campaign_lib below.
-_OWN_CAMPAIGN_LIB_MODULE = "mmml_pbc_solvent_burst_campaign_lib"
+_OWN_CAMPAIGN_LIB_MODULE = "karml_pbc_solvent_burst_campaign_lib"
 
 from dataclasses import dataclass
 from typing import Any

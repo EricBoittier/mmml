@@ -12,7 +12,7 @@ residue names. `--residue HEME` builds the library residue as written.
 The stream IC table stores bond lengths as zero, so CHARMM cannot build
 coordinates from it. The gas builder places the 73 atoms from the HEME
 residue in CHARMM's myoglobin CO test coordinates
-(`mmml/data/charmm/heme_mbco_coords.txt`). With
+(`karml/data/charmm/heme_mbco_coords.txt`). With
 `--charmm-zero-energy-terms vdw,elec,bonded`, the CHARMM MM pre-minimize is
 skipped and PET relaxes that structure.
 
@@ -51,10 +51,10 @@ bonded terms are zeroed so they are not added on top of PET.
 ```bash
 export CHARMM_HOME=$PWD/setup/charmm
 export CHARMM_LIB_DIR=$CHARMM_HOME/lib
-# serial libcharmm: export MMML_NO_CHARMM_MPI=1 MMML_NO_MPI_RERUN=1
-# GPU teacher: export MMML_METATOMIC_DEVICE=cuda
+# serial libcharmm: export KARML_NO_CHARMM_MPI=1 KARML_NO_MPI_RERUN=1
+# GPU teacher: export KARML_METATOMIC_DEVICE=cuda
 
-uv run --no-sync mmml md-system --backend pycharmm \
+uv run --no-sync karml md-system --backend pycharmm \
   --ml-potential-mode metatomic \
   --metatomic-eval-mode whole_system \
   --checkpoint "$PET_OMOL_S_CKPT" \
@@ -70,7 +70,7 @@ uv run --no-sync mmml md-system --backend pycharmm \
 The same settings are in `yaml/heme_nve.yaml`:
 
 ```bash
-uv run --no-sync mmml md-system --config examples/pet_omol_heme/yaml/heme_nve.yaml --checkpoint "$PET_OMOL_S_CKPT"
+uv run --no-sync karml md-system --config examples/pet_omol_heme/yaml/heme_nve.yaml --checkpoint "$PET_OMOL_S_CKPT"
 ```
 
 The log line `Metatomic electronic state: charge=0 spin_multiplicity=3` is
@@ -124,7 +124,7 @@ way the isolated heme did, so registration skips it. Bonded terms and charges
 on the PET atoms are zeroed. Van der Waals among those atoms stays in CHARMM.
 
 ```bash
-uv run --no-sync mmml md-system --backend pycharmm \
+uv run --no-sync karml md-system --backend pycharmm \
   --ml-potential-mode metatomic \
   --metatomic-eval-mode whole_system \
   --checkpoint "$PET_OMOL_S_CKPT" \

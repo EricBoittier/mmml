@@ -1529,7 +1529,7 @@ def create_mono_imputation_fn(model, params):
     Load a pretrained model and use it to impute monopoles:
     
     >>> import pickle
-    >>> from mmml.dcmnet.dcmnet.training import create_mono_imputation_fn, train_model
+    >>> from karml.dcmnet.dcmnet.training import create_mono_imputation_fn, train_model
     >>> 
     >>> # Load a pretrained model
     >>> with open('pretrained_model/best_params.pkl', 'rb') as f:

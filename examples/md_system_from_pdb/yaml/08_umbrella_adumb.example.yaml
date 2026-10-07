@@ -15,7 +15,7 @@
 # via ps / ps_prod / dt_fs (see calc notes below).
 #
 # Unit file paths are relative to the process CWD (usually the repo root when
-# you `uv run mmml md-system`). Prefer paths under output_dir.
+# you `uv run karml md-system`). Prefer paths under output_dir.
 #
 # Smoke for the lingo plumbing (cons fix): 08_from_pdb_pre_dynamics_lingo.yaml
 

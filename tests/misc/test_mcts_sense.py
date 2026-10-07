@@ -2,7 +2,7 @@
 # import jax.numpy as jnp
 # import jax
 
-# from mmml.models.dcmnet.dcmnet_mcts import (
+# from karml.models.dcmnet.dcmnet_mcts import (
 #     CONVERSION_FACTOR,
 #     DCMNETSelectionEnv,
 #     optimize_dcmnet_combination,

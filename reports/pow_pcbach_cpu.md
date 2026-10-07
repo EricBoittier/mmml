@@ -10,18 +10,18 @@
 
 | Target System | Category | Supported Methods | Energy RMSE (kcal/mol) | Max Force Err | Runtime (s) | Status |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| `BENZ` | liquids | `MM, ML, MMML` | `0.0025` | `0.0` | `1.6545` | **SUCCESS** |
-| `TIP3` | liquids | `MM, MMML` | `0.0025` | `0.0` | `0.5145` | **SUCCESS** |
-| `DCM` | liquids | `MM, ML, MMML` | `0.0025` | `0.0` | `0.5511` | **SUCCESS** |
-| `ACO` | liquids | `MM, ML, MMML` | `0.0025` | `0.0` | `0.5801` | **SUCCESS** |
-| `trialanine` | peptides | `MM, ML, MMML` | `0.0025` | `0.0` | `0.6792` | **SUCCESS** |
-| `alanine` | peptides | `MM, ML, MMML` | `0.0025` | `0.0` | `0.6415` | **SUCCESS** |
+| `BENZ` | liquids | `MM, ML, KARML` | `0.0025` | `0.0` | `1.6545` | **SUCCESS** |
+| `TIP3` | liquids | `MM, KARML` | `0.0025` | `0.0` | `0.5145` | **SUCCESS** |
+| `DCM` | liquids | `MM, ML, KARML` | `0.0025` | `0.0` | `0.5511` | **SUCCESS** |
+| `ACO` | liquids | `MM, ML, KARML` | `0.0025` | `0.0` | `0.5801` | **SUCCESS** |
+| `trialanine` | peptides | `MM, ML, KARML` | `0.0025` | `0.0` | `0.6792` | **SUCCESS** |
+| `alanine` | peptides | `MM, ML, KARML` | `0.0025` | `0.0` | `0.6415` | **SUCCESS** |
 
 ## System Details & Physics Validation
 
 ### Goal System: `BENZ` (Liquids)
 - **Description**: Pure Benzene liquid bulk simulation & PES energy drift check
-- **Evaluated Methodologies**: `MM, ML, MMML`
+- **Evaluated Methodologies**: `MM, ML, KARML`
 - **Proof Status**: Verification Complete
 
 ```json
@@ -37,7 +37,7 @@
 
 ### Goal System: `TIP3` (Liquids)
 - **Description**: Pure TIP3P Water bulk liquid simulation & electrostatic embedding validation
-- **Evaluated Methodologies**: `MM, MMML`
+- **Evaluated Methodologies**: `MM, KARML`
 - **Proof Status**: Verification Complete
 
 ```json
@@ -53,7 +53,7 @@
 
 ### Goal System: `DCM` (Liquids)
 - **Description**: Pure Dichloromethane liquid bulk simulation & long-range multipole evaluation
-- **Evaluated Methodologies**: `MM, ML, MMML`
+- **Evaluated Methodologies**: `MM, ML, KARML`
 - **Proof Status**: Verification Complete
 
 ```json
@@ -69,7 +69,7 @@
 
 ### Goal System: `ACO` (Liquids)
 - **Description**: Pure Acetone liquid bulk simulation & energy/force finite difference check
-- **Evaluated Methodologies**: `MM, ML, MMML`
+- **Evaluated Methodologies**: `MM, ML, KARML`
 - **Proof Status**: Verification Complete
 
 ```json
@@ -85,7 +85,7 @@
 
 ### Goal System: `trialanine` (Peptides)
 - **Description**: Trialanine peptide gas phase PES and solvated NVT trajectory validation
-- **Evaluated Methodologies**: `MM, ML, MMML`
+- **Evaluated Methodologies**: `MM, ML, KARML`
 - **Proof Status**: Verification Complete
 
 ```json
@@ -101,7 +101,7 @@
 
 ### Goal System: `alanine` (Peptides)
 - **Description**: Alanine dipeptide gas phase / solvated Ramachandran FES generation
-- **Evaluated Methodologies**: `MM, ML, MMML`
+- **Evaluated Methodologies**: `MM, ML, KARML`
 - **Proof Status**: Verification Complete
 
 ```json

@@ -16,8 +16,8 @@ import numpy as np
 import orbax
 import orbax.checkpoint
 
-from mmml.models.physnetjax.physnetjax.utils.pretty_printer import print_dict_as_table
-from mmml.models.physnetjax.physnetjax.utils.utils import get_files
+from karml.models.physnetjax.physnetjax.utils.pretty_printer import print_dict_as_table
+from karml.models.physnetjax.physnetjax.utils.utils import get_files
 
 orbax_checkpointer = orbax.checkpoint.PyTreeCheckpointer()
 
@@ -157,7 +157,7 @@ def get_last(path: str) -> Path:
 
 def _restore_json_checkpoint(restart: Path) -> dict:
     """Load a portable ``params_*.json`` into an Orbax-like restored dict."""
-    from mmml.utils.model_checkpoint import (
+    from karml.utils.model_checkpoint import (
         json_to_params,
         normalize_flax_params_for_apply,
     )
@@ -173,7 +173,7 @@ def _restore_json_checkpoint(restart: Path) -> dict:
     if not isinstance(config, dict) or not config:
         raise ValueError(
             f"JSON checkpoint {restart} has no 'config' / 'model_attributes'. "
-            "Portable exports from mmml make-training include config; "
+            "Portable exports from karml make-training include config; "
             "re-export with orbax_to_json(..., config=...) if needed."
         )
     meta = loaded.get("metadata") if isinstance(loaded.get("metadata"), dict) else {}
@@ -221,7 +221,7 @@ def get_params_model(
     tuple
         Tuple of (parameters, model)
     """
-    from mmml.utils.model_checkpoint import _restore_pytree_cpu_safe
+    from karml.utils.model_checkpoint import _restore_pytree_cpu_safe
 
     restart_path = Path(restart)
     if _is_params_json(restart_path):
@@ -264,7 +264,7 @@ def get_params_model(
 
     # kwargs = _process_model_attributes(restored["model_attributes"], natoms)
     kwargs = restored["model_attributes"]
-    from mmml.utils.model_checkpoint import build_physnet_from_config
+    from karml.utils.model_checkpoint import build_physnet_from_config
 
     model = build_physnet_from_config(
         kwargs,
@@ -410,7 +410,7 @@ def get_params_model_with_ase(pkl_path, model_path, atoms):
 
     from physnetjax.utils.utils import _process_model_attributes
 
-    from mmml.utils.model_checkpoint import build_physnet_from_config
+    from karml.utils.model_checkpoint import build_physnet_from_config
 
     params = pd.read_pickle(pkl_path)
     model_kwargs = pd.read_pickle(model_path)

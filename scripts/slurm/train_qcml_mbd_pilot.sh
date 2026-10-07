@@ -10,8 +10,8 @@
 
 set -euo pipefail
 
-ROOT="${MMML_ROOT:-$HOME/mmml}"
-PY="${MMML_PYTHON:-$ROOT/.venv/bin/python}"
+ROOT="${KARML_ROOT:-$HOME/karml}"
+PY="${KARML_PYTHON:-$ROOT/.venv/bin/python}"
 CACHE="${CACHE:-$HOME/orbax_cache/qcml_mbd}"
 WORKDIR="${WORKDIR:-$HOME/qcml_runs/mbd_pilot}"
 MAX_STRUCTURES="${MAX_STRUCTURES:-500000}"

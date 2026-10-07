@@ -2,7 +2,7 @@ REST     1       400
  !NATOM,NPRIV,NSTEP,NSAVC,NSAVV,JHSTRT,NDEGF,SEED,NSAVL
         20         0         0         1         0       400         0         0         0
        1 !NTITLE followed by title
-* MMML snapshot
+* KARML snapshot
  !X, Y, Z
    3.256657686361097D+00  -1.005068729900860D+00  -9.024130505552131D+00
    3.591678861044449D+00  -1.329591456629233D+00  -8.082119754060734D+00

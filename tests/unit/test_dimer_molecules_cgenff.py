@@ -5,8 +5,8 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from mmml.analysis.dimer_molecules import make_oriented_scan_geometries
-from mmml.analysis.dimer_scans import geometric_centroid
+from karml.analysis.dimer_molecules import make_oriented_scan_geometries
+from karml.analysis.dimer_scans import geometric_centroid
 
 
 def test_campaign_pair_still_uses_chemically_motivated_orientation() -> None:
@@ -67,7 +67,7 @@ def test_generic_pair_without_campaign_config(tmp_path, monkeypatch) -> None:
         )
 
     # ETOH must exist in CGenFF RTF
-    from mmml.interfaces.pycharmmInterface.cgenff_residues import is_cgenff_residue_name
+    from karml.interfaces.pycharmmInterface.cgenff_residues import is_cgenff_residue_name
 
     assert is_cgenff_residue_name("ETOH")
     assert is_cgenff_residue_name("CYBZ")

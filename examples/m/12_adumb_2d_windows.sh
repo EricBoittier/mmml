@@ -17,7 +17,7 @@
 #   DRY_RUN=1 bash examples/m/12_adumb_2d_windows.sh       # print one md-system cmd/point
 #   GRID="3.8,1.57 6.0,1.5" bash examples/m/12_adumb_2d_windows.sh   # subset
 #
-# Cluster: DRY_RUN=1 gives one self-contained `mmml md-system` command per point;
+# Cluster: DRY_RUN=1 gives one self-contained `karml md-system` command per point;
 # submit each as its own sbatch job (they share only the read-only NPZ/checkpoint).
 # Combine the per-point ADUMB-WUNI.DAT 2D histograms via WHAM.
 #
@@ -41,11 +41,11 @@ if ! uv run python -c "import pycharmm" >/dev/null 2>&1; then
   exit 0
 fi
 
-if [[ -z "${MMML_CGENFF_EXTRA_RTF:-}" ]]; then
-  echo "WARN: MMML_CGENFF_EXTRA_RTF unset — CH3CL will not be in CGenFF"
+if [[ -z "${KARML_CGENFF_EXTRA_RTF:-}" ]]; then
+  echo "WARN: KARML_CGENFF_EXTRA_RTF unset — CH3CL will not be in CGenFF"
 fi
-if [[ -z "${MMML_CGENFF_EXTRA_PRM:-}" ]]; then
-  echo "WARN: MMML_CGENFF_EXTRA_PRM unset — CG331–CLGA1 bond/angle may be missing"
+if [[ -z "${KARML_CGENFF_EXTRA_PRM:-}" ]]; then
+  echo "WARN: KARML_CGENFF_EXTRA_PRM unset — CG331–CLGA1 bond/angle may be missing"
 fi
 
 echo "=== 2D ADUMB replicas seeded across (r_ClC, r_CN): ${GRID} ==="
@@ -75,7 +75,7 @@ for pt in ${GRID}; do
   # Centered seed nearest this (rcl, rcn) point.
   uv run python examples/m/07_export_solute_pdb.py --rcl "${rcl}" --rcn "${rcn}" -o "${SOLUTE}"
 
-  CMD=(uv run mmml md-system
+  CMD=(uv run karml md-system
     --config "${CFG}"
     --output-dir "${OUT}"
     --composition "${SOLUTE}"

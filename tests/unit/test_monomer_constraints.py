@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
     format_resid_constraint_message,
     parse_resid_list,
     resolve_constrain_resids,
@@ -17,7 +17,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
     turn_off_cons_fix,
     validate_resids_for_cluster,
 )
-from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
     MinimizeWithMlpotConfig,
     MlpotSdChunkResult,
     minimize_with_mlpot,
@@ -78,7 +78,7 @@ def test_setup_cons_fix_for_resids_calls_pycharmm():
     fake_sel.get_atom_indexes.return_value = [1, 2, 3]
     cons_fix = MagicMock()
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.select_by_resids",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.select_by_resids",
         return_value=fake_sel,
     ), _patch_pycharmm_cons_fix(cons_fix):
         sel = setup_cons_fix_for_resids([1])
@@ -90,7 +90,7 @@ def test_setup_cons_fix_raises_when_selection_empty():
     fake_sel = MagicMock()
     fake_sel.get_atom_indexes.return_value = []
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.select_by_resids",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.select_by_resids",
         return_value=fake_sel,
     ), _patch_pycharmm_cons_fix(MagicMock()):
         with pytest.raises(RuntimeError, match="no atoms"):
@@ -105,7 +105,7 @@ def test_turn_off_cons_fix():
 
 
 def test_prepare_mlpot_sd_list_frequencies_clears_imgfrq_when_inbfrq_zero():
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _prepare_mlpot_sd_list_frequencies,
     )
 
@@ -135,14 +135,14 @@ def test_minimize_with_mlpot_runs_two_sd_passes_when_fixed_selection_set():
     )
 
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._import_pycharmm_modules",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._import_pycharmm_modules",
         return_value=(pycharmm, cons_fix, MagicMock(), minimize, MagicMock()),
     ), patch(
-        "mmml.interfaces.pycharmmInterface.charmm_mpi.recover_mpi_for_charmm_after_jax",
+        "karml.interfaces.pycharmmInterface.charmm_mpi.recover_mpi_for_charmm_after_jax",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._ensure_domdec_off_for_mlpot_energy",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._ensure_domdec_off_for_mlpot_energy",
     ) as mock_domdec, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.sync_charmm_lists_after_mini",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics.sync_charmm_lists_after_mini",
     ):
         assert minimize_with_mlpot(config) is True
 
@@ -169,19 +169,19 @@ def test_minimize_with_mlpot_asserts_user_when_ctx_provided():
     )
 
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._import_pycharmm_modules",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._import_pycharmm_modules",
         return_value=(pycharmm, cons_fix, MagicMock(), minimize, MagicMock()),
     ), patch(
-        "mmml.interfaces.pycharmmInterface.charmm_mpi.recover_mpi_for_charmm_after_jax",
+        "karml.interfaces.pycharmmInterface.charmm_mpi.recover_mpi_for_charmm_after_jax",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._ensure_domdec_off_for_mlpot_energy",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._ensure_domdec_off_for_mlpot_energy",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.sync_charmm_lists_after_mini",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics.sync_charmm_lists_after_mini",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_mlpot_sd_then_abnr",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._run_mlpot_sd_then_abnr",
         return_value=MlpotSdChunkResult(completed=True),
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.prepare_mlpot_hybrid_state_for_sd",
+        "karml.interfaces.pycharmmInterface.mlpot.cli_common.prepare_mlpot_hybrid_state_for_sd",
         return_value=(0.0, 0.0),
     ) as prepare_sd:
         minimize_with_mlpot(config)
@@ -204,14 +204,14 @@ def test_minimize_with_mlpot_single_pass_when_no_fix():
     )
 
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._import_pycharmm_modules",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._import_pycharmm_modules",
         return_value=(pycharmm, cons_fix, MagicMock(), minimize, MagicMock()),
     ), patch(
-        "mmml.interfaces.pycharmmInterface.charmm_mpi.recover_mpi_for_charmm_after_jax",
+        "karml.interfaces.pycharmmInterface.charmm_mpi.recover_mpi_for_charmm_after_jax",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._ensure_domdec_off_for_mlpot_energy",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._ensure_domdec_off_for_mlpot_energy",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.sync_charmm_lists_after_mini",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics.sync_charmm_lists_after_mini",
     ):
         minimize_with_mlpot(config)
 

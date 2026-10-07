@@ -8,8 +8,8 @@ import pytest
 from ase import Atoms
 from ase.calculators.calculator import Calculator, all_changes
 
-from mmml.analysis.dimer_scans import distance_scan_geometries
-from mmml.dimer_scan import (
+from karml.analysis.dimer_scans import distance_scan_geometries
+from karml.dimer_scan import (
     ORIENTATION_SCHEMA_VERSION,
     RESULT_SCHEMA_VERSION,
     DimerScanConfig,
@@ -17,7 +17,7 @@ from mmml.dimer_scan import (
     ScanResult,
     run_dimer_scan,
 )
-from mmml.dimer_scan.evaluate import evaluate_geometries
+from karml.dimer_scan.evaluate import evaluate_geometries
 
 
 class DistanceCalculator(Calculator):
@@ -39,7 +39,7 @@ class DistanceCalculator(Calculator):
 def provenance() -> Provenance:
     return Provenance(
         created_utc="2026-01-01T00:00:00+00:00",
-        software={"mmml": "test"},
+        software={"karml": "test"},
         platform={"system": "test"},
         git={"commit": "abc", "dirty": False},
         checkpoint=None,

@@ -52,7 +52,7 @@ def _capture_fortran_stdio_pty() -> Iterator[str]:
     tmp = tempfile.NamedTemporaryFile(
         mode="wb",
         delete=False,
-        prefix="mmml-charmm-pty-",
+        prefix="karml-charmm-pty-",
         suffix=".log",
     )
     tmp_path = tmp.name
@@ -133,7 +133,7 @@ def _capture_fortran_stdio_file() -> Iterator[str]:
     tmp = tempfile.NamedTemporaryFile(
         mode="wb",
         delete=False,
-        prefix="mmml-charmm-capture-",
+        prefix="karml-charmm-capture-",
         suffix=".log",
     )
     tmp_path = tmp.name

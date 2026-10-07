@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT="${MMML_ROOT:-$HOME/mmml}"
+ROOT="${KARML_ROOT:-$HOME/karml}"
 cd "$ROOT"
 mkdir -p logs
 
@@ -11,8 +11,8 @@ export RUN_TAG
 export_vars=(
   "ALL"
   "RUN_TAG=$RUN_TAG"
-  "MMML_ROOT=${MMML_ROOT:-$HOME/mmml}"
-  "MMML_PYTHON=${MMML_PYTHON:-$HOME/mmml/.venv/bin/python}"
+  "KARML_ROOT=${KARML_ROOT:-$HOME/karml}"
+  "KARML_PYTHON=${KARML_PYTHON:-$HOME/karml/.venv/bin/python}"
   "MAX_STRUCTURES=${MAX_STRUCTURES:-}"
   "MAX_ATOMS=${MAX_ATOMS:-32}"
   "BATCH_SIZE=${BATCH_SIZE:-8}"

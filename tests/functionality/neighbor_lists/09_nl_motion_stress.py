@@ -36,11 +36,11 @@ from _common import (
     print_pass,
     _composition_dict_from_liquid_case,
 )
-from mmml.interfaces.pycharmmInterface.jax_md_neighbor_list import (
+from karml.interfaces.pycharmmInterface.jax_md_neighbor_list import (
     create_jax_md_neighbor_list,
     have_jax_md,
 )
-from mmml.interfaces.pycharmmInterface.nl_reference import (
+from karml.interfaces.pycharmmInterface.nl_reference import (
     compare_pair_sets,
     extract_valid_pairs,
     filter_pairs_under_cutoff,

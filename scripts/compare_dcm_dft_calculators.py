@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compare MMML calculators against DCM MP2 monomer/dimer reference NPZ files.
+"""Compare KARML calculators against DCM MP2 monomer/dimer reference NPZ files.
 
 The input NPZ must contain padded ``N, Z, R, E`` arrays. The split files written
 under ``artifacts/dcm_mp2_round2`` already use the CHARMM-like atom order
@@ -18,7 +18,7 @@ from typing import Any
 import numpy as np
 from ase import Atoms
 
-from mmml.data.units import energy_to_ev, infer_reference_energy_unit
+from karml.data.units import energy_to_ev, infer_reference_energy_unit
 
 
 def _select_indices(n_frames: int, max_frames: int | None, stride: int, seed: int) -> np.ndarray:
@@ -73,7 +73,7 @@ class CalculatorRunner:
         if self.checkpoint is None:
             raise ValueError(f"calculator {self.name!r} requires --checkpoint")
         if self._calculator is None:
-            from mmml.interfaces.calculators.checkpoint_loading import (
+            from karml.interfaces.calculators.checkpoint_loading import (
                 create_calculator_from_checkpoint,
             )
 
@@ -91,8 +91,8 @@ class CalculatorRunner:
             raise ValueError(f"hybrid calculators expect DCM 5-atom monomers, got N={n_atoms}")
         key = (n_monomers, bool(do_ml_dimer))
         if key not in self._hybrid_cache:
-            from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
-            from mmml.interfaces.pycharmmInterface.mmml_calculator import setup_calculator
+            from karml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
+            from karml.interfaces.pycharmmInterface.karml_calculator import setup_calculator
 
             factory = setup_calculator(
                 ATOMS_PER_MONOMER=[5] * n_monomers,
@@ -214,7 +214,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--reference-energy-unit",
         default=None,
         choices=["hartree", "ha", "ev", "kcal", "kcal/mol", "kcal_mol"],
-        help="Reference NPZ energy unit (default: read from _mmml_units or units_manifest.json).",
+        help="Reference NPZ energy unit (default: read from _karml_units or units_manifest.json).",
     )
     parser.add_argument("--cutoff", type=float, default=10.0)
     parser.add_argument(

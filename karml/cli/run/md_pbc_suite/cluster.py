@@ -9,15 +9,15 @@ import numpy as np
 import pandas as pd
 
 if TYPE_CHECKING:
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmMmMinimizeReport
-    from mmml.utils.monomer_internal_geometry import MonomerInternalGeometryReport
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmMmMinimizeReport
+    from karml.utils.monomer_internal_geometry import MonomerInternalGeometryReport
 
-import mmml.interfaces.pycharmmInterface.import_pycharmm as pyci
-from mmml.interfaces.pycharmmInterface.import_pycharmm import (
+import karml.interfaces.pycharmmInterface.import_pycharmm as pyci
+from karml.interfaces.pycharmmInterface.import_pycharmm import (
     pycharmm,
     reset_block,
 )
-from mmml.interfaces.pycharmmInterface.utils import get_Z_from_psf
+from karml.interfaces.pycharmmInterface.utils import get_Z_from_psf
 
 
 def _coor():
@@ -84,7 +84,7 @@ def _build_psf_ordered_cluster(
     if template_pdb is None:
         template_pdb = _default_template_pdb_for_residue(residue)
     if template_pdb is None:
-        from mmml.cli.run.md_pbc_suite.ase import _build_cluster_from_composition
+        from karml.cli.run.md_pbc_suite.ase import _build_cluster_from_composition
 
         z, shifted, _, _ = _build_cluster_from_composition(
             composition=[(residue, n_molecules)],
@@ -99,8 +99,8 @@ def _build_psf_ordered_cluster(
 
     sequence = " ".join([residue] * n_molecules)
 
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import prepare_charmm_vacuum
-    from mmml.interfaces.pycharmmInterface.nbonds_config import ic_prm_fill, read_cgenff_toppar
+    from karml.interfaces.pycharmmInterface.mlpot.setup import prepare_charmm_vacuum
+    from karml.interfaces.pycharmmInterface.nbonds_config import ic_prm_fill, read_cgenff_toppar
 
     pycharmm.lingo.charmm_script("DELETE ATOM SELE ALL END")
     reset_block()
@@ -108,7 +108,7 @@ def _build_psf_ordered_cluster(
     read_cgenff_toppar(enable_drude=False)
 
     read.sequence_string(sequence)
-    from mmml.interfaces.pycharmmInterface.heme_library import segment_terminal_patches
+    from karml.interfaces.pycharmmInterface.heme_library import segment_terminal_patches
 
     gen.new_segment(seg_name="CLST", setup_ic=True, **segment_terminal_patches())
     ic_prm_fill(replace_all=True)
@@ -123,7 +123,7 @@ def _build_psf_ordered_cluster(
             "cannot form equal same-residue chunks."
         )
     atoms_per_res = n_atoms // n_molecules
-    from mmml.interfaces.pycharmmInterface.cluster_geometry import (
+    from karml.interfaces.pycharmmInterface.cluster_geometry import (
         apply_same_residue_template_to_positions,
     )
 
@@ -165,7 +165,7 @@ def _build_psf_ordered_cluster(
 
     _coor().set_positions(pd.DataFrame(shifted, columns=["x", "y", "z"]))
     try:
-        from mmml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
+        from karml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
 
         sync_charmm_positions(shifted)
     except Exception:
@@ -184,7 +184,7 @@ def _build_psf_ordered_cluster(
 def _default_template_pdb_for_residue(residue: str) -> Path | None:
     """Bundled 3D monomer templates keyed by CGenFF residue name."""
     residue = residue.upper()
-    from mmml.paths import (
+    from karml.paths import (
         default_aco_template_pdb,
         default_meoh_template_pdb,
         default_tip3_template_pdb,
@@ -203,7 +203,7 @@ def _default_template_pdb_for_residue(residue: str) -> Path | None:
 
 
 def _monomer_geometry_is_3d(coords: np.ndarray, *, min_axis_span: float = 0.3) -> bool:
-    from mmml.interfaces.pycharmmInterface.cluster_geometry import (
+    from karml.interfaces.pycharmmInterface.cluster_geometry import (
         _monomer_geometry_is_3d as _is_3d,
     )
 
@@ -217,8 +217,8 @@ def relax_monomer_geometry_for_cluster(
     nstep_abnr: int = 200,
 ) -> tuple[np.ndarray, list[str], np.ndarray]:
     """Build and CHARMM-minimize an isolated monomer for cluster assembly."""
-    from mmml.cli.run.md_pbc_suite.cluster import build_minimized_monomer_for_packmol
-    from mmml.interfaces.pycharmmInterface.cluster_geometry import ensure_charmm_session_ready
+    from karml.cli.run.md_pbc_suite.cluster import build_minimized_monomer_for_packmol
+    from karml.interfaces.pycharmmInterface.cluster_geometry import ensure_charmm_session_ready
 
     ensure_charmm_session_ready()
     return build_minimized_monomer_for_packmol(
@@ -237,10 +237,10 @@ def build_cluster_from_reference_npz(
     frame: int = 0,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Build CHARMM PSF for ``residue``×``n_molecules`` and load positions from reference NPZ."""
-    from mmml.interfaces.pycharmmInterface.cluster_geometry import ensure_charmm_session_ready
-    from mmml.cli.run.md_pbc_suite.ase import _build_cluster_psf_topology_only
-    from mmml.interfaces.pycharmmInterface.cluster_geometry import reference_frame_geometry
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
+    from karml.interfaces.pycharmmInterface.cluster_geometry import ensure_charmm_session_ready
+    from karml.cli.run.md_pbc_suite.ase import _build_cluster_psf_topology_only
+    from karml.interfaces.pycharmmInterface.cluster_geometry import reference_frame_geometry
+    from karml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
 
     ensure_charmm_session_ready()
     ref_z, ref_r = reference_frame_geometry(reference_npz, frame=frame)
@@ -281,15 +281,15 @@ def build_minimized_monomer_for_packmol(
     verbose: bool = True,
 ) -> tuple[np.ndarray, list[str], np.ndarray]:
     """Build and CHARMM-minimize an isolated monomer before Packmol (MM only, no MLpot)."""
-    from mmml.interfaces.pycharmmInterface.cluster_geometry import ensure_charmm_session_ready
+    from karml.interfaces.pycharmmInterface.cluster_geometry import ensure_charmm_session_ready
 
     ensure_charmm_session_ready()
-    from mmml.cli.run.md_pbc_suite.ase import _generate_residue_with_make_res_recipe
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.cli.run.md_pbc_suite.ase import _generate_residue_with_make_res_recipe
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         CharmmMmMinimizeConfig,
         minimize_charmm_mm_only,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+    from karml.interfaces.pycharmmInterface.mlpot.setup import (
         get_charmm_positions_array,
         sync_charmm_positions,
     )
@@ -297,8 +297,8 @@ def build_minimized_monomer_for_packmol(
     residue = residue.upper()
     coords, atom_names, z = _generate_residue_with_make_res_recipe(residue)
 
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import prepare_charmm_vacuum
-    from mmml.interfaces.pycharmmInterface.nbonds_config import ic_prm_fill, read_cgenff_toppar
+    from karml.interfaces.pycharmmInterface.mlpot.setup import prepare_charmm_vacuum
+    from karml.interfaces.pycharmmInterface.nbonds_config import ic_prm_fill, read_cgenff_toppar
 
     pycharmm.lingo.charmm_script("DELETE ATOM SELE ALL END")
     reset_block()
@@ -306,7 +306,7 @@ def build_minimized_monomer_for_packmol(
     read_cgenff_toppar(enable_drude=False)
     pycharmm.settings.set_bomb_level(-5)
     read.sequence_string(residue)
-    from mmml.interfaces.pycharmmInterface.heme_library import segment_terminal_patches
+    from karml.interfaces.pycharmmInterface.heme_library import segment_terminal_patches
 
     gen.new_segment(seg_name="CLST", setup_ic=True, **segment_terminal_patches())
     ic_prm_fill(replace_all=True)
@@ -366,7 +366,7 @@ def _residue_geometry_for_packmol(
     """Load user PDB monomer template or CHARMM-minimize via make-res."""
     key = str(residue).upper()
     if monomer_pdb_templates and key in monomer_pdb_templates:
-        from mmml.interfaces.pycharmmInterface.mlpot.composition_spec import (
+        from karml.interfaces.pycharmmInterface.mlpot.composition_spec import (
             load_monomer_geometry_from_pdb,
         )
 
@@ -417,7 +417,7 @@ def assert_packmol_cluster_minimize_sane(
     A pre-minimize GRMS of exactly 0.0 only warns: healthy KEY_LIBRARY CHARMM
     builds report it too (see :class:`CharmmMmMinimizeReport`).
     """
-    from mmml.utils.monomer_internal_geometry import (
+    from karml.utils.monomer_internal_geometry import (
         MONOMER_INTERNAL_DEVIATION_ENV,
         assert_monomer_internal_geometry,
         resolve_max_monomer_internal_deviation_A,
@@ -452,7 +452,7 @@ def assert_packmol_cluster_minimize_sane(
         )
     except RuntimeError as exc:
         # Name the likely cause rather than leaving "the build returned garbage".
-        from mmml.utils.monomer_internal_geometry import (
+        from karml.utils.monomer_internal_geometry import (
             charmm_collapsed_nonbonded_hint,
         )
 
@@ -515,15 +515,15 @@ def build_packmol_composition_cluster(
     monomer_pdb_templates: dict[str, Path] | None = None,
 ) -> tuple[np.ndarray, np.ndarray, list[int], list[str]]:
     """CHARMM-minimize monomers, Packmol cube/sphere pack, cluster PSF, then cluster MM relax."""
-    from mmml.cli.run.md_pbc_suite.ase import (
+    from karml.cli.run.md_pbc_suite.ase import (
         _build_cluster_psf_from_composition,
         _load_packmol_sphere_positions,
     )
-    from mmml.interfaces.pycharmmInterface import packmol_cache, packmol_placement
-    from mmml.interfaces.pycharmmInterface.cluster_geometry import (
+    from karml.interfaces.pycharmmInterface import packmol_cache, packmol_placement
+    from karml.interfaces.pycharmmInterface.cluster_geometry import (
         remember_cluster_residue_geometries,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         CharmmMmMinimizeConfig,
         minimize_charmm_mm_only,
     )
@@ -748,7 +748,7 @@ def build_packmol_composition_cluster(
         )
         shifted = _coor().get_positions()[["x", "y", "z"]].to_numpy(dtype=float)
         if verbose:
-            from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_grms
+            from karml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_grms
 
             pycharmm.lingo.charmm_script("ENER")
             print(
@@ -881,13 +881,13 @@ def build_pyxtal_composition_cluster(
     geometry_store: Any | None = None,
 ) -> tuple[np.ndarray, np.ndarray, list[int], list[str]]:
     """CHARMM-minimize monomers, PyXtal crystal build, PSF map, then cluster MM relax."""
-    from mmml.cli.run.md_pbc_suite.ase import _build_cluster_psf_from_composition
-    from mmml.interfaces.aseInterface.pyxtal_optimize import optimize_ase_atoms
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.cli.run.md_pbc_suite.ase import _build_cluster_psf_from_composition
+    from karml.interfaces.aseInterface.pyxtal_optimize import optimize_ase_atoms
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         CharmmMmMinimizeConfig,
         minimize_charmm_mm_only,
     )
-    from mmml.interfaces.pyxtal_placement import (
+    from karml.interfaces.pyxtal_placement import (
         MolecularCrystalBuildRequest,
         ase_supercell,
         assign_ase_cluster_to_psf_order,
@@ -900,7 +900,7 @@ def build_pyxtal_composition_cluster(
         resolve_pyxtal_unit_stoichiometry,
         unique_residue_species,
     )
-    from mmml.interfaces.pycharmmInterface import packmol_placement
+    from karml.interfaces.pycharmmInterface import packmol_placement
 
     if not have_pyxtal():
         require_pyxtal()
@@ -1040,7 +1040,7 @@ def build_pyxtal_composition_cluster(
         )
         shifted = _coor().get_positions()[["x", "y", "z"]].to_numpy(dtype=float)
         if verbose:
-            from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_grms
+            from karml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_grms
 
             pycharmm.lingo.charmm_script("ENER")
             print(
@@ -1055,7 +1055,7 @@ def build_pyxtal_composition_cluster(
         f"(spg={result.space_group}, attempts={result.attempts})",
         flush=True,
     )
-    from mmml.interfaces.pycharmmInterface.cluster_geometry import (
+    from karml.interfaces.pycharmmInterface.cluster_geometry import (
         remember_cluster_residue_geometries,
     )
 

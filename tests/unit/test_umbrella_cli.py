@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from mmml.cli.misc.umbrella_mbar import build_parser as build_mbar_parser
-from mmml.cli.misc.umbrella_sample import (
+from karml.cli.misc.umbrella_mbar import build_parser as build_mbar_parser
+from karml.cli.misc.umbrella_sample import (
     _config_from_args,
     build_parser as build_sample_parser,
 )
@@ -119,7 +119,7 @@ def test_mbar_parser():
 
 
 def test_format_pmf_report_2d():
-    from mmml.cli.misc.umbrella_mbar import _format_pmf_report
+    from karml.cli.misc.umbrella_mbar import _format_pmf_report
 
     result = {
         "ndim": 2,
@@ -175,12 +175,12 @@ def test_sample_parser_2d():
 
 
 def test_registry_lists_umbrella_commands():
-    from mmml.cli.registry import command_by_name
+    from karml.cli.registry import command_by_name
 
     assert command_by_name("umbrella-sample") is not None
     assert command_by_name("umbrella-mbar") is not None
-    assert command_by_name("umbrella-sample").module == "mmml.cli.misc.umbrella_sample"
-    assert command_by_name("umbrella-mbar").module == "mmml.cli.misc.umbrella_mbar"
+    assert command_by_name("umbrella-sample").module == "karml.cli.misc.umbrella_sample"
+    assert command_by_name("umbrella-mbar").module == "karml.cli.misc.umbrella_mbar"
 
 
 def test_sample_parser_hybrid_engine():

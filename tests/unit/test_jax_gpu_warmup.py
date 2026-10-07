@@ -7,7 +7,7 @@ import shutil
 from pathlib import Path
 from unittest import mock
 
-from mmml.utils import jax_gpu_warmup
+from karml.utils import jax_gpu_warmup
 
 
 def test_find_bundled_ptxas_dir_from_site_packages(tmp_path, monkeypatch):
@@ -118,7 +118,7 @@ def test_ensure_jax_cuda_runtime_libs_prefers_bundled_cudnn(tmp_path, monkeypatc
 
 def test_ensure_jax_cuda_toolchain_required_raises_when_missing(monkeypatch):
     monkeypatch.setattr(jax_gpu_warmup, "find_bundled_ptxas_dir", lambda: None)
-    with mock.patch("mmml.utils.jax_gpu_warmup.shutil.which", return_value=None):
+    with mock.patch("karml.utils.jax_gpu_warmup.shutil.which", return_value=None):
         try:
             jax_gpu_warmup.ensure_jax_cuda_toolchain(required=True)
             raised = False
@@ -185,13 +185,13 @@ def test_maybe_sanitize_process_env_for_ptxas_strips_openmpi(monkeypatch):
 
 
 def test_jax_compile_timers_work_without_prior_reset(monkeypatch):
-    monkeypatch.setenv("MMML_JAX_COMPILE_TIMERS", "1")
+    monkeypatch.setenv("KARML_JAX_COMPILE_TIMERS", "1")
     jax_gpu_warmup.run_jax_warmup_passes("init_check", 1, lambda: 0, block=lambda _: None)
     assert jax_gpu_warmup.get_jax_compile_timer_session().entries
 
 
 def test_jax_compile_timers_log_passes(capsys, monkeypatch):
-    monkeypatch.setenv("MMML_JAX_COMPILE_TIMERS", "1")
+    monkeypatch.setenv("KARML_JAX_COMPILE_TIMERS", "1")
     jax_gpu_warmup.reset_jax_compile_timers()
     calls = {"n": 0}
 
@@ -211,16 +211,16 @@ def test_jax_compile_timers_log_passes(capsys, monkeypatch):
 
 
 def test_jax_compile_timers_disabled_by_default(capsys, monkeypatch):
-    monkeypatch.delenv("MMML_JAX_COMPILE_TIMERS", raising=False)
-    monkeypatch.delenv("MMML_MLPOT_PROFILE", raising=False)
+    monkeypatch.delenv("KARML_JAX_COMPILE_TIMERS", raising=False)
+    monkeypatch.delenv("KARML_MLPOT_PROFILE", raising=False)
     jax_gpu_warmup.reset_jax_compile_timers()
     jax_gpu_warmup.run_jax_warmup_passes("silent", 2, lambda: 1, block=lambda _: None)
     assert "JAX compile timer" not in capsys.readouterr().out
 
 
 def test_jax_compile_timers_follow_mlpot_profile(capsys, monkeypatch):
-    monkeypatch.delenv("MMML_JAX_COMPILE_TIMERS", raising=False)
-    monkeypatch.setenv("MMML_MLPOT_PROFILE", "1")
+    monkeypatch.delenv("KARML_JAX_COMPILE_TIMERS", raising=False)
+    monkeypatch.setenv("KARML_MLPOT_PROFILE", "1")
     jax_gpu_warmup.reset_jax_compile_timers()
     jax_gpu_warmup.run_jax_warmup_passes("profiled", 1, lambda: 0, block=lambda _: None)
     assert "JAX compile timer [profiled]" in capsys.readouterr().out

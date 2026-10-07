@@ -8,11 +8,11 @@ from pathlib import Path
 
 import numpy as np
 
-from mmml.interfaces.pycharmmInterface.dcm_liquid_box import (
+from karml.interfaces.pycharmmInterface.dcm_liquid_box import (
     monomer_offsets_from_atoms_per,
 )
-from mmml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_PRM
-from mmml.interfaces.pycharmmInterface.nbonds_config import PbcNbondCutoffs
+from karml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_PRM
+from karml.interfaces.pycharmmInterface.nbonds_config import PbcNbondCutoffs
 
 TIP3_LIQUID_PSF = "tip3-liquid.psf"
 TIP3_LIQUID_CRD = "tip3-liquid.crd"
@@ -74,13 +74,13 @@ def build_tip3_liquid_box_in_charmm(
     import pycharmm.settings as settings
     import pycharmm.write as write
 
-    from mmml.interfaces.pycharmmInterface import import_pycharmm as ipy
-    from mmml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap import mark_cgenff_params_full
-    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+    from karml.interfaces.pycharmmInterface import import_pycharmm as ipy
+    from karml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap import mark_cgenff_params_full
+    from karml.interfaces.pycharmmInterface.mlpot.pbc_env import (
         apply_pbc_nbonds,
         prepare_charmm_pbc,
     )
-    from mmml.interfaces.pycharmmInterface.trialanine_water_box import (
+    from karml.interfaces.pycharmmInterface.trialanine_water_box import (
         _grid_oxygen_sites,
         _load_cgenff_with_trialanine,
         _tip3_template,
@@ -164,17 +164,17 @@ def reload_tip3_liquid_box_in_charmm(
     """Reload a saved TIP3-only PSF and coordinates into CHARMM."""
     import pycharmm.coor as coor
 
-    from mmml.interfaces.pycharmmInterface.cgenff_bonded_reference import (
+    from karml.interfaces.pycharmmInterface.cgenff_bonded_reference import (
         read_psf_card_file,
         set_charmm_positions,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import apply_crd_file_to_charmm
-    from mmml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap import mark_cgenff_params_full
-    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import apply_crd_file_to_charmm
+    from karml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap import mark_cgenff_params_full
+    from karml.interfaces.pycharmmInterface.mlpot.pbc_env import (
         apply_pbc_nbonds,
         prepare_charmm_pbc,
     )
-    from mmml.interfaces.pycharmmInterface.trialanine_water_box import (
+    from karml.interfaces.pycharmmInterface.trialanine_water_box import (
         prepare_charmm_for_trialanine_box_psf,
     )
 

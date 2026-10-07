@@ -15,7 +15,7 @@ import numpy as np
 
 os.environ.setdefault(
     "MPLCONFIGDIR",
-    str(Path(tempfile.gettempdir()) / "mmml-matplotlib"),
+    str(Path(tempfile.gettempdir()) / "karml-matplotlib"),
 )
 import matplotlib
 
@@ -541,7 +541,7 @@ def main() -> None:
         json.dumps(summary, indent=2, sort_keys=True),
         encoding="utf-8",
     )
-    from mmml.utils.rich_report import print_colored_json
+    from karml.utils.rich_report import print_colored_json
 
     print_colored_json(summary, sort_keys=True)
     print(f"Wrote component plots to {args.output_dir}")

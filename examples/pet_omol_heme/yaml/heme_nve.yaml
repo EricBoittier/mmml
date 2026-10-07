@@ -2,7 +2,7 @@
 #
 #   uv run --no-sync python -c "from upet import save_upet; save_upet(model='pet-omol', size='s', version='1.0.0', output='pet-omol-s-v1.0.0.pt')"
 #   export PET_OMOL_S_CKPT=$PWD/pet-omol-s-v1.0.0.pt
-#   mmml md-system --config examples/pet_omol_heme/yaml/heme_nve.yaml --checkpoint "$PET_OMOL_S_CKPT"
+#   karml md-system --config examples/pet_omol_heme/yaml/heme_nve.yaml --checkpoint "$PET_OMOL_S_CKPT"
 #
 # RESI HEME is the 6-coordinate planar heme in toppar_all36_prot_heme.str.
 # See examples/pet_omol_heme/README.md.

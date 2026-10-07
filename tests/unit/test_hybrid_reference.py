@@ -9,12 +9,12 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 import pytest
 
-from mmml.interfaces.pycharmmInterface.cutoffs import (
+from karml.interfaces.pycharmmInterface.cutoffs import (
     cutoff_grids_from_args,
     cutoff_search_result_dict,
     parse_comma_float_grid,
 )
-from mmml.interfaces.pycharmmInterface.hybrid_reference import (
+from karml.interfaces.pycharmmInterface.hybrid_reference import (
     compute_com_distances,
     load_geometry_npz,
     load_reference_trajectory_npz,
@@ -75,7 +75,7 @@ def test_load_geometry_npz_positions_only(tmp_path: Path) -> None:
 
 
 def test_evaluate_hybrid_mse_converts_hartree_reference() -> None:
-    from mmml.interfaces.pycharmmInterface.hybrid_reference import evaluate_hybrid_mse_on_frames
+    from karml.interfaces.pycharmmInterface.hybrid_reference import evaluate_hybrid_mse_on_frames
 
     class _FakeAtoms:
         def set_positions(self, _pos) -> None:
@@ -170,7 +170,7 @@ def test_compute_com_distances_dimer() -> None:
 
 
 def test_run_cutoff_grid_search_picks_best() -> None:
-    from mmml.interfaces.pycharmmInterface.hybrid_reference import ReferenceTrajectory
+    from karml.interfaces.pycharmmInterface.hybrid_reference import ReferenceTrajectory
 
     reference = ReferenceTrajectory(
         path=Path("x.npz"),
@@ -197,7 +197,7 @@ def test_run_cutoff_grid_search_picks_best() -> None:
         )
 
     with patch(
-        "mmml.interfaces.pycharmmInterface.hybrid_reference.evaluate_cutoff_triple",
+        "karml.interfaces.pycharmmInterface.hybrid_reference.evaluate_cutoff_triple",
         side_effect=fake_evaluate,
     ):
         results, best = run_cutoff_grid_search(

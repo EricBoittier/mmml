@@ -25,8 +25,8 @@ import numpy as np
 
 def kept_confs(group) -> np.ndarray:
     """Conformer indices the ragged converter keeps for one HDF5 group."""
-    from mmml.data.spice_alpha import _optional_charge
-    from mmml.data.spice_alpha_ragged import polar_e_angstrom2_per_volt_to_bohr3
+    from karml.data.spice_alpha import _optional_charge
+    from karml.data.spice_alpha_ragged import polar_e_angstrom2_per_volt_to_bohr3
 
     if "conformations" not in group or "atomic_numbers" not in group:
         return np.zeros(0, int)
@@ -100,7 +100,7 @@ def main():
     ap.add_argument("--split", default="test")
     ap.add_argument("--workers", type=int, default=16)
     args = ap.parse_args()
-    from mmml.data.spice_alpha_ragged import SUBSET_IDS, load_ragged
+    from karml.data.spice_alpha_ragged import SUBSET_IDS, load_ragged
 
     args.out_dir.mkdir(parents=True, exist_ok=True)
     shards = sorted(args.ragged_dir.glob("*.npz"))

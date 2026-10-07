@@ -1,4 +1,4 @@
-% ACS-style draft: hybrid ML/MM for condensed-phase simulations (MMML).
+% ACS-style draft: hybrid ML/MM for condensed-phase simulations (KARML).
 % Compile:  tectonic -X compile main.tex   (or: make pdf)
 % Supporting Information is appended in this file after the bibliography.
 \documentclass[journal=jctc,manuscript=article]{achemso}
@@ -108,11 +108,11 @@ combine a local high-accuracy model with an efficient environment have a long
 history in QM/MM chemistry\cite{Warshel1976,Senn2009,Lin2014} and motivate
 analogous ML/MM constructions: ML for intramolecular and short-range many-body
 interactions, MM for the intermolecular tail and optional long-range Coulomb
-solvers.\cite{Unke2019PhysNet,MMML2026}
+solvers.\cite{Unke2019PhysNet,KARML2026}
 
 A practical hybrid scheme must expose a \emph{single} total energy both when
-fitting parameters and when integrating equations of motion. The MMML
-package\cite{MMML2026} implements that requirement through a shared hybrid
+fitting parameters and when integrating equations of motion. The KARML
+package\cite{KARML2026} implements that requirement through a shared hybrid
 forward pass used by training and MD entry points. The remainder of this
 article defines the hybrid energy (Section~\ref{sec:energy}), summarizes
 training and condensed-phase protocols (Sections~\ref{sec:train}--\ref{sec:md}),
@@ -960,7 +960,7 @@ Computational resources at the University of Basel are gratefully acknowledged.
 \begin{suppinfo}
 Supporting Information is appended at the end of this file (CLI inventories,
 YAML templates, free-energy command examples, and workflow provenance notes).
-Extended CLI documentation also lives in the MMML documentation tree.
+Extended CLI documentation also lives in the KARML documentation tree.
 \end{suppinfo}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -1002,7 +1002,7 @@ for Condensed-Phase Simulations}\\[0.4em]
 
 Hybrid models are trained with
 \begin{verbatim}
-mmml physnet-train --hybrid-mm [--config train.yaml]
+karml physnet-train --hybrid-mm [--config train.yaml]
 \end{verbatim}
 Essential flags (YAML or CLI):
 \begin{itemize}
@@ -1017,8 +1017,8 @@ CGenFF fields in the NPZ (\texttt{cgenff\_type\_idx}, \texttt{mol\_id},
 \texttt{cgenff\_charge}, master \(\sigma/\varepsilon\)) are prepared after
 electronic-structure evaluation of normal-mode samples, e.g.\
 \begin{verbatim}
-mmml prepare-mm-dataset ...
-mmml physnet-train --hybrid-mm --config train.yaml
+karml prepare-mm-dataset ...
+karml physnet-train --hybrid-mm --config train.yaml
 \end{verbatim}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -1028,7 +1028,7 @@ mmml physnet-train --hybrid-mm --config train.yaml
 
 Dynamics are launched with
 \begin{verbatim}
-mmml md-system --config campaign.yaml --run-all [--resume]
+karml md-system --config campaign.yaml --run-all [--resume]
 \end{verbatim}
 A campaign file supplies global \texttt{defaults} (composition, box, checkpoint,
 cutoffs, \texttt{lr\_solver}, \texttt{mm\_charge\_mode}, backend options) and an
@@ -1072,7 +1072,7 @@ runs:
 \toprule
 Component & Role \\
 \midrule
-MMML\cite{MMML2026} & CLI, hybrid calculator, workflows \\
+KARML\cite{KARML2026} & CLI, hybrid calculator, workflows \\
 JAX / jax-md\cite{Schoenholz2019JaxMD} & Differentiable hybrid energy; jaxmd backend \\
 PyCHARMM / CHARMM\cite{Brooks2009CHARMM} & Topology, classical MM, pycharmm backend \\
 PhysNet / SpookyNet / SO3LR\cite{Unke2019PhysNet,Unke2021SpookyNet,Kabylda2025SO3LR}
@@ -1091,11 +1091,11 @@ Snakemake (+ Slurm) & Parameter sweeps and cluster submission \\
 
 Gas-phase packed windows:
 \begin{verbatim}
-mmml umbrella-sample \
+karml umbrella-sample \
   --checkpoint model.json \
   --structure seed.xyz \
   --config umbrella.yaml
-mmml umbrella-mbar --input umbrella_windows.json -o pmf/
+karml umbrella-mbar --input umbrella_windows.json -o pmf/
 \end{verbatim}
 Explicit-solvent mechanical embedding uses \texttt{engine: hybrid\_jaxmd} with a
 PSF/PDB/box and an ML region (reactive complex) while solvent remains MM.

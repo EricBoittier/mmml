@@ -20,7 +20,7 @@ pytest.importorskip("jax_md")
 
 from jax_md import quantity  # noqa: E402
 
-import mmml.cli.run.jaxmd_runner as runner  # noqa: E402
+import karml.cli.run.jaxmd_runner as runner  # noqa: E402
 
 SIGMA = 3.4
 EPS = 0.0104

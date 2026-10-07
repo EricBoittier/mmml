@@ -1,4 +1,4 @@
-# `mmml mode-check`
+# `karml mode-check`
 
 Monomer/cluster FD, X–H stretch, vib, kick (+ PBC FD).
 
@@ -6,13 +6,13 @@ Monomer/cluster FD, X–H stretch, vib, kick (+ PBC FD).
 ## Usage
 
 ```bash
-mmml mode-check --help
+karml mode-check --help
 ```
 
 ## Options
 
 ```text
-usage: mmml mode-check [-h] [--pbc-fd] [--composition COMPOSITION]
+usage: karml mode-check [-h] [--pbc-fd] [--composition COMPOSITION]
                        [--checkpoint CHECKPOINT] [--output-dir OUTPUT_DIR]
                        [--output OUTPUT] [--xyz XYZ] [--checks CHECKS]
                        [--include-mm | --no-include-mm]
@@ -44,7 +44,7 @@ Input & configuration:
                         TIP3:2
   --checkpoint CHECKPOINT
                         PhysNet / Spooky portable JSON or Orbax checkpoint
-                        ($MMML_CKPT / bundled)
+                        ($KARML_CKPT / bundled)
   --residue RESIDUE     Residue for --pbc-fd
 
 Scientific model:

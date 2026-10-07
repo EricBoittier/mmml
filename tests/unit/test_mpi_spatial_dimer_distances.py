@@ -4,18 +4,18 @@ from __future__ import annotations
 
 import numpy as np
 
-from mmml.interfaces.pycharmmInterface.mlpot.medium_pbc_validation import (
+from karml.interfaces.pycharmmInterface.mlpot.medium_pbc_validation import (
     lattice_positions_cubic_pbc,
 )
-from mmml.interfaces.pycharmmInterface.mlpot.mlpot_sparse_dimer_policy import (
+from karml.interfaces.pycharmmInterface.mlpot.mlpot_sparse_dimer_policy import (
     build_monomer_dimer_index_arrays,
     dimer_com_distance_numpy,
 )
-from mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.active_set import (
+from karml.interfaces.pycharmmInterface.mlpot.mpi_spatial.active_set import (
     global_near_dimer_mask,
     monomer_pair_com_distances_mic,
 )
-from mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domain import compute_monomer_coms
+from karml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domain import compute_monomer_coms
 
 
 def _reference_dimer_dists(pos, n_monomers, atoms_per, box_side):

@@ -21,8 +21,8 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from mmml.interfaces.pycharmmInterface.long_range_backend import CHARMM_COULOMB_KCAL
-from mmml.interfaces.pycharmmInterface.pbc_utils_jax import mic_displacement
+from karml.interfaces.pycharmmInterface.long_range_backend import CHARMM_COULOMB_KCAL
+from karml.interfaces.pycharmmInterface.pbc_utils_jax import mic_displacement
 
 jax.config.update("jax_enable_x64", True)
 
@@ -56,13 +56,13 @@ def print_header(title: str) -> None:
 
 
 def print_pass(msg: str) -> None:
-    from mmml.utils.rich_report import emit_status
+    from karml.utils.rich_report import emit_status
 
     emit_status(True, msg)
 
 
 def print_fail(msg: str) -> None:
-    from mmml.utils.rich_report import emit_status
+    from karml.utils.rich_report import emit_status
 
     emit_status(False, msg)
 
@@ -77,20 +77,20 @@ def have_jax_pme_package() -> bool:
 
 
 def have_scafacos_library() -> bool:
-    from mmml.interfaces.scafacosInterface import have_scafacos
+    from karml.interfaces.scafacosInterface import have_scafacos
 
     return have_scafacos()
 
 
 def scafacos_integration_enabled() -> bool:
     """Opt-in gate for ScaFaCoS integration tests (avoids MPI crashes in CI)."""
-    flag = os.environ.get("MMML_SCAFACOS_TESTS", "").strip().lower()
+    flag = os.environ.get("KARML_SCAFACOS_TESTS", "").strip().lower()
     return flag in ("1", "yes", "true") and have_scafacos_library()
 
 
 def default_scafacos_method() -> str:
     """Solver string for tests (env override, else first default-build method)."""
-    from mmml.interfaces.scafacosInterface.scafacos_session import SCAFACOS_DEFAULT_METHODS
+    from karml.interfaces.scafacosInterface.scafacos_session import SCAFACOS_DEFAULT_METHODS
 
     env = os.environ.get("SCAFACOS_METHOD", "").strip()
     if env:
@@ -198,7 +198,7 @@ def mic_coulomb_energy_forces(
     cutoff_A: float | None = None,
     constant: float = CHARMM_COULOMB_KCAL,
 ) -> CoulombResult:
-    """All-pairs MIC Coulomb (MMML pair convention: sum over i<j, no extra ½)."""
+    """All-pairs MIC Coulomb (KARML pair convention: sum over i<j, no extra ½)."""
     pos = np.asarray(system.positions_A, dtype=np.float64)
     chg = np.asarray(system.charges_e, dtype=np.float64)
     cell = np.eye(3, dtype=np.float64) * float(system.box_length_A)
@@ -244,7 +244,7 @@ def jax_pme_coulomb_energy_forces(
     calc_map = {"ewald": Ewald, "pme": PME, "p3m": P3M}
     calc = calc_map[method](prefactor=jpref.kcalmol_A)
     smearing = sr_cutoff_A / 5.0
-    from mmml.interfaces.pycharmmInterface.long_range_backend import jax_pme_mesh_spacing_A
+    from karml.interfaces.pycharmmInterface.long_range_backend import jax_pme_mesh_spacing_A
 
     mesh_spacing = jax_pme_mesh_spacing_A(sr_cutoff_A, L)
     lr_wavelength = smearing / 2.0
@@ -266,7 +266,7 @@ def jax_pme_coulomb_energy_forces(
             smearing=smearing,
         )
 
-    from mmml.interfaces.pycharmmInterface.long_range_backend import (
+    from karml.interfaces.pycharmmInterface.long_range_backend import (
         jax_pme_host_eval_context,
         jax_pme_mesh_method,
         jax_pme_pure_callback_host_context,
@@ -294,7 +294,7 @@ def scafacos_coulomb_energy_forces(
     parameters: dict[str, str | float | int] | None = None,
 ) -> CoulombResult:
     """Full periodic Coulomb via ScaFaCoS libfcs."""
-    from mmml.interfaces.scafacosInterface import compute_scafacos_coulomb
+    from karml.interfaces.scafacosInterface import compute_scafacos_coulomb
 
     out = compute_scafacos_coulomb(
         system.positions_A,
@@ -367,8 +367,8 @@ def compare_results(
 
 
 def available_scafacos_methods() -> list[str]:
-    from mmml.interfaces.scafacosInterface import scafacos_runtime_ok
-    from mmml.interfaces.scafacosInterface.scafacos_session import SCAFACOS_DEFAULT_METHODS
+    from karml.interfaces.scafacosInterface import scafacos_runtime_ok
+    from karml.interfaces.scafacosInterface.scafacos_session import SCAFACOS_DEFAULT_METHODS
 
     if not scafacos_integration_enabled():
         return []
@@ -380,8 +380,8 @@ def available_scafacos_methods() -> list[str]:
 
 
 def describe_environment() -> str:
-    from mmml.interfaces.pycharmmInterface.long_range_backend import describe_lr_solver
-    from mmml.interfaces.scafacosInterface import scafacos_runtime_ok
+    from karml.interfaces.pycharmmInterface.long_range_backend import describe_lr_solver
+    from karml.interfaces.scafacosInterface import scafacos_runtime_ok
 
     lines = [describe_lr_solver()]
     lines.append(f"jaxpme={'yes' if have_jax_pme_package() else 'no'}")
@@ -392,6 +392,6 @@ def describe_environment() -> str:
         lines.append(f"scafacos_methods={','.join(methods) if methods else 'none'}")
     elif have_scafacos_library():
         lines.append(
-            "scafacos_runtime=skipped (set MMML_SCAFACOS_TESTS=1 and run under mpiexec)"
+            "scafacos_runtime=skipped (set KARML_SCAFACOS_TESTS=1 and run under mpiexec)"
         )
     return "\n".join(lines)

@@ -4,7 +4,7 @@
 # Regenerate: uv run python examples/m/07_export_neb_endpoints.py
 #
 #   source examples/m/_env.sh
-#   uv run mmml neb --config examples/m/yaml/neb.yaml --overwrite
+#   uv run karml neb --config examples/m/yaml/neb.yaml --overwrite
 #   bash examples/m/13_neb.sh
 
 initial: ../neb/reag_0_opt.xyz

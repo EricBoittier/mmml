@@ -1,4 +1,4 @@
-"""Figures for ``mmml tune-mm-nonbonded fit`` (house ``icml`` style, Okabe-Ito)."""
+"""Figures for ``karml tune-mm-nonbonded fit`` (house ``icml`` style, Okabe-Ito)."""
 
 from __future__ import annotations
 
@@ -47,8 +47,8 @@ def make_tune_figures(
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
-    from mmml.models.mm_nonbonded_tune import TuneParams, predict_energy
-    from mmml.utils.plotting.styles import apply_plot_style, legend_outside
+    from karml.models.mm_nonbonded_tune import TuneParams, predict_energy
+    from karml.utils.plotting.styles import apply_plot_style, legend_outside
 
     apply_plot_style("icml")
     figs_dir = Path(figs_dir)

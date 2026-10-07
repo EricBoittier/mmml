@@ -103,7 +103,7 @@ slurm_cpus_per_task: 4
 slurm_mem_mb_per_cpu: 4000
 slurm_runtime_min: 120
 slurm_max_concurrent: 6
-# Prefer idle nodes; override with MMML_SLURM_NO_NODELIST=1 if needed.
+# Prefer idle nodes; override with KARML_SLURM_NO_NODELIST=1 if needed.
 slurm_gpu_nodes_fast:
   - gpu01
   - gpu02

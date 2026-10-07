@@ -10,7 +10,7 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 import pytest
 
-from mmml.cli.run.md_evaluate_npz import (
+from karml.cli.run.md_evaluate_npz import (
     EvaluateNpzPayload,
     _reference_com_dist_A,
     classify_ml_regime,
@@ -29,7 +29,7 @@ from mmml.cli.run.md_evaluate_npz import (
     save_evaluate_trajectory_npz_multi,
     should_evaluate_reference_trajectory,
 )
-from mmml.cli.run.md_handoff import MdHandoffState
+from karml.cli.run.md_handoff import MdHandoffState
 
 
 def test_load_evaluate_npz_optional_mm_fields(tmp_path: Path) -> None:
@@ -68,7 +68,7 @@ def test_load_evaluate_npz_positions_only(tmp_path: Path) -> None:
 
 
 def test_evaluate_int_arg_treats_none_as_default() -> None:
-    from mmml.cli.run.md_evaluate_npz import _evaluate_int_arg
+    from karml.cli.run.md_evaluate_npz import _evaluate_int_arg
 
     args = Namespace(max_pairs=None, jax_md_update_interval=None)
     assert _evaluate_int_arg(args, "max_pairs", 20_000) == 20_000
@@ -76,9 +76,9 @@ def test_evaluate_int_arg_treats_none_as_default() -> None:
     assert _evaluate_int_arg(Namespace(), "max_pairs", 20_000) == 20_000
 
 
-def test_attach_ase_mmml_forwards_ml_charge_configuration(monkeypatch) -> None:
+def test_attach_ase_karml_forwards_ml_charge_configuration(monkeypatch) -> None:
     """Static validation must exercise the requested E_MM charge Hamiltonian."""
-    from mmml.cli.run.md_evaluate_npz import _attach_ase_mmml_calculator
+    from karml.cli.run.md_evaluate_npz import _attach_ase_karml_calculator
 
     captured: dict[str, object] = {}
     sentinel = object()
@@ -88,7 +88,7 @@ def test_attach_ase_mmml_forwards_ml_charge_configuration(monkeypatch) -> None:
         return sentinel
 
     monkeypatch.setattr(
-        "mmml.cli.run.md_pbc_suite.ase._factory_mmml", fake_factory
+        "karml.cli.run.md_pbc_suite.ase._factory_karml", fake_factory
     )
     atoms = MagicMock()
     atoms.get_positions.return_value = np.zeros((6, 3), dtype=np.float64)
@@ -98,7 +98,7 @@ def test_attach_ase_mmml_forwards_ml_charge_configuration(monkeypatch) -> None:
         mm_latent_charge_template=None,
     )
 
-    result = _attach_ase_mmml_calculator(
+    result = _attach_ase_karml_calculator(
         args,
         atoms=atoms,
         z=np.array([8, 1, 1, 8, 1, 1], dtype=np.int32),
@@ -125,7 +125,7 @@ def test_composition_mismatch_frames_flags_relabelled_frames() -> None:
     """
     from types import SimpleNamespace
 
-    from mmml.cli.run.md_evaluate_npz import composition_mismatch_frames
+    from karml.cli.run.md_evaluate_npz import composition_mismatch_frames
 
     water = [8, 1, 1, 8, 1, 1]
     other = [8, 6, 8, 1, 1, 18]
@@ -151,7 +151,7 @@ def test_evaluate_npz_declares_the_unit_it_actually_stores(tmp_path: Path, multi
     rather than against EV_TO_HARTREE, so a wrong internal constant cannot make
     this pass by being consistently wrong with the writer.
     """
-    from mmml.data.units import units_from_npz
+    from karml.data.units import units_from_npz
 
     hartree_to_ev = 27.211386245988  # CODATA 2018
     energy_ev = -19.9964262266207
@@ -179,7 +179,7 @@ def test_evaluate_npz_declares_the_unit_it_actually_stores(tmp_path: Path, multi
     with np.load(path, allow_pickle=True) as data:
         stored_e = float(np.asarray(data["E"]).reshape(-1)[0])
         stored_e_ev = float(np.asarray(data["E_eV"]).reshape(-1)[0])
-        declared = json.loads(str(np.asarray(data["_mmml_units"]).item()))
+        declared = json.loads(str(np.asarray(data["_karml_units"]).item()))
 
     assert stored_e_ev == pytest.approx(energy_ev, rel=1e-12)
     assert stored_e * hartree_to_ev == pytest.approx(energy_ev, rel=1e-6)
@@ -368,7 +368,7 @@ def test_should_evaluate_reference_trajectory() -> None:
 
 
 def test_resolve_reference_units_respects_manifest_when_cli_unset(tmp_path: Path) -> None:
-    from mmml.data.units import UnitsManifestV2
+    from karml.data.units import UnitsManifestV2
 
     manifest = UnitsManifestV2(
         arrays={"E": "ev", "F": "ev_angstrom", "R": "angstrom"},
@@ -459,7 +459,7 @@ def test_save_evaluate_extxyz_includes_forces(tmp_path: Path) -> None:
 
 
 def test_center_positions_at_com_moves_mass_weighted_origin() -> None:
-    from mmml.cli.run.md_evaluate_npz import center_positions_at_com
+    from karml.cli.run.md_evaluate_npz import center_positions_at_com
 
     z = np.array([6, 1, 1], dtype=int)
     pos = np.array([[1.0, 0.0, 0.0], [4.0, 0.0, 0.0], [7.0, 0.0, 0.0]])
@@ -473,7 +473,7 @@ def test_center_positions_at_com_moves_mass_weighted_origin() -> None:
 def test_save_evaluate_compare_extxyz_trajectories_writes_three_layers(tmp_path: Path) -> None:
     from ase.io import read
 
-    from mmml.cli.run.md_evaluate_npz import save_evaluate_compare_extxyz_trajectories
+    from karml.cli.run.md_evaluate_npz import save_evaluate_compare_extxyz_trajectories
 
     z = np.array([6, 1, 1, 17, 17], dtype=np.int32)
     r = np.array([[[1.0, 2.0, 3.0]] * 5])
@@ -516,7 +516,7 @@ def test_resolve_evaluate_use_pbc_from_setup() -> None:
 
 
 def test_md_system_parser_accepts_evaluate_npz() -> None:
-    from mmml.cli.run.md_system import parse_md_system_args
+    from karml.cli.run.md_system import parse_md_system_args
 
     args = parse_md_system_args(
         [
@@ -537,7 +537,7 @@ def test_md_system_parser_accepts_evaluate_npz() -> None:
 
 
 def test_md_system_parser_accepts_optimize_cutoffs() -> None:
-    from mmml.cli.run.md_system import parse_md_system_args
+    from karml.cli.run.md_system import parse_md_system_args
 
     args = parse_md_system_args(
         [
@@ -613,18 +613,18 @@ def test_run_evaluate_npz_ase_backend(tmp_path: Path, monkeypatch: pytest.Monkey
     fake_ase_mod._parse_composition.return_value = [("ACO", 1)]
 
     with (
-        patch.dict(sys.modules, {"mmml.cli.run.md_pbc_suite.ase": fake_ase_mod}),
+        patch.dict(sys.modules, {"karml.cli.run.md_pbc_suite.ase": fake_ase_mod}),
         patch(
-            "mmml.cli.run.md_evaluate_npz.cluster_geometry_from_handoff",
+            "karml.cli.run.md_evaluate_npz.cluster_geometry_from_handoff",
             return_value=(z, pos, [4], ["ACO"], {"ACO": 1}),
         ),
-        patch("mmml.cli.run.md_evaluate_npz.ensure_psf_for_handoff_cluster"),
+        patch("karml.cli.run.md_evaluate_npz.ensure_psf_for_handoff_cluster"),
         patch(
-            "mmml.cli.run.md_evaluate_npz._build_atoms_for_evaluate",
+            "karml.cli.run.md_evaluate_npz._build_atoms_for_evaluate",
             return_value=fake_atoms,
         ),
         patch(
-            "mmml.cli.run.md_evaluate_npz._evaluate_ase_mmml",
+            "karml.cli.run.md_evaluate_npz._evaluate_ase_karml",
             return_value={
                 "energy_eV": -1.25,
                 "forces_eV_A": np.zeros((4, 3)).tolist(),
@@ -637,7 +637,7 @@ def test_run_evaluate_npz_ase_backend(tmp_path: Path, monkeypatch: pytest.Monkey
             },
         ),
         patch(
-            "mmml.cli.base.resolve_checkpoint_paths",
+            "karml.cli.base.resolve_checkpoint_paths",
             return_value=(Path("/tmp/ckpt"), Path("/tmp/ckpt")),
         ),
     ):
@@ -659,7 +659,7 @@ def test_md_system_evaluate_npz_manifest_exit_code_success(
 ) -> None:
     import sys
 
-    from mmml.cli.run import md_system
+    from karml.cli.run import md_system
 
     out_dir = tmp_path / "eval_smoke"
     out_dir.mkdir()
@@ -671,7 +671,7 @@ def test_md_system_evaluate_npz_manifest_exit_code_success(
         sys,
         "argv",
         [
-            "mmml",
+            "karml",
             "--evaluate-npz",
             str(npz),
             "--composition",
@@ -684,7 +684,7 @@ def test_md_system_evaluate_npz_manifest_exit_code_success(
             str(out_dir),
         ],
     )
-    monkeypatch.setattr("mmml.cli.run.md_evaluate_npz.run_evaluate_npz", lambda _args: 0)
+    monkeypatch.setattr("karml.cli.run.md_evaluate_npz.run_evaluate_npz", lambda _args: 0)
 
     assert md_system.main() == 0
 
@@ -695,7 +695,7 @@ def test_md_system_evaluate_npz_manifest_exit_code_success(
 
 
 def test_normalize_metrics_converts_hartree_labeled_ev() -> None:
-    from mmml.cli.run.md_evaluate_npz import normalize_metrics_to_ev
+    from karml.cli.run.md_evaluate_npz import normalize_metrics_to_ev
 
     metrics = normalize_metrics_to_ev(
         {
@@ -710,7 +710,7 @@ def test_normalize_metrics_converts_hartree_labeled_ev() -> None:
 
 
 def test_save_evaluate_npz_e_and_e_ev_consistent(tmp_path: Path) -> None:
-    from mmml.data.units import EV_TO_HARTREE
+    from karml.data.units import EV_TO_HARTREE
 
     z = np.array([6, 1, 1], dtype=np.int32)
     r = np.zeros((3, 3))
@@ -740,7 +740,7 @@ def test_compare_autodetects_ev_reference(tmp_path: Path) -> None:
         Z=z.reshape(1, 2),
         R=r.reshape(1, 2, 3),
         E=np.array([-10.0], dtype=np.float64),
-        _mmml_units=np.array(meta),
+        _karml_units=np.array(meta),
     )
     cmp = compare_evaluate_to_reference_npz(
         ref_path,
@@ -755,12 +755,12 @@ def test_compare_autodetects_ev_reference(tmp_path: Path) -> None:
 
 
 def test_apply_charmm_output_from_args_defaults_missing_bomlev() -> None:
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
         apply_charmm_output_from_args,
     )
 
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.apply_charmm_verbosity"
+        "karml.interfaces.pycharmmInterface.mlpot.setup.apply_charmm_verbosity"
     ) as mock_apply:
         nprint = apply_charmm_output_from_args(Namespace(quiet=True))
     assert nprint == 100
@@ -768,12 +768,12 @@ def test_apply_charmm_output_from_args_defaults_missing_bomlev() -> None:
 
 
 def test_evaluate_jaxmd_uses_cutoff_parameters_from_cutoffs_module() -> None:
-    import mmml.cli.run.md_evaluate_npz as mod
+    import karml.cli.run.md_evaluate_npz as mod
 
     source = Path(mod.__file__).read_text(encoding="utf-8")
-    assert "from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters" in source
+    assert "from karml.interfaces.pycharmmInterface.cutoffs import CutoffParameters" in source
     assert (
-        "from mmml.interfaces.pycharmmInterface.calculator_utils import CutoffParameters"
+        "from karml.interfaces.pycharmmInterface.calculator_utils import CutoffParameters"
         not in source
     )
 
@@ -781,12 +781,12 @@ def test_evaluate_jaxmd_uses_cutoff_parameters_from_cutoffs_module() -> None:
 def test_charmm_total_forces_ev_angstrom_converts_kcal_units(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from mmml.interfaces.pycharmmInterface.charmm_mpi import charmm_lib_available
+    from karml.interfaces.pycharmmInterface.charmm_mpi import charmm_lib_available
 
     if not charmm_lib_available():
         pytest.skip("CHARMM runtime not available")
     import pycharmm  # noqa: F401
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
         charmm_total_forces_ev_angstrom,
         charmm_total_forces_kcalmol_A,
     )
@@ -798,7 +798,7 @@ def test_charmm_total_forces_ev_angstrom_converts_kcal_units(
     # pinning is the sign flip (gradient -> force) and the kcal/mol -> eV
     # conversion, both of which sit above that call.
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.charmm_forces.charmm_gradient_array",
+        "karml.interfaces.pycharmmInterface.charmm_forces.charmm_gradient_array",
         lambda: np.array([[-23.060548867, 0.0, 0.0]], dtype=float),
     )
     kcal = charmm_total_forces_kcalmol_A()
@@ -811,47 +811,47 @@ def test_charmm_total_forces_ev_angstrom_converts_kcal_units(
 def test_evaluate_pycharmm_returns_forces_ev_angstrom(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from mmml.cli.run.md_evaluate_npz import _evaluate_pycharmm
-    from mmml.interfaces.pycharmmInterface.mmml_calculator import ev2kcalmol
+    from karml.cli.run.md_evaluate_npz import _evaluate_pycharmm
+    from karml.interfaces.pycharmmInterface.karml_calculator import ev2kcalmol
 
     forces_kcal = np.array([[23.060548867, 0.0, 0.0], [0.0, 46.121097734, 0.0]])
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.apply_charmm_output_from_args",
+        "karml.interfaces.pycharmmInterface.mlpot.cli_common.apply_charmm_output_from_args",
         lambda _args: 50,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.setup_default_nbonds",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.setup_default_nbonds",
         lambda: None,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.resolve_checkpoint",
+        "karml.interfaces.pycharmmInterface.mlpot.cli_common.resolve_checkpoint",
         lambda _ckpt: Path("/tmp/ckpt"),
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.run_workflow._register_mlpot_context",
+        "karml.interfaces.pycharmmInterface.mlpot.run_workflow._register_mlpot_context",
         lambda *a, **k: (object(), object()),
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
         lambda _pos: None,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.refresh_mlpot_energy_and_grms",
+        "karml.interfaces.pycharmmInterface.mlpot.cli_common.refresh_mlpot_energy_and_grms",
         lambda *_a, **_k: 0.1,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.charmm_energy_row",
+        "karml.interfaces.pycharmmInterface.mlpot.cli_common.charmm_energy_row",
         lambda: {"ENER": float(ev2kcalmol)},
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.resolve_evaluate_forces_ev_angstrom",
+        "karml.interfaces.pycharmmInterface.mlpot.cli_common.resolve_evaluate_forces_ev_angstrom",
         lambda _calc, *, natom, positions=None, use_pbc=False, box_A=None: (
             np.asarray(forces_kcal[: int(natom)], dtype=np.float64) / float(ev2kcalmol),
             "spherical_fn",
         ),
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.collect_evaluate_force_sources_ev_angstrom",
+        "karml.interfaces.pycharmmInterface.mlpot.cli_common.collect_evaluate_force_sources_ev_angstrom",
         lambda *_a, **_k: {},
     )
 
@@ -873,10 +873,10 @@ def test_evaluate_pycharmm_returns_forces_ev_angstrom(
 
 
 def test_mlpot_hybrid_forces_ev_angstrom_reads_last_ml_forces() -> None:
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
         mlpot_hybrid_forces_ev_angstrom,
     )
-    from mmml.interfaces.pycharmmInterface.mmml_calculator import ev2kcalmol
+    from karml.interfaces.pycharmmInterface.karml_calculator import ev2kcalmol
 
     class _Calc:
         last_ml_forces = np.array([[23.060548867, 0.0, 0.0]], dtype=np.float64)
@@ -909,10 +909,10 @@ def test_reference_com_dist_A_from_trajectory() -> None:
 def test_build_atoms_for_evaluate_preserves_r0_when_requested(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from mmml.cli.run.md_evaluate_npz import _build_atoms_for_evaluate
+    from karml.cli.run.md_evaluate_npz import _build_atoms_for_evaluate
 
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
         lambda _pos: None,
     )
 
@@ -1015,7 +1015,7 @@ def test_save_evaluate_compare_diagnostics_writes_csv_and_summary(tmp_path: Path
 
 
 def test_enrich_compare_with_force_sources() -> None:
-    from mmml.cli.run.md_evaluate_npz import enrich_compare_with_force_sources
+    from karml.cli.run.md_evaluate_npz import enrich_compare_with_force_sources
 
     cmp: dict = {"force_rmse_eV_A": 0.1}
     ref_f = np.zeros((2, 3), dtype=np.float64)
@@ -1040,7 +1040,7 @@ def test_enrich_compare_with_force_sources() -> None:
 
 
 def test_metrics_for_json_export_strips_force_sources() -> None:
-    from mmml.cli.run.md_evaluate_npz import metrics_for_json_export
+    from karml.cli.run.md_evaluate_npz import metrics_for_json_export
 
     metrics = {
         "energy_eV": 1.0,
@@ -1052,7 +1052,7 @@ def test_metrics_for_json_export_strips_force_sources() -> None:
 
 
 def test_compare_force_sources_to_reference() -> None:
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
         compare_force_sources_to_reference,
         cross_lane_force_rmse_ev_angstrom,
         force_error_metrics_ev_angstrom,
@@ -1077,7 +1077,7 @@ def test_compare_force_sources_to_reference() -> None:
 
 def test_evaluate_pycharmm_reuses_mlpot_state_without_reregister() -> None:
     """Multi-frame evaluate must not call register_mlpot per frame (upinb segfault)."""
-    from mmml.cli.run.md_evaluate_npz import _evaluate_pycharmm
+    from karml.cli.run.md_evaluate_npz import _evaluate_pycharmm
 
     z = np.array([6, 1, 1, 1, 1, 6, 1, 1, 1, 1], dtype=np.int32)
     pos = np.random.default_rng(0).random((10, 3))
@@ -1086,12 +1086,12 @@ def test_evaluate_pycharmm_reuses_mlpot_state_without_reregister() -> None:
     args = Namespace(quiet=True)
 
     with patch(
-        "mmml.cli.run.md_evaluate_npz.setup_pycharmm_eval_mlpot",
+        "karml.cli.run.md_evaluate_npz.setup_pycharmm_eval_mlpot",
     ) as setup_mock, patch(
-        "mmml.cli.run.md_evaluate_npz._pycharmm_eval_metrics",
+        "karml.cli.run.md_evaluate_npz._pycharmm_eval_metrics",
         return_value={"energy_eV": 1.0, "forces_eV_A": np.zeros((10, 3))},
     ) as metrics_mock, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
     ) as sync_mock:
         _evaluate_pycharmm(
             args,

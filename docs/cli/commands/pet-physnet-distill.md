@@ -1,4 +1,4 @@
-# `mmml pet-physnet-distill`
+# `karml pet-physnet-distill`
 
 PET-MAD teacher → PhysNet NPZ (acetone dataset + synthetic pool).
 
@@ -6,13 +6,13 @@ PET-MAD teacher → PhysNet NPZ (acetone dataset + synthetic pool).
 ## Usage
 
 ```bash
-mmml pet-physnet-distill --help
+karml pet-physnet-distill --help
 ```
 
 ## Options
 
 ```text
-usage: mmml pet-physnet-distill [-h] [--checkpoint CHECKPOINT] --out-dir OUT_DIR
+usage: karml pet-physnet-distill [-h] [--checkpoint CHECKPOINT] --out-dir OUT_DIR
                                 [--preset {smoke,md}] [--seed SEED]
                                 [--energy-mode {mlmm,interaction,total}]
                                 [--geometries-only]
@@ -111,7 +111,7 @@ Other options:
 
 ## Related docs
 
-- [Metatomic in MMML](../../metatomic.md)
+- [Metatomic in KARML](../../metatomic.md)
 - [Bayesian PES design](../../bayesian-pes-design.md)
 
 ---

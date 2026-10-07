@@ -9,7 +9,7 @@ import sys
 import numpy as np
 
 from _common import npt_box_sequence, print_fail, print_header, print_pass, two_dimer_cluster
-from mmml.interfaces.pycharmmInterface.mm_energy_forces import neighbor_pair_cache_should_reuse
+from karml.interfaces.pycharmmInterface.mm_energy_forces import neighbor_pair_cache_should_reuse
 
 
 def main() -> int:

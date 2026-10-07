@@ -12,13 +12,13 @@ from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
 
-from mmml.interfaces.pycharmmInterface.mlpot.monomer_geometry_limits import (
+from karml.interfaces.pycharmmInterface.mlpot.monomer_geometry_limits import (
     DEFAULT_INTRA_MIN_DISTANCE_A,
     DEFAULT_MAX_MONOMER_EXTENT_A,
 )
 
 if TYPE_CHECKING:
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
+    from karml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
 
 DynamicsOverlapAction = Literal["error", "warn", "rescue", "off"]
 
@@ -187,7 +187,7 @@ def add_dynamics_overlap_args(parser: argparse.ArgumentParser) -> None:
         action="store_true",
         help=(
             "Continue overlap chunks in-process without READYN on scratch restarts. "
-            "Default on MPI-linked CHARMM under mpirun (set MMML_NO_OVERLAP_MEMORY_HANDOFF=1 "
+            "Default on MPI-linked CHARMM under mpirun (set KARML_NO_OVERLAP_MEMORY_HANDOFF=1 "
             "to force scratch .overlap_a/.b.res handoffs)."
         ),
     )
@@ -361,12 +361,12 @@ def resolve_overlap_memory_handoff(args: argparse.Namespace | Any | None) -> boo
     """
     if bool(getattr(args, "dynamics_overlap_memory_handoff", False)):
         return True
-    if _truthy_env("MMML_NO_OVERLAP_MEMORY_HANDOFF"):
+    if _truthy_env("KARML_NO_OVERLAP_MEMORY_HANDOFF"):
         return False
-    if _truthy_env("MMML_OVERLAP_MEMORY_HANDOFF"):
+    if _truthy_env("KARML_OVERLAP_MEMORY_HANDOFF"):
         return True
     try:
-        from mmml.interfaces.pycharmmInterface.charmm_mpi import (
+        from karml.interfaces.pycharmmInterface.charmm_mpi import (
             _under_mpirun,
             charmm_lib_links_mpi,
         )
@@ -415,7 +415,7 @@ def _workflow_arg(args: Any | None, name: str, default: Any = None) -> Any:
 
 
 def _workflow_arg_int(args: Any | None, name: str, default: int) -> int:
-    from mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping import (
+    from karml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping import (
         _safe_int,
     )
 
@@ -423,7 +423,7 @@ def _workflow_arg_int(args: Any | None, name: str, default: int) -> int:
 
 
 def _workflow_arg_float(args: Any | None, name: str, default: float) -> float:
-    from mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping import (
+    from karml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping import (
         _safe_float,
     )
 
@@ -452,7 +452,7 @@ def resolve_dynamics_overlap_config(
     if action not in ("error", "warn", "rescue", "off"):
         raise ValueError(f"unknown dynamics_overlap_action: {action!r}")
 
-    from mmml.utils.intermonomer_geometry import DYNAMICS_OVERLAP_REFERENCE_A
+    from karml.utils.intermonomer_geometry import DYNAMICS_OVERLAP_REFERENCE_A
 
     min_dist = _workflow_arg(args, "dynamics_overlap_min_distance", None)
     if min_dist is None:
@@ -537,7 +537,7 @@ def resolve_dynamics_overlap_config(
 
 
 def _monomer_health_config_from_args(args: argparse.Namespace | Any | None) -> Any:
-    from mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping import (
+    from karml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping import (
         monomer_health_config_from_args,
     )
 
@@ -545,13 +545,13 @@ def _monomer_health_config_from_args(args: argparse.Namespace | Any | None) -> A
 
 
 def _cleanup_mode_from_args(args: argparse.Namespace) -> bool:
-    from mmml.interfaces.pycharmmInterface.mlpot.cleanup_mode import cleanup_enabled
+    from karml.interfaces.pycharmmInterface.mlpot.cleanup_mode import cleanup_enabled
 
     return cleanup_enabled(args)
 
 
 def _cleanup_overlap_fallback_from_args(args: argparse.Namespace) -> bool:
-    from mmml.interfaces.pycharmmInterface.mlpot.cleanup_mode import (
+    from karml.interfaces.pycharmmInterface.mlpot.cleanup_mode import (
         cleanup_overlap_fallback_enabled,
     )
 
@@ -613,7 +613,7 @@ def resolve_prior_segment_restart_path(
     geometry_baseline_restart: Path | str | None = None,
 ) -> Path | None:
     """Return the best on-disk checkpoint before the current segment."""
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import _valid_restart_file
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import _valid_restart_file
 
     candidates: list[Path] = []
     seg_i = int(segment_index)
@@ -627,7 +627,7 @@ def resolve_prior_segment_restart_path(
         p = Path(cand)
         if geometry_baseline_restart is not None and p == Path(geometry_baseline_restart):
             continue
-        from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
+        from karml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
             is_pretreat_mm_restart_path,
         )
 
@@ -657,7 +657,7 @@ def refresh_overlap_prior_segment_restart(
         return overlap
     from dataclasses import replace
 
-    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+    from karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
         ensure_segment_restart_checkpoint,
     )
 
@@ -681,7 +681,7 @@ def attach_prior_segment_restart(
         return overlap
     existing = overlap.prior_segment_restart
     if existing is not None and Path(existing).is_file():
-        from mmml.interfaces.pycharmmInterface.mlpot.dynamics import _valid_restart_file
+        from karml.interfaces.pycharmmInterface.mlpot.dynamics import _valid_restart_file
 
         if _valid_restart_file(existing) is not None:
             return overlap
@@ -710,7 +710,7 @@ def attach_prior_segment_restart(
         geometry_baseline_restart=tagged.geometry_baseline_restart,
     )
     if prior is None:
-        from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
+        from karml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
             build_geometry_recovery_candidates,
             first_valid_restart_path,
         )
@@ -728,17 +728,17 @@ def resolve_overlap_monomer_offsets(
     mlpot_ctx: "MlpotContext | None" = None,
 ) -> np.ndarray:
     """Monomer offsets from PSF / composition / ctx when available, else uniform."""
-    from mmml.interfaces.pycharmmInterface.mlpot.mc_density import (
+    from karml.interfaces.pycharmmInterface.mlpot.mc_density import (
         monomer_offsets_from_atoms_per,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
+    from karml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
 
     pos = get_charmm_positions_array()
     n_atoms = int(pos.shape[0])
     # Mixed solvent PSFs have heterogeneous residue sizes.  Consult the
     # residue boundaries directly before falling back to a uniform split.
     try:
-        from mmml.interfaces.pycharmmInterface.mlpot.trimer_scan import (
+        from karml.interfaces.pycharmmInterface.mlpot.trimer_scan import (
             atoms_per_monomer_from_psf,
         )
 
@@ -748,7 +748,7 @@ def resolve_overlap_monomer_offsets(
     except Exception:
         pass
     if mlpot_ctx is not None:
-        from mmml.interfaces.pycharmmInterface.mlpot.monomer_geometry_limits import (
+        from karml.interfaces.pycharmmInterface.mlpot.monomer_geometry_limits import (
             resolve_monomer_offsets_for_limits,
         )
 
@@ -761,7 +761,7 @@ def resolve_overlap_monomer_offsets(
             return offsets
         args = getattr(mlpot_ctx, "workflow_args", None)
         if args is not None:
-            from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+            from karml.interfaces.pycharmmInterface.mlpot.setup import (
                 _cluster_atoms_per_from_composition,
             )
 
@@ -791,9 +791,9 @@ def monomer_offsets(n_atoms: int, n_monomers: int) -> np.ndarray:
 
 @lru_cache(maxsize=1)
 def _geometry_checks_mod():
-    """Load geometry_checks without importing ``mmml.utils`` (pulls JAX)."""
+    """Load geometry_checks without importing ``karml.utils`` (pulls JAX)."""
     path = Path(__file__).resolve().parents[3] / "utils" / "geometry_checks.py"
-    name = "_mmml_geometry_checks"
+    name = "_karml_geometry_checks"
     if name in sys.modules:
         return sys.modules[name]
     spec = importlib.util.spec_from_file_location(name, path)
@@ -822,7 +822,7 @@ def _separate_intermonomer_overlaps_fn():
 
 @lru_cache(maxsize=1)
 def _repack_monomers_clear_overlap_fn():
-    from mmml.interfaces.pycharmmInterface import packmol_repack
+    from karml.interfaces.pycharmmInterface import packmol_repack
 
     return packmol_repack.repack_monomers_clear_overlap
 
@@ -863,7 +863,7 @@ _bond_exclusion_cache: tuple[int, bool, frozenset[tuple[int, int]]] | None = Non
 def _bond_exclusion_pairs(*, exclude_1_3: bool) -> frozenset[tuple[int, int]]:
     """PSF 1–2 / 1–3 pairs to skip during intra-monomer scans."""
     global _bond_exclusion_cache
-    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+    import karml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
     import pycharmm.psf as psf
 
     nbond = int(psf.get_nbond())
@@ -899,7 +899,7 @@ def _overlap_cell(
 ) -> float | np.ndarray | None:
     if not use_pbc:
         return None
-    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+    from karml.interfaces.pycharmmInterface.mlpot.pbc_env import (
         probe_charmm_cubic_box_side_A,
     )
 
@@ -917,7 +917,7 @@ def measure_worst_intermonomer_distance(
     mlpot_ctx: "MlpotContext | None" = None,
 ) -> float:
     """Return closest inter-monomer atom–atom distance (Å) without raising."""
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
+    from karml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
 
     pos = get_charmm_positions_array()
     offsets = resolve_overlap_monomer_offsets(config, mlpot_ctx)
@@ -935,7 +935,7 @@ def _overlap_check(
     context: str,
     mlpot_ctx: "MlpotContext | None" = None,
 ) -> float:
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
+    from karml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
 
     pos = get_charmm_positions_array()
     offsets = resolve_overlap_monomer_offsets(config, mlpot_ctx)
@@ -959,7 +959,7 @@ def _intramonomer_check(
     context: str,
     mlpot_ctx: "MlpotContext | None" = None,
 ) -> float:
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
+    from karml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
 
     pos = get_charmm_positions_array()
     offsets = resolve_overlap_monomer_offsets(config, mlpot_ctx)
@@ -988,11 +988,11 @@ def relieve_intramonomer_clashes(
     mlpot_ctx: "MlpotContext | None" = None,
 ) -> float:
     """Push apart intra-monomer atom pairs below ``intra_min_distance_A``."""
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+    from karml.interfaces.pycharmmInterface.mlpot.setup import (
         get_charmm_positions_array,
         sync_charmm_positions,
     )
-    from mmml.utils.geometry_checks import (
+    from karml.utils.geometry_checks import (
         find_worst_intramonomer_close_contact,
         separate_intramonomer_contacts,
     )
@@ -1055,7 +1055,7 @@ def _extent_check(
     context: str,
     mlpot_ctx: "MlpotContext | None" = None,
 ) -> float:
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
+    from karml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
 
     pos = get_charmm_positions_array()
     offsets = resolve_overlap_monomer_offsets(config, mlpot_ctx)
@@ -1080,14 +1080,14 @@ def flyoff_checkpoint_geometry_acceptable(
     max_hybrid_grms_kcalmol_A: float = 50.0,
 ) -> bool:
     """True when restored coordinates pass extent and hybrid GRMS gates."""
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
         measure_hybrid_charmm_grms,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         invalidate_mlpot_calculator_caches,
         sync_charmm_lists_after_mini,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+    from karml.interfaces.pycharmmInterface.mlpot.setup import (
         invalidate_mlpot_pre_sd_ener_probe,
     )
 
@@ -1116,7 +1116,7 @@ def _prefer_all_ml_pbc_checkpoint_only_extent_rescue(
     """
     if not bool(config.use_pbc) or not bool(getattr(mlpot_ctx, "use_pbc", False)):
         return False
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import _is_all_ml_pbc_context
+    from karml.interfaces.pycharmmInterface.mlpot.setup import _is_all_ml_pbc_context
 
     return bool(_is_all_ml_pbc_context(mlpot_ctx))
 
@@ -1130,14 +1130,14 @@ def _try_flyoff_checkpoint_ladder_rescue(
     require_intra: bool = False,
 ) -> float:
     """Walk prior restart checkpoints until extent (+ optional intra) gates pass."""
-    from mmml.interfaces.pycharmmInterface.mlpot.extent_repack_recovery import (
+    from karml.interfaces.pycharmmInterface.mlpot.extent_repack_recovery import (
         polish_after_extent_repack,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
+    from karml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
         build_flyoff_recovery_candidates,
         try_recovery_from_checkpoint_ladder,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+    from karml.interfaces.pycharmmInterface.mlpot.setup import (
         invalidate_mlpot_pre_sd_ener_probe,
     )
 
@@ -1211,10 +1211,10 @@ def save_stabilized_overlap_rescue_snapshot(
     registry = getattr(config, "artifact_registry", None)
     if registry is None:
         return
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
         resolve_mlpot_grms_kcalmol_A,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.minimize_artifacts import (
+    from karml.interfaces.pycharmmInterface.mlpot.minimize_artifacts import (
         save_snapshot_from_charmm,
     )
 
@@ -1238,7 +1238,7 @@ def _run_intramonomer_bonded_rescue(
     mlpot_ctx: "MlpotContext",
     config: DynamicsOverlapConfig,
 ) -> None:
-    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+    from karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
         run_intra_monomer_overlap_rescue,
     )
 
@@ -1251,7 +1251,7 @@ def apply_overlap_repack_last_resort(
     mlpot_ctx: "MlpotContext | None" = None,
 ) -> float:
     """Re-place monomer COMs with preserved internal geometry (Packmol-style repack)."""
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+    from karml.interfaces.pycharmmInterface.mlpot.setup import (
         get_charmm_positions_array,
         sync_charmm_positions,
     )
@@ -1272,10 +1272,10 @@ def apply_overlap_repack_last_resort(
     new_pos = None
     scratch_dir = _packmol_repack_scratch_dir(config)
     if mlpot_ctx is not None:
-        from mmml.interfaces.pycharmmInterface.packmol_repack import (
+        from karml.interfaces.pycharmmInterface.packmol_repack import (
             repack_selected_monomers_clear_overlap,
         )
-        from mmml.utils.monomer_force_diag import resolve_selective_repack_monomers
+        from karml.utils.monomer_force_diag import resolve_selective_repack_monomers
 
         diag = resolve_selective_repack_monomers(
             mlpot_ctx,
@@ -1326,7 +1326,7 @@ def apply_overlap_separation_last_resort(
     mlpot_ctx: "MlpotContext | None" = None,
 ) -> float:
     """Rigidly push overlapped monomer pairs apart (symmetric COM translation)."""
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+    from karml.interfaces.pycharmmInterface.mlpot.setup import (
         get_charmm_positions_array,
         sync_charmm_positions,
     )
@@ -1434,7 +1434,7 @@ def _handle_inter_monomer_rescue(
         f"(SD={config.rescue.nstep_sd}, ABNR={config.rescue.nstep_abnr})...",
         flush=True,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+    from karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
         run_inter_monomer_overlap_rescue,
     )
 
@@ -1483,11 +1483,11 @@ def _handle_all_ml_pbc_intramonomer_rescue(
     Never MLpot/bonded SD polish — with no CHARMM bonded topology, SD can re-crush
     O–H and leave the segment unrecoverable.
     """
-    from mmml.interfaces.pycharmmInterface.mlpot.monomer_geometry_limits import (
+    from karml.interfaces.pycharmmInterface.mlpot.monomer_geometry_limits import (
         restore_monomer_from_template_for_violation,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
-    from mmml.utils.geometry_checks import find_worst_intramonomer_close_contact
+    from karml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
+    from karml.utils.geometry_checks import find_worst_intramonomer_close_contact
 
     offsets = resolve_overlap_monomer_offsets(config, mlpot_ctx)
     cell = _overlap_cell(
@@ -1577,11 +1577,11 @@ def _handle_intramonomer_rescue(
             config, label=label, exc=exc, mlpot_ctx=mlpot_ctx
         )
 
-    from mmml.interfaces.pycharmmInterface.mlpot.monomer_geometry_limits import (
+    from karml.interfaces.pycharmmInterface.mlpot.monomer_geometry_limits import (
         restore_monomer_from_template_for_violation,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
-    from mmml.utils.geometry_checks import find_worst_intramonomer_close_contact
+    from karml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
+    from karml.utils.geometry_checks import find_worst_intramonomer_close_contact
 
     pos = get_charmm_positions_array()
     offsets = resolve_overlap_monomer_offsets(config, mlpot_ctx)
@@ -1659,12 +1659,12 @@ def _load_extent_reference_positions(
     candidates: list[Path],
 ) -> tuple[np.ndarray, Path]:
     """Load reference coordinates for selective monomer rebuild (CRD preferred)."""
-    from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
+    from karml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
         first_valid_geometry_crd_path,
         first_valid_restart_path,
         is_geometry_recovery_crd_path,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         read_crd_coordinates,
         read_restart_coordinates,
     )
@@ -1706,13 +1706,13 @@ def _restore_extent_from_memory_checkpoint_only(
     mlpot_ctx: "MlpotContext",
 ) -> float:
     """Restore in-memory mini/baseline geometry + cold start (no Packmol/SD)."""
-    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+    from karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
         sync_charmm_velocities_akma,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.extent_repack_recovery import (
+    from karml.interfaces.pycharmmInterface.mlpot.extent_repack_recovery import (
         resolve_extent_reference_positions,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+    from karml.interfaces.pycharmmInterface.mlpot.setup import (
         invalidate_mlpot_pre_sd_ener_probe,
         sync_charmm_positions,
     )
@@ -1768,18 +1768,18 @@ def _handle_extent_cleanup_rescue(
                 config, label=label, exc=exc, mlpot_ctx=mlpot_ctx
             )
 
-    from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
+    from karml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
         build_extent_recovery_candidates,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+    from karml.interfaces.pycharmmInterface.mlpot.setup import (
         get_charmm_positions_array,
         sync_charmm_positions,
     )
-    from mmml.interfaces.pycharmmInterface.packmol_repack import (
+    from karml.interfaces.pycharmmInterface.packmol_repack import (
         repack_monomers_clear_overlap,
         repack_selected_monomers_clear_overlap,
     )
-    from mmml.utils.geometry_checks import (
+    from karml.utils.geometry_checks import (
         coords_pathological_for_repack,
         find_worst_monomer_extent,
         rebuild_monomers_from_reference,
@@ -1802,7 +1802,7 @@ def _handle_extent_cleanup_rescue(
         raise exc
 
     candidates = build_extent_recovery_candidates(config)
-    from mmml.interfaces.pycharmmInterface.mlpot.extent_repack_recovery import (
+    from karml.interfaces.pycharmmInterface.mlpot.extent_repack_recovery import (
         polish_after_extent_repack,
         resolve_extent_reference_positions,
     )
@@ -1856,7 +1856,7 @@ def _handle_extent_cleanup_rescue(
             **repack_common,
         )
     sync_charmm_positions(new_pos)
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         invalidate_mlpot_calculator_caches,
         sync_charmm_lists_after_mini,
     )
@@ -1870,7 +1870,7 @@ def _handle_extent_cleanup_rescue(
         label=f"{label} after monomer repack",
     )
     setattr(mlpot_ctx, "_overlap_post_rescue_cold_start", True)
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
         measure_hybrid_charmm_grms,
     )
 
@@ -2005,11 +2005,11 @@ def _handle_extent_rescue(
                 config, label=label, exc=exc, mlpot_ctx=mlpot_ctx
             )
 
-    from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
+    from karml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
         build_extent_recovery_candidates,
         resolve_extent_recovery_source,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.extent_repack_recovery import (
+    from karml.interfaces.pycharmmInterface.mlpot.extent_repack_recovery import (
         in_memory_extent_reference_available,
     )
 
@@ -2049,7 +2049,7 @@ def _handle_extent_rescue(
         f"{recovery_path.name} ({recovery_method}, steps={sd_steps})...",
         flush=True,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+    from karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
         run_extent_recovery_from_prior_restart,
     )
 
@@ -2093,15 +2093,15 @@ def _try_density_prep_ladder_after_extent_failure(
     mlpot_ctx: "MlpotContext",
 ) -> float:
     """Fall back to the liquid-prep density ladder when fly-off recovery fails."""
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
         refresh_mlpot_energy_and_grms,
         resolve_max_grms_before_dyn,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
+    from karml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
         density_prep_ladder_enabled,
         run_density_prep_ladder,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
+    from karml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
 
     args = getattr(mlpot_ctx, "workflow_args", None)
     if args is None or not density_prep_ladder_enabled(args):
@@ -2159,7 +2159,7 @@ def _try_density_prep_ladder_after_extent_failure(
     )
     setattr(args, "_density_prep_ladder_extent_fallback_summary", summary.to_dict())
     sync_positions = get_charmm_positions_array()
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
+    from karml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
 
     sync_charmm_positions(sync_positions)
     # Density ladder rewrites liquid geometry; force velocity cold-start like

@@ -567,7 +567,7 @@ function App() {
               </svg>
             </button>
             <h1 className="text-xl font-semibold text-slate-800 dark:text-slate-100">
-              MMML Molecular Viewer
+              KARML Molecular Viewer
             </h1>
           </div>
           

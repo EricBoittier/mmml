@@ -4,7 +4,7 @@ WORKFLOW_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 REPO_ROOT="$(cd "$WORKFLOW_ROOT/../.." && pwd)"
 cd "$REPO_ROOT"
 
-CFG="${MMML_WORKFLOW_CONFIG:-config.yaml}"
+CFG="${KARML_WORKFLOW_CONFIG:-config.yaml}"
 if [[ "${1:-}" == "--config" ]]; then
   CFG="${2:?--config requires path}"
 fi
@@ -16,10 +16,10 @@ else
   CFG_PATH="${WORKFLOW_ROOT}/${CFG}"
 fi
 
-# shellcheck source=../../../scripts/resolve_mmml_env.sh
-source "$REPO_ROOT/scripts/resolve_mmml_env.sh"
-mmml_resolve_env "$REPO_ROOT"
-PY="${MMML_PYTHON}"
+# shellcheck source=../../../scripts/resolve_karml_env.sh
+source "$REPO_ROOT/scripts/resolve_karml_env.sh"
+karml_resolve_env "$REPO_ROOT"
+PY="${KARML_PYTHON}"
 
 "$PY" -c "
 from pathlib import Path
@@ -45,8 +45,8 @@ from campaign_lib import (
     validate_checkpoint,
 )
 from cleanup_strategy import resolve_cleanup_strategy
-from mmml.interfaces.pycharmmInterface.cgenff_residues import require_cgenff_residue_name
-from mmml.analysis.residue_geometry import bundled_monomer_pdb
+from karml.interfaces.pycharmmInterface.cgenff_residues import require_cgenff_residue_name
+from karml.analysis.residue_geometry import bundled_monomer_pdb
 
 cfg = load_config(Path('${CFG_PATH}'))
 require_cgenff_residue_name('METH')

@@ -1,5 +1,5 @@
 {
-  "schema": "mmml.interaction_pes/v2",
+  "schema": "karml.interaction_pes/v2",
   "energy_definition": "interaction",
   "energy_formula": "E_int = E(AB) - E(A) - E(B)",
   "units": {
@@ -10,7 +10,7 @@
   },
   "pet_receptive_field_angstrom": 9.0,
   "calculator": "metatomic",
-  "checkpoint": "/tmp/mmml-metatomic-models/pet-mad-xs-v1.5.0.pt",
+  "checkpoint": "/tmp/karml-metatomic-models/pet-mad-xs-v1.5.0.pt",
   "checkpoint_sha256": "788dd43241e2403ec56d7fd2b7c71a50fbe85192f918f6944e07cc626b47b162",
   "systems": {
     "water": {

@@ -3,8 +3,8 @@ import types
 
 # Stub heavy modules to avoid GPU/model deps during tests
 
-# Stub mmml.dcmnet.dcmnet.models to prevent importing e3x/large weights
-stub_models = types.ModuleType("mmml.dcmnet.dcmnet.models")
+# Stub karml.dcmnet.dcmnet.models to prevent importing e3x/large weights
+stub_models = types.ModuleType("karml.dcmnet.dcmnet.models")
 for name in ["DCM1", "DCM2", "DCM3", "DCM4", "DCM5", "DCM6", "DCM7"]:
     setattr(stub_models, name, object())
 for name in [
@@ -17,5 +17,5 @@ for name in [
     "dcm7_params",
 ]:
     setattr(stub_models, name, {})
-sys.modules["mmml.dcmnet.dcmnet.models"] = stub_models
+sys.modules["karml.dcmnet.dcmnet.models"] = stub_models
 

@@ -10,8 +10,8 @@ from typing import Any, Callable, Sequence
 
 import numpy as np
 
-from mmml.cli.run.md_handoff import MdHandoffState, load_handoff_from_npz
-from mmml.data.units import (
+from karml.cli.run.md_handoff import MdHandoffState, load_handoff_from_npz
+from karml.data.units import (
     energy_to_ev,
     forces_to_ev_angstrom,
     infer_reference_energy_unit,

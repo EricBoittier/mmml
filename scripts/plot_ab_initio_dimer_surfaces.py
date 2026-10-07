@@ -20,7 +20,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from mmml.utils.plotting.styles import apply_plot_style
+from karml.utils.plotting.styles import apply_plot_style
 
 
 METHOD_LABELS = {
@@ -163,12 +163,12 @@ def main() -> None:
                 f'<figcaption class="text-small text-muted">{label}</figcaption></figure>'
             )
         fragment = (
-            '<div id="mmml-ab-initio-surfaces">\n'
+            '<div id="karml-ab-initio-surfaces">\n'
             '<style>\n'
-            '#mmml-ab-initio-surfaces{display:grid;gap:16px;color:var(--foreground);}\n'
-            '#mmml-ab-initio-surfaces figure{margin:0;}\n'
-            '#mmml-ab-initio-surfaces img{display:block;width:100%;height:auto;}\n'
-            '#mmml-ab-initio-surfaces figcaption{margin-top:4px;}\n'
+            '#karml-ab-initio-surfaces{display:grid;gap:16px;color:var(--foreground);}\n'
+            '#karml-ab-initio-surfaces figure{margin:0;}\n'
+            '#karml-ab-initio-surfaces img{display:block;width:100%;height:auto;}\n'
+            '#karml-ab-initio-surfaces figcaption{margin-top:4px;}\n'
             '</style>\n'
             + "\n".join(figures)
             + '\n</div>\n'

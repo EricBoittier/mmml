@@ -6,7 +6,7 @@ from pathlib import Path
 
 
 def test_setup_box_generic_uses_prepare_charmm_pbc() -> None:
-    src = Path("mmml/interfaces/pycharmmInterface/setupBox.py").read_text(
+    src = Path("karml/interfaces/pycharmmInterface/setupBox.py").read_text(
         encoding="utf-8"
     )
     body = src.split("def setup_box_generic")[1].split("\ndef ")[0]
@@ -20,7 +20,7 @@ def test_setup_box_generic_uses_prepare_charmm_pbc() -> None:
 
 
 def test_minimize_box_does_not_use_lingo_nbonds() -> None:
-    src = Path("mmml/interfaces/pycharmmInterface/setupBox.py").read_text(
+    src = Path("karml/interfaces/pycharmmInterface/setupBox.py").read_text(
         encoding="utf-8"
     )
     body = src.split("def minimize_box")[1].split("\ndef ")[0]
@@ -30,7 +30,7 @@ def test_minimize_box_does_not_use_lingo_nbonds() -> None:
 
 
 def test_make_box_cli_uses_density_for_neat_liquid() -> None:
-    src = Path("mmml/cli/make/make_box.py").read_text(encoding="utf-8")
+    src = Path("karml/cli/make/make_box.py").read_text(encoding="utf-8")
     assert "determine_n_molecules_from_density" in src
     # Neat path (solvent is None) must size N from density when provided.
     neat = src.split("if args.solvent is None:")[1].split("else:")[0]
@@ -40,7 +40,7 @@ def test_make_box_cli_uses_density_for_neat_liquid() -> None:
 
 def test_make_box_cli_stages_pdb_before_packmol() -> None:
     """``--pdb`` must stage to pdb/initial.pdb and still run Packmol solvation."""
-    src = Path("mmml/cli/make/make_box.py").read_text(encoding="utf-8")
+    src = Path("karml/cli/make/make_box.py").read_text(encoding="utf-8")
     assert "_stage_solute_pdb" in src
     assert "run_packmol_solvation" in src
     # Staging must not short-circuit packing (old bug: --pdb skipped Packmol).
@@ -48,7 +48,7 @@ def test_make_box_cli_stages_pdb_before_packmol() -> None:
 
 
 def test_setup_box_generic_uses_read_cgenff_toppar() -> None:
-    src = Path("mmml/interfaces/pycharmmInterface/setupBox.py").read_text(
+    src = Path("karml/interfaces/pycharmmInterface/setupBox.py").read_text(
         encoding="utf-8"
     )
     body = src.split("def setup_box_generic")[1].split("\ndef ")[0]
@@ -57,7 +57,7 @@ def test_setup_box_generic_uses_read_cgenff_toppar() -> None:
 
 
 def test_run_packmol_solvation_restores_resnames() -> None:
-    src = Path("mmml/interfaces/pycharmmInterface/setupBox.py").read_text(
+    src = Path("karml/interfaces/pycharmmInterface/setupBox.py").read_text(
         encoding="utf-8"
     )
     body = src.split("def run_packmol_solvation")[1].split("\ndef ")[0]

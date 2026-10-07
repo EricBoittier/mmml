@@ -8,15 +8,15 @@ import uuid
 from dataclasses import dataclass
 from pathlib import Path
 
-from mmml.mcp.allowlist import (
+from karml.mcp.allowlist import (
     is_allowed_console_script,
-    is_allowed_mmml_command,
+    is_allowed_karml_command,
     validate_cli_args,
 )
-from mmml.mcp.env import (
+from karml.mcp.env import (
     assert_under_runs,
     resolve_console_script,
-    resolve_mmml_bin,
+    resolve_karml_bin,
     repo_root,
 )
 
@@ -55,7 +55,7 @@ def _logs_dir(run_dir: Path | None) -> Path:
     return logs
 
 
-def run_mmml(
+def run_karml(
     command: str,
     args: list[str] | None = None,
     *,
@@ -65,11 +65,11 @@ def run_mmml(
     env: dict[str, str] | None = None,
     timeout_s: int | None = None,
 ) -> CommandResult:
-    if not is_allowed_mmml_command(command):
+    if not is_allowed_karml_command(command):
         raise ValueError(f"command not allowlisted: {command}")
     argv = validate_cli_args(list(args or []))
-    mmml_bin = str(resolve_mmml_bin())
-    full_cmd = [mmml_bin, command, *argv]
+    karml_bin = str(resolve_karml_bin())
+    full_cmd = [karml_bin, command, *argv]
     cwd = str(run_dir.resolve()) if run_dir else str(repo_root())
     if run_dir is not None:
         assert_under_runs(run_dir)

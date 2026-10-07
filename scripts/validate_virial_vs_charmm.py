@@ -80,8 +80,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("-o", "--output", type=Path, default=None)
     a = ap.parse_args(argv)
 
-    from mmml.interfaces.pycharmmInterface.nbonds_config import read_cgenff_toppar
-    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import prepare_charmm_pbc
+    from karml.interfaces.pycharmmInterface.nbonds_config import read_cgenff_toppar
+    from karml.interfaces.pycharmmInterface.mlpot.pbc_env import prepare_charmm_pbc
 
     import pycharmm.coor as coor
     import pycharmm.energy as energy
@@ -100,14 +100,14 @@ def main(argv: list[str] | None = None) -> int:
     volume = float(a.box_side) ** 3
 
     # CHARMM forces are kcal/mol/A; the virial identity above wants eV/A.
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_forces_array
+    from karml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_forces_array
 
     forces_kcal = np.asarray(get_charmm_forces_array(), dtype=np.float64).reshape(-1, 3)
     forces_ev = forces_kcal * KCAL_MOL_A_TO_EV_A
 
     ours_atm = virial_pressure_atm(forces_ev, pos, volume, kinetic_ev=0.0)
 
-    from mmml.interfaces.pycharmmInterface.mlpot.pressure_tensor import (
+    from karml.interfaces.pycharmmInterface.mlpot.pressure_tensor import (
         read_instantaneous_scalar_pressure_atm,
     )
 

@@ -8,11 +8,11 @@ import yaml
 from ase import Atoms
 from ase.calculators.calculator import Calculator
 
-from mmml.cli.__main__ import main as mmml_main
-from mmml.cli.misc.neb import build_parser, main
-from mmml.cli.registry import command_by_name
-from mmml.neb import NebConfig, run_neb
-from mmml.neb.run import path_length_coordinate, relative_energies_kcal
+from karml.cli.__main__ import main as karml_main
+from karml.cli.misc.neb import build_parser, main
+from karml.cli.registry import command_by_name
+from karml.neb import NebConfig, run_neb
+from karml.neb.run import path_length_coordinate, relative_energies_kcal
 
 
 class _ZeroForceCalculator(Calculator):
@@ -32,12 +32,12 @@ class _ZeroForceCalculator(Calculator):
 def test_neb_cli_is_registered_and_help_is_reachable(monkeypatch, capsys):
     spec = command_by_name("neb")
     assert spec is not None
-    assert spec.module == "mmml.cli.misc.neb"
-    assert build_parser().prog == "mmml neb"
+    assert spec.module == "karml.cli.misc.neb"
+    assert build_parser().prog == "karml neb"
 
-    monkeypatch.setattr("sys.argv", ["mmml", "neb", "--help"])
+    monkeypatch.setattr("sys.argv", ["karml", "neb", "--help"])
     with pytest.raises(SystemExit) as exc:
-        mmml_main()
+        karml_main()
     assert exc.value.code == 0
     out = capsys.readouterr().out
     assert "Nudged elastic band" in out
@@ -124,7 +124,7 @@ def test_neb_cli_accepts_yaml_config(tmp_path: Path, monkeypatch):
         captured["config"] = config
         return _Result()
 
-    monkeypatch.setattr("mmml.cli.misc.neb.run_neb", fake_run)
+    monkeypatch.setattr("karml.cli.misc.neb.run_neb", fake_run)
     assert main(["--config", str(config_path), "--overwrite"]) == 0
     cfg = captured["config"]
     assert cfg.n_images == 7

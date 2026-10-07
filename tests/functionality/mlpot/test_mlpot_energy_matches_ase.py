@@ -19,14 +19,14 @@ def _can_import(name: str) -> bool:
 
 
 def _resolve_ckpt() -> Path | None:
-    ckpt_env = os.environ.get("MMML_CKPT")
+    ckpt_env = os.environ.get("KARML_CKPT")
     candidates: list[Path] = []
     if ckpt_env:
         candidates.append(Path(ckpt_env))
     candidates.extend(
         [
             PROJECT_ROOT / "examples/ckpts_json/DESdimers_params.json",
-            PROJECT_ROOT / "mmml/models/physnetjax/ckpts/DESdimers",
+            PROJECT_ROOT / "karml/models/physnetjax/ckpts/DESdimers",
         ]
     )
     for p in candidates:
@@ -46,7 +46,7 @@ def test_mlpot_energy_matches_ase():
     import e3x
     import numpy as np
 
-    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+    import karml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
     import pycharmm.energy as energy
 
     import sys
@@ -55,14 +55,14 @@ def test_mlpot_energy_matches_ase():
     if str(mlpot_dir) not in sys.path:
         sys.path.insert(0, str(mlpot_dir))
     from _common import build_acetone_dimer_cluster
-    from mmml.interfaces.pycharmmInterface.mmml_calculator import ev2kcalmol
-    from mmml.interfaces.pycharmmInterface.mlpot import (
+    from karml.interfaces.pycharmmInterface.karml_calculator import ev2kcalmol
+    from karml.interfaces.pycharmmInterface.mlpot import (
         load_physnet_mlpot_bundle,
         register_mlpot,
         select_all_atoms,
         setup_default_nbonds,
     )
-    from mmml.models.physnetjax.physnetjax.calc.helper_mlp import get_ase_calc
+    from karml.models.physnetjax.physnetjax.calc.helper_mlp import get_ase_calc
 
     z, r = build_acetone_dimer_cluster(4.0)
     n_atoms = len(z)

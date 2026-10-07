@@ -652,7 +652,7 @@ def tip3_peer_donor_acceptable(chunk: np.ndarray) -> bool:
 
 def load_bundled_tip3_template_A() -> np.ndarray:
     """COM-centered TIP3 coordinates (Å) from bundled ``tip3.pdb`` (OH2, H1, H2)."""
-    from mmml.paths import default_tip3_template_pdb
+    from karml.paths import default_tip3_template_pdb
 
     tip3_pdb = default_tip3_template_pdb()
     coords: list[list[float]] = []
@@ -748,7 +748,7 @@ def rebuild_high_force_monomers_from_peers(
     ``donor_id`` is a monomer index, :data:`TEMPLATE_DONOR_IDEAL_TIP3`, or
     :data:`TEMPLATE_DONOR_NONE`.
     """
-    from mmml.utils.structure_align import kabsch_rotation
+    from karml.utils.structure_align import kabsch_rotation
 
     pos = np.asarray(positions, dtype=float).copy()
     offsets = np.asarray(monomer_offsets, dtype=int)
@@ -954,7 +954,7 @@ def tile_monomer_in_cubic_cell(
     COMs sit on a simple cubic grid that fills the cell (``ceil(N^{1/3})``
     along each edge). Each copy is optionally rotated about its COM. This is
     a CHARMM-free starting guess for all-ML liquid MD — production boxes
-    should still come from Packmol / ``mmml liquid-box``.
+    should still come from Packmol / ``karml liquid-box``.
     """
     template = np.asarray(monomer_positions, dtype=float)
     if template.ndim != 2 or template.shape[1] != 3:

@@ -1,3 +1,3 @@
 import os
-import mmml.cli
+import karml.cli
 print("Testing NVE failure...")

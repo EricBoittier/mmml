@@ -120,7 +120,7 @@ def maybe_record_forces(
     if writer is None or not writer.should_save(step):
         return
     try:
-        from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+        from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
             charmm_positions_angstrom,
             charmm_total_forces_kcalmol_A,
         )

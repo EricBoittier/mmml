@@ -5,7 +5,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from mmml.cli.misc.fix_and_split import (
+from karml.cli.misc.fix_and_split import (
     _load_and_merge_efd,
     atomic_ref_sum_hartree,
     check_atomic_ref_subtraction,

@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from mmml.interfaces.pycharmmInterface.mm_energy_forces import (
+from karml.interfaces.pycharmmInterface.mm_energy_forces import (
     check_mm_pair_list_radius,
     format_mm_pair_list_radius_report,
     mm_pair_list_radius_breakdown,

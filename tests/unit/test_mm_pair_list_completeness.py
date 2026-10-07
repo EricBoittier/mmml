@@ -15,7 +15,7 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from mmml.interfaces.pycharmmInterface.mm_energy_forces import (
+from karml.interfaces.pycharmmInterface.mm_energy_forces import (
     DEFAULT_JAX_MD_SKIN_DISTANCE_A,
     build_mm_energy_forces_fn,
     have_vesin,
@@ -72,7 +72,7 @@ def _fake_charmm(n_atoms: int):
     rtf_mock.readlines.return_value = ["ATOM C1 CG321 -0.1\n"]
     prm_mock = MagicMock()
     prm_mock.readlines.return_value = ["CG321 0.0 -0.05 1.6 0.0 -0.01 1.9\n"]  # >4 fields: parsed
-    mod = "mmml.interfaces.pycharmmInterface.mm_energy_forces"
+    mod = "karml.interfaces.pycharmmInterface.mm_energy_forces"
     with patch("pycharmm.psf", fake_psf), patch("pycharmm.param", fake_param), patch(
         f"{mod}.open", side_effect=[rtf_mock, prm_mock]
     ), patch(f"{mod}._get_actual_psf_charges", return_value=charges), patch(
@@ -219,7 +219,7 @@ def _mm(mm_fn, pair_idx, pair_mask, R):
 
 def test_outgrown_extent_refits_list_and_matches_larger_margin(monkeypatch):
     """Extent past the assumed margin, room below L/2: refit + rebuild, same MM as a wider list."""
-    monkeypatch.setenv("MMML_MM_EXTENT_MARGIN_A", "0.25")
+    monkeypatch.setenv("KARML_MM_EXTENT_MARGIN_A", "0.25")
     R = _box(ON + WIDTH - 0.01)
     mm_fn, update = _build(R)
     old_list = update.get_stats()["radius"]["list_radius_A"]  # 6.5 + 2 x 1.45 + 0.25
@@ -237,7 +237,7 @@ def test_outgrown_extent_refits_list_and_matches_larger_margin(monkeypatch):
     assert (0, 5) in listed
     e, f = _mm(mm_fn, pidx, pmask, stretched)
 
-    monkeypatch.setenv("MMML_MM_EXTENT_MARGIN_A", "1.0")
+    monkeypatch.setenv("KARML_MM_EXTENT_MARGIN_A", "1.0")
     mm_ref, update_ref = _build(R)
     e_ref, f_ref = _mm(mm_ref, *update_ref(stretched, force_rebuild=True), stretched)
     assert update_ref.get_stats()["list_refits"] == 0
@@ -248,7 +248,7 @@ def test_outgrown_extent_refits_list_and_matches_larger_margin(monkeypatch):
 def test_jax_md_backend_refits_outgrown_extent(monkeypatch):
     """``mm_nl_backend=jax_md`` closes over the setup cutoff; a refit reallocates it."""
     pytest.importorskip("jax_md")
-    monkeypatch.setenv("MMML_MM_EXTENT_MARGIN_A", "0.25")
+    monkeypatch.setenv("KARML_MM_EXTENT_MARGIN_A", "0.25")
     R = _box(ON + WIDTH - 0.01)
     kw = dict(use_jax_md_neighbor_list=True, mm_nl_backend="jax_md")
     mm_fn, update = _build(R, **kw)
@@ -263,7 +263,7 @@ def test_jax_md_backend_refits_outgrown_extent(monkeypatch):
     assert (0, 5) in listed
     e, f = _mm(mm_fn, pidx, pmask, stretched)
 
-    monkeypatch.setenv("MMML_MM_EXTENT_MARGIN_A", "1.0")
+    monkeypatch.setenv("KARML_MM_EXTENT_MARGIN_A", "1.0")
     mm_ref, update_ref = _build(R, **kw)
     e_ref, f_ref = _mm(mm_ref, *update_ref(stretched), stretched)
     assert update_ref.get_stats()["list_refits"] == 0
@@ -273,7 +273,7 @@ def test_jax_md_backend_refits_outgrown_extent(monkeypatch):
 
 def test_outgrown_extent_trades_skin_when_half_box_is_tight(monkeypatch):
     """No L/2 headroom left: keep the list radius, shrink the skin; MM unchanged."""
-    monkeypatch.setenv("MMML_MM_EXTENT_MARGIN_A", "0.25")
+    monkeypatch.setenv("KARML_MM_EXTENT_MARGIN_A", "0.25")
     box_L = 2 * (ON + WIDTH + 2 * 1.5 + 0.201)  # stretched extent 1.5 leaves 0.2 A
     R = _lattice(box_L)
     mm_fn, update = _build(R, box_L=box_L)
@@ -285,7 +285,7 @@ def test_outgrown_extent_trades_skin_when_half_box_is_tight(monkeypatch):
     assert stats["radius"]["list_radius_A"] < box_L / 2
     e, f = _mm(mm_fn, pidx, pmask, stretched)
 
-    monkeypatch.setenv("MMML_MM_EXTENT_MARGIN_A", "0.0")
+    monkeypatch.setenv("KARML_MM_EXTENT_MARGIN_A", "0.0")
     mm_ref, update_ref = _build(stretched, box_L=box_L, jax_md_skin_distance=0.1)
     e_ref, f_ref = _mm(mm_ref, *update_ref(stretched, force_rebuild=True), stretched)
     assert e == pytest.approx(e_ref, rel=1e-12, abs=1e-12)
@@ -293,7 +293,7 @@ def test_outgrown_extent_trades_skin_when_half_box_is_tight(monkeypatch):
 
 
 def test_outgrown_extent_beyond_half_box_still_raises(monkeypatch):
-    monkeypatch.setenv("MMML_MM_EXTENT_MARGIN_A", "0.25")
+    monkeypatch.setenv("KARML_MM_EXTENT_MARGIN_A", "0.25")
     box_L = 20.0  # start list 9.65 < 10; extent 1.75 needs 6.5 + 3.5 + skin >= 10
     R = _lattice(box_L)
     _, update = _build(R, box_L=box_L)
@@ -302,7 +302,7 @@ def test_outgrown_extent_beyond_half_box_still_raises(monkeypatch):
 
 
 def test_dissociated_molecule_raises(monkeypatch):
-    monkeypatch.setenv("MMML_MM_EXTENT_MARGIN_A", "0.25")
+    monkeypatch.setenv("KARML_MM_EXTENT_MARGIN_A", "0.25")
     R = _box(ON + 0.3)
     _, update = _build(R)
     stretched = R.copy()
@@ -315,7 +315,7 @@ def test_dissociated_molecule_raises(monkeypatch):
 
 def test_refit_mm_pair_list_dcm_32A():
     """26 Sep DCM:308 / 32 A trip: extent 2.376 vs 2.3745 assumed, list 15.999 A."""
-    from mmml.interfaces.pycharmmInterface.mm_energy_forces import (
+    from karml.interfaces.pycharmmInterface.mm_energy_forces import (
         MM_REFIT_MIN_SKIN_A,
         refit_mm_pair_list,
     )
@@ -333,7 +333,7 @@ def test_refit_mm_pair_list_dcm_32A():
 
 def test_refit_keeps_box_headroom_for_variable_cell():
     """NpT: a refit leaves L/2 headroom, so a slightly smaller box needs no second refit."""
-    from mmml.interfaces.pycharmmInterface.mm_energy_forces import refit_mm_pair_list
+    from karml.interfaces.pycharmmInterface.mm_energy_forces import refit_mm_pair_list
 
     fixed = refit_mm_pair_list(extent_A=1.806, com_switch_end_A=11.0, skin_A=0.25, box_half_min_A=15.995)
     assert fixed["list_radius_A"] == pytest.approx(15.994)  # all room to the margin
@@ -347,7 +347,7 @@ def test_refit_keeps_box_headroom_for_variable_cell():
 
 def test_shrinking_box_refits_once_with_headroom(monkeypatch):
     """Box passed in shrinks below the list radius (NpT): one refit, then rebuilds reuse it."""
-    monkeypatch.setenv("MMML_MM_EXTENT_MARGIN_A", "0.25")
+    monkeypatch.setenv("KARML_MM_EXTENT_MARGIN_A", "0.25")
     box_L = 2 * (ON + WIDTH + 2 * 1.2 + 0.25 + 2 * 0.25) + 0.002  # list = L/2 - 1e-3
     R = _lattice(box_L)
     mm_fn, update = _build(R, box_L=box_L)
@@ -361,7 +361,7 @@ def test_shrinking_box_refits_once_with_headroom(monkeypatch):
     # the refit list holds every pair the COM switch weights: same MM as a fresh build
     Rs, Ls = R * s_, box_L * s_
     e, f = mm_fn(jnp.asarray(Rs), pidx, pmask, box_override=jnp.diag(jnp.full(3, Ls)))
-    monkeypatch.setenv("MMML_MM_EXTENT_MARGIN_A", "0.0")
+    monkeypatch.setenv("KARML_MM_EXTENT_MARGIN_A", "0.0")
     mm_ref, update_ref = _build(Rs, box_L=Ls)
     e_ref, f_ref = _mm(mm_ref, *update_ref(Rs, force_rebuild=True), Rs)
     assert float(e) == pytest.approx(e_ref, rel=1e-12, abs=1e-12)
@@ -386,7 +386,7 @@ def test_pair_capacity_growth_keeps_forces(monkeypatch):
     The switching weights read the setup-time pair list, so the first grow
     crashed with ``Incompatible shapes for broadcasting`` (WIP DCM:308 NVT).
     """
-    monkeypatch.setenv("MMML_MM_EXTENT_MARGIN_A", "0.25")
+    monkeypatch.setenv("KARML_MM_EXTENT_MARGIN_A", "0.25")
     sparse, dense = _spread(20.0), _spread(5.5)  # no MM pairs -> COM 5.5 A dimers
     mm_fn, update = _build(sparse, box_L=40.0, max_pairs=16)
     assert update(sparse, force_rebuild=True)[0].shape[0] == 16
@@ -415,7 +415,7 @@ def test_max_monomer_extent_is_image_invariant():
 def test_update_mm_pairs_gpu_rebuild_identical_to_cpu(edge_com, monkeypatch):
     """The closure's GPU rebuild (auto device) gives the CPU pair list bit-for-bit (and the same MM energy/forces)."""
     pytest.importorskip("cupy")
-    from mmml.interfaces.pycharmmInterface import nl_gpu
+    from karml.interfaces.pycharmmInterface import nl_gpu
 
     try:
         gpu = jax.devices("gpu")[0]
@@ -426,7 +426,7 @@ def test_update_mm_pairs_gpu_rebuild_identical_to_cpu(edge_com, monkeypatch):
     R = _box(edge_com, seed=7)
     out = {}
     for device in ("cpu", "auto"):
-        monkeypatch.setenv("MMML_MM_NL_DEVICE", device)
+        monkeypatch.setenv("KARML_MM_NL_DEVICE", device)
         with jax.default_device(gpu):
             mm_fn, update = _build(R)
             for pos in (R, jax.device_put(jnp.asarray(R), gpu)):  # host (MLpot) and device input
@@ -446,9 +446,9 @@ def test_update_mm_pairs_gpu_rebuild_identical_to_cpu(edge_com, monkeypatch):
 
 def test_extent_margin_grows_into_half_box_headroom(monkeypatch):
     """The assumed extent uses the room left below L/2 (capped), never less than requested."""
-    from mmml.interfaces.pycharmmInterface.mm_energy_forces import resolve_mm_extent_margin_A
+    from karml.interfaces.pycharmmInterface.mm_energy_forces import resolve_mm_extent_margin_A
 
-    monkeypatch.delenv("MMML_MM_EXTENT_MARGIN_A", raising=False)
+    monkeypatch.delenv("KARML_MM_EXTENT_MARGIN_A", raising=False)
     kw = dict(mm_switch_on=6.0, mm_switch_width=5.0, skin_distance=0.25)
     # DCM:308 in 32 A: 16 - 1e-3 - (11.25 + 2 * 1.727) = 1.295 of radius -> 0.6475 of extent
     m = resolve_mm_extent_margin_A(0.25, measured_extent_A=1.727, cell=np.eye(3) * 32.0, **kw)
@@ -458,5 +458,5 @@ def test_extent_margin_grows_into_half_box_headroom(monkeypatch):
     assert resolve_mm_extent_margin_A(0.25, measured_extent_A=2.4, cell=np.eye(3) * 32.0, **kw) == 0.25
     # large box: capped
     assert resolve_mm_extent_margin_A(0.25, measured_extent_A=1.0, cell=np.eye(3) * 80.0, **kw) == 1.0
-    monkeypatch.setenv("MMML_MM_EXTENT_MARGIN_A", "0.1")
+    monkeypatch.setenv("KARML_MM_EXTENT_MARGIN_A", "0.1")
     assert resolve_mm_extent_margin_A(0.25, measured_extent_A=1.0, cell=np.eye(3) * 80.0, **kw) == 0.1

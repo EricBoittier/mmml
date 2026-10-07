@@ -44,17 +44,17 @@ def load_config(config_path: Path | str | None = None) -> dict[str, Any]:
 
 
 def resolve_checkpoint(raw: str) -> Path:
-    if raw == "${MMML_CKPT}":
-        env = os.environ.get("MMML_CKPT", "").strip()
+    if raw == "${KARML_CKPT}":
+        env = os.environ.get("KARML_CKPT", "").strip()
         if not env:
             try:
-                from mmml.cli.base import resolve_checkpoint_paths
+                from karml.cli.base import resolve_checkpoint_paths
                 base_ckpt, _ = resolve_checkpoint_paths(None)
                 if base_ckpt and base_ckpt.exists():
                     return base_ckpt
             except Exception:
                 pass
-            raise RuntimeError("MMML_CKPT is not set (config checkpoint: ${MMML_CKPT})")
+            raise RuntimeError("KARML_CKPT is not set (config checkpoint: ${KARML_CKPT})")
         path = Path(env).expanduser().resolve()
     else:
         path = Path(os.path.expandvars(raw)).expanduser().resolve()
@@ -64,8 +64,8 @@ def resolve_checkpoint(raw: str) -> Path:
 
 
 def checkpoint_path_for_yaml(raw: str) -> str:
-    """Resolve ``${MMML_CKPT}`` for campaign YAML; leave explicit paths as strings."""
-    if str(raw).strip() == "${MMML_CKPT}":
+    """Resolve ``${KARML_CKPT}`` for campaign YAML; leave explicit paths as strings."""
+    if str(raw).strip() == "${KARML_CKPT}":
         return str(resolve_checkpoint(str(raw)))
     return str(os.path.expandvars(str(raw)))
 
@@ -176,7 +176,7 @@ def cell_run_tag_long(cell: RunCell) -> str:
 
 
 def cell_ml_atoms(cell: RunCell) -> int:
-    from mmml.interfaces.pycharmmInterface.mlpot.mlpot_limits import estimate_ml_atoms
+    from karml.interfaces.pycharmmInterface.mlpot.mlpot_limits import estimate_ml_atoms
 
     return estimate_ml_atoms(cell.n_monomers, solvent=cell.solvent)
 
@@ -640,7 +640,7 @@ def warmup_mlpot_argv(cfg: dict[str, Any], cell: RunCell) -> list[str]:
     compile_threads = cfg.get("warmup_compile_threads", cfg.get("jax_compile_threads"))
     if compile_threads is not None:
         argv.extend(["--compile-threads", str(int(compile_threads))])
-    from mmml.cli.run.warmup_mlpot_jax import resolve_warmup_do_mm_for_config
+    from karml.cli.run.warmup_mlpot_jax import resolve_warmup_do_mm_for_config
 
     if resolve_warmup_do_mm_for_config(cfg):
         argv.append("--do-mm")

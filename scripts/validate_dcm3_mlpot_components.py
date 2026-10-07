@@ -13,12 +13,12 @@ check for unphysical same-monomer overlap when dimers are close.
 
 Examples
 --------
-  export MMML_CKPT=/path/to/dcm_ckpt
+  export KARML_CKPT=/path/to/dcm_ckpt
   python scripts/validate_dcm3_mlpot_components.py \\
     --output artifacts/dcm3_component_scan/scan.npz
 
   python scripts/validate_dcm3_mlpot_components.py \\
-    --reference-crd workflows/dcm_nve_scaling/results/dcm_3_nve/02_mlpot_mmml_dcm_3.crd \\
+    --reference-crd workflows/dcm_nve_scaling/results/dcm_3_nve/02_mlpot_karml_dcm_3.crd \\
     --scan-1d-min 2.0 --scan-1d-max 8.0 --scan-1d-steps 25 \\
     --scan-2d-min 3.0 --scan-2d-max 10.0 --scan-2d-steps 15
 """
@@ -45,7 +45,7 @@ def _parse_args() -> argparse.Namespace:
         "--checkpoint",
         type=Path,
         default=None,
-        help="PhysNet checkpoint (default: MMML_CKPT or repo default)",
+        help="PhysNet checkpoint (default: KARML_CKPT or repo default)",
     )
     p.add_argument(
         "--output",
@@ -132,7 +132,7 @@ def _load_positions_crd(path: Path) -> np.ndarray:
 
 
 def _atomic_numbers_dcm3(atoms_per_monomer: int) -> np.ndarray:
-    from mmml.cli.run.md_pbc_suite.ase import _build_cluster_psf_from_composition
+    from karml.cli.run.md_pbc_suite.ase import _build_cluster_psf_from_composition
 
     z, _names, atoms_per_list, _res = _build_cluster_psf_from_composition([("DCM", 3)])
     if list(atoms_per_list) != [atoms_per_monomer] * 3:
@@ -163,7 +163,7 @@ def _load_reference_cluster(
         return z, pos, [apm] * n_mol
 
     composition = [("DCM", n_mol)]
-    from mmml.cli.run.md_pbc_suite.cluster import build_packmol_composition_cluster
+    from karml.cli.run.md_pbc_suite.cluster import build_packmol_composition_cluster
 
     if not args.quiet:
         print("Building DCM:3 reference cluster (Packmol + CHARMM MM pre-min)...", flush=True)
@@ -280,8 +280,8 @@ def _build_model(
     atoms_per: list[int],
     args: argparse.Namespace,
 ):
-    from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
-    from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import build_decomposed_mlpot_model
+    from karml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
+    from karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import build_decomposed_mlpot_model
 
     cutoff = CutoffParameters(
         ml_switch_width=float(args.ml_switch_width),
@@ -311,7 +311,7 @@ def _eval_breakdown(
     import jax
     import jax.numpy as jnp
 
-    from mmml.interfaces.pycharmmInterface.calculator_utils import ModelOutput
+    from karml.interfaces.pycharmmInterface.calculator_utils import ModelOutput
 
     pos_j = jnp.asarray(positions, dtype=jnp.float64)
     z_j = jnp.asarray(z, dtype=int)
@@ -495,7 +495,7 @@ def _run_scan_2d(
 
 def main() -> int:
     args = _parse_args()
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import resolve_checkpoint
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import resolve_checkpoint
 
     ckpt = resolve_checkpoint(
         args.checkpoint.expanduser().resolve() if args.checkpoint else None
@@ -511,7 +511,7 @@ def main() -> int:
         print(f"Reference span (Å): {span}", flush=True)
 
     model, cutoff = _build_model(ckpt, z, atoms_per, args)
-    from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import warmup_decomposed_mlpot
+    from karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import warmup_decomposed_mlpot
 
     warmup_decomposed_mlpot(model, ref_pos, verbose=not args.quiet)
 

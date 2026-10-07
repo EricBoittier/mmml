@@ -27,7 +27,7 @@ import numpy as np
 
 from _toy import dimer, e_mm, fit
 
-from mmml.models.mm_lj_scales import (
+from karml.models.mm_lj_scales import (
     MM_LJ_EPSILON_SCALE_BOUNDS as EPS_BOUNDS,
     MM_LJ_SIGMA_SCALE_BOUNDS as SIG_BOUNDS,
     attach_mm_lj_scales,

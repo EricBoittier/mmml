@@ -10,22 +10,22 @@ from typing import Any, Mapping
 import numpy as np
 import yaml
 
-from mmml.analysis.npz_comparison import (
+from karml.analysis.npz_comparison import (
     align_npz_arrays,
     compare_npz_arrays,
     plot_comparison,
     write_comparison_report,
 )
-from mmml.data.units import normalize_energy_unit
-from mmml.interfaces.qc_backends.factory import backend_from_dict, build_backend
-from mmml.interfaces.qc_backends.npz_output import (
+from karml.data.units import normalize_energy_unit
+from karml.interfaces.qc_backends.factory import backend_from_dict, build_backend
+from karml.interfaces.qc_backends.npz_output import (
     BACKEND_NATIVE_UNITS,
     infer_target_units,
     normalize_backend_npz,
     write_backend_metadata,
 )
-from mmml.interfaces.qc_backends.protocol import BackendSpec
-from mmml.interfaces.qc_backends.structures import load_structures
+from karml.interfaces.qc_backends.protocol import BackendSpec
+from karml.interfaces.qc_backends.structures import load_structures
 
 
 @dataclass

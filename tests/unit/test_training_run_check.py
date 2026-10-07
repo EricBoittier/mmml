@@ -12,7 +12,7 @@ import json
 
 import pytest
 
-from mmml.utils.training_run_check import (
+from karml.utils.training_run_check import (
     check_run,
     parse_epoch_summaries,
     parse_step_metrics,
@@ -21,13 +21,13 @@ from mmml.utils.training_run_check import (
 
 # Verbatim from artifacts/spooky_q0_distill_smoke/slurm-206104.out (the good run).
 GOOD_WARM_START = (
-    "Warm-started from /mmhome/boittier/home/mmml/artifacts/spooky_so3lr_charges/"
+    "Warm-started from /mmhome/boittier/home/karml/artifacts/spooky_so3lr_charges/"
     "epoch-0002: loaded 41 parameter leaves, initialized 0 new leaves, "
     "skipped 0 incompatible leaves"
 )
 # Verbatim from slurm-206089.out (the run that reported COMPLETED regardless).
 BAD_WARM_START = (
-    "Warm-started from /mmhome/boittier/home/mmml/artifacts/spooky_so3lr_charges/"
+    "Warm-started from /mmhome/boittier/home/karml/artifacts/spooky_so3lr_charges/"
     "epoch-0002: loaded 36 parameter leaves, initialized 10 new leaves, "
     "skipped 2 incompatible leaves"
 )
@@ -73,7 +73,7 @@ def _workdir(tmp_path, *, checkpoint=True, distillation=True):
 
 def test_parse_warm_start_reads_the_real_line():
     assert parse_warm_start([GOOD_WARM_START]) == {
-        "path": "/mmhome/boittier/home/mmml/artifacts/spooky_so3lr_charges/epoch-0002",
+        "path": "/mmhome/boittier/home/karml/artifacts/spooky_so3lr_charges/epoch-0002",
         "loaded": 41,
         "initialized": 0,
         "skipped": 0,

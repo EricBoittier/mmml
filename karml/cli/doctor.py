@@ -1,7 +1,7 @@
-"""``mmml doctor``: is this machine ready to run MMML?
+"""``karml doctor``: is this machine ready to run KARML?
 
 One command that answers the install question. It reuses the existing interface
-checks in :mod:`mmml.cli.run.health_check` rather than reimplementing them, and
+checks in :mod:`karml.cli.run.health_check` rather than reimplementing them, and
 adds the two things that actually confuse people during setup: which CHARMM
 paths were auto-discovered, and whether ``libcharmm`` is newer than the
 ``api_func.F90`` it was built from.
@@ -57,8 +57,8 @@ INSTALL_CHECKS = ("core", "jax", "gpu_quantum", "charmm", "mlpot", "packmol")
 
 def _charmm_section() -> tuple[list[str], bool]:
     """Resolved CHARMM paths and libcharmm freshness."""
-    from mmml.interfaces.pycharmmInterface.charmm_paths import resolve_charmm_paths
-    from mmml.interfaces.pycharmmInterface.mlpot.mlpot_limits import mlpot_limits_status
+    from karml.interfaces.pycharmmInterface.charmm_paths import resolve_charmm_paths
+    from karml.interfaces.pycharmmInterface.mlpot.mlpot_limits import mlpot_limits_status
 
     lines: list[str] = []
     home, lib_dir = resolve_charmm_paths()
@@ -80,8 +80,8 @@ def _charmm_section() -> tuple[list[str], bool]:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="mmml doctor",
-        description="Check that this machine can run MMML (Python, JAX, CHARMM, Packmol).",
+        prog="karml doctor",
+        description="Check that this machine can run KARML (Python, JAX, CHARMM, Packmol).",
     )
     parser.add_argument(
         "--json", action="store_true", help="machine-readable report on stdout"
@@ -106,8 +106,8 @@ def main(argv: list[str] | None = None) -> int:
 
     # Populate CHARMM_HOME / CHARMM_LIB_DIR from the discovery chain before the
     # checks read them, so `doctor` reports what a real run would actually use.
-    from mmml.interfaces.pycharmmInterface.charmm_paths import bootstrap_charmm_env
-    from mmml.cli.run.health_check import (
+    from karml.interfaces.pycharmmInterface.charmm_paths import bootstrap_charmm_env
+    from karml.cli.run.health_check import (
         HealthReport,
         render_health_report,
         run_health_check,
@@ -132,8 +132,8 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.json:
         payload = report.to_dict()
-        from mmml.interfaces.pycharmmInterface.charmm_paths import resolve_charmm_paths
-        from mmml.interfaces.pycharmmInterface.mlpot.mlpot_limits import (
+        from karml.interfaces.pycharmmInterface.charmm_paths import resolve_charmm_paths
+        from karml.interfaces.pycharmmInterface.mlpot.mlpot_limits import (
             mlpot_limits_status,
         )
 
@@ -158,7 +158,7 @@ def main(argv: list[str] | None = None) -> int:
     print()
 
     ok = report.ok and charmm_ok
-    print(f"doctor: {'OK -- this machine can run MMML' if ok else 'FAIL'}")
+    print(f"doctor: {'OK -- this machine can run KARML' if ok else 'FAIL'}")
     if not ok:
         print("Install: make install       (Python deps via uv)")
         print("         make install-native (libcharmm + packmol)")

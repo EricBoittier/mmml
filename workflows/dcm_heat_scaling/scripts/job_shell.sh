@@ -11,18 +11,18 @@ DT_SLUG="${3:?usage: job_shell.sh N_MONOMERS REPEAT DT_SLUG}"
 
 cd "$REPO_ROOT"
 
-# shellcheck source=../../../scripts/resolve_mmml_env.sh
-source "$REPO_ROOT/scripts/resolve_mmml_env.sh"
-mmml_resolve_env "$REPO_ROOT"
-PY="${MMML_PYTHON}"
+# shellcheck source=../../../scripts/resolve_karml_env.sh
+source "$REPO_ROOT/scripts/resolve_karml_env.sh"
+karml_resolve_env "$REPO_ROOT"
+PY="${KARML_PYTHON}"
 
 export JAX_ENABLE_X64="${JAX_ENABLE_X64:-1}"
 
 echo "=== dcm_heat_scaling: DCM:${N_MONOMERS} repeat=${REPEAT} ${DT_SLUG} ==="
 echo "REPO_ROOT=${REPO_ROOT}"
 echo "PY=${PY}"
-echo "MMML_BIN=${MMML_BIN:-<python -m mmml.cli.__main__>}"
-echo "MMML_CKPT=${MMML_CKPT:-<unset>}"
+echo "KARML_BIN=${KARML_BIN:-<python -m karml.cli.__main__>}"
+echo "KARML_CKPT=${KARML_CKPT:-<unset>}"
 echo "JAX_ENABLE_X64=${JAX_ENABLE_X64}"
 
 "$PY" -c "

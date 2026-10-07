@@ -7,7 +7,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from mmml.interfaces.pycharmmInterface.dcm_mp2_mm_compare import (
+from karml.interfaces.pycharmmInterface.dcm_mp2_mm_compare import (
     DCM_PSF_MONOMER_PERM,
     HybridEvalResult,
     Mp2Frame,
@@ -26,7 +26,7 @@ from mmml.interfaces.pycharmmInterface.dcm_mp2_mm_compare import (
     repeat_monomer_permutation,
     select_frame_indices,
 )
-from mmml.data.units import convert_forces
+from karml.data.units import convert_forces
 
 
 def _write_synthetic_mp2_npz(path: Path, *, n_dimer: int = 4, n_mono: int = 2) -> None:
@@ -100,7 +100,7 @@ def test_load_monomer_mean_energy_eV(tmp_path: Path) -> None:
     npz = tmp_path / "ref.npz"
     _write_synthetic_mp2_npz(npz, n_dimer=2, n_mono=3)
     mean_ev = load_monomer_mean_energy_eV(npz, reference_energy_unit="hartree")
-    from mmml.data.units import energy_to_ev
+    from karml.data.units import energy_to_ev
 
     mono_e = -43.0 + 0.001 * np.arange(2, 5, dtype=np.float64)
     expected = float(np.mean(energy_to_ev(mono_e, "hartree")))

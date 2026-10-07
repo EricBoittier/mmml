@@ -39,7 +39,7 @@ _REPO = Path(__file__).resolve().parents[1]
 if str(_REPO) not in sys.path:
     sys.path.insert(0, str(_REPO))
 
-from mmml.utils.plotting.styles import (  # noqa: E402
+from karml.utils.plotting.styles import (  # noqa: E402
     STATUS_COLORS,
     apply_plot_style,
     comparison_colors,
@@ -218,7 +218,7 @@ PERSPECTIVES: list[tuple[str, str]] = [
 
 def _load_plot_utils():
     path = _REPO / "scripts" / "plot_utils.py"
-    spec = importlib.util.spec_from_file_location("mmml_plot_utils", path)
+    spec = importlib.util.spec_from_file_location("karml_plot_utils", path)
     assert spec and spec.loader
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)

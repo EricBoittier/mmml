@@ -28,7 +28,7 @@ _PROFILE_RE = re.compile(
     r"CHARMM\+overhead=(?P<charmm>[0-9.]+)s"
 )
 _JAX_TIMER_RE = re.compile(
-    r"mmml: JAX compile timers — estimated compile=(?P<compile>[0-9.]+)s, run=(?P<run>[0-9.]+)s"
+    r"karml: JAX compile timers — estimated compile=(?P<compile>[0-9.]+)s, run=(?P<run>[0-9.]+)s"
 )
 _WARMUP_RE = re.compile(r"warmup-mlpot-jax: done in (?P<sec>[0-9.]+)s")
 

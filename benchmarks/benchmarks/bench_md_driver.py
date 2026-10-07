@@ -1,4 +1,4 @@
-"""End-to-end MD throughput through ``mmml.md.drivers.JaxmdDriver``.
+"""End-to-end MD throughput through ``karml.md.drivers.JaxmdDriver``.
 
 This is the benchmark that answers the only question a simulation actually asks:
 **how many nanoseconds per day**. Everything else in the suite explains this
@@ -25,9 +25,9 @@ DT_FS = 0.5
 
 def _hybrid_mm_energy(system):
     """A ``HybridEnergy`` with the switched MM nonbonded term over the box."""
-    from mmml.interfaces.pycharmmInterface.mm_system_energy import CharmmNbondSettings
-    from mmml.md.energy import EnergyContext, HybridEnergy
-    from mmml.md.energy.terms import MMNonbondedTerm
+    from karml.interfaces.pycharmmInterface.mm_system_energy import CharmmNbondSettings
+    from karml.md.energy import EnergyContext, HybridEnergy
+    from karml.md.energy.terms import MMNonbondedTerm
 
     settings = CharmmNbondSettings(cutnb=CUTOFF_A, ctonnb=10.0, ctofnb=CUTOFF_A)
     return HybridEnergy([MMNonbondedTerm(settings)], system, EnergyContext())
@@ -61,11 +61,11 @@ class _DriverBase:
         require_jax()
         require_jax_md()
         try:
-            from mmml.md.config import EnsembleSpec
-            from mmml.md.drivers import JaxmdDriver
-            from mmml.md.neighbors import make_intermolecular_neighbor_fn
+            from karml.md.config import EnsembleSpec
+            from karml.md.drivers import JaxmdDriver
+            from karml.md.neighbors import make_intermolecular_neighbor_fn
         except Exception as exc:  # pragma: no cover - environment-dependent
-            raise skip(f"mmml.md driver stack unavailable: {exc}") from exc
+            raise skip(f"karml.md driver stack unavailable: {exc}") from exc
 
         system, box = synthetic_system(int(n_waters))
         self.box_L = float(box["box_L"])

@@ -48,7 +48,7 @@ def pair_displacements(
     positions_dst = e3x.ops.gather_dst(positions, dst_idx=dst_idx)
     positions_src = e3x.ops.gather_src(positions, src_idx=src_idx)
     if use_pbc and cell is not None:
-        from mmml.interfaces.pycharmmInterface.pbc_utils_jax import cell_inverse
+        from karml.interfaces.pycharmmInterface.pbc_utils_jax import cell_inverse
 
         dR = positions_src - positions_dst
         # Same map as solve(cell.T, dR.T).T; 1/L on cubic, one inv otherwise.

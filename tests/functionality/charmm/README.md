@@ -59,16 +59,16 @@ Port of [pyCHARMM Workshop 3SimpleMPIExample](https://github.com/BrooksResearchG
 pytest tests/charmm_mpi/ -m "charmm_mpi and not pycharmm" -q
 
 # Live under mpirun (CHARMM node / CI charmm job)
-MMML_MPI_NP=1 ./scripts/mmml-charmm-mpirun.sh pytest tests/charmm_mpi/test_mpi_live_energy.py -q
+KARML_MPI_NP=1 ./scripts/karml-charmm-mpirun.sh pytest tests/charmm_mpi/test_mpi_live_energy.py -q
 ```
 
 ```bash
 # Environment check first
-mmml mpi-check
-./scripts/mmml-charmm-mpirun.sh mpi-check
+karml mpi-check
+./scripts/karml-charmm-mpirun.sh mpi-check
 
 # Workshop smoke (requires CHARMM_HOME/toppar protein files)
-MMML_MPI_NP=4 ./scripts/mmml-charmm-mpirun.sh python \
+KARML_MPI_NP=4 ./scripts/karml-charmm-mpirun.sh python \
   tests/functionality/charmm/mpi_alad_phi_psi.py --n-phi 12 --n-psi 12 \
   -o /tmp/alad_phi_psi_mpi.json
 ```
@@ -82,6 +82,6 @@ See [`docs/pycharmm-mpi.md`](../../../docs/pycharmm-mpi.md) for Phases 0–2 des
 | PyCHARMM MPI Phases 0–2 | `docs/pycharmm-mpi.md` |
 | Protein CHARMM + jax-md | `docs/protein-force-fields.md` |
 | Spatial ML MPI (Tier 2) | `docs/mlpot-spatial-mpi.md` |
-| Thermostat / CPT keywords | `mmml/interfaces/pycharmmInterface/mlpot/THERMOSTAT_INVESTIGATION.md` |
-| Stage presets | `mmml/interfaces/pycharmmInterface/mlpot/CHARMM_SETTINGS.md` |
+| Thermostat / CPT keywords | `karml/interfaces/pycharmmInterface/mlpot/THERMOSTAT_INVESTIGATION.md` |
+| Stage presets | `karml/interfaces/pycharmmInterface/mlpot/CHARMM_SETTINGS.md` |
 | Monomer constraints (FF-only SD) | `tests/functionality/constraints/README.md` |

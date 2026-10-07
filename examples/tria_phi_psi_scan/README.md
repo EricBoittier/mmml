@@ -19,13 +19,13 @@ Pipeline:
 ## Smoke (cluster / PyCHARMM node)
 
 ```bash
-cd ~/mmml
-export MMML_CKPT="${MMML_CKPT:-examples/sppoky-epoch-0010_params.json}"
+cd ~/karml
+export KARML_CKPT="${KARML_CKPT:-examples/sppoky-epoch-0010_params.json}"
 OUT=artifacts/tria_phi_psi_scan
 
 # 1) Coarse gas grid (30° → 13×13; use 60° for a quicker smoke)
 uv run python scripts/scan_trialanine_phi_psi_pes.py \
-  --checkpoint "$MMML_CKPT" \
+  --checkpoint "$KARML_CKPT" \
   --phi=-180:180:60 --psi=-180:180:60 \
   --out "$OUT/gas" \
   --mm-sd-steps 50 --mm-abnr-steps 50 \
@@ -59,7 +59,7 @@ uv run python scripts/plot_tria_phi_psi_gas_solvent.py --demo \
 ## Umbrella sampling (gas φ / ψ)
 
 After the gas scan NPZ + traj exist, run a **periodic dihedral** umbrella with
-`mmml umbrella-sample` (`DihedralCV`, degrees / eV·deg⁻²). Seeds come from the
+`karml umbrella-sample` (`DihedralCV`, degrees / eV·deg⁻²). Seeds come from the
 scan (`seed_mode: frames`); stretch seeding is distance-only.
 
 ```bash
@@ -70,10 +70,10 @@ uv run python scripts/export_tria_phi_umbrella_seeds.py \
   -o "$OUT/gas/umbrella_phi_seeds.npz"
 
 # Smoke (~7 windows); swap yaml for production 13-window / longer nsteps
-uv run mmml umbrella-sample \
+uv run karml umbrella-sample \
   --config examples/tria_phi_psi_scan/yaml/umbrella_phi_gas_smoke.yaml
 
-uv run mmml umbrella-mbar --run-dir "$OUT/umbrella_phi_gas_smoke"
+uv run karml umbrella-mbar --run-dir "$OUT/umbrella_phi_gas_smoke"
 
 uv run python scripts/plot_tria_dihedral_umbrella_pmf.py \
   --run-dir "$OUT/umbrella_phi_gas_smoke" \

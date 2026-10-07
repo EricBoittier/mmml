@@ -4,7 +4,7 @@
 Consumes the JSON files written by ``scripts/validate_packmol_monomer_geometry.py``
 (real cluster builds) and, optionally, a Packmol cache entry whose coordinates are
 known bad, and shows why
-``mmml.utils.monomer_internal_geometry.DEFAULT_MAX_MONOMER_INTERNAL_DEVIATION_A``
+``karml.utils.monomer_internal_geometry.DEFAULT_MAX_MONOMER_INTERNAL_DEVIATION_A``
 sits where it does.
 
 Example
@@ -47,7 +47,7 @@ def _load_runs(paths: list[Path]) -> list[dict]:
 
 def _cache_entry_deviations(entry: Path) -> tuple[np.ndarray, str]:
     """Per-monomer deviations for a Packmol cache entry on disk."""
-    from mmml.utils.monomer_internal_geometry import scan_monomer_internal_geometry
+    from karml.utils.monomer_internal_geometry import scan_monomer_internal_geometry
 
     data = np.load(entry / "cluster.npz", allow_pickle=False)
     residue_names = [str(x).upper() for x in data["residue_names"]]
@@ -75,12 +75,12 @@ def _plot_worst_monomer(entry: Path, out: Path) -> None:
     """Draw the template monomer next to the worst monomer in a cache entry."""
     import matplotlib.pyplot as plt
 
-    from mmml.utils.monomer_internal_geometry import (
+    from karml.utils.monomer_internal_geometry import (
         DEFAULT_MAX_MONOMER_INTERNAL_DEVIATION_A as LIMIT,
         covalent_skeleton_pairs,
         scan_monomer_internal_geometry,
     )
-    from mmml.utils.plotting.styles import status_color
+    from karml.utils.plotting.styles import status_color
 
     data = np.load(entry / "cluster.npz", allow_pickle=False)
     residue_names = [str(x).upper() for x in data["residue_names"]]
@@ -112,7 +112,7 @@ def _plot_worst_monomer(entry: Path, out: Path) -> None:
         if np.linalg.norm(coords[i] - coords[j]) < 1.8  # 1-2 only, for drawing
     ]
 
-    from mmml.utils.structure_align import align_positions
+    from karml.utils.structure_align import align_positions
 
     template = coords - coords.mean(axis=0)
     broken = align_positions(positions[s:e] - positions[s:e].mean(axis=0), template)
@@ -208,10 +208,10 @@ def main(argv: list[str] | None = None) -> int:
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
-    from mmml.utils.monomer_internal_geometry import (
+    from karml.utils.monomer_internal_geometry import (
         DEFAULT_MAX_MONOMER_INTERNAL_DEVIATION_A as LIMIT,
     )
-    from mmml.utils.plotting.styles import apply_plot_style, status_color
+    from karml.utils.plotting.styles import apply_plot_style, status_color
 
     apply_plot_style()
     runs = _load_runs(list(args.json))

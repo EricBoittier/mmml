@@ -3,7 +3,7 @@
 CLI: export an Orbax checkpoint to a portable JSON file.
 
 Usage:
-    mmml orbax-to-json path/to/epoch-1985 -o DESdimers_params.json
+    karml orbax-to-json path/to/epoch-1985 -o DESdimers_params.json
 """
 
 from __future__ import annotations
@@ -48,8 +48,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 def main() -> int:
     args = parse_args()
 
-    from mmml.cli.base import resolve_checkpoint_paths
-    from mmml.utils.model_checkpoint import orbax_to_json
+    from karml.cli.base import resolve_checkpoint_paths
+    from karml.utils.model_checkpoint import orbax_to_json
 
     _, epoch_dir = resolve_checkpoint_paths(args.checkpoint)
     if epoch_dir.is_file() and epoch_dir.suffix == ".json":

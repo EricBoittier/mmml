@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """Profile GPU NL communication: D2H sync vs CPU build vs H2D pairs vs CuPy+DLPack.
 
-Run on a GPU node with ``uv sync --extra gpu`` and ``MMML_MM_NL_DEVICE=gpu`` for
+Run on a GPU node with ``uv sync --extra gpu`` and ``KARML_MM_NL_DEVICE=gpu`` for
 the full comparison. On CPU-only hosts, reports D2H + CPU Vesin timings only.
 
 Examples
 --------
   uv run python tests/functionality/neighbor_lists/11_gpu_nl_sync_profile.py
-  MMML_MM_NL_DEVICE=gpu uv run python tests/functionality/neighbor_lists/11_gpu_nl_sync_profile.py \\
+  KARML_MM_NL_DEVICE=gpu uv run python tests/functionality/neighbor_lists/11_gpu_nl_sync_profile.py \\
       --case synthetic_aco_liquid_n32 --repeat 30
 """
 
@@ -23,7 +23,7 @@ from _common import (
     liquid_density_synthetic_cases,
     print_header,
 )
-from mmml.interfaces.pycharmmInterface.nl_gpu import (
+from karml.interfaces.pycharmmInterface.nl_gpu import (
     gpu_nl_path_available,
     have_cupy,
     profile_nl_sync_components,
@@ -43,7 +43,7 @@ def main() -> int:
     args = parser.parse_args()
 
     print_header("GPU NL sync profile")
-    print(f"  MMML_MM_NL_DEVICE={resolve_mm_nl_device()}")
+    print(f"  KARML_MM_NL_DEVICE={resolve_mm_nl_device()}")
     print(f"  cupy={have_cupy()}  gpu_path={gpu_nl_path_available()}")
 
     try:
@@ -88,7 +88,7 @@ def main() -> int:
 
     if not gpu_nl_path_available():
         print(
-            "\nNote: set MMML_MM_NL_DEVICE=gpu with cupy + vesin>=0.5 on a CUDA node "
+            "\nNote: set KARML_MM_NL_DEVICE=gpu with cupy + vesin>=0.5 on a CUDA node "
             "to benchmark gpu_vesin_dlpack_ms."
         )
     return 0

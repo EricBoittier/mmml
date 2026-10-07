@@ -27,10 +27,10 @@ def main() -> int:
     from jax_md import simulate, space, units
 
     from examples.md_cpu._geometry import aco_dimer_cluster
-    from mmml.interfaces.pycharmmInterface.calculator_utils import unpack_factory_result
-    from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import resolve_checkpoint
-    from mmml.interfaces.pycharmmInterface.mmml_calculator import setup_calculator
+    from karml.interfaces.pycharmmInterface.calculator_utils import unpack_factory_result
+    from karml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import resolve_checkpoint
+    from karml.interfaces.pycharmmInterface.karml_calculator import setup_calculator
 
     z, r = aco_dimer_cluster(n_monomers=2, spacing=5.0)
     ckpt = resolve_checkpoint(args.checkpoint)

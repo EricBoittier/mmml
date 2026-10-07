@@ -3,8 +3,8 @@ from openmm import *
 from openmm.unit import *
 
 # Load CHARMM topology (PSF) and structure (PDB)
-psf = CharmmPsfFile("/pchem-data/meuwly/boittier/home/project-mmml/proh/proh-262.psf")
-pdb = PDBFile("/pchem-data/meuwly/boittier/home/project-mmml/proh/mini.pdb")
+psf = CharmmPsfFile("/pchem-data/meuwly/boittier/home/project-karml/proh/proh-262.psf")
+pdb = PDBFile("/pchem-data/meuwly/boittier/home/project-karml/proh/mini.pdb")
 
 # Load CHARMM force field parameters
 forcefield = ForceField("charmm36.xml", "charmm36_cgenff.xml")

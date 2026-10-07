@@ -10,9 +10,9 @@ Related: [Dimer scans (COM distance / LR solvers)](dimer_scans/README.md).
 
 | Script | Role |
 |--------|------|
-| [`scripts/scan_dimer_orientations.py`](https://github.com/EricBoittier/mmml/blob/main/scripts/scan_dimer_orientations.py) | Batched `hybrid_forward` ray scan → `rays.csv` + `summary.json` |
-| [`scripts/plot_orient_hemisphere_annotated.py`](https://github.com/EricBoittier/mmml/blob/main/scripts/plot_orient_hemisphere_annotated.py) | Hemisphere maps, ASE overlays, path atlas, 1D slices |
-| [`scripts/run_gfn2_nms_hybrid.sh`](https://github.com/EricBoittier/mmml/blob/main/scripts/run_gfn2_nms_hybrid.sh) | Train → freeze → orientation gate (cluster workflow) |
+| [`scripts/scan_dimer_orientations.py`](https://github.com/EricBoittier/karml/blob/main/scripts/scan_dimer_orientations.py) | Batched `hybrid_forward` ray scan → `rays.csv` + `summary.json` |
+| [`scripts/plot_orient_hemisphere_annotated.py`](https://github.com/EricBoittier/karml/blob/main/scripts/plot_orient_hemisphere_annotated.py) | Hemisphere maps, ASE overlays, path atlas, 1D slices |
+| [`scripts/run_gfn2_nms_hybrid.sh`](https://github.com/EricBoittier/karml/blob/main/scripts/run_gfn2_nms_hybrid.sh) | Train → freeze → orientation gate (cluster workflow) |
 
 Plotting needs only CPU + ASE + matplotlib (no CHARMM / GPU). The scan itself
 needs a JAX checkpoint (GPU recommended for ~240 rays).
@@ -201,11 +201,11 @@ relative — do **not** pass `--subtract-atom-energies`.
 
 ```bash
 UUID=f448e34c-cca7-43f6-8b8e-f4986b9403eb
-ACODCM=/mmhome/boittier/home/mmml_tutorial/acodcm
+ACODCM=/mmhome/boittier/home/karml_tutorial/acodcm
 FROZEN=$ACODCM/ckpts/_gate_frozen_e222   # contains only epoch-222
 OUT=$ACODCM/eval_gfn2nms_${UUID}
 
-mmml physnet-evaluate \
+karml physnet-evaluate \
   --checkpoint "$FROZEN" \
   --data "$ACODCM/gfn2_nms_test.npz" \
   -o "$OUT/gfn2_nms_test_e222" \

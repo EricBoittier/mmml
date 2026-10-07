@@ -50,7 +50,7 @@ from pycharmm.charmm_file import c_api_path_buffer
 
 def _resolve_write_path(filename: str):
     try:
-        from mmml.interfaces.pycharmmInterface.charmm_paths import charmm_fortran_path
+        from karml.interfaces.pycharmmInterface.charmm_paths import charmm_fortran_path
     except ImportError:
         return filename, None
     return charmm_fortran_path(filename, for_write=True)
@@ -117,11 +117,11 @@ def coor_pdbx(filename, **kwargs):
 def coor_card(filename, title='', comp=False, offset=0, **kwargs):
     """Write a CHARMM card coordinate file.
 
-    Prefers mmml's coordinate writer when that package is installed. Otherwise
+    Prefers karml's coordinate writer when that package is installed. Otherwise
     uses the script path with an uppercase ``CARD`` token.
     """
     try:
-        from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+        from karml.interfaces.pycharmmInterface.mlpot.setup import (
             write_charmm_crd_from_charmm,
         )
     except ImportError:

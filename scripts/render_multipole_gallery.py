@@ -7,11 +7,11 @@ shared axis labels, per docs/plotting-style-guide.md "Complex figure
 layout".
 
 No saved real multipole-coefficient array exists in this checkout (real
-data comes from mmml.models.multipoles at runtime, cached to Orbax
+data comes from karml.models.multipoles at runtime, cached to Orbax
 checkpoints not present here) -- values below are physically-plausible
 synthetic ones (charge O(1) e, dipole O(1) e*bohr, decaying magnitude for
-quadrupole/octupole), matching mmml/models/multipoles/electrostatics.py's
-documented units and mmml/models/multipoles/representations.py's packed
+quadrupole/octupole), matching karml/models/multipoles/electrostatics.py's
+documented units and karml/models/multipoles/representations.py's packed
 irrep convention (max_ell=3 -> l=0,1,2,3 blocks of width 2l+1).
 """
 
@@ -25,7 +25,7 @@ import numpy as np
 from matplotlib.colors import Normalize
 from matplotlib.patches import Rectangle
 
-from mmml.utils.plotting.styles import (
+from karml.utils.plotting.styles import (
     apply_plot_style,
     booktabs_table,
     latex_available,
@@ -184,7 +184,7 @@ def multi_cmap_panel_figure(out: Path) -> None:
     """
     import cmap as cmap_lib
 
-    from mmml.utils.plotting.styles import MULTI_CMAP_SHORTLIST
+    from karml.utils.plotting.styles import MULTI_CMAP_SHORTLIST
 
     n = 40
     x, y = np.meshgrid(np.linspace(-3, 3, n), np.linspace(-3, 3, n))

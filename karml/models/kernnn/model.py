@@ -9,13 +9,13 @@ import flax.linen as nn
 import jax
 import jax.numpy as jnp
 
-from mmml.models.kernnn.dihedrals import h2co_hcoh_dihedral
-from mmml.models.kernnn.distances import (
+from karml.models.kernnn.dihedrals import h2co_hcoh_dihedral
+from karml.models.kernnn.distances import (
     DISTANCE_FNS,
     n_atoms_for_scheme,
     n_features_for_scheme,
 )
-from mmml.models.kernnn.kernels import KERNEL_FNS, get_1d_kernels_k33
+from karml.models.kernnn.kernels import KERNEL_FNS, get_1d_kernels_k33
 
 
 @dataclass(frozen=True)

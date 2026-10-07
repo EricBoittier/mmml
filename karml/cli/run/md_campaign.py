@@ -1,4 +1,4 @@
-"""In-process campaign runner for ``mmml md-system``."""
+"""In-process campaign runner for ``karml md-system``."""
 
 from __future__ import annotations
 
@@ -9,14 +9,14 @@ from argparse import Namespace
 from pathlib import Path
 from typing import Any, Mapping
 
-from mmml.cli.run.md_config import (
+from karml.cli.run.md_config import (
     expand_repeated_jobs,
     load_yaml_config,
     merge_campaign_job_config,
     topological_job_order,
     validate_campaign_checkpoint,
 )
-from mmml.cli.run.md_handoff import (
+from karml.cli.run.md_handoff import (
     clear_handoff_context,
     enrich_handoff_from_restart_files,
     find_latest_charmm_restart_in_dir,
@@ -28,7 +28,7 @@ from mmml.cli.run.md_handoff import (
     set_handoff_in,
     set_handoff_out,
 )
-from mmml.cli.run.md_stage_summary import (
+from karml.cli.run.md_stage_summary import (
     MdJobSummary,
     MdStageSummary,
     build_pycharmm_plan_rows,
@@ -265,7 +265,7 @@ def resolve_campaign_namespace_paths(
     ``merge_campaign_job_config`` re-reads relative paths from YAML; without this,
     an initial parse-time resolve on the parent args is overwritten.
     """
-    from mmml.cli.run.md_config import resolve_config_relative_path
+    from karml.cli.run.md_config import resolve_config_relative_path
 
     for key in _CAMPAIGN_CONFIG_RELATIVE_PATH_KEYS:
         val = getattr(ns, key, None)
@@ -277,7 +277,7 @@ def resolve_campaign_namespace_paths(
 
 
 def namespace_from_merged(merged: dict[str, Any]) -> Namespace:
-    from mmml.cli.run import md_system
+    from karml.cli.run import md_system
 
     parser_keys = set(vars(md_system.parse_args([])))
     argv: list[str] = []
@@ -351,18 +351,18 @@ def run_single_backend(
     *,
     handoff_in=None,
 ) -> tuple[int, Any, list[MdStageSummary]]:
-    from mmml.cli.run import md_system
+    from karml.cli.run import md_system
 
     clear_handoff_context()
     set_handoff_in(handoff_in)
     set_handoff_out(None)
     if getattr(args, "jaxmd_unified", False):
-        from mmml.cli.run.md_system_unified import run_unified_jaxmd
+        from karml.cli.run.md_system_unified import run_unified_jaxmd
 
         try:
             exit_code = int(run_unified_jaxmd(args))
         except Exception as exc:
-            print(f"mmml md-system: jaxmd-unified failed: {exc}", flush=True)
+            print(f"karml md-system: jaxmd-unified failed: {exc}", flush=True)
             exit_code = 1
         handoff_out = get_handoff_out()
         stages: list[MdStageSummary] = getattr(md_system, "_last_job_stages", []) or []
@@ -375,10 +375,10 @@ def run_single_backend(
 
 
 def run_campaign(args: Namespace) -> int:
-    from mmml.cli.run import md_system
+    from karml.cli.run import md_system
 
     campaign = load_yaml_config(args.config)
-    from mmml.interfaces.pycharmmInterface.mlpot.spatial_mpi_policy import (
+    from karml.interfaces.pycharmmInterface.mlpot.spatial_mpi_policy import (
         sync_spatial_mpi_env_from_campaign,
     )
 
@@ -392,7 +392,7 @@ def run_campaign(args: Namespace) -> int:
 
     if _campaign_needs_pycharmm(campaign):
         md_system._apply_charmm_omp_threads_env(args)
-        from mmml.interfaces.pycharmmInterface.charmm_mpi import (
+        from karml.interfaces.pycharmmInterface.charmm_mpi import (
             maybe_rerun_md_system_under_mpirun,
             prepare_serial_charmm_mpi_env,
         )
@@ -406,7 +406,7 @@ def run_campaign(args: Namespace) -> int:
     plan_rows = build_plan_rows(campaign, order)
     campaign_root = Path(getattr(args, "campaign_output_dir", None) or campaign.get("campaign_output", "artifacts/md_campaign"))
     campaign_root = campaign_root.expanduser().resolve()
-    from mmml.cli.run.md_config import campaign_resume_enabled
+    from karml.cli.run.md_config import campaign_resume_enabled
 
     resume = campaign_resume_enabled(args, campaign)
     run_all = bool(getattr(args, "run_all", False))
@@ -415,7 +415,7 @@ def run_campaign(args: Namespace) -> int:
         campaign_root = _unique_output_dir_if_exists(campaign_root, resume=False)
         if campaign_root != requested_campaign_root and not getattr(args, "quiet", False):
             print(
-                f"mmml md-system: campaign output dir {requested_campaign_root} exists; "
+                f"karml md-system: campaign output dir {requested_campaign_root} exists; "
                 f"using {campaign_root}",
                 flush=True,
             )
@@ -443,7 +443,7 @@ def run_campaign(args: Namespace) -> int:
             out_dir = _unique_output_dir_if_exists(out_dir, resume=False)
             if out_dir != requested_out_dir and not getattr(args, "quiet", False):
                 print(
-                    f"mmml md-system: job {run_id!r} output dir exists; using {out_dir}",
+                    f"karml md-system: job {run_id!r} output dir exists; using {out_dir}",
                     flush=True,
                 )
         resolved_output_dirs[run_id] = out_dir
@@ -495,7 +495,7 @@ def run_campaign(args: Namespace) -> int:
             )
 
         if resume and handoff_is_valid(out_dir):
-            print(f"mmml md-system: resume skip complete job {run_id!r}", flush=True)
+            print(f"karml md-system: resume skip complete job {run_id!r}", flush=True)
             if (out_dir / "handoff" / "state.npz").is_file():
                 handoff_by_run[run_id] = load_handoff(out_dir / "handoff" / "state.npz")
             continue
@@ -565,7 +565,7 @@ def build_md_system_argv_from_campaign(
     """Build flat argv for one campaign job (benchmark workflows)."""
     merged = merge_campaign_job_config(campaign, job_id, output_dir=output_dir)
     args = namespace_from_merged(merged)
-    from mmml.cli.run import md_system
+    from karml.cli.run import md_system
 
     _backend, backend_argv = md_system.build_command(args)
     return backend_argv
@@ -579,7 +579,7 @@ def build_benchmark_md_system_argv(
     resolve_checkpoint,
     job_output_dir,
 ) -> list[str]:
-    """Build flat ``mmml md-system`` CLI argv for legacy benchmark ``config.yaml`` jobs."""
+    """Build flat ``karml md-system`` CLI argv for legacy benchmark ``config.yaml`` jobs."""
     job = cfg["jobs"][job_id]
     out = output_dir or job_output_dir(cfg, job_id)
 

@@ -32,15 +32,15 @@ Runs with `smoothness_score` > `energy_catastrophe_score` (default **10 000**)
 
 ## Prerequisites
 
-- `export MMML_CKPT=/path/to/dcm_physnet_ckpt`
-- GPU JAX (`uv sync --extra gpu`) or env with `jax` + `mmml`
-- OpenMPI + `libcharmm` (use `scripts/mmml-charmm-mpirun.sh`)
+- `export KARML_CKPT=/path/to/dcm_physnet_ckpt`
+- GPU JAX (`uv sync --extra gpu`) or env with `jax` + `karml`
+- OpenMPI + `libcharmm` (use `scripts/karml-charmm-mpirun.sh`)
 - `packmol`, `snakemake`
 
 ## Run
 
 ```bash
-export MMML_CKPT=/path/to/your/dcm_ckpt
+export KARML_CKPT=/path/to/your/dcm_ckpt
 cd workflows/dcm3_nve_cutoff_sweep
 bash scripts/preflight.sh
 snakemake -n

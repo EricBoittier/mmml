@@ -20,10 +20,10 @@ from typing import Sequence
 
 import numpy as np
 
-from mmml.interfaces.calculators.link_atoms import LinkAtom
-from mmml.interfaces.pycharmmInterface.charmm_paths import mmml_repo_root
-from mmml.interfaces.pycharmmInterface.cgenff_residues import parse_cgenff_residues
-from mmml.interfaces.pycharmmInterface.heme_library import heme_toppar_paths
+from karml.interfaces.calculators.link_atoms import LinkAtom
+from karml.interfaces.pycharmmInterface.charmm_paths import karml_repo_root
+from karml.interfaces.pycharmmInterface.cgenff_residues import parse_cgenff_residues
+from karml.interfaces.pycharmmInterface.heme_library import heme_toppar_paths
 
 MBCO_RESIDUE_NAMES = frozenset({"MBCO", "MYOGLOBIN"})
 DEFAULT_MBCO_CRD = Path("setup/charmm/test/data/mbco_au_q0.crd")
@@ -94,7 +94,7 @@ def is_myoglobin_args(args: object | None) -> bool:
 
 
 def default_mbco_crd_path(repo_root: Path | None = None) -> Path:
-    return (repo_root or mmml_repo_root()) / DEFAULT_MBCO_CRD
+    return (repo_root or karml_repo_root()) / DEFAULT_MBCO_CRD
 
 
 @dataclass(frozen=True, slots=True)
@@ -270,9 +270,9 @@ def his93_cut_from_args(args: object) -> tuple[np.ndarray, tuple[LinkAtom, ...]]
 
 def myoglobin_electronic_state(args: object):
     """Charge and spin for PET on MbCO."""
-    from mmml.interfaces.pycharmmInterface.heme_electronic import MetatomicElectronicState
+    from karml.interfaces.pycharmmInterface.heme_electronic import MetatomicElectronicState
 
-    from mmml.interfaces.pycharmmInterface.ml_cut import ml_cut_spec_from_args
+    from karml.interfaces.pycharmmInterface.ml_cut import ml_cut_spec_from_args
 
     cut_spec = ml_cut_spec_from_args(args)
     if cut_spec is not None:
@@ -536,12 +536,12 @@ def build_myoglobin_in_charmm(
     """
     if int(n_molecules) != 1:
         raise ValueError("MBCO is one crystal structure; --n-molecules must be 1")
-    from mmml.interfaces.pycharmmInterface.cluster_geometry import (
+    from karml.interfaces.pycharmmInterface.cluster_geometry import (
         ensure_charmm_session_ready,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import prepare_charmm_vacuum
-    from mmml.interfaces.pycharmmInterface.nbonds_config import read_cgenff_toppar
-    from mmml.interfaces.pycharmmInterface.utils import get_Z_from_psf
+    from karml.interfaces.pycharmmInterface.mlpot.setup import prepare_charmm_vacuum
+    from karml.interfaces.pycharmmInterface.nbonds_config import read_cgenff_toppar
+    from karml.interfaces.pycharmmInterface.utils import get_Z_from_psf
 
     ensure_charmm_session_ready()
     import pycharmm.coor as coor
@@ -609,7 +609,7 @@ def build_myoglobin_in_charmm(
 @lru_cache(maxsize=1)
 def residue_formal_charges() -> dict[str, int]:
     """Integer RESI charges from the protein, heme, and water-ion libraries."""
-    root = mmml_repo_root()
+    root = karml_repo_root()
     rtf, _prm, stream = heme_toppar_paths(root)
     paths = [rtf, stream, root / "setup/charmm/toppar/toppar_water_ions.str"]
     charges: dict[str, int] = {}
@@ -636,7 +636,7 @@ def _integer_charge(text: str) -> int:
 
 
 def _protein_ion_names() -> frozenset[str]:
-    from mmml.interfaces.pycharmmInterface.heme_electronic import PROTEIN_ION_CHARGE
+    from karml.interfaces.pycharmmInterface.heme_electronic import PROTEIN_ION_CHARGE
 
     return frozenset(PROTEIN_ION_CHARGE)
 

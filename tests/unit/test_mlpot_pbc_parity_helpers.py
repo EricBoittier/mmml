@@ -8,20 +8,20 @@ import warnings
 import numpy as np
 import pytest
 
-from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
-from mmml.interfaces.pycharmmInterface.mm_energy_forces import (
+from karml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
+from karml.interfaces.pycharmmInterface.mm_energy_forces import (
     decompose_mlpot_mm_nb_eterms_kcalmol,
 )
-from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
     resolve_jax_pme_sr_cutoff_for_mlpot,
     resolve_lr_solver_for_mlpot,
     resolve_mlpot_use_pbc,
     warn_if_mic_pbc_without_lr,
 )
-from mmml.interfaces.pycharmmInterface.mlpot.charmm_eterm_routing import (
+from karml.interfaces.pycharmmInterface.mlpot.charmm_eterm_routing import (
     route_mlpot_callback_energy_kcalmol,
 )
-from mmml.interfaces.pycharmmInterface.mlpot.mlpot_sparse_dimer_policy import (
+from karml.interfaces.pycharmmInterface.mlpot.mlpot_sparse_dimer_policy import (
     image_aware_dimer_com_distance_numpy,
     mic_displacement_numpy,
 )
@@ -116,7 +116,7 @@ def test_decompose_mm_nb_primary_vs_image_buckets():
 
 
 def test_route_mlpot_callback_energy_subtracts_mm_from_user(monkeypatch):
-    monkeypatch.setenv("MMML_MLPOT_ROUTE_MM_ETERMS", "1")
+    monkeypatch.setenv("KARML_MLPOT_ROUTE_MM_ETERMS", "1")
     components = {
         "vdw_primary": 1.0,
         "vdw_image": 0.5,
@@ -129,7 +129,7 @@ def test_route_mlpot_callback_energy_subtracts_mm_from_user(monkeypatch):
 
 
 def test_route_mlpot_callback_keeps_user_when_routing_would_zero_hybrid(monkeypatch):
-    monkeypatch.setenv("MMML_MLPOT_ROUTE_MM_ETERMS", "1")
+    monkeypatch.setenv("KARML_MLPOT_ROUTE_MM_ETERMS", "1")
     components = {
         "vdw_primary": -15000.0,
         "vdw_image": -10000.0,
@@ -144,7 +144,7 @@ def test_route_mlpot_callback_keeps_user_when_routing_would_zero_hybrid(monkeypa
 def test_route_mlpot_callback_keeps_small_user_when_routing_would_zero_hybrid(
     monkeypatch,
 ):
-    monkeypatch.setenv("MMML_MLPOT_ROUTE_MM_ETERMS", "1")
+    monkeypatch.setenv("KARML_MLPOT_ROUTE_MM_ETERMS", "1")
     components = {
         "vdw_primary": -1.0e-4,
         "vdw_image": -1.0e-4,
@@ -184,7 +184,7 @@ def test_decompose_mlpot_mm_nb_skips_out_of_range_pair_indices():
 def test_decompose_and_route_uses_per_atom_nb_arrays_not_type_table(monkeypatch):
     from unittest.mock import MagicMock, patch
 
-    from mmml.interfaces.pycharmmInterface.mlpot.charmm_eterm_routing import (
+    from karml.interfaces.pycharmmInterface.mlpot.charmm_eterm_routing import (
         decompose_and_route_mlpot_mm_from_callback,
     )
 
@@ -205,10 +205,10 @@ def test_decompose_and_route_uses_per_atom_nb_arrays_not_type_table(monkeypatch)
     live_rmins = np.ones(n) * 1.8
 
     with patch(
-        "mmml.interfaces.pycharmmInterface.mm_system_energy._live_charmm_nonbonded_arrays",
+        "karml.interfaces.pycharmmInterface.mm_system_energy._live_charmm_nonbonded_arrays",
         return_value=(live_charges, live_eps, live_rmins),
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mm_energy_forces.decompose_mlpot_mm_nb_eterms_kcalmol",
+        "karml.interfaces.pycharmmInterface.mm_energy_forces.decompose_mlpot_mm_nb_eterms_kcalmol",
         return_value={
             "vdw_primary": 0.0,
             "vdw_image": 0.0,

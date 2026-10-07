@@ -1,6 +1,6 @@
 # Monomer constraint verification (run locally)
 
-Verify `cons_fix` behavior in **two layers** before relying on `mmml md-system --setup free_nvt`.
+Verify `cons_fix` behavior in **two layers** before relying on `karml md-system --setup free_nvt`.
 
 ## Layer 0 — no CHARMM (seconds)
 
@@ -18,7 +18,7 @@ Goal: prove fixed monomer atoms **do not move** under CHARMM SD while the rest o
 
 Suggested approach (manual script or notebook — not wired to `md-system` yet):
 
-1. Build a small multi-monomer PSF with `mmml make-res` (e.g. ACO) or use an existing `cluster_for_vmd_*.psf`.
+1. Build a small multi-monomer PSF with `karml make-res` (e.g. ACO) or use an existing `cluster_for_vmd_*.psf`.
 2. Perturb one monomer’s coordinates (translate resid 2 by ~0.5 Å).
 3. Run CHARMM `minimize.run_sd` **pass 1** (all atoms free), then `cons_fix.setup` on resid 1, **pass 2** SD.
 4. Assert RMSD of resid-1 atoms before/after pass 2 ≈ 0; resid 2 RMSD > 0.
@@ -28,7 +28,7 @@ PyCHARMM sketch:
 ```python
 import pycharmm.cons_fix as cons_fix
 import pycharmm.minimize as minimize
-from mmml.interfaces.pycharmmInterface.mlpot.cli_common import setup_cons_fix_for_resids, turn_off_cons_fix
+from karml.interfaces.pycharmmInterface.mlpot.cli_common import setup_cons_fix_for_resids, turn_off_cons_fix
 
 # ... load PSF/CRD, nbonds ...
 minimize.run_sd(nstep=50, nprint=50, inbfrq=0, ihbfrq=0)
@@ -39,12 +39,12 @@ turn_off_cons_fix()
 
 Pass criterion: max displacement on fixed resid < 1e-4 Å (tolerance can be tightened once stable).
 
-## Layer 2 — MMML / MLpot (existing functionality scripts)
+## Layer 2 — KARML / MLpot (existing functionality scripts)
 
 After layer 1 passes, use the MLpot stubs (CHARMM + checkpoint required):
 
 ```bash
-export MMML_CKPT=examples/ckpts_json/DESdimers_params.json
+export KARML_CKPT=examples/ckpts_json/DESdimers_params.json
 
 # Mini: free SD then cons_fix on --fix-resids
 python tests/functionality/mlpot/04_mlpot_minimize_stub.py --run --n-molecules 4 \
@@ -62,7 +62,7 @@ Compare DCD / CRD: fixed monomers should be frozen in pass 2 and during MD when 
 Only after layers 1–2:
 
 ```bash
-mmml md-system --setup free_nvt --backend pycharmm \
+karml md-system --setup free_nvt --backend pycharmm \
   --residue ACO --n-molecules 4 \
   --fix-resids 1,3 --md-stages mini \
   --mini-nstep 50 --skip-energy-show
@@ -76,7 +76,7 @@ Argv forwarding is covered by unit tests; end-to-end physics is your layer 3 che
 
 For DCM:2 smoke tests, bonded strain after MLpot mini can still read high vs CGENFF baseline — that is expected when comparing ML-relaxed coords to CHARMM bonded reference. Use strain margins (`--bonded-mm-grms-margin`) or skip `--bonded-mm-mini` on tiny smoke systems.
 
-For DCM:100+ on MPI-linked CHARMM, **do not** set `MMML_ALLOW_PSF_DELETE_RELOAD=1`; the default inplace path avoids the post-MLpot `DELETE ATOM` segfault.
+For DCM:100+ on MPI-linked CHARMM, **do not** set `KARML_ALLOW_PSF_DELETE_RELOAD=1`; the default inplace path avoids the post-MLpot `DELETE ATOM` segfault.
 
 For DCM:2 heat smoke tests prefer: no `--bonded-mm-mini`, longer `--ps-heat`, Hoover or smaller `TEMINC` (see `CHARMM_SETTINGS.md`), and constraint tests (`--fix-resids`) as in layer 2.
 

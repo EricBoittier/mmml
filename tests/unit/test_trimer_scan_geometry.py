@@ -10,7 +10,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from mmml.interfaces.pycharmmInterface.mlpot.trimer_scan import (
+from karml.interfaces.pycharmmInterface.mlpot.trimer_scan import (
     atoms_per_monomer_from_psf,
     com_distances,
     distance_report,
@@ -181,7 +181,7 @@ def test_scan_mlpot_dimer_2d_pycharmm_batch_parse() -> None:
 
 
 def test_default_scan_2d_metric_keys_include_wall_E() -> None:
-    from mmml.interfaces.pycharmmInterface.mlpot.trimer_scan import (
+    from karml.interfaces.pycharmmInterface.mlpot.trimer_scan import (
         default_scan_2d_metric_keys,
     )
 

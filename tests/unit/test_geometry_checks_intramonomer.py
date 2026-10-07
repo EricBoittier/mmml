@@ -9,7 +9,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-_GEOM_PATH = Path(__file__).resolve().parents[2] / "mmml" / "utils" / "geometry_checks.py"
+_GEOM_PATH = Path(__file__).resolve().parents[2] / "karml" / "utils" / "geometry_checks.py"
 _spec = importlib.util.spec_from_file_location("_test_geometry_checks_intra", _GEOM_PATH)
 assert _spec is not None and _spec.loader is not None
 _geom = importlib.util.module_from_spec(_spec)

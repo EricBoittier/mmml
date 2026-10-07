@@ -4,8 +4,8 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from mmml.interfaces.pycharmmInterface.mmml_calculator import strain_stress_voigt
-from mmml.interfaces.pycharmmInterface.pbc_utils_jax import cart_coords, frac_coords
+from karml.interfaces.pycharmmInterface.karml_calculator import strain_stress_voigt
+from karml.interfaces.pycharmmInterface.pbc_utils_jax import cart_coords, frac_coords
 
 L = np.array([6.0, 6.5, 7.0])
 R = np.random.default_rng(0).uniform(0.0, 1.0, size=(16, 3)) * L

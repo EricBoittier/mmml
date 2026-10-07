@@ -1,10 +1,10 @@
-"""Tests for mmml.md.results.energy_drift_metrics."""
+"""Tests for karml.md.results.energy_drift_metrics."""
 
 from __future__ import annotations
 
 import numpy as np
 
-from mmml.md.results import energy_drift_metrics
+from karml.md.results import energy_drift_metrics
 
 
 def test_flat_trace_has_zero_trend_and_zero_fluctuation():

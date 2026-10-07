@@ -50,7 +50,7 @@ def _write(path: Path, R: np.ndarray, Z: np.ndarray, meta: dict) -> None:
         # Placeholder reference: these datasets exist to read the model's own
         # energy, not to score it against anything.
         E=np.zeros(n_frames, dtype=np.float64),
-        _mmml_units=np.array(json.dumps({"E": "ev", "R": "angstrom"})),
+        _karml_units=np.array(json.dumps({"E": "ev", "R": "angstrom"})),
         metadata=json.dumps(meta),
     )
     print(f"wrote {path}  frames={n_frames} atoms={n_atoms}")

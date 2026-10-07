@@ -7,7 +7,7 @@ import jax
 import numpy as np
 
 # import numpy as np
-from  mmml.models.physnetjax.physnetjax.calc.pycharmm_calculator import PyCharmm_Calculator
+from  karml.models.physnetjax.physnetjax.calc.pycharmm_calculator import PyCharmm_Calculator
 
 conversion = {
     "energy": 1,
@@ -87,11 +87,11 @@ def get_ase_calc(
 
     class MessagePassingCalculator(ase_calc.Calculator):
         implemented_properties = Implemented_properties
-        _mmml_physnet_model = model
-        _mmml_physnet_params = params
-        _mmml_physnet_is_spooky = is_spooky_model
-        _mmml_spooky_charge = float(spooky_charge)
-        _mmml_spooky_multiplicity = float(spooky_multiplicity)
+        _karml_physnet_model = model
+        _karml_physnet_params = params
+        _karml_physnet_is_spooky = is_spooky_model
+        _karml_spooky_charge = float(spooky_charge)
+        _karml_spooky_multiplicity = float(spooky_multiplicity)
 
         def calculate(
             self,

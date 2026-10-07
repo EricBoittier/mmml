@@ -31,13 +31,13 @@ def dcm5_test_checkpoint() -> Iterator[Path]:
     from typing import Iterator
     ckpt = Path("/tmp/dcm5_test_ckpt")
     ckpt.mkdir(parents=True, exist_ok=True)
-    old_val = os.environ.get("MMML_CKPT")
-    os.environ["MMML_CKPT"] = str(ckpt)
+    old_val = os.environ.get("KARML_CKPT")
+    os.environ["KARML_CKPT"] = str(ckpt)
     yield ckpt
     if old_val is not None:
-        os.environ["MMML_CKPT"] = old_val
+        os.environ["KARML_CKPT"] = old_val
     else:
-        os.environ.pop("MMML_CKPT", None)
+        os.environ.pop("KARML_CKPT", None)
 
 
 @pytest.fixture(scope="module")
@@ -45,11 +45,11 @@ def cfg() -> dict:
     return load_config(WORKFLOW_ROOT / "config.yaml")
 
 
-def test_resolve_mmml_cmd_uses_md_system_subcommand() -> None:
+def test_resolve_karml_cmd_uses_md_system_subcommand() -> None:
     sys.path.insert(0, str(SCRIPTS))
-    from run_job import _resolve_mmml_cmd  # noqa: E402
+    from run_job import _resolve_karml_cmd  # noqa: E402
 
-    cmd = _resolve_mmml_cmd(["--setup", "free_nve"])
+    cmd = _resolve_karml_cmd(["--setup", "free_nve"])
     assert "md-system" in cmd
     idx = cmd.index("md-system")
     assert cmd[idx + 1] == "--setup"
@@ -100,7 +100,7 @@ def test_config_composition_is_dcm5(cfg: dict) -> None:
     ],
 )
 def test_build_md_system_argv_includes_core_flags(cfg: dict, job_id: str) -> None:
-    os.environ.setdefault("MMML_CKPT", "/tmp/dcm5_test_ckpt")
+    os.environ.setdefault("KARML_CKPT", "/tmp/dcm5_test_ckpt")
     argv = build_md_system_argv(cfg, job_id)
     assert "--composition" in argv
     assert "DCM:5" in argv
@@ -111,7 +111,7 @@ def test_build_md_system_argv_includes_core_flags(cfg: dict, job_id: str) -> Non
 
 
 def test_pycharmm_vac_nve_single_chunk_and_free_space(cfg: dict) -> None:
-    os.environ.setdefault("MMML_CKPT", "/tmp/dcm5_test_ckpt")
+    os.environ.setdefault("KARML_CKPT", "/tmp/dcm5_test_ckpt")
     argv = build_md_system_argv(cfg, "pycharmm_vac_nve")
     assert "--free-space" in argv
     idx = argv.index("--dynamics-overlap-check-interval")
@@ -122,13 +122,13 @@ def test_pycharmm_vac_nve_single_chunk_and_free_space(cfg: dict) -> None:
 
 def test_pycharmm_benchmark_passes_bonded_mm_mini(cfg: dict) -> None:
     assert cfg.get("bonded_mm_mini") is True
-    os.environ.setdefault("MMML_CKPT", "/tmp/dcm5_test_ckpt")
+    os.environ.setdefault("KARML_CKPT", "/tmp/dcm5_test_ckpt")
     argv = build_md_system_argv(cfg, "pycharmm_vac_nve")
     assert "--bonded-mm-mini" in argv
 
 
 def test_pycharmm_heat_hoover_argv(cfg: dict) -> None:
-    os.environ.setdefault("MMML_CKPT", "/tmp/dcm5_test_ckpt")
+    os.environ.setdefault("KARML_CKPT", "/tmp/dcm5_test_ckpt")
     argv = build_md_system_argv(cfg, "pycharmm_vac_heat_hoover")
     assert "--heat-thermostat" in argv
     idx = argv.index("--heat-thermostat")
@@ -148,7 +148,7 @@ def test_pycharmm_heat_hoover_argv(cfg: dict) -> None:
 
 
 def test_pycharmm_heat_scale_argv(cfg: dict) -> None:
-    os.environ.setdefault("MMML_CKPT", "/tmp/dcm5_test_ckpt")
+    os.environ.setdefault("KARML_CKPT", "/tmp/dcm5_test_ckpt")
     argv = build_md_system_argv(cfg, "pycharmm_vac_heat_scale")
     idx = argv.index("--heat-thermostat")
     assert argv[idx + 1] == "scale"
@@ -157,7 +157,7 @@ def test_pycharmm_heat_scale_argv(cfg: dict) -> None:
 
 
 def test_ase_vac_nve_warms_initial_temperature(cfg: dict) -> None:
-    os.environ.setdefault("MMML_CKPT", "/tmp/dcm5_test_ckpt")
+    os.environ.setdefault("KARML_CKPT", "/tmp/dcm5_test_ckpt")
     argv = build_md_system_argv(cfg, "ase_vac_nve")
     assert "--extra-args" in argv
     extra_idx = argv.index("--extra-args")
@@ -168,7 +168,7 @@ def test_ase_vac_nve_warms_initial_temperature(cfg: dict) -> None:
 
 
 def test_vacuum_jobs_use_packmol_builder_default(cfg: dict) -> None:
-    os.environ.setdefault("MMML_CKPT", "/tmp/dcm5_test_ckpt")
+    os.environ.setdefault("KARML_CKPT", "/tmp/dcm5_test_ckpt")
     for job_id, job in cfg["jobs"].items():
         if job.get("pbc"):
             continue
@@ -177,7 +177,7 @@ def test_vacuum_jobs_use_packmol_builder_default(cfg: dict) -> None:
 
 
 def test_pbc_jobs_use_box_size(cfg: dict) -> None:
-    os.environ.setdefault("MMML_CKPT", "/tmp/dcm5_test_ckpt")
+    os.environ.setdefault("KARML_CKPT", "/tmp/dcm5_test_ckpt")
     for job_id, job in cfg["jobs"].items():
         if not job.get("pbc"):
             continue
@@ -189,7 +189,7 @@ def test_pbc_jobs_use_box_size(cfg: dict) -> None:
 
 
 def test_pbc_jobs_use_packmol_builder_default(cfg: dict) -> None:
-    os.environ.setdefault("MMML_CKPT", "/tmp/dcm5_test_ckpt")
+    os.environ.setdefault("KARML_CKPT", "/tmp/dcm5_test_ckpt")
     for job_id, job in cfg["jobs"].items():
         if not job.get("pbc"):
             continue
@@ -198,7 +198,7 @@ def test_pbc_jobs_use_packmol_builder_default(cfg: dict) -> None:
 
 
 def test_jaxmd_pbc_npt_uses_larger_box(cfg: dict) -> None:
-    os.environ.setdefault("MMML_CKPT", "/tmp/dcm5_test_ckpt")
+    os.environ.setdefault("KARML_CKPT", "/tmp/dcm5_test_ckpt")
     argv = build_md_system_argv(cfg, "jaxmd_pbc_npt")
     idx = argv.index("--box-size")
     assert argv[idx + 1] == "35.0"
@@ -206,7 +206,7 @@ def test_jaxmd_pbc_npt_uses_larger_box(cfg: dict) -> None:
 
 @pytest.mark.parametrize("job_id", ["ase_vac_nve", "jaxmd_pbc_npt", "pycharmm_vac_nve"])
 def test_namespace_builds_backend_argv(cfg: dict, job_id: str) -> None:
-    os.environ.setdefault("MMML_CKPT", "/tmp/dcm5_test_ckpt")
+    os.environ.setdefault("KARML_CKPT", "/tmp/dcm5_test_ckpt")
     backend, backend_argv, args = namespace_for_job(cfg, job_id)
     job = cfg["jobs"][job_id]
     assert backend == job["backend"]

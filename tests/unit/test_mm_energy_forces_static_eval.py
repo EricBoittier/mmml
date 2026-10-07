@@ -8,7 +8,7 @@ import numpy as np
 
 
 def test_build_mm_energy_forces_fn_force_static_cell_list_sets_pair_lambda():
-    from mmml.interfaces.pycharmmInterface.mm_energy_forces import build_mm_energy_forces_fn
+    from karml.interfaces.pycharmmInterface.mm_energy_forces import build_mm_energy_forces_fn
 
     n_atoms = 8
     n_mono = 2
@@ -38,34 +38,34 @@ def test_build_mm_energy_forces_fn_force_static_cell_list_sets_pair_lambda():
     prm_mock.readlines.return_value = ["CG321 0.0 -0.1 3.5\n"]
 
     with patch(
-        "mmml.interfaces.pycharmmInterface.mm_energy_forces.have_jax_md",
+        "karml.interfaces.pycharmmInterface.mm_energy_forces.have_jax_md",
         return_value=False,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mm_energy_forces.have_vesin",
+        "karml.interfaces.pycharmmInterface.mm_energy_forces.have_vesin",
         return_value=False,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mm_energy_forces._cell_list_pairs",
+        "karml.interfaces.pycharmmInterface.mm_energy_forces._cell_list_pairs",
         return_value=object(),
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mm_energy_forces.build_mm_pairs_with_backend",
+        "karml.interfaces.pycharmmInterface.mm_energy_forces.build_mm_pairs_with_backend",
         return_value=(pair_i, pair_j, pair_mask, len(pair_i), len(pair_i), "cell_list"),
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mm_energy_forces.resolve_mm_nl_backend",
+        "karml.interfaces.pycharmmInterface.mm_energy_forces.resolve_mm_nl_backend",
         return_value="cell_list",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mm_energy_forces.pick_static_rebuild_backend",
+        "karml.interfaces.pycharmmInterface.mm_energy_forces.pick_static_rebuild_backend",
         return_value="cell_list",
     ), patch("pycharmm.psf", fake_psf), patch("pycharmm.param", fake_param), patch(
-        "mmml.interfaces.pycharmmInterface.mm_energy_forces.open",
+        "karml.interfaces.pycharmmInterface.mm_energy_forces.open",
         side_effect=[rtf_mock, prm_mock],
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mm_energy_forces._get_actual_psf_charges",
+        "karml.interfaces.pycharmmInterface.mm_energy_forces._get_actual_psf_charges",
         return_value=np.zeros(n_atoms, dtype=np.float64),
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mm_energy_forces.CGENFF_PRM",
+        "karml.interfaces.pycharmmInterface.mm_energy_forces.CGENFF_PRM",
         "/dev/null",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mm_energy_forces.CGENFF_RTF",
+        "karml.interfaces.pycharmmInterface.mm_energy_forces.CGENFF_RTF",
         "/dev/null",
     ):
         mm_fn = build_mm_energy_forces_fn(

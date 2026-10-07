@@ -48,7 +48,7 @@ _SOLUTE_LJ = {
 # there. Along this reaction the ML model drives that charge to about -0.9 e,
 # i.e. the atom becomes chloride, and CLGA1's core is then far too small to hold
 # a solvent hydrogen off: the collapse this caused is described in
-# mmml/md/energy/terms/ml_mm_elec.py. CLA (eps 0.150, Rmin/2 2.270; Beglov &
+# karml/md/energy/terms/ml_mm_elec.py. CLA (eps 0.150, Rmin/2 2.270; Beglov &
 # Roux, J. Chem. Phys. 100, 9050 (1994)) is CHARMM's chloride ion and is the
 # right partner for the charge the model actually assigns over most of the PMF.
 # The cost is at the reactant end, where the still-covalent Cl is modelled a
@@ -133,7 +133,7 @@ def build_jaxmd_solvated_system(
     """Solute at the box centre, solvent on a jittered lattice around it."""
     import dataclasses
 
-    from mmml.md.system import FFParams, MolecularSystem
+    from karml.md.system import FFParams, MolecularSystem
 
     rng = np.random.default_rng(seed)
     n_solute = int(solute_geometry.shape[0])

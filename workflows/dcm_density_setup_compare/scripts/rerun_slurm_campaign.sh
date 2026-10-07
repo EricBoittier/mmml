@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Stop the Snakemake driver and relaunch all workflow cells with the current MMML_CKPT.
+# Stop the Snakemake driver and relaunch all workflow cells with the current KARML_CKPT.
 #
 # Usage (pc-studix / gpu09 login node):
-#   export MMML_CKPT=/path/to/checkpoint.json
+#   export KARML_CKPT=/path/to/checkpoint.json
 #   bash scripts/rerun_slurm_campaign.sh              # prep sweep (24 jobs)
 #   bash scripts/rerun_slurm_campaign.sh --main         # main config.yaml matrix
 set -euo pipefail
@@ -11,9 +11,9 @@ WORKFLOW_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$WORKFLOW_ROOT"
 REPO_ROOT="$(cd "$WORKFLOW_ROOT/../.." && pwd)"
 
-# shellcheck source=../../../scripts/resolve_mmml_env.sh
-source "$REPO_ROOT/scripts/resolve_mmml_env.sh"
-mmml_resolve_env "$REPO_ROOT"
+# shellcheck source=../../../scripts/resolve_karml_env.sh
+source "$REPO_ROOT/scripts/resolve_karml_env.sh"
+karml_resolve_env "$REPO_ROOT"
 # shellcheck source=ckpt_defaults.sh
 source "$WORKFLOW_ROOT/scripts/ckpt_defaults.sh"
 
@@ -41,28 +41,28 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-export MMML_CKPT="${MMML_CKPT:-$(default_mmml_ckpt "$REPO_ROOT")}"
-export MMML_CKPT="$(readlink -f "${MMML_CKPT}")"
+export KARML_CKPT="${KARML_CKPT:-$(default_karml_ckpt "$REPO_ROOT")}"
+export KARML_CKPT="$(readlink -f "${KARML_CKPT}")"
 export JAX_ENABLE_X64="${JAX_ENABLE_X64:-1}"
 
-if [[ ! -f "${MMML_CKPT}" ]]; then
-  echo "ERROR: checkpoint not found: ${MMML_CKPT}" >&2
-  echo "  export MMML_CKPT=/path/to/checkpoint.json" >&2
+if [[ ! -f "${KARML_CKPT}" ]]; then
+  echo "ERROR: checkpoint not found: ${KARML_CKPT}" >&2
+  echo "  export KARML_CKPT=/path/to/checkpoint.json" >&2
   exit 1
 fi
 
 if [[ "$MODE" == prep ]]; then
-  export MMML_WORKFLOW_CONFIG="${WORKFLOW_ROOT}/config.prep_sweep.yaml"
-  MMML_WORKFLOW_CONFIG=config.prep_sweep.yaml bash scripts/preflight.sh
+  export KARML_WORKFLOW_CONFIG="${WORKFLOW_ROOT}/config.prep_sweep.yaml"
+  KARML_WORKFLOW_CONFIG=config.prep_sweep.yaml bash scripts/preflight.sh
   CONFIGFILE=(--configfile config.prep_sweep.yaml)
 else
-  unset MMML_WORKFLOW_CONFIG || true
-  export MMML_WORKFLOW_CONFIG="${WORKFLOW_ROOT}/config.yaml"
+  unset KARML_WORKFLOW_CONFIG || true
+  export KARML_WORKFLOW_CONFIG="${WORKFLOW_ROOT}/config.yaml"
   bash scripts/preflight.sh
   CONFIGFILE=(--configfile config.yaml)
 fi
 
-echo "rerun_slurm_campaign.sh: mode=${MODE} MMML_CKPT=${MMML_CKPT}" >&2
+echo "rerun_slurm_campaign.sh: mode=${MODE} KARML_CKPT=${KARML_CKPT}" >&2
 
 bash scripts/stop_snakemake.sh 2>/dev/null || true
 

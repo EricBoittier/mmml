@@ -8,7 +8,7 @@ from pathlib import Path
 
 import numpy as np
 
-from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
     read_restart_coordinates,
     read_restart_last_step,
     read_restart_natom,
@@ -73,7 +73,7 @@ def _speeds_akma(vel: np.ndarray) -> np.ndarray:
 
 def _temperature_uniform_mass_k(vel: np.ndarray) -> float:
     """Kinetic T (K) with unit mass per atom (diagnostic when masses unavailable)."""
-    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+    from karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
         _AMU_ANG_PS2_TO_KCALMOL,
         _KCALMOL_PER_K,
     )

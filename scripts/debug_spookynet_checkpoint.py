@@ -21,8 +21,8 @@ _REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-from mmml.analysis.dimer_molecules import MOLECULES, make_oriented_scan_geometries
-from mmml.models.spookynet_calc import SpookyNetCalculator, EV_TO_KCAL_MOL
+from karml.analysis.dimer_molecules import MOLECULES, make_oriented_scan_geometries
+from karml.models.spookynet_calc import SpookyNetCalculator, EV_TO_KCAL_MOL
 
 
 def analyze_checkpoint(

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Run the mmml asv suite against the current checkout and refresh the HTML report.
+# Run the karml asv suite against the current checkout and refresh the HTML report.
 #
 #   bash benchmarks/run_bench.sh                    # everything
 #   bash benchmarks/run_bench.sh bench_md_driver    # one module
@@ -22,12 +22,12 @@ BENCH_PATTERN="${1:-}"
 # Match the production MD path (examples/md_cpu/_env.sh). Timings are only
 # comparable between runs that agree on this — asv records nothing about it, so
 # changing it means starting a new results series, not extending the old one.
-export MMML_BENCH_X64="${MMML_BENCH_X64:-1}"
-export JAX_ENABLE_X64="${JAX_ENABLE_X64:-${MMML_BENCH_X64}}"
+export KARML_BENCH_X64="${KARML_BENCH_X64:-1}"
+export JAX_ENABLE_X64="${JAX_ENABLE_X64:-${KARML_BENCH_X64}}"
 # One thread per process: JAX's CPU backend and NumPy will otherwise both try to
 # fill the machine and the samples turn into scheduler noise.
 export OMP_NUM_THREADS="${OMP_NUM_THREADS:-1}"
-export MMML_CKPT="${MMML_CKPT:-${REPO_ROOT}/examples/ckpts_json/DESdimers_params.json}"
+export KARML_CKPT="${KARML_CKPT:-${REPO_ROOT}/examples/ckpts_json/DESdimers_params.json}"
 
 ASV=(.venv/bin/asv)
 if [[ ! -x "${ASV[0]}" ]]; then
@@ -57,7 +57,7 @@ if [[ "${BENCH_APPEND_SAMPLES:-0}" == "1" ]]; then
   RUN_ARGS+=(--append-samples)
 fi
 
-echo "==> asv run  (x64=${MMML_BENCH_X64}  pattern='${BENCH_PATTERN:-all}'  commit=${COMMIT_HASH:0:8})"
+echo "==> asv run  (x64=${KARML_BENCH_X64}  pattern='${BENCH_PATTERN:-all}'  commit=${COMMIT_HASH:0:8})"
 "${ASV[@]}" "${RUN_ARGS[@]}"
 
 echo "==> asv publish"

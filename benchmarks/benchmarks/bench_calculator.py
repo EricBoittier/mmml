@@ -28,12 +28,12 @@ from ._common import aco_cluster, block, default_checkpoint, require_jax, skip
 def _build_calculator(n_monomers: int):
     """``(calc, spherical_fn, geometry)`` for an ACO cluster from the bundled JSON."""
     try:
-        from mmml.interfaces.pycharmmInterface.calculator_utils import (
+        from karml.interfaces.pycharmmInterface.calculator_utils import (
             unpack_factory_result,
         )
-        from mmml.interfaces.pycharmmInterface.mmml_calculator import setup_calculator
+        from karml.interfaces.pycharmmInterface.karml_calculator import setup_calculator
     except Exception as exc:  # pragma: no cover - environment-dependent
-        raise skip(f"mmml calculator unavailable: {exc}") from exc
+        raise skip(f"karml calculator unavailable: {exc}") from exc
 
     ckpt = default_checkpoint()
     geom = aco_cluster(int(n_monomers))
@@ -130,7 +130,7 @@ class JaxMLEnergy:
         try:
             import e3x
 
-            from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
+            from karml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
         except Exception as exc:  # pragma: no cover - environment-dependent
             raise skip(f"e3x / cutoffs unavailable: {exc}") from exc
 
@@ -184,7 +184,7 @@ class CheckpointLoad:
     def setup(self):
         require_jax()
         try:
-            from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+            from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
                 resolve_checkpoint,
             )
         except Exception as exc:  # pragma: no cover - environment-dependent
@@ -234,7 +234,7 @@ class DimerScanThroughput:
         try:
             import e3x
 
-            from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
+            from karml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
         except Exception as exc:  # pragma: no cover - environment-dependent
             raise skip(f"e3x / cutoffs unavailable: {exc}") from exc
 

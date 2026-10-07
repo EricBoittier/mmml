@@ -160,7 +160,7 @@ def get_forces_pycharmm(update: bool = True):
     is the negative gradient. Pass ``update=False`` to read the forces left by a
     previous ``ENER FORCE`` instead of re-evaluating.
     """
-    from mmml.interfaces.pycharmmInterface.charmm_forces import charmm_forces_array
+    from karml.interfaces.pycharmmInterface.charmm_forces import charmm_forces_array
 
     if update:
         pycharmm.lingo.charmm_script("ENER FORCE")
@@ -408,11 +408,11 @@ def get_rmse_mae(energy, ref_energy):
     return rmse, mae
 
 
-def print_energy_comparison(mmml_energy, charmm, ref_energy):
+def print_energy_comparison(karml_energy, charmm, ref_energy):
     """Print comparison of energies with reference data"""
 
     print("comb")
-    print(mmml_energy, ref_energy, abs(mmml_energy - ref_energy))
+    print(karml_energy, ref_energy, abs(karml_energy - ref_energy))
 
     print("charmm")
     print(charmm, ref_energy, abs(charmm - ref_energy))
@@ -458,7 +458,7 @@ def calc_energies_forces(
     ase_atom_full_system = ase.Atoms(atomic_numbers, atom_positions)
 
     result = None
-    mmml_energy = None
+    karml_energy = None
     charmm = None
 
     if DO_MM:
@@ -509,10 +509,10 @@ def calc_energies_forces(
             ml_scale,
         ) = combined_with_switches
 
-        mmml_energy = float(ml_contrib.sum() + mm_contrib.sum())
+        karml_energy = float(ml_contrib.sum() + mm_contrib.sum())
         charmm = float(summed_mm_intE.sum())
     else:
-        mmml_energy = float(summed_ml_intE.sum())
+        karml_energy = float(summed_ml_intE.sum())
         charmm = float(summed_mm_intE.sum())
 
     print(summed_ml_intE.shape, summed_mm_intE.shape)
@@ -525,18 +525,18 @@ def calc_energies_forces(
     )
     flattened_ml_dimers = ml_forces.reshape(-1, 3).flatten()
     # indices = np.repeat(np.array(all_dimer_idxs).flatten(), 3)
-    mmml_forces = jax.ops.segment_sum(flattened_ml_dimers, indices.flatten()).reshape(
+    karml_forces = jax.ops.segment_sum(flattened_ml_dimers, indices.flatten()).reshape(
         mm_forces.shape[1], 3
     )
 
-    # mmml_forces = (mm_forces, ml_forces)
+    # karml_forces = (mm_forces, ml_forces)
 
     output_dict = {
-        "mmml_energy": mmml_energy,
+        "karml_energy": karml_energy,
         "charmm": charmm,
         "mm_forces": mm_forces,
         "ml_forces": ml_forces,
-        "mmml_forces": mmml_forces,
+        "karml_forces": karml_forces,
     }
 
     return output_dict
@@ -553,11 +553,11 @@ def compare_energies(
         MM_CUTOFF=MM_CUTOFF,
         BUFFER=BUFFER,
     )
-    mmml_energy = energy_forces_dict["mmml_energy"]
+    karml_energy = energy_forces_dict["karml_energy"]
     charmm = energy_forces_dict["charmm"]
     mm_forces = energy_forces_dict["mm_forces"]
     ml_forces = energy_forces_dict["ml_forces"]
-    mmml_forces = energy_forces_dict["mmml_forces"]
+    karml_forces = energy_forces_dict["karml_forces"]
 
     # print(fn)
     fnkey = get_fnkey(fn)
@@ -568,25 +568,25 @@ def compare_energies(
         # print(df)
         ref_energy = df.iloc[0]["Formation Energy (kcal/mol)"]
         if DO_MM:
-            err_mmml = mmml_energy - ref_energy
+            err_karml = karml_energy - ref_energy
             err_charmm = charmm - ref_energy
         else:
-            err_mmml = mmml_energy - ref_energy
+            err_karml = karml_energy - ref_energy
             err_charmm = None
     else:
         ref_energy = None
-        err_mmml = None
+        err_karml = None
         err_charmm = None
 
     results_dict = {
         "ref_energy": ref_energy,
-        "mmml_energy": mmml_energy,
+        "karml_energy": karml_energy,
         "charmm": charmm,
-        "err_mmml": err_mmml,
+        "err_karml": err_karml,
         "err_charmm": err_charmm,
         "mm_forces": mm_forces,
         "ml_forces": ml_forces,
-        "mmml_forces": mmml_forces,
+        "karml_forces": karml_forces,
     }
     return results_dict
 
@@ -615,7 +615,7 @@ def get_loss_terms(
     import time
 
     start = time.time()
-    err_mmml_list = []
+    err_karml_list = []
     err_charmm_list = []
     for fn in fns:
         results_dict = compare_energies(
@@ -627,15 +627,15 @@ def get_loss_terms(
             MM_CUTOFF=MM_CUTOFF,
             BUFFER=BUFFER,
         )
-        err_mmml_list.append(results_dict["err_mmml"])
+        err_karml_list.append(results_dict["err_karml"])
         err_charmm_list.append(results_dict["err_charmm"])
         print(
             "{} {:.1f} {:.1f} {:.1f} {:.1f} {:.1f}".format(
                 fn.stem,
                 results_dict["ref_energy"],
-                results_dict["mmml_energy"],
+                results_dict["karml_energy"],
                 results_dict["charmm"],
-                results_dict["err_mmml"],
+                results_dict["err_karml"],
                 results_dict["err_charmm"],
             )
         )
@@ -644,18 +644,18 @@ def get_loss_terms(
     print("Finished")
     print("Time taken", end - start)
     print("--------------------------------")
-    err_mmml_list = np.array(err_mmml_list)
+    err_karml_list = np.array(err_karml_list)
     err_charmm_list = np.array(err_charmm_list)
 
-    print("RMSE MMML", np.sqrt(np.mean(err_mmml_list**2)))
-    print("MAE MMML", np.mean(np.abs(err_mmml_list)))
+    print("RMSE KARML", np.sqrt(np.mean(err_karml_list**2)))
+    print("MAE KARML", np.mean(np.abs(err_karml_list)))
     print("RMSE Charmm", np.sqrt(np.mean(err_charmm_list**2)))
     print("MAE Charmm", np.mean(np.abs(err_charmm_list)))
 
-    loss = MM_lambda * np.mean(err_mmml_list**2) + ML_lambda * np.mean(
+    loss = MM_lambda * np.mean(err_karml_list**2) + ML_lambda * np.mean(
         err_charmm_list**2
     )
-    return loss, err_mmml_list, err_charmm_list
+    return loss, err_karml_list, err_charmm_list
 
 
 def get_loss_fn(

@@ -7,7 +7,7 @@ the resulting *energy* agreed with ASE, which is a weak test of the indexing: a
 symmetric error in the pair list can cancel out.
 
 CHARMM already exposes the lists (``mlpot_get_pair_counts``,
-``mlpot_export_mlml_pairs``, ``mlpot_export_mlmm_pairs``) and nothing in mmml
+``mlpot_export_mlml_pairs``, ``mlpot_export_mlmm_pairs``) and nothing in karml
 called them. This uses them as a direct read-back.
 
 The oracle is exact rather than approximate. With every atom selected as ML and
@@ -43,14 +43,14 @@ def _can_import(name: str) -> bool:
 
 def _resolve_ckpt() -> Path | None:
     candidates: list[Path] = []
-    ckpt_env = os.environ.get("MMML_CKPT")
+    ckpt_env = os.environ.get("KARML_CKPT")
     if ckpt_env:
         candidates.append(Path(ckpt_env))
     candidates.extend(
         [
             PROJECT_ROOT / "examples/ckpts_json/DESdimers_params.json",
-            PROJECT_ROOT / "mmml/models/physnetjax/physnetjax/ckpts/DESdimers",
-            PROJECT_ROOT / "mmml/models/physnetjax/ckpts/DESdimers",
+            PROJECT_ROOT / "karml/models/physnetjax/physnetjax/ckpts/DESdimers",
+            PROJECT_ROOT / "karml/models/physnetjax/ckpts/DESdimers",
         ]
     )
     for p in candidates:
@@ -72,7 +72,7 @@ def test_mlpot_ml_ml_pairs_are_the_complete_graph():
     import e3x
     import numpy as np
 
-    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+    import karml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
     import pycharmm.energy as energy
 
     mlpot_dir = Path(__file__).resolve().parent
@@ -80,7 +80,7 @@ def test_mlpot_ml_ml_pairs_are_the_complete_graph():
         sys.path.insert(0, str(mlpot_dir))
     from _common import build_acetone_dimer_cluster
 
-    from mmml.interfaces.pycharmmInterface.mlpot import (
+    from karml.interfaces.pycharmmInterface.mlpot import (
         load_physnet_mlpot_bundle,
         register_mlpot,
         select_all_atoms,

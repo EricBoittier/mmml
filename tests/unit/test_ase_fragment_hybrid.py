@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 from ase.calculators.calculator import Calculator, all_changes
 
-from mmml.interfaces.calculators.ase_fragment_hybrid import (
+from karml.interfaces.calculators.ase_fragment_hybrid import (
     AseFragmentHybridCalculator,
     evaluate_fragment_hybrid,
     evaluate_fragment_hybrid_batched,
@@ -14,7 +14,7 @@ from mmml.interfaces.calculators.ase_fragment_hybrid import (
     numpy_ml_switch_scale,
     wrap_dimer_monomer_b_numpy,
 )
-from mmml.interfaces.pycharmmInterface.cutoffs import (
+from karml.interfaces.pycharmmInterface.cutoffs import (
     DEFAULT_ML_SWITCH_WIDTH,
     DEFAULT_MM_SWITCH_ON,
 )
@@ -68,7 +68,7 @@ def _two_atom_dimer(separation: float) -> tuple[np.ndarray, np.ndarray]:
 def test_numpy_ml_switch_scale_matches_jax() -> None:
     import jax.numpy as jnp
 
-    from mmml.interfaces.pycharmmInterface.calculator_utils import ml_switch_scale
+    from karml.interfaces.pycharmmInterface.calculator_utils import ml_switch_scale
 
     mm_on = DEFAULT_MM_SWITCH_ON
     width = DEFAULT_ML_SWITCH_WIDTH
@@ -91,7 +91,7 @@ def test_numpy_ml_switch_scale_matches_jax() -> None:
 def test_wrap_dimer_monomer_b_numpy_matches_jax() -> None:
     import jax.numpy as jnp
 
-    from mmml.interfaces.pycharmmInterface.pbc_utils_jax import wrap_dimer_monomer_b
+    from karml.interfaces.pycharmmInterface.pbc_utils_jax import wrap_dimer_monomer_b
 
     cell = np.diag([30.0, 30.0, 30.0])
     pos_a = np.array([[0.0, 0.0, 0.0], [0.1, 0.0, 0.0]], dtype=np.float64)

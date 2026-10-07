@@ -4,7 +4,7 @@ Workflow for single-rank GPU throughput with global sparse dimers before spatial
 
 ## Prerequisites
 
-- Launch via [`scripts/mmml-charmm-mpirun.sh`](https://github.com/EricBoittier/mmml/blob/main/scripts/mmml-charmm-mpirun.sh) with **`MMML_MPI_NP=1`** (recommended).
+- Launch via [`scripts/karml-charmm-mpirun.sh`](https://github.com/EricBoittier/karml/blob/main/scripts/karml-charmm-mpirun.sh) with **`KARML_MPI_NP=1`** (recommended).
 - Default cutoffs: `extended_mm5` (8 / 5 / 1.5 Å) — see [MLpot Settings](mlpot-settings.md).
 
 ## Sparse dimer cap validation (required before production)
@@ -38,7 +38,7 @@ free-space runs:
 - **Free-space clusters:** all `n(n-1)/2` unique dimers; explicit lower caps are
   promoted so pairs are not dropped.
 - **Explicit overrides:** `--ml-max-active-dimers` or
-  `MMML_MLPOT_MAX_ACTIVE_DIMERS` set the PBC cap, but a step that exceeds it now
+  `KARML_MLPOT_MAX_ACTIVE_DIMERS` set the PBC cap, but a step that exceeds it now
   fails closed with `SparseDimerCapOverflow` instead of truncating forces.
 
 The standalone validator tests the cap you pass; if omitted, it reports its
@@ -63,8 +63,8 @@ the run's actual cap.
 | 500–2000 monomers | `256` | `128` or `64` | `512` if memory allows |
 
 ```bash
-export MMML_MLPOT_ML_BATCH_SIZE=256
-mmml md-system ... --ml-batch-size 256
+export KARML_MLPOT_ML_BATCH_SIZE=256
+karml md-system ... --ml-batch-size 256
 ```
 
 Multi-GPU on one node (still `np=1`): `--ml-gpu-count N` with `--ml-batch-size 128–256`.
@@ -75,11 +75,11 @@ Use **one MPI rank** and let JAX `pmap` spread PhysNet chunks across both GPUs:
 
 ```bash
 export CUDA_VISIBLE_DEVICES=0,1
-MMML_MPI_NP=1 ./scripts/mmml-charmm-mpirun.sh md-system ... \
+KARML_MPI_NP=1 ./scripts/karml-charmm-mpirun.sh md-system ... \
   --ml-batch-size 128 --ml-gpu-count 2
 ```
 
-`ml_batch_size` must be small enough that `ceil(systems_per_step / ml_batch_size) >= 2` so both GPUs receive chunks (see `effective_ml_gpu_count` in [`mlpot_gpu_policy.py`](https://github.com/EricBoittier/mmml/blob/main/mmml/interfaces/pycharmmInterface/mlpot/mlpot_gpu_policy.py)).
+`ml_batch_size` must be small enough that `ceil(systems_per_step / ml_batch_size) >= 2` so both GPUs receive chunks (see `effective_ml_gpu_count` in [`mlpot_gpu_policy.py`](https://github.com/EricBoittier/karml/blob/main/karml/interfaces/pycharmmInterface/mlpot/mlpot_gpu_policy.py)).
 
 Benchmark guidance:
 
@@ -93,8 +93,8 @@ python scripts/benchmark_mlpot_ml_batch.py --checkpoint path/to/ckpt --n-monomer
 Per-rank ML decomposition with one GPU per rank — see [Spatial ML MPI](mlpot-spatial-mpi.md):
 
 ```bash
-export MMML_MLPOT_SPATIAL_MPI=1
-MMML_MPI_NP=2 ./scripts/mmml-charmm-mpirun.sh md-system ... \
+export KARML_MLPOT_SPATIAL_MPI=1
+KARML_MPI_NP=2 ./scripts/karml-charmm-mpirun.sh md-system ... \
   --ml-spatial-mpi --ml-gpu-count 1 --ml-batch-size 256
 ```
 
@@ -109,14 +109,14 @@ Do **not** combine `np>1` with `--ml-gpu-count 2` on a 2-GPU node without explic
 
 ## MPI note
 
-- **Production:** `MMML_MPI_NP=1` with optional `--ml-gpu-count 2` for dual-GPU pmap.
-- **Experimental:** `MMML_MPI_NP=2` with `--ml-spatial-mpi` for per-rank ML decomposition (see [Spatial ML MPI](mlpot-spatial-mpi.md)).
+- **Production:** `KARML_MPI_NP=1` with optional `--ml-gpu-count 2` for dual-GPU pmap.
+- **Experimental:** `KARML_MPI_NP=2` with `--ml-spatial-mpi` for per-rank ML decomposition (see [Spatial ML MPI](mlpot-spatial-mpi.md)).
 - **Do not** use `np>1` with rank-0 bridge for performance; use spatial MPI or stay on `np=1`.
 
 ## Python API
 
 ```python
-from mmml.interfaces.pycharmmInterface.mlpot.medium_pbc_validation import (
+from karml.interfaces.pycharmmInterface.mlpot.medium_pbc_validation import (
     suggest_medium_pbc_sizing,
     validate_medium_pbc_geometry,
     workflow_checklist,

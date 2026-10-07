@@ -6,13 +6,13 @@ from pathlib import Path
 
 import pytest
 
-from mmml.analysis.residue_geometry import (
+from karml.analysis.residue_geometry import (
     ensure_residue_pdb,
     known_solvent_density_kg_m3,
     load_residue_monomer_atoms,
     resolve_solvent_density_kg_m3,
 )
-from mmml.interfaces.pycharmmInterface.cgenff_residues import (
+from karml.interfaces.pycharmmInterface.cgenff_residues import (
     is_cgenff_residue_name,
     normalize_cgenff_residue_name,
     require_cgenff_residue_name,
@@ -49,7 +49,7 @@ def test_generate_monomer_keeps_cgenff_resname(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """make-res writes CGenFF names; we must not overwrite with ASE MOL."""
-    from mmml.analysis import residue_geometry as rg
+    from karml.analysis import residue_geometry as rg
 
     monkeypatch.chdir(tmp_path)
     (tmp_path / "pdb").mkdir()
@@ -71,7 +71,7 @@ def test_generate_monomer_keeps_cgenff_resname(
         return rg._read_monomer_pdb(out)
 
     monkeypatch.setattr(
-        "mmml.cli.make.make_res.main_loop",
+        "karml.cli.make.make_res.main_loop",
         _fake_make_res_main_loop,
     )
 
@@ -119,7 +119,7 @@ def test_ensure_residue_pdb_writes_campaign_alias_without_bundle(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """ACO aliases to ACE in MOLECULES; without a bundle, still write aco.pdb."""
-    from mmml.analysis import residue_geometry as rg
+    from karml.analysis import residue_geometry as rg
 
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(rg, "bundled_monomer_pdb", lambda _name: None)

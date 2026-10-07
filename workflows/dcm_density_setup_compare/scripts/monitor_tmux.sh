@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # tmux "TV studio" for dcm_density_setup_compare: rotating job channels + driver log.
 #
-# Usage (from ~/mmml/workflows/dcm_density_setup_compare):
+# Usage (from ~/karml/workflows/dcm_density_setup_compare):
 #   bash scripts/monitor_tmux.sh
 #   bash scripts/monitor_tmux.sh --tags resilient_dcm_77_t50_l32_ht_bussi resilient_dcm_52_t50_l28_ht_bussi
 #   bash scripts/monitor_tmux.sh --interval 8 --include-done --replace
@@ -23,9 +23,9 @@ cd "$WORKFLOW_ROOT"
 REPO_ROOT="$(cd "$WORKFLOW_ROOT/../.." && pwd)"
 # shellcheck source=debug_lib.sh
 source "$WORKFLOW_ROOT/scripts/debug_lib.sh"
-# shellcheck source=../../../scripts/resolve_mmml_env.sh
-source "$REPO_ROOT/scripts/resolve_mmml_env.sh"
-mmml_resolve_env "$REPO_ROOT"
+# shellcheck source=../../../scripts/resolve_karml_env.sh
+source "$REPO_ROOT/scripts/resolve_karml_env.sh"
+karml_resolve_env "$REPO_ROOT"
 
 SESSION="dcm-tv"
 DRIVER_LOG=""
@@ -34,7 +34,7 @@ REPLACE=false
 ATTACH=true
 INTERVAL=12
 INCLUDE_DONE=false
-CONFIG="${MMML_WORKFLOW_CONFIG:-config.yaml}"
+CONFIG="${KARML_WORKFLOW_CONFIG:-config.yaml}"
 
 usage() {
   sed -n '2,18p' "$0"
@@ -105,7 +105,7 @@ if ! command -v tmux >/dev/null 2>&1; then
   exit 1
 fi
 
-export MMML_WORKFLOW_CONFIG="$CONFIG"
+export KARML_WORKFLOW_CONFIG="$CONFIG"
 
 if [[ -z "$DRIVER_LOG" ]]; then
   case "$CONFIG" in
@@ -118,7 +118,7 @@ if [[ "$DRIVER_LOG" != /* ]]; then
 fi
 
 CTL="$WORKFLOW_ROOT/scripts/monitor_tv_ctl.sh"
-PY="$MMML_PYTHON"
+PY="$KARML_PYTHON"
 TV="$WORKFLOW_ROOT/scripts/monitor_tv.py"
 
 _apply_tv_bindings() {
@@ -156,7 +156,7 @@ fi
 LAUNCH="$WORKFLOW_ROOT/.monitor_tv/launch.sh"
 {
   printf '%s\n' '#!/usr/bin/env bash' 'set -euo pipefail'
-  printf 'export MMML_WORKFLOW_CONFIG=%q\n' "$CONFIG"
+  printf 'export KARML_WORKFLOW_CONFIG=%q\n' "$CONFIG"
   printf 'exec %q ' "$PY" "$TV"
   printf '%q ' "${TV_ARGS[@]}"
   printf '\n'

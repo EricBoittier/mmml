@@ -9,8 +9,8 @@ This tool analyzes checkpoint files to:
 - Identify model type (PhysNet, DCMNet, etc.)
 
 Usage:
-    python -m mmml.cli.inspect_checkpoint --checkpoint path/to/best_params.pkl
-    python -m mmml.cli.inspect_checkpoint --checkpoint checkpoints/my_model/
+    python -m karml.cli.inspect_checkpoint --checkpoint path/to/best_params.pkl
+    python -m karml.cli.inspect_checkpoint --checkpoint checkpoints/my_model/
 """
 
 import argparse
@@ -246,13 +246,13 @@ def main():
         epilog="""
 Examples:
   # Inspect checkpoint file
-  python -m mmml.cli.inspect_checkpoint --checkpoint best_params.pkl
+  python -m karml.cli.inspect_checkpoint --checkpoint best_params.pkl
   
   # Inspect checkpoint directory (finds best_params.pkl automatically)
-  python -m mmml.cli.inspect_checkpoint --checkpoint checkpoints/my_model/
+  python -m karml.cli.inspect_checkpoint --checkpoint checkpoints/my_model/
   
   # Save configuration to JSON
-  python -m mmml.cli.inspect_checkpoint --checkpoint model/best_params.pkl --save-config config.json
+  python -m karml.cli.inspect_checkpoint --checkpoint model/best_params.pkl --save-config config.json
         """
     )
     

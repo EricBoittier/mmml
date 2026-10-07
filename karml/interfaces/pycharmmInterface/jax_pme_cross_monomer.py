@@ -5,8 +5,8 @@ Default implementation uses a **structure-factor** reciprocal pass (ewald) plus
 cross-masked real space; ``masked`` mode uses ``E_full(q) − Σ_m E(q ⊙ mask_m)``.
 
 Env:
-  ``MMML_JAX_PME_INTRA_MODE=cross|full_minus_intra`` (default ``cross``)
-  ``MMML_JAX_PME_CROSS_KERNEL=structure_factor|masked`` (ewald default: structure_factor)
+  ``KARML_JAX_PME_INTRA_MODE=cross|full_minus_intra`` (default ``cross``)
+  ``KARML_JAX_PME_CROSS_KERNEL=structure_factor|masked`` (ewald default: structure_factor)
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ from functools import lru_cache
 
 import numpy as np
 
-from mmml.interfaces.pycharmmInterface.long_range_backend import (
+from karml.interfaces.pycharmmInterface.long_range_backend import (
     LongRangeInteractionResult,
     jax_pme_mesh_method,
     jax_pme_mesh_spacing_A,
@@ -31,14 +31,14 @@ _PROFILE: dict[str, list[float]] = {}
 
 def resolve_jax_pme_intra_mode(method: str | None = None) -> str:
     """``cross`` (fused) or ``full_minus_intra`` (legacy per-monomer loop)."""
-    raw = os.environ.get("MMML_JAX_PME_INTRA_MODE", "cross").strip().lower()
+    raw = os.environ.get("KARML_JAX_PME_INTRA_MODE", "cross").strip().lower()
     if raw in ("cross", "direct", "structure_factor", "masked"):
         mode = "cross"
     elif raw in ("full_minus_intra", "legacy", "loop", "intra_loop"):
         mode = "full_minus_intra"
     else:
         raise ValueError(
-            "MMML_JAX_PME_INTRA_MODE must be cross|full_minus_intra; "
+            "KARML_JAX_PME_INTRA_MODE must be cross|full_minus_intra; "
             f"got {raw!r}"
         )
     return mode
@@ -46,7 +46,7 @@ def resolve_jax_pme_intra_mode(method: str | None = None) -> str:
 
 def resolve_jax_pme_cross_kernel(method: str | None = None) -> str:
     """``structure_factor`` (ewald, fast) or ``masked`` (exact reference, all methods)."""
-    raw = os.environ.get("MMML_JAX_PME_CROSS_KERNEL", "auto").strip().lower()
+    raw = os.environ.get("KARML_JAX_PME_CROSS_KERNEL", "auto").strip().lower()
     if raw in ("auto", ""):
         return (
             "structure_factor"
@@ -58,13 +58,13 @@ def resolve_jax_pme_cross_kernel(method: str | None = None) -> str:
     if raw in ("masked", "full_minus_masked", "reference"):
         return "masked"
     raise ValueError(
-        "MMML_JAX_PME_CROSS_KERNEL must be auto|structure_factor|masked; "
+        "KARML_JAX_PME_CROSS_KERNEL must be auto|structure_factor|masked; "
         f"got {raw!r}"
     )
 
 
 def _profile_enabled() -> bool:
-    raw = os.environ.get("MMML_JAX_PME_PROFILE", "").strip().lower()
+    raw = os.environ.get("KARML_JAX_PME_PROFILE", "").strip().lower()
     return raw in ("1", "true", "yes", "on", "per_call")
 
 
@@ -423,7 +423,7 @@ class _CrossMonomerHostEvaluator:
     ) -> LongRangeInteractionResult:
         import jax.numpy as jnp
 
-        from mmml.interfaces.pycharmmInterface.long_range_backend import (
+        from karml.interfaces.pycharmmInterface.long_range_backend import (
             jax_pme_host_eval_context,
             jax_pme_pure_callback_host_context,
         )
@@ -470,7 +470,7 @@ class _CrossMonomerHostEvaluator:
             else "cross_monomer_masked"
         )
         t0 = time.perf_counter() if _profile_enabled() else None
-        from mmml.interfaces.pycharmmInterface.ml_dtypes import resolve_ml_compute_dtype
+        from karml.interfaces.pycharmmInterface.ml_dtypes import resolve_ml_compute_dtype
         dtype = resolve_ml_compute_dtype()
         with host_ctx():
             energy, forces = energy_forces(

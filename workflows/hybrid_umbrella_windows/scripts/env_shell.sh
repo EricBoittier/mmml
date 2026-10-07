@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Resolve MMML env (+ CUDA on GPU Slurm jobs), then exec remaining argv.
+# Resolve KARML env (+ CUDA on GPU Slurm jobs), then exec remaining argv.
 #
-#   bash env_shell.sh -- uv run mmml ...
+#   bash env_shell.sh -- uv run karml ...
 #   bash env_shell.sh --no-cuda -- bash scripts/run_assemble.sh ...
 set -euo pipefail
 
@@ -18,16 +18,16 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-# shellcheck source=../../../scripts/resolve_mmml_env.sh
-source "$REPO_ROOT/scripts/resolve_mmml_env.sh"
-mmml_resolve_env "$REPO_ROOT"
+# shellcheck source=../../../scripts/resolve_karml_env.sh
+source "$REPO_ROOT/scripts/resolve_karml_env.sh"
+karml_resolve_env "$REPO_ROOT"
 
 export JAX_ENABLE_X64="${JAX_ENABLE_X64:-1}"
 export PYTHONUNBUFFERED=1
 # Avoid grabbing the whole GPU up front when several JAX jobs share a node.
 export XLA_PYTHON_CLIENT_PREALLOCATE="${XLA_PYTHON_CLIENT_PREALLOCATE:-false}"
 
-_mmml_cuda_ready() {
+_karml_cuda_ready() {
   # nvidia-smi must see at least one device in this job's view.
   if ! command -v nvidia-smi >/dev/null 2>&1; then
     return 1
@@ -36,7 +36,7 @@ _mmml_cuda_ready() {
     return 1
   fi
   # Cheap cuInit via jax — matches the failure mode in window logs.
-  "$MMML_PYTHON" - <<'PY' >/dev/null 2>&1
+  "$KARML_PYTHON" - <<'PY' >/dev/null 2>&1
 import os
 os.environ.setdefault("JAX_PLATFORMS", "cuda")
 import jax
@@ -46,11 +46,11 @@ print(devs[0])
 PY
 }
 
-_mmml_wait_cuda() {
-  local tries="${MMML_CUDA_INIT_RETRIES:-12}"
+_karml_wait_cuda() {
+  local tries="${KARML_CUDA_INIT_RETRIES:-12}"
   local i=1
   while (( i <= tries )); do
-    if _mmml_cuda_ready; then
+    if _karml_cuda_ready; then
       echo "[env_shell] CUDA ready (try ${i}/${tries})  CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-}  SLURM_JOB_GPUS=${SLURM_JOB_GPUS:-}" >&2
       return 0
     fi
@@ -80,39 +80,39 @@ if [[ "$USE_CUDA" == "1" ]]; then
           fi
           ;;
       esac
-      export MMML_EXAMPLE_DEVICE="${MMML_EXAMPLE_DEVICE:-gpu}"
-      export MMML_MLPOT_DEVICE="${MMML_MLPOT_DEVICE:-gpu}"
-      export MMML_JAX_WARMUP_DEVICE="${MMML_JAX_WARMUP_DEVICE:-gpu}"
-      _mmml_wait_cuda
+      export KARML_EXAMPLE_DEVICE="${KARML_EXAMPLE_DEVICE:-gpu}"
+      export KARML_MLPOT_DEVICE="${KARML_MLPOT_DEVICE:-gpu}"
+      export KARML_JAX_WARMUP_DEVICE="${KARML_JAX_WARMUP_DEVICE:-gpu}"
+      _karml_wait_cuda
     fi
-  elif [[ -n "${CUDA_VISIBLE_DEVICES:-}" || "${MMML_EXAMPLE_DEVICE:-}" == "gpu" ]]; then
+  elif [[ -n "${CUDA_VISIBLE_DEVICES:-}" || "${KARML_EXAMPLE_DEVICE:-}" == "gpu" ]]; then
     export JAX_PLATFORMS="${JAX_PLATFORMS:-cuda}"
-    export MMML_EXAMPLE_DEVICE="${MMML_EXAMPLE_DEVICE:-gpu}"
-    _mmml_wait_cuda
+    export KARML_EXAMPLE_DEVICE="${KARML_EXAMPLE_DEVICE:-gpu}"
+    _karml_wait_cuda
   fi
 fi
 
-_cfg_raw="${MMML_WORKFLOW_CONFIG:-$WORKFLOW_ROOT/config.yaml}"
+_cfg_raw="${KARML_WORKFLOW_CONFIG:-$WORKFLOW_ROOT/config.yaml}"
 if [[ "$_cfg_raw" = /* ]]; then
-  export MMML_WORKFLOW_CONFIG="$_cfg_raw"
+  export KARML_WORKFLOW_CONFIG="$_cfg_raw"
 else
-  export MMML_WORKFLOW_CONFIG="$WORKFLOW_ROOT/$_cfg_raw"
+  export KARML_WORKFLOW_CONFIG="$WORKFLOW_ROOT/$_cfg_raw"
 fi
 
-# Prefer workflow checkpoint over a stale interactive MMML_CKPT.
-if [[ -f "$MMML_WORKFLOW_CONFIG" ]]; then
-  _ckpt="$("$MMML_PYTHON" -c "
+# Prefer workflow checkpoint over a stale interactive KARML_CKPT.
+if [[ -f "$KARML_WORKFLOW_CONFIG" ]]; then
+  _ckpt="$("$KARML_PYTHON" -c "
 import sys
 from pathlib import Path
 sys.path.insert(0, '${WORKFLOW_ROOT}/scripts')
 from campaign_lib import load_config, checkpoint_path
-print(checkpoint_path(load_config('${MMML_WORKFLOW_CONFIG}')))
+print(checkpoint_path(load_config('${KARML_WORKFLOW_CONFIG}')))
 " 2>/dev/null || true)"
   if [[ -n "${_ckpt:-}" ]]; then
     if [[ "$_ckpt" != /* ]]; then
       _ckpt="$REPO_ROOT/$_ckpt"
     fi
-    export MMML_CKPT="$_ckpt"
+    export KARML_CKPT="$_ckpt"
   fi
 fi
 
@@ -131,7 +131,7 @@ fi
 if [[ -z "${CHARMM_LIB_DIR:-}" ]]; then
   for cand in \
     "$REPO_ROOT/setup/charmm/lib" \
-    "$HOME/.cache/mmml-charmm-build/tier_56000000_nodomdec/lib"
+    "$HOME/.cache/karml-charmm-build/tier_56000000_nodomdec/lib"
   do
     if [[ -e "$cand/libcharmm.so" ]]; then
       export CHARMM_LIB_DIR="$cand"

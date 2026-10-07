@@ -1,6 +1,6 @@
 # `md-system` YAML presets
 
-Composable fragments for `mmml md-system` campaigns. Each file is a YAML mapping
+Composable fragments for `karml md-system` campaigns. Each file is a YAML mapping
 with a `defaults:` block (and optional `include:` for chaining).
 
 ## Usage
@@ -35,7 +35,7 @@ runs:
 ```
 
 ```bash
-mmml md-system --config my_dcm103_equil.yaml --job-id dcm103_equil
+karml md-system --config my_dcm103_equil.yaml --job-id dcm103_equil
 ```
 
 Later keys override earlier includes. Job-level keys in `runs:` override `defaults`.
@@ -102,4 +102,4 @@ If you see `monomer extent exceeded` (e.g. monomer 67 at 50 Å):
 4. Enable `liquid_prep: true` so fly-off can fall back to the density-prep ladder.
 5. Tier CHARMM lib for your `(n_monomers, box_size)` — see `ensure_charmm_mlpot_limits.sh`.
 
-See also `mmml/cli/run/md_system.dcm103_equil.example.yaml` and `docs/md-system-configs.md`.
+See also `karml/cli/run/md_system.dcm103_equil.example.yaml` and `docs/md-system-configs.md`.

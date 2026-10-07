@@ -23,7 +23,7 @@ Args:
 Run from a notebook:
     from pathlib import Path
     import argparse
-    from mmml.cli.run_sim import run
+    from karml.cli.run_sim import run
 
     args = argparse.Namespace(
         pdbfile=Path("pdb/init-packmol.pdb"),
@@ -52,29 +52,29 @@ from pathlib import Path
 
 import numpy as np
 
-from mmml.interfaces.pycharmmInterface.cutoffs import (
+from karml.interfaces.pycharmmInterface.cutoffs import (
     DEFAULT_MM_SWITCH_ON,
     DEFAULT_MM_SWITCH_WIDTH,
 )
-from mmml.cli.base import (
+from karml.cli.base import (
     load_model_parameters,
     resolve_checkpoint_paths,
     setup_ase_imports,
-    setup_mmml_imports,
+    setup_karml_imports,
 )
-from mmml.cli.run.shared import run_sim_loop, save_trajectory
-from mmml.cli.run.summaries import (
+from karml.cli.run.shared import run_sim_loop, save_trajectory
+from karml.cli.run.summaries import (
     print_charges_summary,
     print_forces_summary,
     print_masses_summary,
     print_positions_summary,
     print_system_summary,
 )
-from mmml.cli.run.pycharmm_sampling_args import add_two_residue_sampling_args
-from mmml.interfaces.pycharmmInterface.mlpot.mlpot_gpu_policy import (
+from karml.cli.run.pycharmm_sampling_args import add_two_residue_sampling_args
+from karml.interfaces.pycharmmInterface.mlpot.mlpot_gpu_policy import (
     resolve_ml_gpu_count as _resolve_ml_gpu_count,
 )
-from mmml.cli.run.utils import get_steps_per_frame, normalize_n_atoms_monomer
+from karml.cli.run.utils import get_steps_per_frame, normalize_n_atoms_monomer
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -253,7 +253,7 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=None,
         metavar="N",
-        help="Parallel PhysNet chunks on N local GPUs (default 1; or MMML_MLPOT_N_GPUS).",
+        help="Parallel PhysNet chunks on N local GPUs (default 1; or KARML_MLPOT_N_GPUS).",
     )
     parser.add_argument(
         "--use-ema",
@@ -491,7 +491,7 @@ def _make_braille_show_frame(live, args):
     """Return show_frame callback for braille viewer, or None if view_braille disabled."""
     if not getattr(args, "view_braille", False):
         return None
-    from mmml.utils.visualize.braille_molecule import render_atoms_braille
+    from karml.utils.visualize.braille_molecule import render_atoms_braille
     from rich.panel import Panel
     from rich.text import Text
 
@@ -510,14 +510,14 @@ def run(args: argparse.Namespace) -> int:
 
     # Setup imports
     setup_ase_imports()
-    CutoffParameters, ev2kcalmol, setup_calculator, get_ase_calc = setup_mmml_imports()
+    CutoffParameters, ev2kcalmol, setup_calculator, get_ase_calc = setup_karml_imports()
     
     # Additional imports for this demo
     try:
         import pycharmm.psf as psf
         import ase
         import ase.io as ase_io
-        from mmml.interfaces.pycharmmInterface.setupBox import setup_box_generic
+        from karml.interfaces.pycharmmInterface.setupBox import setup_box_generic
         import jax
         import jax.numpy as jnp
     except ModuleNotFoundError as exc:
@@ -713,14 +713,14 @@ def run(args: argparse.Namespace) -> int:
         print_forces_summary(hybrid_forces, energy_eV=hybrid_energy)
     
 
-    from mmml.cli.run.pycharmm_runner import (
+    from karml.cli.run.pycharmm_runner import (
         run_equilibration,
         run_heat,
         run_production,
         run_pycharmm_setup_and_minimize,
     )
-    from mmml.cli.run.ase_runner import run_ase_md
-    from mmml.cli.run.jaxmd_runner import set_up_nhc_sim_routine
+    from karml.cli.run.ase_runner import run_ase_md
+    from karml.cli.run.jaxmd_runner import set_up_nhc_sim_routine
 
     view_braille = getattr(args, "view_braille", False)
     if view_braille:

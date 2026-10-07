@@ -20,11 +20,11 @@ import jax.numpy as jnp
 import numpy as np
 from jax import Array
 
-from mmml.interfaces.pycharmmInterface.cgenff_bonded import (
+from karml.interfaces.pycharmmInterface.cgenff_bonded import (
     KCAL_MOL_TO_EV,
     build_bonded_energy_fn,
 )
-from mmml.interfaces.pycharmmInterface.cgenff_topology import (
+from karml.interfaces.pycharmmInterface.cgenff_topology import (
     load_cgenff_bonded_from_psf,
 )
 
@@ -138,7 +138,7 @@ def _monomer_bonded_fn_from_psf(
             f"PSF {psf} has {system.n_atoms} atoms; need at least {end} "
             f"(offset={start}, atoms_per_monomer={n_mono})"
         )
-    from mmml.interfaces.pycharmmInterface.cgenff_topology import filter_bonded_topology_for_mm
+    from karml.interfaces.pycharmmInterface.cgenff_topology import filter_bonded_topology_for_mm
 
     mm_mask = jnp.zeros(system.n_atoms, dtype=bool)
     mm_mask = mm_mask.at[start:end].set(True)

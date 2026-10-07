@@ -13,7 +13,7 @@ from pathlib import Path
 import numpy as np
 import yaml
 
-from mmml.interfaces.calculators.link_atoms import LinkAtom
+from karml.interfaces.calculators.link_atoms import LinkAtom
 
 _SELECTOR_KEYS = frozenset({"resname", "segid", "resid", "names", "name"})
 

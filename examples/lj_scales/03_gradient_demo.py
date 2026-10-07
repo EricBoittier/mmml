@@ -19,7 +19,7 @@ import numpy as np
 
 from _toy import MASTER_EPSILONS, MASTER_SIGMAS, TYPE_NAMES, dimer, e_mm
 
-from mmml.models.mm_lj_scales import (
+from karml.models.mm_lj_scales import (
     apply_mm_lj_scales,
     attach_mm_lj_scales,
     split_mm_lj_scale_params,

@@ -1,6 +1,6 @@
 * Lennard-Jones parameters for argon, krypton and xenon.
 * NOT A CHARMM FILE. Split out of toppar_noble_gases_literature.str for
-* read_cgenff_prm(path, append=True) via MMML_CGENFF_EXTRA_PRM; pairs with
+* read_cgenff_prm(path, append=True) via KARML_CGENFF_EXTRA_PRM; pairs with
 * top_noble_gases_literature.rtf.
 * Values are the classical 12-6 noble-gas parameters from the standard
 * gas-transport / second-virial literature, converted to CHARMM's

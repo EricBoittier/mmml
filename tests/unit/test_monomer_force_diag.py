@@ -7,7 +7,7 @@ import pytest
 
 
 def test_per_monomer_forces_grms_single_atom_monomer():
-    from mmml.utils.monomer_force_diag import per_monomer_forces_grms_kcalmol_A
+    from karml.utils.monomer_force_diag import per_monomer_forces_grms_kcalmol_A
 
     forces = np.array([[3.0, 4.0, 0.0], [0.0, 3.0, 4.0]], dtype=float)
     offsets = np.array([0, 1, 2], dtype=int)
@@ -18,7 +18,7 @@ def test_per_monomer_forces_grms_single_atom_monomer():
 
 
 def test_select_stressed_monomer_indices_flags_one_hot_spot():
-    from mmml.utils.monomer_force_diag import select_stressed_monomer_indices
+    from karml.utils.monomer_force_diag import select_stressed_monomer_indices
 
     grms = np.array([5.0, 5.0, 120.0, 4.0, 6.0], dtype=float)
     flagged = select_stressed_monomer_indices(grms, max_select=2, min_abs_grms=30.0)
@@ -26,14 +26,14 @@ def test_select_stressed_monomer_indices_flags_one_hot_spot():
 
 
 def test_select_stressed_monomer_indices_empty_when_widespread():
-    from mmml.utils.monomer_force_diag import select_stressed_monomer_indices
+    from karml.utils.monomer_force_diag import select_stressed_monomer_indices
 
     grms = np.array([80.0, 75.0, 90.0, 85.0], dtype=float)
     assert select_stressed_monomer_indices(grms, max_select=2) == []
 
 
 def test_diagnose_monomer_forces_merges_overlap_hint_when_within_max_select():
-    from mmml.utils.monomer_force_diag import diagnose_monomer_forces
+    from karml.utils.monomer_force_diag import diagnose_monomer_forces
 
     forces = np.zeros((4, 3), dtype=float)
     forces[2:4] = 100.0
@@ -50,7 +50,7 @@ def test_diagnose_monomer_forces_merges_overlap_hint_when_within_max_select():
 
 
 def test_diagnose_monomer_forces_clears_flag_when_merge_exceeds_max_select():
-    from mmml.utils.monomer_force_diag import diagnose_monomer_forces
+    from karml.utils.monomer_force_diag import diagnose_monomer_forces
 
     forces = np.zeros((6, 3), dtype=float)
     forces[4:6] = 100.0
@@ -66,7 +66,7 @@ def test_diagnose_monomer_forces_clears_flag_when_merge_exceeds_max_select():
 
 
 def test_resolve_selective_repack_monomers_uses_mlpot_ctx(monkeypatch):
-    from mmml.utils.monomer_force_diag import resolve_selective_repack_monomers
+    from karml.utils.monomer_force_diag import resolve_selective_repack_monomers
 
     offsets = np.array([0, 2, 4], dtype=int)
     forces = np.array(
@@ -80,7 +80,7 @@ def test_resolve_selective_repack_monomers_uses_mlpot_ctx(monkeypatch):
     )
 
     monkeypatch.setattr(
-        "mmml.utils.monomer_force_diag.mlpot_hybrid_forces_kcalmol_A",
+        "karml.utils.monomer_force_diag.mlpot_hybrid_forces_kcalmol_A",
         lambda *_a, **_kw: forces,
     )
     ctx = object()

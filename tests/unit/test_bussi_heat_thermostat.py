@@ -9,17 +9,17 @@ from unittest import mock
 import numpy as np
 import pytest
 
-from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+from karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
     apply_bussi_velocity_rescale,
     assign_bussi_fallback_velocities,
     calculate_bussi_rescale_alpha,
     target_kinetic_energy_kcalmol,
 )
-from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
     _requested_heat_thermostat,
     resolve_heat_thermostat,
 )
-from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
     _apply_bussi_in_memory_continuation_kw,
     _bussi_heat_chunk_nstep,
     _ensure_bussi_heat_continuation_iasvel,
@@ -84,7 +84,7 @@ def test_prepare_bussi_heat_dynamics_kw_disables_charmm_ihtfrq():
 
 
 def test_capture_charmm_velocities_for_bussi_prefers_live_memory_over_restart(tmp_path):
-    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+    from karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
         capture_charmm_velocities_for_bussi,
     )
 
@@ -104,12 +104,12 @@ def test_capture_charmm_velocities_for_bussi_prefers_live_memory_over_restart(tm
         encoding="ascii",
     )
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.charmm_velocities_akma",
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.charmm_velocities_akma",
         return_value=warm,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.sync_charmm_velocities_akma",
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.sync_charmm_velocities_akma",
     ) as sync, mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.velocities_are_cold",
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.velocities_are_cold",
         return_value=False,
     ):
         out = capture_charmm_velocities_for_bussi(restart_path=restart)
@@ -119,7 +119,7 @@ def test_capture_charmm_velocities_for_bussi_prefers_live_memory_over_restart(tm
 
 
 def test_capture_charmm_velocities_for_bussi_skips_cold_restart(tmp_path):
-    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+    from karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
         capture_charmm_velocities_for_bussi,
     )
 
@@ -144,12 +144,12 @@ def test_capture_charmm_velocities_for_bussi_skips_cold_restart(tmp_path):
         return float(np.max(np.abs(arr))) < 1.0
 
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.charmm_velocities_akma",
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.charmm_velocities_akma",
         return_value=warm,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.sync_charmm_velocities_akma",
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.sync_charmm_velocities_akma",
     ) as sync, mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.velocities_are_cold",
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.velocities_are_cold",
         side_effect=_cold,
     ):
         out = capture_charmm_velocities_for_bussi(restart_path=restart)
@@ -159,31 +159,31 @@ def test_capture_charmm_velocities_for_bussi_skips_cold_restart(tmp_path):
 
 
 def test_capture_charmm_velocities_for_bussi_rejects_position_like_comp(tmp_path):
-    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+    from karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
         capture_charmm_velocities_for_bussi,
     )
 
     positions = np.array([[1.5, 2.0, -3.0]], dtype=float)
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.charmm_velocities_akma",
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.charmm_velocities_akma",
         return_value=None,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.comparison_velocities_akma",
+        "karml.interfaces.pycharmmInterface.mlpot.comp_velocities.comparison_velocities_akma",
         return_value=positions,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities._velocity_array_matches_psf",
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities._velocity_array_matches_psf",
         return_value=True,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.comparison_matches_main_positions",
+        "karml.interfaces.pycharmmInterface.mlpot.comp_velocities.comparison_matches_main_positions",
         return_value=False,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.velocity_array_matches_main_coordinates",
+        "karml.interfaces.pycharmmInterface.mlpot.comp_velocities.velocity_array_matches_main_coordinates",
         return_value=True,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities._read_restart_velocities_akma",
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities._read_restart_velocities_akma",
         return_value=None,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities._try_bussi_finite_difference_velocities",
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities._try_bussi_finite_difference_velocities",
         return_value=None,
     ):
         out = capture_charmm_velocities_for_bussi(restart_path=tmp_path / "missing.res")
@@ -191,7 +191,7 @@ def test_capture_charmm_velocities_for_bussi_rejects_position_like_comp(tmp_path
 
 
 def test_capture_charmm_velocities_for_bussi_from_restart(tmp_path):
-    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+    from karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
         capture_charmm_velocities_for_bussi,
     )
 
@@ -210,12 +210,12 @@ def test_capture_charmm_velocities_for_bussi_from_restart(tmp_path):
         encoding="ascii",
     )
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.charmm_velocities_akma",
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.charmm_velocities_akma",
         return_value=None,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.sync_charmm_velocities_akma",
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.sync_charmm_velocities_akma",
     ) as sync, mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.velocities_are_cold",
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.velocities_are_cold",
         return_value=False,
     ):
         out = capture_charmm_velocities_for_bussi(restart_path=restart)
@@ -225,7 +225,7 @@ def test_capture_charmm_velocities_for_bussi_from_restart(tmp_path):
 
 
 def test_read_restart_velocities_charmm_vx_vy_vz(tmp_path):
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         read_restart_velocities,
     )
 
@@ -254,14 +254,14 @@ def test_resolve_dynamics_init_velocities_falls_back_to_iasvel_one_when_cold():
 
     import numpy as np
 
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _resolve_dynamics_init_velocities,
     )
 
     kw = {"start": False, "iasvel": 0, "firstt": 12.0}
     cold = np.zeros((4, 3), dtype=float)
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities._resolve_bussi_rescale_velocities",
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities._resolve_bussi_rescale_velocities",
         return_value=cold,
     ):
         out = _resolve_dynamics_init_velocities(kw, restart_read_path="/tmp/x.res")
@@ -277,12 +277,12 @@ def test_resolve_dynamics_init_velocities_bussi_uses_mb_fallback_not_iasvel_one(
 
     import numpy as np
 
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _resolve_dynamics_init_velocities,
     )
 
     # Opt-in COMP/C-API inject path (default Bussi refuses handoff entirely).
-    monkeypatch.setenv("MMML_BUSSI_IASVEL0_CONTINUATION", "1")
+    monkeypatch.setenv("KARML_BUSSI_IASVEL0_CONTINUATION", "1")
     cold = np.zeros((3, 3), dtype=float)
     warm = np.array([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]], dtype=float)
     kw = {
@@ -295,10 +295,10 @@ def test_resolve_dynamics_init_velocities_bussi_uses_mb_fallback_not_iasvel_one(
         # path entirely (``_requires_init_velocities_handoff`` returns False).
     }
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities._resolve_bussi_rescale_velocities",
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities._resolve_bussi_rescale_velocities",
         return_value=cold,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.assign_bussi_fallback_velocities",
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.assign_bussi_fallback_velocities",
         return_value=(10.0, warm),
     ) as assign:
         out = _resolve_dynamics_init_velocities(kw, restart_read_path=None)
@@ -310,12 +310,12 @@ def test_resolve_dynamics_init_velocities_bussi_uses_mb_fallback_not_iasvel_one(
 
 def test_requires_init_velocities_handoff_false_for_default_bussi(monkeypatch):
     """Deferred-DCD Bussi must not take COMP inject (gpu09 T≃1e12 K crash)."""
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _drop_unsafe_bussi_init_velocities_for_dcd,
         _requires_init_velocities_handoff,
     )
 
-    monkeypatch.delenv("MMML_BUSSI_IASVEL0_CONTINUATION", raising=False)
+    monkeypatch.delenv("KARML_BUSSI_IASVEL0_CONTINUATION", raising=False)
     kw = {
         "start": False,
         "iasvel": 0,
@@ -332,7 +332,7 @@ def test_requires_init_velocities_handoff_false_for_default_bussi(monkeypatch):
 
 def test_dcd_drop_init_velocities_keeps_iasvel0_for_cpt_hoover():
     """CPT Hoover must not redraw Boltzmann when DCD forbids C-API inject."""
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _drop_unsafe_bussi_init_velocities_for_dcd,
     )
 
@@ -357,7 +357,7 @@ def test_dcd_drop_init_velocities_keeps_iasvel0_for_cpt_hoover():
 
 def test_dcd_drop_init_velocities_boltzmann_when_not_cpt_hoover():
     """Non-Hoover CPT still falls back to bath Boltzmann when DCD blocks inject."""
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _drop_unsafe_bussi_init_velocities_for_dcd,
     )
 
@@ -379,7 +379,7 @@ def test_dcd_drop_init_velocities_boltzmann_when_not_cpt_hoover():
 
 
 def test_run_dynamics_captures_bussi_velocities_before_velos_del():
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import run_dynamics
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import run_dynamics
 
     call_order: list[str] = []
 
@@ -405,23 +405,23 @@ def test_run_dynamics_captures_bussi_velocities_before_velos_del():
     fake_pycharmm = mock.MagicMock()
     fake_pycharmm.DynamicsScript = mock.MagicMock(return_value=fake_dyn)
     with mock.patch.dict("sys.modules", {"pycharmm": fake_pycharmm}), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_via_c_api",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_via_c_api",
         return_value=fake_dyn,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_c_api_available",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_c_api_available",
         return_value=True,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._release_charmm_dynamics_api_buffers",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._release_charmm_dynamics_api_buffers",
         side_effect=_release,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._apply_dynamics_io_setters",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._apply_dynamics_io_setters",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.capture_charmm_velocities_for_bussi",
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.capture_charmm_velocities_for_bussi",
         side_effect=_capture,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.mirror_comparison_velocities_for_dynamics",
+        "karml.interfaces.pycharmmInterface.mlpot.comp_velocities.mirror_comparison_velocities_for_dynamics",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.maybe_assign_velocities_via_ase_if_cold",
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.maybe_assign_velocities_via_ase_if_cold",
     ):
         run_dynamics(kw)
     assert call_order == ["release", "capture", "release"]
@@ -431,7 +431,7 @@ def test_cpt_skip_ase_cold_does_not_resolve_or_redraw_velocities():
     """CPT in-memory sub-chunk must keep iasvel=0 (pop of skip must not re-enable inject)."""
     from unittest import mock
 
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import run_dynamics
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import run_dynamics
 
     resolve = mock.Mock(return_value=None)
     kw = {
@@ -450,32 +450,32 @@ def test_cpt_skip_ase_cold_does_not_resolve_or_redraw_velocities():
     fake_pycharmm = mock.MagicMock()
     fake_pycharmm.DynamicsScript = mock.MagicMock(return_value=fake_dyn)
     with mock.patch.dict("sys.modules", {"pycharmm": fake_pycharmm}), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_via_c_api",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_via_c_api",
         return_value=fake_dyn,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._execute_dynamics_script",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._execute_dynamics_script",
         return_value=None,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_c_api_available",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_c_api_available",
         return_value=True,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_c_api_safe_for_kw",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_c_api_safe_for_kw",
         return_value=True,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._release_charmm_dynamics_api_buffers",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._release_charmm_dynamics_api_buffers",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._apply_dynamics_io_setters",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._apply_dynamics_io_setters",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_dynamics_list_frequencies",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_dynamics_list_frequencies",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._resolve_dynamics_init_velocities",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._resolve_dynamics_init_velocities",
         resolve,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._ensure_cpt_iasvel0_comp_velocity_handoff",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._ensure_cpt_iasvel0_comp_velocity_handoff",
     ) as ensure_comp, mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.maybe_assign_velocities_via_ase_if_cold",
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.maybe_assign_velocities_via_ase_if_cold",
     ) as ase_cold, mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.capture_charmm_velocities_for_bussi",
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.capture_charmm_velocities_for_bussi",
     ):
         run_dynamics(kw)
 
@@ -491,28 +491,28 @@ def test_ensure_cpt_iasvel0_comp_handoff_uses_cached_velocities():
 
     import numpy as np
 
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _ensure_cpt_iasvel0_comp_velocity_handoff,
     )
 
     kw = {"iasvel": 0, "start": False, "hoover reft": 120.0, "firstt": 120.0}
     raw = np.ones((3, 3), dtype=float) * 0.01
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.last_synced_velocities_akma_raw",
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.last_synced_velocities_akma_raw",
         return_value=raw,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.velocities_are_cold",
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.velocities_are_cold",
         return_value=False,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.velocities_are_pathological",
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.velocities_are_pathological",
         return_value=False,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.sync_comparison_velocities_akma",
+        "karml.interfaces.pycharmmInterface.mlpot.comp_velocities.sync_comparison_velocities_akma",
     ) as sync_akma, mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.comparison_matches_main_positions",
+        "karml.interfaces.pycharmmInterface.mlpot.comp_velocities.comparison_matches_main_positions",
         return_value=False,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.assert_comparison_holds_velocities_not_positions",
+        "karml.interfaces.pycharmmInterface.mlpot.comp_velocities.assert_comparison_holds_velocities_not_positions",
     ):
         _ensure_cpt_iasvel0_comp_velocity_handoff(kw, restart_read_path=None)
 
@@ -523,7 +523,7 @@ def test_ensure_cpt_iasvel0_comp_handoff_uses_cached_velocities():
 def test_ensure_cpt_iasvel0_comp_handoff_falls_back_to_iasvel_one():
     from unittest import mock
 
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _ensure_cpt_iasvel0_comp_velocity_handoff,
     )
 
@@ -535,15 +535,15 @@ def test_ensure_cpt_iasvel0_comp_handoff_falls_back_to_iasvel_one():
         "finalt": 200.0,
     }
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.last_synced_velocities_akma_raw",
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.last_synced_velocities_akma_raw",
         return_value=None,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.sync_comparison_velocities_from_main",
+        "karml.interfaces.pycharmmInterface.mlpot.comp_velocities.sync_comparison_velocities_from_main",
         return_value=False,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.capture_charmm_velocities_for_bussi",
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.capture_charmm_velocities_for_bussi",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.comparison_matches_main_positions",
+        "karml.interfaces.pycharmmInterface.mlpot.comp_velocities.comparison_matches_main_positions",
         return_value=True,
     ):
         _ensure_cpt_iasvel0_comp_velocity_handoff(kw, restart_read_path=None)
@@ -553,8 +553,8 @@ def test_ensure_cpt_iasvel0_comp_handoff_falls_back_to_iasvel_one():
 
 
 def test_post_dyna_restart_write_path_prefers_staging_alias(tmp_path):
-    from mmml.interfaces.pycharmmInterface.charmm_paths import CharmmIoAlias
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.charmm_paths import CharmmIoAlias
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _post_dyna_restart_write_path,
     )
 
@@ -567,8 +567,8 @@ def test_post_dyna_restart_write_path_prefers_staging_alias(tmp_path):
 
 
 def test_post_dyna_restart_write_path_returns_staging_before_file_exists(tmp_path):
-    from mmml.interfaces.pycharmmInterface.charmm_paths import CharmmIoAlias
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.charmm_paths import CharmmIoAlias
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _post_dyna_restart_write_path,
     )
 
@@ -580,7 +580,7 @@ def test_post_dyna_restart_write_path_returns_staging_before_file_exists(tmp_pat
 
 
 def test_resolve_restart_velocities_read_paths_includes_overlap_slots(tmp_path):
-    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+    from karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
         resolve_restart_velocities_read_paths,
     )
 
@@ -608,7 +608,7 @@ def _write_restart_with_velocities(path: Path, vx: float) -> None:
 
 
 def test_resolve_restart_velocities_read_paths_from_scratch_slot(tmp_path):
-    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+    from karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
         resolve_restart_velocities_read_paths,
     )
 
@@ -620,7 +620,7 @@ def test_resolve_restart_velocities_read_paths_from_scratch_slot(tmp_path):
 
 
 def test_read_restart_velocities_akma_falls_back_to_alternate_slot(tmp_path):
-    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+    from karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
         _read_restart_velocities_akma,
     )
 
@@ -634,7 +634,7 @@ def test_read_restart_velocities_akma_falls_back_to_alternate_slot(tmp_path):
         return float(np.max(np.abs(arr))) < 50.0
 
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.velocities_are_cold",
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.velocities_are_cold",
         side_effect=_cold,
     ):
         vel = _read_restart_velocities_akma(cold, quiet=True)
@@ -643,7 +643,7 @@ def test_read_restart_velocities_akma_falls_back_to_alternate_slot(tmp_path):
 
 
 def test_read_restart_velocities_akma_falls_back_to_prior_restart(tmp_path):
-    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+    from karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
         _read_restart_velocities_akma,
     )
 
@@ -657,7 +657,7 @@ def test_read_restart_velocities_akma_falls_back_to_prior_restart(tmp_path):
         return float(np.max(np.abs(arr))) < 50.0
 
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.velocities_are_cold",
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.velocities_are_cold",
         side_effect=_cold,
     ):
         vel = _read_restart_velocities_akma(
@@ -670,17 +670,17 @@ def test_read_restart_velocities_akma_falls_back_to_prior_restart(tmp_path):
 
 
 def test_read_restart_velocities_akma_skips_natom_mismatch(tmp_path):
-    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+    from karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
         _read_restart_velocities_akma,
     )
 
     wrong = tmp_path / "pretreat.res"
     _write_restart_with_velocities(wrong, 100.0)
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.charmm_psf_natom",
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.charmm_psf_natom",
         return_value=990,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities._restart_file_matches_psf",
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities._restart_file_matches_psf",
         return_value=False,
     ):
         assert _read_restart_velocities_akma(
@@ -691,7 +691,7 @@ def test_read_restart_velocities_akma_skips_natom_mismatch(tmp_path):
 
 
 def test_read_restart_velocities_akma_rejects_pathological(tmp_path):
-    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+    from karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
         _read_restart_velocities_akma,
     )
 
@@ -702,7 +702,7 @@ def test_read_restart_velocities_akma_rejects_pathological(tmp_path):
 
 
 def test_read_restart_velocities_akma_rejects_coords_as_velocities(tmp_path):
-    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+    from karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
         _read_restart_velocities_akma,
     )
 
@@ -725,7 +725,7 @@ def test_read_restart_velocities_akma_rejects_coords_as_velocities(tmp_path):
 
 
 def test_apply_bussi_velocity_rescale_rejects_pathological():
-    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+    from karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
         apply_bussi_velocity_rescale,
     )
 
@@ -733,26 +733,26 @@ def test_apply_bussi_velocity_rescale_rejects_pathological():
     bad = np.array([[1.0e12, 0.0, 0.0]], dtype=float)
     good = np.array([[100.0, 0.0, 0.0]], dtype=float)
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.charmm_masses_amu",
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.charmm_masses_amu",
         return_value=masses,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities._resolve_bussi_rescale_velocities",
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities._resolve_bussi_rescale_velocities",
         return_value=bad,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.assign_bussi_fallback_velocities",
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.assign_bussi_fallback_velocities",
         return_value=(40.0, good),
     ) as assign, mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.calculate_bussi_rescale_alpha",
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.calculate_bussi_rescale_alpha",
         return_value=1.0,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.sync_charmm_velocities_akma",
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.sync_charmm_velocities_akma",
     ):
         apply_bussi_velocity_rescale(40.0, timestep_ps=0.0005, quiet=True)
     assign.assert_called_once()
 
 
 def test_apply_bussi_velocity_rescale_rejects_pathological_after_alpha():
-    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+    from karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
         apply_bussi_velocity_rescale,
     )
 
@@ -760,29 +760,29 @@ def test_apply_bussi_velocity_rescale_rejects_pathological_after_alpha():
     warm = np.array([[1.0e8, 0.0, 0.0]], dtype=float)
     good = np.array([[100.0, 0.0, 0.0]], dtype=float)
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.charmm_masses_amu",
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.charmm_masses_amu",
         return_value=masses,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities._resolve_bussi_rescale_velocities",
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities._resolve_bussi_rescale_velocities",
         return_value=warm,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.assign_bussi_fallback_velocities",
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.assign_bussi_fallback_velocities",
         return_value=(28.0, good),
     ) as assign, mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.velocities_are_pathological",
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.velocities_are_pathological",
         side_effect=[False, True],
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.calculate_bussi_rescale_alpha",
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.calculate_bussi_rescale_alpha",
         return_value=0.6065,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.sync_charmm_velocities_akma",
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.sync_charmm_velocities_akma",
     ):
         apply_bussi_velocity_rescale(28.0, timestep_ps=0.0005, quiet=True)
     assign.assert_called_once()
 
 
 def test_bussi_overlap_skip_scratch_restart_write():
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _bussi_overlap_skip_scratch_restart_write,
         prepare_bussi_heat_dynamics_kw,
     )
@@ -813,18 +813,18 @@ def test_apply_bussi_velocity_rescale_syncs_charmm():
     masses = np.array([12.0, 1.0, 1.0], dtype=float)
     v_akma = np.ones((3, 3), dtype=float) * 100.0
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.charmm_masses_amu",
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.charmm_masses_amu",
         return_value=masses,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.capture_charmm_velocities_for_bussi",
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.capture_charmm_velocities_for_bussi",
         side_effect=[v_akma, v_akma * 1.1],
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.sync_charmm_velocities_akma",
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.sync_charmm_velocities_akma",
     ) as sync, mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.calculate_bussi_rescale_alpha",
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.calculate_bussi_rescale_alpha",
         return_value=1.1,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.estimate_kinetic_temperature_k",
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.estimate_kinetic_temperature_k",
         return_value=295.0,
     ):
         measured, alpha = apply_bussi_velocity_rescale(
@@ -842,21 +842,21 @@ def test_apply_bussi_velocity_rescale_assigns_when_velocities_missing():
     masses = np.array([12.0, 1.0, 1.0], dtype=float)
     v_akma = np.ones((3, 3), dtype=float) * 50.0
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.charmm_masses_amu",
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.charmm_masses_amu",
         return_value=masses,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities._resolve_bussi_rescale_velocities",
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities._resolve_bussi_rescale_velocities",
         return_value=v_akma,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.sync_charmm_velocities_akma",
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.sync_charmm_velocities_akma",
     ) as sync, mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.calculate_bussi_rescale_alpha",
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.calculate_bussi_rescale_alpha",
         return_value=1.0,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.estimate_kinetic_temperature_k",
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.estimate_kinetic_temperature_k",
         return_value=10.0,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.estimate_kinetic_energy_kcalmol",
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.estimate_kinetic_energy_kcalmol",
         return_value=1.0,
     ):
         measured, alpha = apply_bussi_velocity_rescale(
@@ -873,13 +873,13 @@ def test_apply_bussi_velocity_rescale_assigns_when_velocities_missing():
 def test_assign_bussi_fallback_velocities_uses_numpy_when_ase_fails():
     masses = np.array([12.0, 1.0, 1.0], dtype=float)
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.assign_maxwell_boltzmann_velocities_via_ase",
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.assign_maxwell_boltzmann_velocities_via_ase",
         side_effect=RuntimeError("ase unavailable"),
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.charmm_masses_amu",
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.charmm_masses_amu",
         return_value=masses,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.sync_charmm_velocities_akma",
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.sync_charmm_velocities_akma",
     ) as sync:
         measured, vel = assign_bussi_fallback_velocities(300.0, quiet=True, seed=0)
     sync.assert_called_once()
@@ -892,21 +892,21 @@ def test_apply_bussi_velocity_rescale_never_raises_when_fallback_assigns():
     masses = np.array([12.0, 1.0, 1.0], dtype=float)
     v_akma = np.ones((3, 3), dtype=float) * 80.0
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.charmm_masses_amu",
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.charmm_masses_amu",
         return_value=masses,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities._resolve_bussi_rescale_velocities",
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities._resolve_bussi_rescale_velocities",
         return_value=v_akma,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.sync_charmm_velocities_akma",
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.sync_charmm_velocities_akma",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.calculate_bussi_rescale_alpha",
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.calculate_bussi_rescale_alpha",
         return_value=1.0,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.estimate_kinetic_temperature_k",
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.estimate_kinetic_temperature_k",
         return_value=12.0,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.estimate_kinetic_energy_kcalmol",
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.estimate_kinetic_energy_kcalmol",
         return_value=2.0,
     ):
         measured, alpha = apply_bussi_velocity_rescale(
@@ -929,7 +929,7 @@ def test_resolve_heat_thermostat_keeps_bussi_after_pretreat(monkeypatch):
         quiet=True,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.resolve_charmm_mm_pretreat_for_staged",
+        "karml.interfaces.pycharmmInterface.mlpot.cli_common.resolve_charmm_mm_pretreat_for_staged",
         lambda *_a, **_k: True,
     )
     assert resolve_heat_thermostat(args) == "bussi"
@@ -938,9 +938,9 @@ def test_resolve_heat_thermostat_keeps_bussi_after_pretreat(monkeypatch):
 def test_apply_bussi_in_memory_continuation_defaults_to_iasvel_one(monkeypatch):
     from unittest.mock import patch
 
-    monkeypatch.delenv("MMML_BUSSI_INIT_VELOCITIES_HANDOFF", raising=False)
-    monkeypatch.delenv("MMML_BUSSI_IASVEL0_CONTINUATION", raising=False)
-    monkeypatch.delenv("MMML_BUSSI_IASVEL1_REDRAW", raising=False)
+    monkeypatch.delenv("KARML_BUSSI_INIT_VELOCITIES_HANDOFF", raising=False)
+    monkeypatch.delenv("KARML_BUSSI_IASVEL0_CONTINUATION", raising=False)
+    monkeypatch.delenv("KARML_BUSSI_IASVEL1_REDRAW", raising=False)
     kw = {
         "firstt": 10.0,
         "finalt": 50.0,
@@ -951,7 +951,7 @@ def test_apply_bussi_in_memory_continuation_defaults_to_iasvel_one(monkeypatch):
     }
     prepare_bussi_heat_dynamics_kw(kw, nstep=50, ihtfrq=50, timestep_ps=0.0001)
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_c_api_available",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_c_api_available",
         return_value=True,
     ):
         _apply_bussi_in_memory_continuation_kw(kw)
@@ -965,8 +965,8 @@ def test_apply_bussi_in_memory_continuation_defaults_to_iasvel_one(monkeypatch):
 def test_apply_bussi_in_memory_continuation_opt_in_iasvel_zero(monkeypatch):
     from unittest.mock import patch
 
-    monkeypatch.setenv("MMML_BUSSI_IASVEL0_CONTINUATION", "1")
-    monkeypatch.delenv("MMML_BUSSI_INIT_VELOCITIES_HANDOFF", raising=False)
+    monkeypatch.setenv("KARML_BUSSI_IASVEL0_CONTINUATION", "1")
+    monkeypatch.delenv("KARML_BUSSI_INIT_VELOCITIES_HANDOFF", raising=False)
     kw = {
         "firstt": 10.0,
         "finalt": 50.0,
@@ -977,7 +977,7 @@ def test_apply_bussi_in_memory_continuation_opt_in_iasvel_zero(monkeypatch):
     }
     prepare_bussi_heat_dynamics_kw(kw, nstep=50, ihtfrq=50, timestep_ps=0.0001)
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_c_api_available",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_c_api_available",
         return_value=True,
     ):
         _apply_bussi_in_memory_continuation_kw(kw)
@@ -990,7 +990,7 @@ def test_apply_bussi_in_memory_continuation_opt_in_iasvel_zero(monkeypatch):
 def test_apply_bussi_in_memory_continuation_opt_in_iasvel_one_redraw(monkeypatch):
     from unittest.mock import patch
 
-    monkeypatch.setenv("MMML_BUSSI_IASVEL1_REDRAW", "1")
+    monkeypatch.setenv("KARML_BUSSI_IASVEL1_REDRAW", "1")
     kw = {
         "firstt": 10.0,
         "finalt": 50.0,
@@ -1001,7 +1001,7 @@ def test_apply_bussi_in_memory_continuation_opt_in_iasvel_one_redraw(monkeypatch
     }
     prepare_bussi_heat_dynamics_kw(kw, nstep=50, ihtfrq=50, timestep_ps=0.0001)
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_c_api_available",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_c_api_available",
         return_value=True,
     ):
         _apply_bussi_in_memory_continuation_kw(kw)
@@ -1016,7 +1016,7 @@ def test_apply_bussi_in_memory_continuation_opt_in_iasvel_one_redraw(monkeypatch
 def test_normalize_dynamics_heat_ramp_kw_strips_bussi_continuation_bath():
     from unittest.mock import patch
 
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _normalize_dynamics_heat_ramp_kw,
         prepare_bussi_heat_dynamics_kw,
     )
@@ -1035,7 +1035,7 @@ def test_normalize_dynamics_heat_ramp_kw_strips_bussi_continuation_bath():
     }
     prepare_bussi_heat_dynamics_kw(kw, nstep=50, ihtfrq=50, timestep_ps=0.0001)
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._ensure_bussi_plain_verlet_fortran_state",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._ensure_bussi_plain_verlet_fortran_state",
     ) as clear_fortran:
         _normalize_dynamics_heat_ramp_kw(kw)
     clear_fortran.assert_called_once()
@@ -1048,7 +1048,7 @@ def test_normalize_dynamics_heat_ramp_kw_strips_bussi_continuation_bath():
 def test_apply_bussi_in_memory_continuation_clears_fortran_heat_bath():
     from unittest.mock import patch
 
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _apply_bussi_in_memory_continuation_kw,
         prepare_bussi_heat_dynamics_kw,
     )
@@ -1056,7 +1056,7 @@ def test_apply_bussi_in_memory_continuation_clears_fortran_heat_bath():
     kw = {"firstt": 10.0, "finalt": 50.0, "timestep": 0.0001, "nstep": 50}
     prepare_bussi_heat_dynamics_kw(kw, nstep=50, ihtfrq=50, timestep_ps=0.0001)
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._ensure_bussi_plain_verlet_fortran_state",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._ensure_bussi_plain_verlet_fortran_state",
     ) as clear_fortran:
         _apply_bussi_in_memory_continuation_kw(kw)
     clear_fortran.assert_called_once()
@@ -1087,7 +1087,7 @@ def test_prepare_bussi_strips_scale_heat_pollution_on_cold_start():
 def test_normalize_dynamics_heat_ramp_kw_bussi_cold_start_keeps_firstt_only():
     from unittest.mock import patch
 
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _normalize_dynamics_heat_ramp_kw,
         prepare_bussi_heat_dynamics_kw,
     )
@@ -1106,7 +1106,7 @@ def test_normalize_dynamics_heat_ramp_kw_bussi_cold_start_keeps_firstt_only():
     }
     prepare_bussi_heat_dynamics_kw(kw, nstep=50, ihtfrq=50, timestep_ps=0.0001)
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._zero_bussi_scale_heat_fortran_keep_firstt",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._zero_bussi_scale_heat_fortran_keep_firstt",
     ) as zero_fortran:
         _normalize_dynamics_heat_ramp_kw(kw)
     zero_fortran.assert_called_once()
@@ -1120,7 +1120,7 @@ def test_normalize_dynamics_heat_ramp_kw_bussi_cold_start_keeps_firstt_only():
 def test_clear_stale_charmm_heat_bath_fortran_state_zeros_twind():
     from unittest.mock import MagicMock, patch
 
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _clear_stale_charmm_heat_bath_fortran_state,
     )
 
@@ -1138,7 +1138,7 @@ def test_clear_stale_charmm_heat_bath_fortran_state_zeros_twind():
 def test_run_bussi_heat_subchunked_clears_fortran_after_each_leg():
     from unittest.mock import patch
 
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _run_bussi_heat_subchunked,
         prepare_bussi_heat_dynamics_kw,
     )
@@ -1156,16 +1156,16 @@ def test_run_bussi_heat_subchunked_clears_fortran_after_each_leg():
         return mock.Mock()
 
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
         side_effect=fake_chunk,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_chunk_state_corrupt",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_chunk_state_corrupt",
         return_value=False,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.apply_bussi_velocity_rescale",
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.apply_bussi_velocity_rescale",
         return_value=(300.0, 1.0),
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._ensure_bussi_plain_verlet_fortran_state",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._ensure_bussi_plain_verlet_fortran_state",
         side_effect=lambda: clear_calls.append(1),
     ):
         _run_bussi_heat_subchunked(
@@ -1185,7 +1185,7 @@ def test_run_bussi_heat_subchunked_keeps_trajectory_when_split():
     from pathlib import Path
     from unittest.mock import patch
 
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         CharmmTrajectoryFiles,
         _run_bussi_heat_subchunked,
         prepare_bussi_heat_dynamics_kw,
@@ -1214,16 +1214,16 @@ def test_run_bussi_heat_subchunked_keeps_trajectory_when_split():
         return mock.Mock()
 
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
         side_effect=fake_chunk,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_chunk_state_corrupt",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_chunk_state_corrupt",
         return_value=False,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.apply_bussi_velocity_rescale",
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.apply_bussi_velocity_rescale",
         return_value=(50.0, 1.0),
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.append_bussi_rescale_ase_frame",
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.append_bussi_rescale_ase_frame",
         return_value=Path("/tmp/heat.bussi.traj"),
     ):
         _run_bussi_heat_subchunked(
@@ -1249,7 +1249,7 @@ def test_overlap_should_not_drop_traj_before_bussi_when_outer_suppresses():
     """Regression: outer nsavc>>chunk nstep used to strip traj before Bussi."""
     from pathlib import Path
 
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         CharmmTrajectoryFiles,
         _drop_trajectory_io,
         _harmonize_overlap_chunk_frequencies,
@@ -1296,7 +1296,7 @@ def test_run_bussi_heat_subchunked_writes_dcd_on_save_boundary_microchunk():
     from pathlib import Path
     from unittest.mock import patch
 
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         CharmmTrajectoryFiles,
         _run_bussi_heat_subchunked,
         prepare_bussi_heat_dynamics_kw,
@@ -1332,19 +1332,19 @@ def test_run_bussi_heat_subchunked_writes_dcd_on_save_boundary_microchunk():
         return Path(_path)
 
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
         side_effect=fake_chunk,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_chunk_state_corrupt",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_chunk_state_corrupt",
         return_value=False,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.apply_bussi_velocity_rescale",
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.apply_bussi_velocity_rescale",
         return_value=(50.0, 1.0),
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.append_bussi_rescale_ase_frame",
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.append_bussi_rescale_ase_frame",
         side_effect=fake_ase_frame,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.charmm_velocities_akma_for_thermostat",
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.charmm_velocities_akma_for_thermostat",
         return_value=np.zeros((3, 3)),
     ):
         _run_bussi_heat_subchunked(
@@ -1374,7 +1374,7 @@ def test_run_bussi_writes_last_micro_even_when_outer_suppressed_stage_nsavc():
     from pathlib import Path
     from unittest.mock import patch
 
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         CharmmTrajectoryFiles,
         _harmonize_overlap_chunk_frequencies,
         _run_bussi_heat_subchunked,
@@ -1410,19 +1410,19 @@ def test_run_bussi_writes_last_micro_even_when_outer_suppressed_stage_nsavc():
         return mock.Mock()
 
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
         side_effect=fake_chunk,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_chunk_state_corrupt",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_chunk_state_corrupt",
         return_value=False,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.apply_bussi_velocity_rescale",
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.apply_bussi_velocity_rescale",
         return_value=(50.0, 1.0),
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.append_bussi_rescale_ase_frame",
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.append_bussi_rescale_ase_frame",
         return_value=Path("/tmp/heat.bussi.traj"),
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.charmm_velocities_akma_for_thermostat",
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.charmm_velocities_akma_for_thermostat",
         return_value=np.zeros((3, 3)),
     ):
         # Traj path preserved (outer no longer drops before Bussi).
@@ -1446,7 +1446,7 @@ def test_run_bussi_writes_last_micro_even_when_outer_suppressed_stage_nsavc():
 
 
 def test_resolve_bussi_ase_traj_path_from_stage_dcd():
-    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+    from karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
         resolve_bussi_ase_traj_path,
     )
 
@@ -1460,7 +1460,7 @@ def test_run_bussi_heat_subchunked_iuncrd_only_on_first_subchunk():
     from pathlib import Path
     from unittest.mock import patch
 
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         CharmmTrajectoryFiles,
         _run_bussi_heat_subchunked,
         prepare_bussi_heat_dynamics_kw,
@@ -1487,16 +1487,16 @@ def test_run_bussi_heat_subchunked_iuncrd_only_on_first_subchunk():
         return mock.Mock()
 
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
         side_effect=fake_chunk,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_chunk_state_corrupt",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_chunk_state_corrupt",
         return_value=False,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.apply_bussi_velocity_rescale",
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.apply_bussi_velocity_rescale",
         return_value=(50.0, 1.0),
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.append_bussi_rescale_ase_frame",
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.append_bussi_rescale_ase_frame",
         return_value=Path("/tmp/heat.bussi.traj"),
     ):
         _run_bussi_heat_subchunked(
@@ -1524,13 +1524,13 @@ def test_run_bussi_heat_subchunked_consumes_force_iasvel_one_after_first_microch
     """Parent kw force flag must not re-Boltzmann every Bussi micro-chunk."""
     from unittest.mock import patch
 
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _run_bussi_heat_subchunked,
         prepare_bussi_heat_dynamics_kw,
     )
 
-    monkeypatch.delenv("MMML_BUSSI_INIT_VELOCITIES_HANDOFF", raising=False)
-    monkeypatch.delenv("MMML_BUSSI_IASVEL1_REDRAW", raising=False)
+    monkeypatch.delenv("KARML_BUSSI_INIT_VELOCITIES_HANDOFF", raising=False)
+    monkeypatch.delenv("KARML_BUSSI_IASVEL1_REDRAW", raising=False)
     kw = {
         "firstt": 10.0,
         "finalt": 50.0,
@@ -1550,24 +1550,24 @@ def test_run_bussi_heat_subchunked_consumes_force_iasvel_one_after_first_microch
         return mock.Mock()
 
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
         side_effect=fake_chunk,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_chunk_state_corrupt",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_chunk_state_corrupt",
         return_value=False,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics."
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics."
         "_bussi_subchunk_grms_blocks_continuation",
         return_value=False,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.apply_bussi_velocity_rescale",
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.apply_bussi_velocity_rescale",
         return_value=(50.0, 1.0),
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities."
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities."
         "charmm_velocities_akma_for_thermostat",
         return_value=None,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities."
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities."
         "estimate_kinetic_temperature_k",
         return_value=50.0,
     ):
@@ -1584,7 +1584,7 @@ def test_run_bussi_heat_subchunked_consumes_force_iasvel_one_after_first_microch
 
     assert seen_iasvel[0] == 1
     # Safe default after consuming the one-shot force flag is still iasvel=1
-    # (iasvel=0 COMP continuation is opt-in via MMML_BUSSI_IASVEL0_CONTINUATION).
+    # (iasvel=0 COMP continuation is opt-in via KARML_BUSSI_IASVEL0_CONTINUATION).
     assert seen_iasvel[1] == 1
     assert "_bussi_force_iasvel_one" not in kw
 
@@ -1592,7 +1592,7 @@ def test_run_bussi_heat_subchunked_consumes_force_iasvel_one_after_first_microch
 def test_run_bussi_heat_subchunked_stops_before_continuation_on_bad_state():
     from unittest.mock import patch
 
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _run_bussi_heat_subchunked,
         prepare_bussi_heat_dynamics_kw,
     )
@@ -1612,13 +1612,13 @@ def test_run_bussi_heat_subchunked_stops_before_continuation_on_bad_state():
         return mock.Mock()
 
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
         side_effect=fake_chunk,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_chunk_state_corrupt",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_chunk_state_corrupt",
         return_value=True,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.apply_bussi_velocity_rescale",
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.apply_bussi_velocity_rescale",
     ) as rescale:
         _run_bussi_heat_subchunked(
             kw,
@@ -1641,7 +1641,7 @@ def test_run_bussi_heat_subchunked_stops_on_high_grms_before_next_microchunk():
     """Fly-off can leave finite coords with GRMS~80; do not IASVEL=1 the wreck."""
     from unittest.mock import patch
 
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _run_bussi_heat_subchunked,
         prepare_bussi_heat_dynamics_kw,
     )
@@ -1661,17 +1661,17 @@ def test_run_bussi_heat_subchunked_stops_on_high_grms_before_next_microchunk():
         return mock.Mock()
 
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
         side_effect=fake_chunk,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_chunk_state_corrupt",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_chunk_state_corrupt",
         return_value=False,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics."
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics."
         "_bussi_subchunk_grms_blocks_continuation",
         return_value=True,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.apply_bussi_velocity_rescale",
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.apply_bussi_velocity_rescale",
     ) as rescale:
         _run_bussi_heat_subchunked(
             kw,
@@ -1693,7 +1693,7 @@ def test_run_bussi_heat_subchunked_stops_on_high_grms_before_next_microchunk():
 def test_overlap_chunk_bussi_ramp_prep_strips_bath():
     from unittest.mock import patch
 
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _apply_overlap_chunk_dynamics_kw,
         _apply_overlap_chunk_heat_ramp,
         heat_ramp_spec_from_kw,
@@ -1723,7 +1723,7 @@ def test_overlap_chunk_bussi_ramp_prep_strips_bath():
         ramp_spec=ramp_spec,
     )
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_c_api_available",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_c_api_available",
         return_value=True,
     ):
         _apply_overlap_chunk_dynamics_kw(
@@ -1746,12 +1746,12 @@ def test_resolve_dynamics_init_velocities_bussi_continuation_uses_rescale_ladder
 
     import numpy as np
 
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _init_velocities_dict_from_akma,
         _resolve_dynamics_init_velocities,
     )
 
-    monkeypatch.setenv("MMML_BUSSI_IASVEL0_CONTINUATION", "1")
+    monkeypatch.setenv("KARML_BUSSI_IASVEL0_CONTINUATION", "1")
     warm = np.array([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]], dtype=float)
     kw = {
         "start": False,
@@ -1759,7 +1759,7 @@ def test_resolve_dynamics_init_velocities_bussi_continuation_uses_rescale_ladder
         "_heat_thermostat": "bussi",
     }
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities._resolve_bussi_rescale_velocities",
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities._resolve_bussi_rescale_velocities",
         return_value=warm,
     ) as resolve:
         out = _resolve_dynamics_init_velocities(kw, restart_read_path=None)
@@ -1773,11 +1773,11 @@ def test_resolve_dynamics_init_velocities_bussi_continuation_uses_rescale_ladder
 def test_resolve_dynamics_init_velocities_default_bussi_skips_handoff(monkeypatch):
     from unittest.mock import patch
 
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _resolve_dynamics_init_velocities,
     )
 
-    monkeypatch.delenv("MMML_BUSSI_IASVEL0_CONTINUATION", raising=False)
+    monkeypatch.delenv("KARML_BUSSI_IASVEL0_CONTINUATION", raising=False)
     kw = {
         "start": False,
         "iasvel": 0,
@@ -1785,7 +1785,7 @@ def test_resolve_dynamics_init_velocities_default_bussi_skips_handoff(monkeypatc
         "_bussi_ramp": {"firstt": 60.0, "finalt": 300.0, "teminc": 15.0, "ihtfrq": 500},
     }
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities._resolve_bussi_rescale_velocities",
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities._resolve_bussi_rescale_velocities",
     ) as resolve:
         out = _resolve_dynamics_init_velocities(kw, restart_read_path=None)
     resolve.assert_not_called()
@@ -1795,11 +1795,11 @@ def test_resolve_dynamics_init_velocities_default_bussi_skips_handoff(monkeypatc
 def test_ensure_bussi_heat_continuation_iasvel_for_overlap_chunk(monkeypatch):
     from unittest.mock import patch
 
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _apply_overlap_chunk_dynamics_kw,
     )
 
-    monkeypatch.delenv("MMML_BUSSI_INIT_VELOCITIES_HANDOFF", raising=False)
+    monkeypatch.delenv("KARML_BUSSI_INIT_VELOCITIES_HANDOFF", raising=False)
     kw = {
         "firstt": 10.0,
         "finalt": 50.0,
@@ -1811,7 +1811,7 @@ def test_ensure_bussi_heat_continuation_iasvel_for_overlap_chunk(monkeypatch):
     }
     prepare_bussi_heat_dynamics_kw(kw, nstep=50, ihtfrq=50, timestep_ps=0.0001)
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_c_api_available",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_c_api_available",
         return_value=True,
     ):
         _apply_overlap_chunk_dynamics_kw(kw, chunk_index=1, has_restart_read=False)
@@ -1822,21 +1822,21 @@ def test_ensure_bussi_heat_continuation_iasvel_for_overlap_chunk(monkeypatch):
 
 
 def test_overlap_chunk_uses_memory_handoff_for_bussi(monkeypatch):
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _overlap_chunk_uses_memory_handoff,
         prepare_bussi_heat_dynamics_kw,
     )
 
     kw = {"firstt": 10.0, "finalt": 50.0, "timestep": 0.0001, "nstep": 50}
     prepare_bussi_heat_dynamics_kw(kw, nstep=50, ihtfrq=50, timestep_ps=0.0001)
-    monkeypatch.delenv("MMML_BUSSI_READYN_OVERLAP", raising=False)
+    monkeypatch.delenv("KARML_BUSSI_READYN_OVERLAP", raising=False)
     assert _overlap_chunk_uses_memory_handoff(
         mock.Mock(),
         chunk_index=1,
         n_chunks=4,
         bussi_heat=True,
     )
-    monkeypatch.setenv("MMML_BUSSI_READYN_OVERLAP", "1")
+    monkeypatch.setenv("KARML_BUSSI_READYN_OVERLAP", "1")
     assert not _overlap_chunk_uses_memory_handoff(
         mock.Mock(),
         chunk_index=1,
@@ -1846,13 +1846,13 @@ def test_overlap_chunk_uses_memory_handoff_for_bussi(monkeypatch):
 
 
 def test_prepare_post_rescue_overlap_handoff_bussi_uses_in_memory_kw(monkeypatch):
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _prepare_post_rescue_overlap_handoff,
         prepare_bussi_heat_dynamics_kw,
     )
 
-    monkeypatch.delenv("MMML_BUSSI_INIT_VELOCITIES_HANDOFF", raising=False)
-    monkeypatch.delenv("MMML_BUSSI_IASVEL1_REDRAW", raising=False)
+    monkeypatch.delenv("KARML_BUSSI_INIT_VELOCITIES_HANDOFF", raising=False)
+    monkeypatch.delenv("KARML_BUSSI_IASVEL1_REDRAW", raising=False)
     chunk_kw = {
         "firstt": 10.0,
         "finalt": 50.0,
@@ -1870,15 +1870,15 @@ def test_prepare_post_rescue_overlap_handoff_bussi_uses_in_memory_kw(monkeypatch
         _overlap_post_rescue_cold_start=False,
     )
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.ensure_charmm_crystal_for_cpt",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.ensure_charmm_crystal_for_cpt",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.probe_charmm_cubic_box_side_A",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.probe_charmm_cubic_box_side_A",
         return_value=(None, None),
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_c_api_available",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_c_api_available",
         return_value=True,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._restore_bussi_velocities_after_overlap_recovery",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._restore_bussi_velocities_after_overlap_recovery",
     ) as restore_vel:
         _prepare_post_rescue_overlap_handoff(chunk_kw, mlpot_ctx=ctx)
 
@@ -1896,7 +1896,7 @@ def test_prepare_post_rescue_overlap_handoff_bussi_uses_in_memory_kw(monkeypatch
 
 def test_prepare_post_rescue_overlap_handoff_extent_cold_start_redraws_velocities():
     """Extent fly-off arms cold-start: ASE MB + iasvel=1, not Bussi COMP continuation."""
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _ensure_bussi_heat_continuation_iasvel,
         _prepare_post_rescue_overlap_handoff,
         _requires_init_velocities_handoff,
@@ -1920,15 +1920,15 @@ def test_prepare_post_rescue_overlap_handoff_extent_cold_start_redraws_velocitie
         _overlap_post_rescue_cold_start=True,
     )
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.ensure_charmm_crystal_for_cpt",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.ensure_charmm_crystal_for_cpt",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.probe_charmm_cubic_box_side_A",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.probe_charmm_cubic_box_side_A",
         return_value=(None, None),
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities."
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities."
         "assign_maxwell_boltzmann_velocities_via_ase",
     ) as assign_mb, mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics."
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics."
         "_restore_bussi_velocities_after_overlap_recovery",
     ) as restore_vel:
         _prepare_post_rescue_overlap_handoff(chunk_kw, mlpot_ctx=ctx)
@@ -1955,13 +1955,13 @@ def test_prepare_post_rescue_overlap_handoff_extent_cold_start_redraws_velocitie
 
 
 def test_ensure_bussi_continuation_preserves_iasvel_one_without_force_flag(monkeypatch):
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _ensure_bussi_heat_continuation_iasvel,
         prepare_bussi_heat_dynamics_kw,
     )
 
-    monkeypatch.delenv("MMML_BUSSI_INIT_VELOCITIES_HANDOFF", raising=False)
-    monkeypatch.delenv("MMML_BUSSI_IASVEL1_REDRAW", raising=False)
+    monkeypatch.delenv("KARML_BUSSI_INIT_VELOCITIES_HANDOFF", raising=False)
+    monkeypatch.delenv("KARML_BUSSI_IASVEL1_REDRAW", raising=False)
     chunk_kw = {"firstt": 10.0, "finalt": 300.0, "timestep": 0.0001, "nstep": 50}
     prepare_bussi_heat_dynamics_kw(
         chunk_kw, nstep=50, ihtfrq=50, timestep_ps=0.0001
@@ -1974,7 +1974,7 @@ def test_ensure_bussi_continuation_preserves_iasvel_one_without_force_flag(monke
 
 def test_bussi_skip_scratch_restart_write_on_intermediate_mem_handoff():
     """Bussi drops restart_write mid-HEAT; rescue must still cold-start without it."""
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _bussi_overlap_skip_scratch_restart_write,
         prepare_bussi_heat_dynamics_kw,
     )
@@ -1995,7 +1995,7 @@ def test_bussi_skip_scratch_restart_write_on_intermediate_mem_handoff():
 
 
 def test_restore_bussi_velocities_skips_when_extent_cold_start_armed():
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _restore_bussi_velocities_after_overlap_recovery,
         prepare_bussi_heat_dynamics_kw,
     )
@@ -2006,7 +2006,7 @@ def test_restore_bussi_velocities_skips_when_extent_cold_start_armed():
     )
     ctx = mock.Mock(_overlap_post_rescue_cold_start=True)
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities."
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities."
         "ensure_bussi_velocities_after_overlap_recovery",
     ) as ensure:
         _restore_bussi_velocities_after_overlap_recovery(
@@ -2019,7 +2019,7 @@ def test_restore_bussi_velocities_skips_when_extent_cold_start_armed():
 
 
 def test_apply_post_rescue_overlap_handoff_bussi_returns_in_memory():
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         CharmmTrajectoryFiles,
         _apply_post_rescue_overlap_handoff,
         prepare_bussi_heat_dynamics_kw,
@@ -2046,7 +2046,7 @@ def test_apply_post_rescue_overlap_handoff_bussi_returns_in_memory():
 
 
 def test_harmonize_overlap_chunk_preserves_nsavv_when_suppressing_dcd():
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _harmonize_overlap_chunk_frequencies,
     )
 
@@ -2068,7 +2068,7 @@ def test_harmonize_overlap_chunk_preserves_nsavv_when_suppressing_dcd():
 
 
 def test_estimate_akma_velocities_from_position_delta():
-    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+    from karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
         estimate_akma_velocities_from_position_delta,
         estimate_kinetic_temperature_k,
     )
@@ -2088,7 +2088,7 @@ def test_estimate_akma_velocities_from_position_delta():
 
 
 def test_read_restart_coordinate_frames_two_snapshots(tmp_path):
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         read_restart_coordinate_frames,
     )
 
@@ -2112,7 +2112,7 @@ def test_read_restart_coordinate_frames_two_snapshots(tmp_path):
 
 
 def test_try_bussi_finite_difference_from_memory(monkeypatch):
-    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+    from karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
         _try_bussi_finite_difference_velocities,
     )
 
@@ -2121,15 +2121,15 @@ def test_try_bussi_finite_difference_from_memory(monkeypatch):
     p1 = np.array([[0.025, 0.0, 0.0]], dtype=float)
 
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         lambda: p1,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.charmm_masses_amu",
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.charmm_masses_amu",
         lambda: masses,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities._charmm_cubic_cell_matrix",
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities._charmm_cubic_cell_matrix",
         lambda: None,
     )
 

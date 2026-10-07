@@ -9,7 +9,7 @@ import pytest
 
 
 def test_probe_pre_mlpot_mic_contacts_logs_without_abort(capsys):
-    from mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
+    from karml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
         probe_pre_mlpot_mic_contacts,
     )
 
@@ -46,7 +46,7 @@ def test_probe_pre_mlpot_mic_contacts_logs_without_abort(capsys):
 
 
 def test_probe_pre_mlpot_mic_contacts_aborts_on_violation():
-    from mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
+    from karml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
         probe_pre_mlpot_mic_contacts,
     )
 
@@ -72,7 +72,7 @@ def test_probe_pre_mlpot_mic_contacts_aborts_on_violation():
 
 
 def test_packmol_repack_uses_inner_cube_margin(tmp_path, monkeypatch):
-    from mmml.interfaces.pycharmmInterface import packmol_repack
+    from karml.interfaces.pycharmmInterface import packmol_repack
 
     pos = np.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [5.0, 0.0, 0.0], [6.0, 0.0, 0.0]])
     offsets = np.array([0, 2, 4], dtype=int)
@@ -115,7 +115,7 @@ def test_packmol_repack_uses_inner_cube_margin(tmp_path, monkeypatch):
 
 
 def test_apply_density_prep_resilient_defaults_disables_pre_mlpot_lattice_abnr():
-    from mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
+    from karml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
         apply_density_prep_resilient_defaults,
     )
 

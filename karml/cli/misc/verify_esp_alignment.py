@@ -6,8 +6,8 @@ Recomputes ESP at grid points using PySCF and compares to stored values.
 If aligned: high correlation. If misaligned (bug in pyscf-evaluate): low correlation.
 
 Usage:
-    mmml verify-esp-alignment -i 07_evaluated.npz
-    mmml verify-esp-alignment -i 07_evaluated.npz --sample 0 --n-points 200
+    karml verify-esp-alignment -i 07_evaluated.npz
+    karml verify-esp-alignment -i 07_evaluated.npz --sample 0 --n-points 200
 """
 
 import argparse
@@ -31,7 +31,7 @@ def compute_esp_at_grid_pyscf(R_angstrom: np.ndarray, Z: np.ndarray, grid_angstr
     mol = pyscf.gto.M(atom=atom, basis=basis, unit="Angstrom", verbose=0)
     mf = rks.RKS(mol, xc=xc).run()
 
-    from mmml.data.units import ANGSTROM_TO_BOHR
+    from karml.data.units import ANGSTROM_TO_BOHR
     grid_bohr = grid_angstrom * ANGSTROM_TO_BOHR
     dm = mf.make_rdm1()
     coords = mol.atom_coords(unit="Bohr")
@@ -132,7 +132,7 @@ def main() -> int:
     rmse = np.sqrt(np.mean((esp_stored - esp_recomputed) ** 2))
 
     # Isolate V_nuc (no SCF): V_nuc = sum Z_a / |r - R_a|. If aligned, stored_esp = V_nuc - V_elec.
-    from mmml.data.units import ANGSTROM_TO_BOHR
+    from karml.data.units import ANGSTROM_TO_BOHR
     coords_bohr = grid_subset_angstrom * ANGSTROM_TO_BOHR
     R_bohr = R_i * ANGSTROM_TO_BOHR
     atoms_valid = np.any(R_i != 0, axis=1)

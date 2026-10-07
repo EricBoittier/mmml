@@ -3,9 +3,9 @@
 CLI for GPU-accelerated DFT calculations via PySCF/gpu4pyscf.
 
 Usage:
-    mmml pyscf-dft --mol "O 0 0 0; H 0.96 0 0; H -0.24 0.93 0" --energy
-    mmml pyscf-dft --mol water.xyz --energy --gradient --output results.hdf5
-    mmml pyscf-dft --mol water.xyz --energy --hessian --harmonic --thermo
+    karml pyscf-dft --mol "O 0 0 0; H 0.96 0 0; H -0.24 0.93 0" --energy
+    karml pyscf-dft --mol water.xyz --energy --gradient --output results.hdf5
+    karml pyscf-dft --mol water.xyz --energy --hessian --harmonic --thermo
 
 Requires: gpu4pyscf, pyscf (GPU/quantum environment)
 """
@@ -17,13 +17,13 @@ from pathlib import Path
 
 
 def build_parser() -> argparse.ArgumentParser:
-    from mmml.interfaces.pyscf4gpuInterface.cli_parser import build_parser as _build_parser
+    from karml.interfaces.pyscf4gpuInterface.cli_parser import build_parser as _build_parser
 
     return _build_parser()
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    from mmml.interfaces.pyscf4gpuInterface.calcs import parse_args as _parse_args
+    from karml.interfaces.pyscf4gpuInterface.calcs import parse_args as _parse_args
 
     return _parse_args(argv)
 
@@ -46,7 +46,7 @@ def main() -> int:
     """Run pyscf-dft CLI."""
     t0 = time.perf_counter()
     try:
-        from mmml.interfaces.pyscf4gpuInterface.calcs import (
+        from karml.interfaces.pyscf4gpuInterface.calcs import (
             process_calcs,
             compute_dft,
             save_pyscf_results,

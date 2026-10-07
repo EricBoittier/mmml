@@ -6,7 +6,7 @@ import math
 
 import pytest
 
-from mmml.interfaces.pycharmmInterface.lr_solver_grms_compare import (
+from karml.interfaces.pycharmmInterface.lr_solver_grms_compare import (
     LrSolverGrmsRow,
     _best_grms_from_steps,
     validate_lr_solver_hybrid_grms,

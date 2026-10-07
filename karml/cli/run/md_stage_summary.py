@@ -1,4 +1,4 @@
-"""Per-stage and campaign observability for ``mmml md-system``."""
+"""Per-stage and campaign observability for ``karml md-system``."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from typing import Any
 
 from rich.console import Console
 
-from mmml.utils.rich_report import get_reporter
+from karml.utils.rich_report import get_reporter
 
 
 @dataclass
@@ -77,8 +77,8 @@ def pycharmm_trajectory_tag(args: Any) -> str:
 
 
 def pycharmm_stage_dcd_frames(output_dir: Path, stage: str, tag: str) -> int:
-    from mmml.interfaces.pycharmmInterface.mlpot.artifact_paths import stage_dcd
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+    from karml.interfaces.pycharmmInterface.mlpot.artifact_paths import stage_dcd
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         count_overlap_chunk_dcd_frames,
         count_readable_dcd_frames,
         overlap_chunk_dcd_paths,
@@ -122,8 +122,8 @@ def finalize_pycharmm_plan_rows(
     Mini has no ``.res`` restart; success is inferred from ``mini.crd`` /
     ``02_mini.crd``. Heat/equi/prod still use stage restarts when present.
     """
-    from mmml.interfaces.pycharmmInterface.mlpot.artifact_paths import stage_restart
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import _valid_restart_file
+    from karml.interfaces.pycharmmInterface.mlpot.artifact_paths import stage_restart
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import _valid_restart_file
 
     out_dir = Path(output_dir) if output_dir is not None else None
     tag = str(trajectory_tag or "")
@@ -201,10 +201,10 @@ def cubic_box_side_from_cell(cell: Any, *, warn_non_cubic: bool = True) -> float
 
                 warnings.warn(
                     f"Non-cubic cell {lengths[0]:.4f} x {lengths[1]:.4f} x "
-                    f"{lengths[2]:.4f} Å collapsed to a {mean:.4f} Å cube: mmml's "
+                    f"{lengths[2]:.4f} Å collapsed to a {mean:.4f} Å cube: karml's "
                     "periodic paths are cubic-only, so the simulated box is not "
                     "the one you supplied. For a static periodic energy on the "
-                    "true cell see mmml.analysis.lattice_energy.",
+                    "true cell see karml.analysis.lattice_energy.",
                     RuntimeWarning,
                     stacklevel=2,
                 )
@@ -221,7 +221,7 @@ def build_pycharmm_plan_rows(
     description: str | None = None,
 ) -> list[MdStageSummary]:
     """Expand PyCHARMM ``md_stages`` / ``md_stage`` into plan rows with step counts."""
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
         dynamics_nstep_from_ps as _nstep,
         opt_attr,
         resolve_dcd_nsavc,
@@ -283,7 +283,7 @@ def build_pycharmm_plan_rows(
 
 
 def build_single_leg_plan_row(job_id: str, args: Any, backend: str, *, description: str | None = None) -> MdStageSummary:
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
         opt_attr,
         resolve_dt_fs,
         resolve_stage_temperature_K,

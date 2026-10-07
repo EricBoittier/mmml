@@ -11,7 +11,7 @@ from typing import Any
 import numpy as np
 import orbax.checkpoint as ocp
 
-from mmml.data.orbax_shards import write_orbax_shards
+from karml.data.orbax_shards import write_orbax_shards
 
 
 DEFAULT_DATASET = "qcml/dft_multipole_moments"

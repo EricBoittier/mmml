@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Gallery renders for the multipole / electrostatic-field / MBD-dispersion
-plotters in :mod:`mmml.utils.plotting.multipoles`.
+plotters in :mod:`karml.utils.plotting.multipoles`.
 
 Same house style as ``render_ramachandran_gallery.py`` (``icml`` +
 ``default_cmap``): a physical quantity is wrapped onto a parametric surface
@@ -24,14 +24,14 @@ from pathlib import Path
 
 import numpy as np
 
-from mmml.utils.plotting.multipoles import (
+from karml.utils.plotting.multipoles import (
     plot_dispersion_field_slice,
     plot_field_progression,
     plot_field_slice,
     plot_mbd_surfaces,
     plot_multipole_surfaces,
 )
-from mmml.utils.plotting.styles import apply_plot_style
+from karml.utils.plotting.styles import apply_plot_style
 
 STYLE_NAME = "icml"
 ROOT = Path(__file__).resolve().parents[1]
@@ -122,7 +122,7 @@ def _multipole_prediction():
         jax.config.update("jax_enable_x64", True)
         from ase import Atoms
 
-        from mmml.models.multipoles.electrostatics import (
+        from karml.models.multipoles.electrostatics import (
             LearnedMolecularMultipoleElectrostatics,
         )
     except Exception:
@@ -182,7 +182,7 @@ def _mbd_prediction():
         jax.config.update("jax_enable_x64", True)
         from ase import Atoms
 
-        from mmml.models.mbd.calculator import load_mbd_model, predict_mbd_from_atoms
+        from karml.models.mbd.calculator import load_mbd_model, predict_mbd_from_atoms
     except Exception:
         return None
     positions = np.array([

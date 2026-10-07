@@ -6,11 +6,11 @@ import ctypes
 
 import numpy as np
 
-from mmml.interfaces.pycharmmInterface.mlpot.callback_buffers import (
+from karml.interfaces.pycharmmInterface.mlpot.callback_buffers import (
     stack_charmm_xyz,
     subtract_forces_from_charmm_grad,
 )
-from mmml.utils.geometry_checks import wrap_monomers_primary_cell
+from karml.utils.geometry_checks import wrap_monomers_primary_cell
 
 
 def test_stack_charmm_xyz_matches_list_transpose() -> None:

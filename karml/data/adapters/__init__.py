@@ -1,5 +1,5 @@
 """
-Model-specific data adapters for MMML.
+Model-specific data adapters for KARML.
 
 Adapters convert the standardized NPZ format into model-specific
 batch formats for DCMNet, PhysNetJAX, and other models.

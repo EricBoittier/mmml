@@ -21,12 +21,12 @@ def _repo_root() -> Path:
     return Path(__file__).resolve().parents[3]
 
 
-def _resolve_mmml_cmd(md_argv: list[str]) -> list[str]:
+def _resolve_karml_cmd(md_argv: list[str]) -> list[str]:
     root = _repo_root()
-    venv_mmml = root / ".venv" / "bin" / "mmml"
-    if venv_mmml.is_file():
-        return [str(venv_mmml), "md-system", *md_argv]
-    return [sys.executable, "-m", "mmml.cli.__main__", "md-system", *md_argv]
+    venv_karml = root / ".venv" / "bin" / "karml"
+    if venv_karml.is_file():
+        return [str(venv_karml), "md-system", *md_argv]
+    return [sys.executable, "-m", "karml.cli.__main__", "md-system", *md_argv]
 
 
 def _insert_before_extra_args(argv: list[str], tokens: list[str]) -> list[str]:
@@ -71,10 +71,10 @@ def main() -> int:
 
     os.chdir(_repo_root())
     if backend == "pycharmm":
-        mpirun = (_repo_root() / "scripts" / "mmml-charmm-mpirun.sh").resolve()
+        mpirun = (_repo_root() / "scripts" / "karml-charmm-mpirun.sh").resolve()
         cmd = [str(mpirun), "md-system", *md_argv]
     else:
-        cmd = _resolve_mmml_cmd(md_argv)
+        cmd = _resolve_karml_cmd(md_argv)
 
     print(f"Running: {' '.join(cmd)}", flush=True)
     return int(subprocess.call(cmd))

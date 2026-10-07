@@ -43,7 +43,7 @@ vdW-scale head are inert and its electrostatics runs unmasked (`mol_id=None` →
 produce, and the resulting distillation targets would carry a systematic,
 geometry-dependent error.
 
-`mmml/models/spookynet_calc.py` already warns about this class of mismatch at
+`karml/models/spookynet_calc.py` already warns about this class of mismatch at
 evaluation time. **Open question:** `step-00294400`'s reported 3.50 eV/Å max
 force may itself have been measured with that warning active, i.e. LJ-less.
 Worth confirming before treating that number as characterizing the full model.

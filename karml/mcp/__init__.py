@@ -1,4 +1,4 @@
-"""MMML Model Context Protocol server — natural-language orchestration over the mmml CLI."""
+"""KARML Model Context Protocol server — natural-language orchestration over the karml CLI."""
 
 from __future__ import annotations
 

@@ -5,7 +5,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from mmml.utils.structure_align import (
+from karml.utils.structure_align import (
     align_positions,
     bond_lengths_per_element,
     load_npz_structure,

@@ -24,7 +24,7 @@ def main() -> int:
         "--checkpoint",
         type=Path,
         default=None,
-        help="PhysNet JSON checkpoint (default: MMML_CKPT or examples/ckpts_json/DESdimers_params.json)",
+        help="PhysNet JSON checkpoint (default: KARML_CKPT or examples/ckpts_json/DESdimers_params.json)",
     )
     parser.add_argument("--n-monomers", type=int, default=2)
     parser.add_argument("--spacing", type=float, default=5.0)
@@ -36,9 +36,9 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import resolve_checkpoint
-    from mmml.interfaces.pycharmmInterface.mmml_calculator import ev2kcalmol, setup_calculator
-    from mmml.interfaces.pycharmmInterface.calculator_utils import unpack_factory_result
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import resolve_checkpoint
+    from karml.interfaces.pycharmmInterface.karml_calculator import ev2kcalmol, setup_calculator
+    from karml.interfaces.pycharmmInterface.calculator_utils import unpack_factory_result
 
     ckpt = resolve_checkpoint(args.checkpoint)
     z, r = aco_dimer_cluster(n_monomers=int(args.n_monomers), spacing=float(args.spacing))

@@ -1,7 +1,7 @@
 """ctypes wrapper around the ScaFaCoS ``libfcs`` C API.
 
 ScaFaCoS solves periodic Coulomb (electrostatic / gravitational) problems with
-PME, P³M, P²NFFT, MSM, and related methods behind a single frontend.  MMML uses
+PME, P³M, P²NFFT, MSM, and related methods behind a single frontend.  KARML uses
 it as an **optional long-range backend** for hybrid ML/MM electrostatics when
 the shared library is installed (see README in this directory).
 

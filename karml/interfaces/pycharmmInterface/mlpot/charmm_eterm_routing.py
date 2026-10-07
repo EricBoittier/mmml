@@ -1,6 +1,6 @@
 """Route MLpot MM nonbond components into CHARMM VDW/ELEC/IMNB/IMEL eterm slots.
 
-``MMML_MLPOT_ETERM_SPLIT_SOURCE`` selects the split (reporting only; forces and the
+``KARML_MLPOT_ETERM_SPLIT_SOURCE`` selects the split (reporting only; forces and the
 total energy are unaffected):
 
 * ``charmm`` (default): CHARMM's live q/ε with the CHARMM LJ form. In all-ML runs
@@ -18,7 +18,7 @@ from typing import Any
 
 
 def mlpot_route_mm_to_charmm_eterms_enabled() -> bool:
-    raw = (os.environ.get("MMML_MLPOT_ROUTE_MM_ETERMS") or "1").strip().lower()
+    raw = (os.environ.get("KARML_MLPOT_ROUTE_MM_ETERMS") or "1").strip().lower()
     return raw not in ("0", "false", "no", "off")
 
 
@@ -61,7 +61,7 @@ _NB_BUCKET_TERMS: dict[str, str] = {
 
 
 def _skipped_nb_buckets() -> list[str]:
-    from mmml.interfaces.pycharmmInterface.mlpot.charmm_energy_policy import (
+    from karml.interfaces.pycharmmInterface.mlpot.charmm_energy_policy import (
         charmm_skipped_terms,
     )
 
@@ -144,9 +144,9 @@ def _hybrid_mm_eterm_split(
 
     CHARMM's live charges/ε are zeroed for ML atoms in all-ML runs, so a split
     built from them always reports VDW = ELEC = 0 and leaves the MM in USER.
-    Opt-in (``MMML_MLPOT_ETERM_SPLIT_SOURCE=hybrid``): one MM forward per callback.
+    Opt-in (``KARML_MLPOT_ETERM_SPLIT_SOURCE=hybrid``): one MM forward per callback.
     """
-    if (os.environ.get("MMML_MLPOT_ETERM_SPLIT_SOURCE") or "charmm").strip().lower() != "hybrid":
+    if (os.environ.get("KARML_MLPOT_ETERM_SPLIT_SOURCE") or "charmm").strip().lower() != "hybrid":
         return None
     update_fn = getattr(calculator, "_cached_update_fn", None)
     get_update_fn = getattr(calculator, "_get_update_fn", None)
@@ -189,7 +189,7 @@ def decompose_and_route_mlpot_mm_from_callback(
     try:
         import numpy as np
 
-        from mmml.interfaces.pycharmmInterface.mm_energy_forces import (
+        from karml.interfaces.pycharmmInterface.mm_energy_forces import (
             decompose_mlpot_mm_nb_eterms_kcalmol,
         )
     except ImportError:
@@ -214,7 +214,7 @@ def decompose_and_route_mlpot_mm_from_callback(
         calculator._last_mm_nb_components_kcalmol = split
         return route_mlpot_callback_energy_kcalmol(float(energy_kcal), split)
 
-    from mmml.interfaces.pycharmmInterface.mm_system_energy import (
+    from karml.interfaces.pycharmmInterface.mm_system_energy import (
         _live_charmm_nonbonded_arrays,
     )
 
@@ -229,7 +229,7 @@ def decompose_and_route_mlpot_mm_from_callback(
             import pycharmm.atom_info as atom_info
         except (ImportError, OSError):
             return float(energy_kcal)
-        from mmml.interfaces.pycharmmInterface.mm_energy_forces import (
+        from karml.interfaces.pycharmmInterface.mm_energy_forces import (
             CGENFF_PRM,
             _get_actual_psf_charges,
         )

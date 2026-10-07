@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Vacuum NEB smoke for NH3–CH3Cl (ASE + the examples/m PhysNet ckpt, MMML_CKPT).
+# Vacuum NEB smoke for NH3–CH3Cl (ASE + the examples/m PhysNet ckpt, KARML_CKPT).
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=/dev/null
@@ -17,7 +17,7 @@ if [[ ! -f examples/m/neb/reag_0_opt.xyz || ! -f examples/m/neb/prod_0_opt.xyz ]
 fi
 
 echo "=== NEB: ${N_IMAGES} images, max_steps=${MAX_STEPS} ==="
-uv run mmml neb \
+uv run karml neb \
   --config "${ROOT}/examples/m/yaml/neb.yaml" \
   --output-dir "${OUT}" \
   --n-images "${N_IMAGES}" \

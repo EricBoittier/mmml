@@ -3,13 +3,13 @@
 
 The reusable core -- CGenFF PRM/RTF parsing, monomer segmentation, template
 matching, graph-isomorphism reordering and the inter-monomer MM baseline -- now
-lives in :mod:`mmml.data.cgenff_dataset`.  This script is the Orbax-cache driver
+lives in :mod:`karml.data.cgenff_dataset`.  This script is the Orbax-cache driver
 that stays here for the DES-S66 bulk workflow.
 
 For dense **NPZ** training splits (e.g. the tutorial's ``mp2_nms15_clean_*.npz``)
 use the first-class CLI instead::
 
-    mmml prepare-mm-dataset -i train.npz -o train_mm.npz
+    karml prepare-mm-dataset -i train.npz -o train_mm.npz
 
 Both paths share the same assignment logic, so they produce identical
 ``cgenff_type_idx`` / ``cgenff_charge`` / ``mol_id`` semantics and master LJ tables.
@@ -31,7 +31,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-from mmml.data.cgenff_dataset import (  # noqa: E402
+from karml.data.cgenff_dataset import (  # noqa: E402
     DEF_PRM_PATH,
     DEF_RTF_PATH,
     K_COULOMB_KCAL_ANG,
@@ -48,7 +48,7 @@ from mmml.data.cgenff_dataset import (  # noqa: E402
 _REF = load_reference()
 
 # ── Backward-compatibility shims ───────────────────────────────────────────────
-# The core moved to mmml.data.cgenff_dataset; these names keep older imports
+# The core moved to karml.data.cgenff_dataset; these names keep older imports
 # (tests, notebooks) working against this script's historical public surface.
 _NB_MAP = _REF.nb_map
 _CGENFF_SIGMAS = _REF.sigmas

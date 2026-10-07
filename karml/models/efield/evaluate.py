@@ -7,9 +7,9 @@ Creates scatter plots and computes metrics (MAE, RMSE, R²) for energy predictio
 Note: Expects input data in eV/angstrom units. All errors are reported in kcal/mol.
 
 Usage:
-    mmml ef-evaluate --params params.json --data test.npz --output-dir results/ --output-h5 eval_gui.h5
-    mmml ef-evaluate --params params.json --test-npz splits/test.npz --save-output-npz --rot-augment --rot-perturbation 1.0
-    python -m mmml.models.efield.evaluate --params params.json --data test.npz --output-dir results/
+    karml ef-evaluate --params params.json --data test.npz --output-dir results/ --output-h5 eval_gui.h5
+    karml ef-evaluate --params params.json --test-npz splits/test.npz --save-output-npz --rot-augment --rot-perturbation 1.0
+    python -m karml.models.efield.evaluate --params params.json --data test.npz --output-dir results/
 """
 
 import warnings
@@ -29,11 +29,11 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import functools
 
-from mmml.utils.cli_args import exit_if_unknown_long_options
-from mmml.models.efield.args import EVALUATE_DEFAULTS as _EVALUATE_DEFAULTS
-from mmml.models.efield.args import build_evaluate_parser as build_parser
-from mmml.models.efield.eval_paths import resolve_evaluation_output_dir
-from mmml.models.efield.training import (
+from karml.utils.cli_args import exit_if_unknown_long_options
+from karml.models.efield.args import EVALUATE_DEFAULTS as _EVALUATE_DEFAULTS
+from karml.models.efield.args import build_evaluate_parser as build_parser
+from karml.models.efield.eval_paths import resolve_evaluation_output_dir
+from karml.models.efield.training import (
     MessagePassingModel,
     mean_absolute_error_forces,
     prepare_batches,
@@ -80,7 +80,7 @@ def get_args(**kwargs):
     # If command line arguments are provided AND we're not in a notebook, use argparse
     if has_flag_args and not in_notebook:
         args, unknown = build_parser().parse_known_args()
-        exit_if_unknown_long_options(unknown, prog="mmml ef-evaluate")
+        exit_if_unknown_long_options(unknown, prog="karml ef-evaluate")
         data_path = args.test_npz if args.test_npz else args.data
         return SimpleNamespace(
             params=args.params,
@@ -134,7 +134,7 @@ def load_params(params_path):
 
 def save_ef_evaluation_h5(path: Path, d: dict) -> None:
     """
-    Write an HDF5 file readable by mmml gui (same dataset names as NPZ trajectories:
+    Write an HDF5 file readable by karml gui (same dataset names as NPZ trajectories:
     R, Z, N, E, F, Dxyz, Ef; plus E_pred, F_pred, Dxyz_pred when present).
     """
     try:
@@ -174,7 +174,7 @@ def save_ef_evaluation_h5(path: Path, d: dict) -> None:
     comp = {"compression": "gzip", "compression_opts": 4}
 
     with h5py.File(path, "w") as hf:
-        hf.attrs["mmml_format"] = "ef_evaluation_v1"
+        hf.attrs["karml_format"] = "ef_evaluation_v1"
         hf.attrs["description"] = (
             "EF evaluation: targets (E,F,Dxyz,Ef) and model predictions (*_pred). Units match input NPZ."
         )

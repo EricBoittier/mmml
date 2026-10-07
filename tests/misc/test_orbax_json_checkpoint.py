@@ -16,7 +16,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from mmml.utils.model_checkpoint import (
+from karml.utils.model_checkpoint import (
     _choose_cpu_safe_restore_args,
     json_to_params,
     load_model_checkpoint,
@@ -28,7 +28,7 @@ from mmml.utils.model_checkpoint import (
 # Path to DESdimers checkpoint (may not exist or be loadable on CPU)
 # Uses epoch-1985 to match other tests; final2 is not present in repo
 _PROJECT_ROOT = Path(__file__).resolve().parents[2]
-DESDIMERS_CKPT = _PROJECT_ROOT / "mmml" / "models" / "physnetjax" / "ckpts" / "DESdimers" / "epoch-1985"
+DESDIMERS_CKPT = _PROJECT_ROOT / "karml" / "models" / "physnetjax" / "ckpts" / "DESdimers" / "epoch-1985"
 
 
 def _create_synthetic_params():
@@ -251,7 +251,7 @@ def test_normalize_flax_params_training_list_wrapper():
 def test_assert_flax_variables_rejects_bare_module_tree():
     bare = _create_synthetic_params()
     with pytest.raises(ValueError, match="missing top-level 'params'"):
-        from mmml.utils.model_checkpoint import assert_flax_variables_for_apply
+        from karml.utils.model_checkpoint import assert_flax_variables_for_apply
 
         assert_flax_variables_for_apply(bare, context="test.ckpt")
 

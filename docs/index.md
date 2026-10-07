@@ -1,18 +1,18 @@
-<div class="mmml-hero" markdown>
-![MMML](images/mmml.svg)
+<div class="karml-hero" markdown>
+![KARML](images/karml.svg)
 </div>
 
-# MMML
+# KARML
 
 Molecular mechanics workflows and machine-learned force fields, on JAX.
-Everything runs through one command: `mmml`.
+Everything runs through one command: `karml`.
 
-<!-- MMML_TOP_HELP_START -->
+<!-- KARML_TOP_HELP_START -->
 ```console
-$ mmml -h
-usage: mmml [-h] <command> ...
+$ karml -h
+usage: karml [-h] <command> ...
 
-MMML: Machine Learning for Molecular Modeling
+KARML: Machine Learning for Molecular Modeling
 
 Subcommands (71 total). Common:
   md-system      mixed-composition MD (YAML + campaigns)
@@ -21,22 +21,22 @@ Subcommands (71 total). Common:
   env            find resolved/bundled checkpoints and CHARMM paths
   liquid-box     build periodic liquid boxes
 
-Browse:   mmml commands
-Setup:    mmml configure
-Examples: mmml examples
-Flags:    mmml <command> --help
+Browse:   karml commands
+Setup:    karml configure
+Examples: karml examples
+Flags:    karml <command> --help
 
 Tab completion (bash/zsh/fish):
-  pip install 'mmml[cli]'
-  eval "$(register-python-argcomplete mmml)"
+  pip install 'karml[cli]'
+  eval "$(register-python-argcomplete karml)"
 
 options:
   -h, --help  show this help message and exit
 ```
-<!-- MMML_TOP_HELP_END -->
+<!-- KARML_TOP_HELP_END -->
 
 These docs are laid out the same way. The sections along the top are the task
-groups from `mmml commands`, and each one holds its guides next to the reference
+groups from `karml commands`, and each one holds its guides next to the reference
 page for every command in that group.
 
 ## Start here
@@ -45,7 +45,7 @@ page for every command in that group.
 
 -   __Install & first run__
 
-    Set up with `uv`, check the machine with `mmml doctor`, run something small.
+    Set up with `uv`, check the machine with `karml doctor`, run something small.
 
     [→ Getting started](getting-started.md)
 
@@ -58,7 +58,7 @@ page for every command in that group.
 
 -   __Examples__
 
-    Copy-paste invocations, mirroring `mmml examples`.
+    Copy-paste invocations, mirroring `karml examples`.
 
     [→ Examples](examples.md)
 
@@ -98,8 +98,8 @@ Design notes, audits, tool inventories, and results reports live under
 
 ## Elsewhere
 
-- [Repository](https://github.com/EricBoittier/mmml)
-- [Issue tracker](https://github.com/EricBoittier/mmml/issues)
+- [Repository](https://github.com/EricBoittier/karml)
+- [Issue tracker](https://github.com/EricBoittier/karml/issues)
 
 ## CDO: Mr Connor Brandes (Chief Dog Officer)
 

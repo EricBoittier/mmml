@@ -15,7 +15,7 @@ pytestmark = pytest.mark.skipif(
 
 
 def test_tip3_ener_force_finite_grms_and_forces(tip3_charmm_ff):
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
         charmm_grms_after_ener_force,
         charmm_total_forces_kcalmol_A,
     )
@@ -32,7 +32,7 @@ def test_tip3_forces_are_negative_energy_gradient(tip3_charmm_ff):
     import pycharmm.coor as coor
     import pycharmm.lingo as lingo
 
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
         charmm_total_forces_kcalmol_A,
     )
 
@@ -50,11 +50,11 @@ def test_tip3_forces_are_negative_energy_gradient(tip3_charmm_ff):
 
 
 def test_tip3_hoover_cpt_nvt_short_dynamics_completes(tip3_charmm_ff):
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         build_hoover_heat_dynamics,
         run_dynamics,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+    from karml.interfaces.pycharmmInterface.mlpot.pbc_env import (
         ensure_charmm_crystal_for_cpt,
     )
 
@@ -77,7 +77,7 @@ def test_tip3_hoover_cpt_nvt_short_dynamics_completes(tip3_charmm_ff):
     kw["iunrea"] = -1
     run_dynamics(kw)
 
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         charmm_dynamics_energy_is_finite,
     )
 
@@ -85,11 +85,11 @@ def test_tip3_hoover_cpt_nvt_short_dynamics_completes(tip3_charmm_ff):
 
 
 def test_tip3_cpt_npt_barostat_keywords_accepted(tip3_charmm_ff):
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         build_cpt_equilibration_dynamics,
         run_dynamics,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+    from karml.interfaces.pycharmmInterface.mlpot.pbc_env import (
         ensure_charmm_crystal_for_cpt,
     )
 
@@ -110,7 +110,7 @@ def test_tip3_cpt_npt_barostat_keywords_accepted(tip3_charmm_ff):
     kw["iunrea"] = -1
     run_dynamics(kw)
 
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         charmm_dynamics_energy_is_finite,
     )
 

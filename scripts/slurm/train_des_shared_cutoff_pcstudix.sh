@@ -8,11 +8,11 @@
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64G
-#SBATCH --output=/mmhome/boittier/home/mmml/artifacts/lj_scales_des_shared_cutoff/logs/slurm-%j.out
-#SBATCH --error=/mmhome/boittier/home/mmml/artifacts/lj_scales_des_shared_cutoff/logs/slurm-%j.err
+#SBATCH --output=/mmhome/boittier/home/karml/artifacts/lj_scales_des_shared_cutoff/logs/slurm-%j.out
+#SBATCH --error=/mmhome/boittier/home/karml/artifacts/lj_scales_des_shared_cutoff/logs/slurm-%j.err
 
 set -euo pipefail
-REPO="${MMML_REPO:-$HOME/mmml}"
+REPO="${KARML_REPO:-$HOME/karml}"
 DATASET="$REPO/artifacts/lj_scales_des/des_dimers_cgenff_all.npz"
 RC="${SHARED_CUTOFF:-6}"
 RC_TAG="${RC//./p}"
@@ -22,7 +22,7 @@ cd "$REPO"
 source .venv/bin/activate
 export PATH="$HOME/.local/bin:$PATH"
 export JAX_PLATFORMS=cuda
-export MMML_MLPOT_DEVICE=gpu
+export KARML_MLPOT_DEVICE=gpu
 mkdir -p "$RUN_DIR/logs" "$CKPT_DIR"
 test -s "$DATASET"
 
@@ -36,7 +36,7 @@ nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
 # with objective=valid_loss + best=true the saved epoch was then selected on
 # data the model had already trained on. Empty --valid-data makes
 # physnet-train split --data itself (0-overlap verified on des-hybrid-ws).
-uv run mmml physnet-train \
+uv run karml physnet-train \
   --config examples/hybrid_mm_charges/train_shared_cutoff_des_transfer.yaml \
   --data "$DATASET" \
   --valid-data "" \

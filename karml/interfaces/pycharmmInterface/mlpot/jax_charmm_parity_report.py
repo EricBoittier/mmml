@@ -8,7 +8,7 @@ from typing import Any, Sequence
 
 import numpy as np
 
-from mmml.utils.rich_report import emit_dashboard
+from karml.utils.rich_report import emit_dashboard
 
 
 @dataclass(frozen=True)
@@ -27,8 +27,8 @@ class RecoveryMmParityMetrics:
 
 
 def _recovery_nbond_settings(ctx: Any):
-    from mmml.interfaces.pycharmmInterface.mm_system_energy import CharmmNbondSettings
-    from mmml.interfaces.pycharmmInterface.nbonds_config import (
+    from karml.interfaces.pycharmmInterface.mm_system_energy import CharmmNbondSettings
+    from karml.interfaces.pycharmmInterface.nbonds_config import (
         VACUUM_CTONNB,
         VACUUM_CTOFNB,
         VACUUM_CUTNB,
@@ -57,7 +57,7 @@ def _cell_from_ctx(ctx: Any) -> np.ndarray:
 
 
 def _charmm_recovery_reference() -> tuple[dict[str, float], np.ndarray]:
-    from mmml.interfaces.pycharmmInterface.cgenff_bonded_reference import (
+    from karml.interfaces.pycharmmInterface.cgenff_bonded_reference import (
         charmm_bonded_energy_components_kcalmol,
         charmm_bonded_forces_kcalmol_A,
         charmm_nonbonded_energy_components_kcalmol,
@@ -87,13 +87,13 @@ def _jax_recovery_reference(
     topology_psf: Path | str | None,
     ml_atom_indices: Sequence[int],
 ) -> tuple[dict[str, float], np.ndarray]:
-    from mmml.interfaces.pycharmmInterface.cgenff_bonded import bonded_energy_and_forces
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_PRM
-    from mmml.interfaces.pycharmmInterface.mm_system_energy import (
+    from karml.interfaces.pycharmmInterface.cgenff_bonded import bonded_energy_and_forces
+    from karml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_PRM
+    from karml.interfaces.pycharmmInterface.mm_system_energy import (
         load_nonbonded_system_from_charmm,
         nonbonded_energy_and_forces,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.bonded_jax_recovery import (
+    from karml.interfaces.pycharmmInterface.mlpot.bonded_jax_recovery import (
         load_bonded_system_for_recovery,
     )
 
@@ -147,7 +147,7 @@ def collect_recovery_mm_parity_metrics(
     force_rms_atol: float = 0.05,
 ) -> RecoveryMmParityMetrics | None:
     """Compare JAX bonded+VDW vs active CHARMM bonded+VDW BLOCK reference."""
-    from mmml.interfaces.pycharmmInterface.mlpot.bonded_jax_recovery import (
+    from karml.interfaces.pycharmmInterface.mlpot.bonded_jax_recovery import (
         _ml_atom_indices,
     )
 
@@ -249,10 +249,10 @@ def maybe_emit_recovery_mm_parity(
     quiet: bool = False,
 ) -> RecoveryMmParityMetrics | None:
     """Collect and print parity metrics for the current CHARMM coordinates."""
-    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+    from karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
         _mlpot_covers_all_atoms,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
+    from karml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
 
     if _mlpot_covers_all_atoms(ctx):
         return None

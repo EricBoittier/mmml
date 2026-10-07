@@ -4,13 +4,13 @@ Read `CLAUDE.md` for repository operational constraints, even when you are not
 Claude. For any scientific feature, evaluation, scan, simulation, model, or
 data transformation, also follow `docs/scientific-code.md`.
 
-Before adding a tool, search `mmml/`, `scripts/`, `workflows/`, tests, and docs
+Before adding a tool, search `karml/`, `scripts/`, `workflows/`, tests, and docs
 for prior implementations. Reuse or promote existing package code instead of
 creating another standalone implementation.
 
 Mandatory scientific-code rules:
 
-- Supported reusable logic belongs in `mmml/`; scripts and CLIs are thin
+- Supported reusable logic belongs in `karml/`; scripts and CLIs are thin
   callers.
 - Make units, energy references, geometry conventions, defaults, seeds, and
   failure policy explicit and serializable.

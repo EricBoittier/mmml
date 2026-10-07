@@ -5,9 +5,9 @@ passed in tests). Does not run MD or PhysNet training.
 
 Example::
 
-    JAX_PLATFORMS=cpu MMML_METATOMIC_DEVICE=cpu \\
-      mmml pet-physnet-distill \\
-      --checkpoint /tmp/mmml-metatomic-models/pet-mad-xs-v1.5.0.pt \\
+    JAX_PLATFORMS=cpu KARML_METATOMIC_DEVICE=cpu \\
+      karml pet-physnet-distill \\
+      --checkpoint /tmp/karml-metatomic-models/pet-mad-xs-v1.5.0.pt \\
       --out-dir ./acetone_pet_distill --preset smoke
 
 Labels go through one batched TorchScript forward per ``--max-atoms-per-batch``
@@ -24,7 +24,7 @@ import time
 from dataclasses import replace
 from pathlib import Path
 
-from mmml.distill.acetone_pool import (
+from karml.distill.acetone_pool import (
     DIMER_ATOMS,
     POOL_PRESETS,
     PRESET_SMOKE,
@@ -32,8 +32,8 @@ from mmml.distill.acetone_pool import (
     build_acetone_pool,
     pool_config_for_preset,
 )
-from mmml.distill.npz_export import SPLIT_MODES, SPLIT_SAMPLE, SPLIT_SEED, write_distill_npz
-from mmml.distill.teacher_label import (
+from karml.distill.npz_export import SPLIT_MODES, SPLIT_SAMPLE, SPLIT_SEED, write_distill_npz
+from karml.distill.teacher_label import (
     ENERGY_MODE_MLMM,
     ENERGY_MODE_TOTAL,
     ENERGY_MODES,
@@ -45,7 +45,7 @@ _REPO = Path(__file__).resolve().parents[3]
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        prog="mmml pet-physnet-distill",
+        prog="karml pet-physnet-distill",
         description=(
             "Build an acetone geometry pool (dataset + noise/scans), label it "
             "with a metatomic PET teacher, and write PhysNet-train NPZ in eV."
@@ -202,7 +202,7 @@ conversion:
 def _box_pool(args: argparse.Namespace):
     from ase.io import read as ase_read
 
-    from mmml.distill.box_clusters import BoxClusterConfig, box_cluster_pool
+    from karml.distill.box_clusters import BoxClusterConfig, box_cluster_pool
 
     if args.atoms_per_monomer is None:
         raise SystemExit("--from-box-extxyz needs --atoms-per-monomer")
@@ -257,7 +257,7 @@ def run(args: argparse.Namespace) -> dict:
     out_dir.mkdir(parents=True, exist_ok=True)
 
     if args.geometries_only:
-        from mmml.distill.teacher_label import LabeledSample
+        from karml.distill.teacher_label import LabeledSample
 
         zeros = [
             LabeledSample(
@@ -283,7 +283,7 @@ def run(args: argparse.Namespace) -> dict:
     if args.checkpoint is None:
         raise SystemExit("--checkpoint is required unless --geometries-only")
     if args.teacher_backend == "torchscript":
-        from mmml.distill.batched_teacher import BatchedMetatomicTeacher
+        from karml.distill.batched_teacher import BatchedMetatomicTeacher
 
         evaluator = BatchedMetatomicTeacher(
             args.checkpoint,
@@ -291,7 +291,7 @@ def run(args: argparse.Namespace) -> dict:
             max_systems_per_batch=int(args.max_systems_per_batch),
         )
     else:
-        from mmml.interfaces.calculators.metatomic import load_metatomic_calculator
+        from karml.interfaces.calculators.metatomic import load_metatomic_calculator
 
         evaluator = load_metatomic_calculator(args.checkpoint)
     t_label = time.perf_counter()

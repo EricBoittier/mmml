@@ -1,7 +1,7 @@
 # Mechanical embedding (legacy cg_jax style): ML solute complex + MM intermolecular.
 # Solute AMM1+CH3CL in TIP3. Run after: source examples/m/_env.sh
 #
-#   uv run mmml md-system --config examples/m/yaml/mech_embed_tip3.yaml --run-all
+#   uv run karml md-system --config examples/m/yaml/mech_embed_tip3.yaml --run-all
 #
 # JAX-MD ``jaxmd_unified`` uses ml_resnames so PhysNet evaluates AMM1+CH3CL once;
 # MM owns solute–solvent / solvent–solvent. ASE / PyCHARMM use the hybrid

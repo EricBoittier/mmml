@@ -10,12 +10,12 @@
 #SBATCH --error=artifacts/npt_argon_water/checkpoint_pes_compare_20260802/slurm-%A_%a.err
 set -euo pipefail
 
-ROOT="${MMML_REPO:-$HOME/mmml}"
+ROOT="${KARML_REPO:-$HOME/karml}"
 cd "$ROOT"
-source "$ROOT/scripts/resolve_mmml_env.sh"
-mmml_resolve_env "$ROOT"
+source "$ROOT/scripts/resolve_karml_env.sh"
+karml_resolve_env "$ROOT"
 export JAX_ENABLE_X64=1
-export MMML_ML_DTYPE=float64
+export KARML_ML_DTYPE=float64
 export XLA_PYTHON_CLIENT_PREALLOCATE=false
 
 LABELS=(
@@ -54,10 +54,10 @@ trap fail ERR
 for required in "$CHECKPOINT" "$BOX/model.psf" "$BOX/model.crd"; do
   [[ -s "$required" ]] || { echo "missing required input: $required" >&2; exit 66; }
 done
-"$MMML_PYTHON" -m mmml.cli.__main__ md-system --help >/dev/null
+"$KARML_PYTHON" -m karml.cli.__main__ md-system --help >/dev/null
 printf '%s\t%s\tRUNNING\t0\t%s\n' "$LABEL" "$CHECKPOINT" "$(date -Iseconds)" > "$STATUS"
 
-"$MMML_PYTHON" -m mmml.cli.__main__ md-system \
+"$KARML_PYTHON" -m karml.cli.__main__ md-system \
   --backend jaxmd --setup pbc_nve \
   --composition TIP3:732 \
   --from-psf "$BOX/model.psf" --from-crd "$BOX/model.crd" \

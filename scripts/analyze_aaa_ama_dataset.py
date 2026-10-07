@@ -7,7 +7,7 @@ Writes plots for MkDocs and a JSON summary::
     uv run python scripts/analyze_aaa_ama_dataset.py --npz /path/to/dataset_aaa.npz
 
 Figures land in ``docs/images/examples/aaa-ama/``.
-Summary JSON: ``mmml/data/external/aaa_ama_dataset_summary.json``.
+Summary JSON: ``karml/data/external/aaa_ama_dataset_summary.json``.
 """
 
 from __future__ import annotations
@@ -20,8 +20,8 @@ import numpy as np
 
 REPO = Path(__file__).resolve().parents[1]
 IMG = REPO / "docs" / "images" / "examples" / "aaa-ama"
-SUMMARY = REPO / "mmml" / "data" / "external" / "aaa_ama_dataset_summary.json"
-DEFAULT_NPZ = REPO / "mmml" / "data" / "external" / "dataset_aaa.npz"
+SUMMARY = REPO / "karml" / "data" / "external" / "aaa_ama_dataset_summary.json"
+DEFAULT_NPZ = REPO / "karml" / "data" / "external" / "dataset_aaa.npz"
 
 
 def _use_agg() -> None:
@@ -31,8 +31,8 @@ def _use_agg() -> None:
 
 
 def _structure_figure(data: dict[str, np.ndarray], out: Path) -> None:
-    from mmml.data.external.aaa_ama import atoms_from_npz_frame, inspect_dataset_aaa
-    from mmml.utils.ase_structure_plot import (
+    from karml.data.external.aaa_ama import atoms_from_npz_frame, inspect_dataset_aaa
+    from karml.utils.ase_structure_plot import (
         SCALE_PEPTIDE_ML,
         save_structure_figure,
         use_matplotlib_agg,
@@ -54,8 +54,8 @@ def _structure_figure(data: dict[str, np.ndarray], out: Path) -> None:
 def _histogram_figures(data: dict[str, np.ndarray], img_dir: Path) -> None:
     import matplotlib.pyplot as plt
 
-    from mmml.data.external.aaa_ama import inspect_dataset_aaa, per_element_force_magnitudes
-    from mmml.utils.plotting.styles import apply_plot_style
+    from karml.data.external.aaa_ama import inspect_dataset_aaa, per_element_force_magnitudes
+    from karml.utils.plotting.styles import apply_plot_style
 
     apply_plot_style("icml")
     report = inspect_dataset_aaa(data)
@@ -134,12 +134,12 @@ def main(argv: list[str] | None = None) -> int:
         npz_path = REPO / npz_path
 
     if args.download or not npz_path.is_file():
-        from mmml.data.external.aaa_ama import download_dataset_aaa
+        from karml.data.external.aaa_ama import download_dataset_aaa
 
         print(f"Downloading {npz_path} …")
         download_dataset_aaa(npz_path)
 
-    from mmml.data.external.aaa_ama import (
+    from karml.data.external.aaa_ama import (
         inspect_dataset_aaa,
         load_dataset_aaa,
         write_report_json,

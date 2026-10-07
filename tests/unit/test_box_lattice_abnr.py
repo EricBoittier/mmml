@@ -26,7 +26,7 @@ def _fake_pycharmm_minimize_module(run_abnr: MagicMock):
 
 
 def test_should_run_mini_lattice_abnr_skips_fixed_box():
-    from mmml.interfaces.pycharmmInterface.mlpot.box_lattice_abnr import (
+    from karml.interfaces.pycharmmInterface.mlpot.box_lattice_abnr import (
         should_run_mini_lattice_abnr,
     )
 
@@ -43,7 +43,7 @@ def test_should_run_mini_lattice_abnr_skips_fixed_box():
 
 
 def test_should_run_mini_lattice_abnr_true_for_pbc_mini():
-    from mmml.interfaces.pycharmmInterface.mlpot.box_lattice_abnr import (
+    from karml.interfaces.pycharmmInterface.mlpot.box_lattice_abnr import (
         should_run_mini_lattice_abnr,
     )
 
@@ -64,7 +64,7 @@ def test_should_run_mini_lattice_abnr_true_for_pbc_mini():
 
 
 def test_should_run_mini_lattice_abnr_skips_density_target():
-    from mmml.interfaces.pycharmmInterface.mlpot.box_lattice_abnr import (
+    from karml.interfaces.pycharmmInterface.mlpot.box_lattice_abnr import (
         should_run_mini_lattice_abnr,
     )
 
@@ -85,7 +85,7 @@ def test_should_run_mini_lattice_abnr_skips_density_target():
 
 
 def test_should_run_mini_lattice_abnr_density_resize_opt_in():
-    from mmml.interfaces.pycharmmInterface.mlpot.box_lattice_abnr import (
+    from karml.interfaces.pycharmmInterface.mlpot.box_lattice_abnr import (
         should_run_mini_lattice_abnr,
     )
 
@@ -106,7 +106,7 @@ def test_should_run_mini_lattice_abnr_density_resize_opt_in():
 
 
 def test_run_charmm_lattice_abnr_uses_minimize_c_api():
-    from mmml.interfaces.pycharmmInterface.mlpot.box_lattice_abnr import (
+    from karml.interfaces.pycharmmInterface.mlpot.box_lattice_abnr import (
         run_charmm_lattice_abnr,
     )
 
@@ -114,21 +114,21 @@ def test_run_charmm_lattice_abnr_uses_minimize_c_api():
     with (
         _fake_pycharmm_minimize_module(run_abnr),
         patch(
-            "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.probe_charmm_cubic_box_side_A",
+            "karml.interfaces.pycharmmInterface.mlpot.pbc_env.probe_charmm_cubic_box_side_A",
             return_value=(None, None),
         ),
         patch(
-            "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.reinstall_charmm_crystal_for_lattice_abnr",
+            "karml.interfaces.pycharmmInterface.mlpot.pbc_env.reinstall_charmm_crystal_for_lattice_abnr",
         ),
         patch(
-            "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.resolve_charmm_cubic_box_side_A",
+            "karml.interfaces.pycharmmInterface.mlpot.pbc_env.resolve_charmm_cubic_box_side_A",
             return_value=(42.5, "pbound"),
         ),
         patch(
-            "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.apply_pbc_nbonds",
+            "karml.interfaces.pycharmmInterface.mlpot.pbc_env.apply_pbc_nbonds",
         ) as apply_nb,
         patch(
-            "mmml.interfaces.pycharmmInterface.charmm_levels.charmm_quiet_output",
+            "karml.interfaces.pycharmmInterface.charmm_levels.charmm_quiet_output",
         ),
     ):
         side = run_charmm_lattice_abnr(
@@ -150,7 +150,7 @@ def test_run_charmm_lattice_abnr_uses_minimize_c_api():
 
 
 def test_run_charmm_lattice_abnr_reinstalls_before_box_only_when_crystal_looks_ready():
-    from mmml.interfaces.pycharmmInterface.mlpot.box_lattice_abnr import (
+    from karml.interfaces.pycharmmInterface.mlpot.box_lattice_abnr import (
         run_charmm_lattice_abnr,
     )
 
@@ -158,21 +158,21 @@ def test_run_charmm_lattice_abnr_reinstalls_before_box_only_when_crystal_looks_r
     with (
         _fake_pycharmm_minimize_module(run_abnr),
         patch(
-            "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.charmm_crystal_abnr_ready",
+            "karml.interfaces.pycharmmInterface.mlpot.pbc_env.charmm_crystal_abnr_ready",
             return_value=True,
         ),
         patch(
-            "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.reinstall_charmm_crystal_for_lattice_abnr",
+            "karml.interfaces.pycharmmInterface.mlpot.pbc_env.reinstall_charmm_crystal_for_lattice_abnr",
         ) as restore_lattice,
         patch(
-            "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.resolve_charmm_cubic_box_side_A",
+            "karml.interfaces.pycharmmInterface.mlpot.pbc_env.resolve_charmm_cubic_box_side_A",
             return_value=(27.307, "xucell"),
         ),
         patch(
-            "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.apply_pbc_nbonds",
+            "karml.interfaces.pycharmmInterface.mlpot.pbc_env.apply_pbc_nbonds",
         ),
         patch(
-            "mmml.interfaces.pycharmmInterface.charmm_levels.charmm_quiet_output",
+            "karml.interfaces.pycharmmInterface.charmm_levels.charmm_quiet_output",
         ),
     ):
         side = run_charmm_lattice_abnr(
@@ -193,7 +193,7 @@ def test_run_charmm_lattice_abnr_reinstalls_before_box_only_when_crystal_looks_r
 
 
 def test_run_charmm_lattice_abnr_skips_zero_steps():
-    from mmml.interfaces.pycharmmInterface.mlpot.box_lattice_abnr import (
+    from karml.interfaces.pycharmmInterface.mlpot.box_lattice_abnr import (
         run_charmm_lattice_abnr,
     )
 
@@ -201,7 +201,7 @@ def test_run_charmm_lattice_abnr_skips_zero_steps():
 
 
 def test_run_charmm_lattice_abnr_uses_fallback_when_pbound_inactive():
-    from mmml.interfaces.pycharmmInterface.mlpot.box_lattice_abnr import (
+    from karml.interfaces.pycharmmInterface.mlpot.box_lattice_abnr import (
         run_charmm_lattice_abnr,
     )
 
@@ -209,17 +209,17 @@ def test_run_charmm_lattice_abnr_uses_fallback_when_pbound_inactive():
     with (
         _fake_pycharmm_minimize_module(run_abnr),
         patch(
-            "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.reinstall_charmm_crystal_for_lattice_abnr",
+            "karml.interfaces.pycharmmInterface.mlpot.pbc_env.reinstall_charmm_crystal_for_lattice_abnr",
         ) as restore_lattice,
         patch(
-            "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.resolve_charmm_cubic_box_side_A",
+            "karml.interfaces.pycharmmInterface.mlpot.pbc_env.resolve_charmm_cubic_box_side_A",
             return_value=(35.0, "restart"),
         ) as resolve_side,
         patch(
-            "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.apply_pbc_nbonds",
+            "karml.interfaces.pycharmmInterface.mlpot.pbc_env.apply_pbc_nbonds",
         ) as apply_nb,
         patch(
-            "mmml.interfaces.pycharmmInterface.charmm_levels.charmm_quiet_output",
+            "karml.interfaces.pycharmmInterface.charmm_levels.charmm_quiet_output",
         ),
     ):
         side = run_charmm_lattice_abnr(
@@ -245,7 +245,7 @@ def test_run_charmm_lattice_abnr_uses_fallback_when_pbound_inactive():
 
 
 def test_run_charmm_lattice_abnr_skips_restart_when_crystal_active():
-    from mmml.interfaces.pycharmmInterface.mlpot.box_lattice_abnr import (
+    from karml.interfaces.pycharmmInterface.mlpot.box_lattice_abnr import (
         run_charmm_lattice_abnr,
     )
 
@@ -253,21 +253,21 @@ def test_run_charmm_lattice_abnr_skips_restart_when_crystal_active():
     with (
         _fake_pycharmm_minimize_module(run_abnr),
         patch(
-            "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.reinstall_charmm_crystal_for_lattice_abnr",
+            "karml.interfaces.pycharmmInterface.mlpot.pbc_env.reinstall_charmm_crystal_for_lattice_abnr",
         ) as restore_lattice,
         patch(
-            "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.charmm_crystal_is_active",
+            "karml.interfaces.pycharmmInterface.mlpot.pbc_env.charmm_crystal_is_active",
             return_value=True,
         ),
         patch(
-            "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.resolve_charmm_cubic_box_side_A",
+            "karml.interfaces.pycharmmInterface.mlpot.pbc_env.resolve_charmm_cubic_box_side_A",
             return_value=(36.0, "pbound"),
         ) as resolve_side,
         patch(
-            "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.apply_pbc_nbonds",
+            "karml.interfaces.pycharmmInterface.mlpot.pbc_env.apply_pbc_nbonds",
         ),
         patch(
-            "mmml.interfaces.pycharmmInterface.charmm_levels.charmm_quiet_output",
+            "karml.interfaces.pycharmmInterface.charmm_levels.charmm_quiet_output",
         ),
     ):
         side = run_charmm_lattice_abnr(

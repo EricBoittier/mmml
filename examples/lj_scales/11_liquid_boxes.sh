@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Step 11 — certify pure DCM and pure ACO liquid boxes (MM-only).
 #
-# Uses mmml liquid-box at experimental bulk densities (or a fraction for smoke).
+# Uses karml liquid-box at experimental bulk densities (or a fraction for smoke).
 # Hybrid MD (step 07 campaign) loads the certified PSF/CRD afterward.
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -26,7 +26,7 @@ _build_one() {
   mkdir -p "${out}"
   # --box-auto count sizes N from L and experimental bulk × fraction.
   # Do not also pass full --target-density-g-cm3 (that would fight the fraction).
-  uv run mmml liquid-box \
+  uv run karml liquid-box \
     --composition "${resid}:1" \
     --box-auto count \
     --box-size "${L}" \

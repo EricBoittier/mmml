@@ -1,4 +1,4 @@
-"""Unit tests for the pure-numeric helpers in mmml.spectra.spectra_md.
+"""Unit tests for the pure-numeric helpers in karml.spectra.spectra_md.
 
 Covers autocorrelation/spectrum math that has no CHARMM/GPU/ML-calculator
 dependency. The ASE-trajectory/HDF5 extraction paths and the ML-calculator
@@ -10,7 +10,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from mmml.spectra.spectra_md import (
+from karml.spectra.spectra_md import (
     FS_INV_TO_CM_INV,
     _freq_mask,
     _make_window,

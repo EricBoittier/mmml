@@ -14,10 +14,10 @@ from typing import Any, Callable, Mapping
 
 import numpy as np
 
-from mmml.md.config import EnsembleSpec
-from mmml.md.energy.registry import HybridEnergy
-from mmml.md.results import Trajectory
-from mmml.md.system import MolecularSystem
+from karml.md.config import EnsembleSpec
+from karml.md.energy.registry import HybridEnergy
+from karml.md.results import Trajectory
+from karml.md.system import MolecularSystem
 
 __all__ = ["JaxmdDriver", "NonFiniteStateError"]
 
@@ -97,7 +97,7 @@ class JaxmdDriver:
             import jax.numpy as jnp
             from jax_md import minimize, quantity, simulate, space, units
 
-            from mmml.md.step_batching import make_block_stepper
+            from karml.md.step_batching import make_block_stepper
         except ImportError as exc:  # pragma: no cover - environment dependent
             raise RuntimeError("JaxmdDriver requires the optional jax and jax-md packages") from exc
 
@@ -442,7 +442,7 @@ class JaxmdDriver:
         state = _init_state(init_position, dynamic_kwargs)
         restart = options.get("restart")
         if restart and ensemble.ensemble != "min":
-            from mmml.md.restart import apply_integrator_restart
+            from karml.md.restart import apply_integrator_restart
 
             state = apply_integrator_restart(state, restart)
             print(
@@ -579,12 +579,12 @@ class JaxmdDriver:
                 next_record = min(completed + self.record_every, ensemble.n_steps)
 
         frames = [np.asarray(f) for f in frames]
-        from mmml.md.restart import flatten_restart, snapshot_integrator
+        from karml.md.restart import flatten_restart, snapshot_integrator
 
         restart_snapshot = snapshot_integrator(state)
         # Z (atomic numbers) and box are needed downstream to reconstruct ASE
         # Atoms for structural analysis (bonds/angles/dihedrals/RDF via
-        # mmml.utils.plotting.trajectory_structure) without re-running the
+        # karml.utils.plotting.trajectory_structure) without re-running the
         # simulation -- topology is static per run, so saving it once here is
         # cheap and avoids every analysis script needing to rebuild the system.
         path = Path(self.output_path) if self.output_path is not None else None
@@ -618,7 +618,7 @@ class JaxmdDriver:
                 npz_kwargs[f"integrator_{key}"] = value
             np.savez(path, **npz_kwargs)
             if bool(options.get("write_dcd", False)):
-                from mmml.md.restart import write_position_dcd
+                from karml.md.restart import write_position_dcd
 
                 dcd_boxes = boxes if any(item is not None for item in boxes) else None
                 write_position_dcd(

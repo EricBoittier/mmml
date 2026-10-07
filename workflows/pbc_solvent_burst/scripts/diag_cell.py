@@ -166,7 +166,7 @@ def main() -> int:
         for p in heat_segs[:12]:
             step_note = ""
             try:
-                from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+                from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
                     read_restart_last_step,
                 )
 

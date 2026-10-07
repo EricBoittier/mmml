@@ -1,4 +1,4 @@
-"""Unit tests for mmml.models.kernnn (JAX KerNN)."""
+"""Unit tests for karml.models.kernnn (JAX KerNN)."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ import numpy as np
 import pytest
 from ase import Atoms
 
-from mmml.models.kernnn import (
+from karml.models.kernnn import (
     DualFFNet,
     FFNet,
     KerNNApplyAdapter,
@@ -29,10 +29,10 @@ from mmml.models.kernnn import (
     load_checkpoint,
     save_checkpoint,
 )
-from mmml.models.kernnn.checkpoint import torch_state_dict_to_flax_params
-from mmml.models.kernnn.evaluate import build_parser as build_eval_parser
-from mmml.models.kernnn.training import build_parser as build_train_parser
-from mmml.neb.run import _default_calculator_factory
+from karml.models.kernnn.checkpoint import torch_state_dict_to_flax_params
+from karml.models.kernnn.evaluate import build_parser as build_eval_parser
+from karml.models.kernnn.training import build_parser as build_train_parser
+from karml.neb.run import _default_calculator_factory
 
 
 def _h2co_geometry() -> np.ndarray:
@@ -254,7 +254,7 @@ def test_torch_state_dict_transpose():
 
 
 def test_form_acem_feature_counts():
-    from mmml.models.kernnn.distances import n_features_for_scheme
+    from karml.models.kernnn.distances import n_features_for_scheme
 
     form = jnp.zeros((6, 3), dtype=jnp.float32)
     form = form.at[1, 0].set(1.0)
@@ -268,7 +268,7 @@ def test_form_acem_feature_counts():
 
 
 def test_print_kernel_table(capsys):
-    from mmml.models.kernnn.kernels import list_kernel_rows, print_kernel_table
+    from karml.models.kernnn.kernels import list_kernel_rows, print_kernel_table
 
     rows = list_kernel_rows(selected="k33")
     assert len(rows) == 14
@@ -280,7 +280,7 @@ def test_print_kernel_table(capsys):
 
 
 def test_calibrate_teacher_energy_offset():
-    from mmml.models.kernnn.training import calibrate_teacher_energy_offset
+    from karml.models.kernnn.training import calibrate_teacher_energy_offset
 
     e_gt = np.array([160.0, 162.0, 161.0], dtype=np.float64)
     e_t = e_gt - 161.5  # atom-ref style zero near 0
@@ -291,9 +291,9 @@ def test_calibrate_teacher_energy_offset():
 
 
 def test_kernnn_arg_choices_match_runtime_tables():
-    from mmml.models.kernnn.args import DISTANCE_SCHEME_CHOICES, KERNEL_CHOICES
-    from mmml.models.kernnn.distances import DISTANCE_FNS
-    from mmml.models.kernnn.kernels import KERNEL_FNS
+    from karml.models.kernnn.args import DISTANCE_SCHEME_CHOICES, KERNEL_CHOICES
+    from karml.models.kernnn.distances import DISTANCE_FNS
+    from karml.models.kernnn.kernels import KERNEL_FNS
 
     assert set(KERNEL_CHOICES) == set(KERNEL_FNS)
     assert set(DISTANCE_SCHEME_CHOICES) == set(DISTANCE_FNS)
@@ -329,8 +329,8 @@ def test_cli_parsers():
 
 
 def test_dimer_scan_factory_requires_checkpoint():
-    from mmml.dimer_scan.calculators import calculator_factory
-    from mmml.dimer_scan.config import DimerScanConfig
+    from karml.dimer_scan.calculators import calculator_factory
+    from karml.dimer_scan.config import DimerScanConfig
 
     cfg = DimerScanConfig(
         residues=("H2CO", "H2CO"),

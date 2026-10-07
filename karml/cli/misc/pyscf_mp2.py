@@ -5,9 +5,9 @@ CLI for GPU-accelerated MP2 (post-HF) calculations via PySCF/gpu4pyscf.
 MP2 is not DFT; use pyscf-dft for DFT and pyscf-mp2 for MP2.
 
 Usage:
-    mmml pyscf-mp2 --mol "O 0 0 0; H 0.96 0 0; H -0.24 0.93 0" --energy
-    mmml pyscf-mp2 --mol water.xyz --energy --gradient --output results
-    mmml pyscf-mp2 --mol water.xyz --energy --gradient --gradient-fd --fd-step 0.001
+    karml pyscf-mp2 --mol "O 0 0 0; H 0.96 0 0; H -0.24 0.93 0" --energy
+    karml pyscf-mp2 --mol water.xyz --energy --gradient --output results
+    karml pyscf-mp2 --mol water.xyz --energy --gradient --gradient-fd --fd-step 0.001
 
 Requires: gpu4pyscf, pyscf (GPU/quantum environment)
 """
@@ -51,7 +51,7 @@ def main() -> int:
     """Run pyscf-mp2 CLI."""
     t0 = time.perf_counter()
     try:
-        from mmml.interfaces.pyscf4gpuInterface.calcs import (
+        from karml.interfaces.pyscf4gpuInterface.calcs import (
             compute_mp2,
             save_pyscf_results,
         )

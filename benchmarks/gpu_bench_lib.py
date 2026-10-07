@@ -183,27 +183,27 @@ def prepare_bench_env(
     """Match ``run_bench.sh`` / ``slurm_bench_gpu.sh`` so numbers stay comparable.
 
     Returns the planned env. Does not write ``os.environ`` unless ``apply`` is
-    true — unit tests that only inspect the dict must not leak ``MMML_CKPT``
+    true — unit tests that only inspect the dict must not leak ``KARML_CKPT``
     into later cases (that took down ``test_warmup_mlpot_jax_missing_checkpoint_exits``).
     """
-    x64 = os.environ.get("MMML_BENCH_X64", "1")
+    x64 = os.environ.get("KARML_BENCH_X64", "1")
     planned: dict[str, str] = {
-        "MMML_BENCH_X64": x64,
+        "KARML_BENCH_X64": x64,
         "JAX_ENABLE_X64": os.environ.get("JAX_ENABLE_X64", x64),
         "OMP_NUM_THREADS": os.environ.get("OMP_NUM_THREADS", "1"),
     }
-    mmml_ckpt = os.environ.get("MMML_CKPT")
-    bench_ckpt = os.environ.get("MMML_BENCH_CKPT")
-    # Keep the two names distinct. Benches prefer MMML_BENCH_CKPT then
-    # MMML_CKPT; copying a bench-only override into MMML_CKPT used to
+    karml_ckpt = os.environ.get("KARML_CKPT")
+    bench_ckpt = os.environ.get("KARML_BENCH_CKPT")
+    # Keep the two names distinct. Benches prefer KARML_BENCH_CKPT then
+    # KARML_CKPT; copying a bench-only override into KARML_CKPT used to
     # poison later checkpoint resolution (and apply=True leaked it).
-    if mmml_ckpt:
-        planned["MMML_CKPT"] = mmml_ckpt
+    if karml_ckpt:
+        planned["KARML_CKPT"] = karml_ckpt
     if bench_ckpt:
-        planned["MMML_BENCH_CKPT"] = bench_ckpt
-    if not mmml_ckpt and not bench_ckpt:
+        planned["KARML_BENCH_CKPT"] = bench_ckpt
+    if not karml_ckpt and not bench_ckpt:
         default = Path(repo_root) / "examples" / "ckpts_json" / "DESdimers_params.json"
-        planned["MMML_CKPT"] = str(default)
+        planned["KARML_CKPT"] = str(default)
     if not allow_cpu:
         planned["JAX_PLATFORMS"] = os.environ.get("JAX_PLATFORMS", "cuda")
     machine = os.environ.get("ASV_MACHINE")
@@ -325,14 +325,14 @@ def render_gpu_report_html(
     gpu = html.escape(str(meta.get("gpu") or "unknown"))
     dirty = "yes" if meta.get("dirty") else "no"
     generated = html.escape(str(meta.get("generated") or _now_iso()))
-    x64 = html.escape(str(meta.get("x64") or os.environ.get("MMML_BENCH_X64", "?")))
+    x64 = html.escape(str(meta.get("x64") or os.environ.get("KARML_BENCH_X64", "?")))
     platforms = html.escape(str(meta.get("jax_platforms") or os.environ.get("JAX_PLATFORMS", "auto")))
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>mmml GPU benchmark — {banner}</title>
+<title>karml GPU benchmark — {banner}</title>
 <style>
   :root {{
     --bg: #0f1419; --card: #1a222c; --ink: #e7ecf1; --muted: #93a1b0;
@@ -370,7 +370,7 @@ def render_gpu_report_html(
 <body>
 <main>
   <p><span class="banner {banner_class}">{banner}</span></p>
-  <h1>mmml GPU benchmark</h1>
+  <h1>karml GPU benchmark</h1>
   <p class="muted">Correctness probes run before asv timings. Generated {generated}.</p>
 
   <div class="card">
@@ -451,7 +451,7 @@ def collect_run_meta(
         "dirty": git_is_dirty(repo_root),
         "hostname": platform.node(),
         "gpu": gpu,
-        "x64": env.get("MMML_BENCH_X64", "1"),
+        "x64": env.get("KARML_BENCH_X64", "1"),
         "jax_platforms": env.get("JAX_PLATFORMS", os.environ.get("JAX_PLATFORMS", "auto")),
         "generated": _now_iso(),
         "python": sys.version.split()[0],
@@ -649,14 +649,14 @@ def check_physnet_energy_forces() -> CheckResult:
     """Tiny PhysNet forward+backward: finite energy and non-zero finite forces."""
     from benchmarks.benchmarks._common import default_checkpoint
     from benchmarks.benchmarks.bench_ml_physnet import _dense_inputs
-    from mmml.cli.base import (
+    from karml.cli.base import (
         load_physnet_params_and_ef_model,
         resolve_checkpoint_paths,
     )
 
     # Use the checkpoint's architecture, not the synthetic scaling benchmark's
     # fixed architecture. In particular, feature width and message-pass depth
-    # can differ for an MMML_BENCH_CKPT override.
+    # can differ for an KARML_BENCH_CKPT override.
     checkpoint = default_checkpoint().expanduser()
     if checkpoint.is_dir() and (checkpoint / "params.json").is_file():
         checkpoint = checkpoint / "params.json"
@@ -703,9 +703,9 @@ def check_mm_nonbonded() -> CheckResult:
     jax = require_jax()
     import jax.numpy as jnp
 
-    from mmml.md.energy import EnergyContext
-    from mmml.md.energy.terms import MMNonbondedTerm
-    from mmml.interfaces.pycharmmInterface.mm_system_energy import CharmmNbondSettings
+    from karml.md.energy import EnergyContext
+    from karml.md.energy.terms import MMNonbondedTerm
+    from karml.interfaces.pycharmmInterface.mm_system_energy import CharmmNbondSettings
 
     # 32 waters at liquid density is ~9.9 Å; a 4 Å cutoff stays inside unique MIC.
     cutoff = 4.0
@@ -765,7 +765,7 @@ def check_shake_projection() -> CheckResult:
     import jax.numpy as jnp
     import numpy as np
 
-    from mmml.md.constraints import constraint_residuals, shake_positions, tip3_rigid_constraints
+    from karml.md.constraints import constraint_residuals, shake_positions, tip3_rigid_constraints
 
     spec = tip3_rigid_constraints(8)
     box = water_box(8, seed=3)
@@ -811,7 +811,7 @@ def check_rattle_projection() -> CheckResult:
     import jax.numpy as jnp
     import numpy as np
 
-    from mmml.md.constraints import rattle_velocities, tip3_rigid_constraints
+    from karml.md.constraints import rattle_velocities, tip3_rigid_constraints
 
     spec = tip3_rigid_constraints(4)
     box = water_box(4, seed=4)
@@ -863,7 +863,7 @@ def check_neighbors() -> CheckResult:
     _import_asv_helpers()
     from _common import water_box  # type: ignore
 
-    from mmml.interfaces.pycharmmInterface.mm_system_energy import (
+    from karml.interfaces.pycharmmInterface.mm_system_energy import (
         _build_pair_indices,
         _build_pair_indices_vectorized,
     )
@@ -905,7 +905,7 @@ def check_neighbors() -> CheckResult:
 
 def check_batch_pair_indices() -> CheckResult:
     """``_pair_indices`` layout used by ``prepare_batches_fast`` / ``pair_cache``."""
-    from mmml.models.physnetjax.physnetjax.data.batches import _pair_indices
+    from karml.models.physnetjax.physnetjax.data.batches import _pair_indices
 
     n_atoms, batch_size = 6, 2
     segs, offsets, dst_2d, src_2d, dst_flat, src_flat = _pair_indices(n_atoms, batch_size)

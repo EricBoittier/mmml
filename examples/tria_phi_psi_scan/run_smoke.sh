@@ -4,13 +4,13 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
 
-export MMML_CKPT="${MMML_CKPT:-examples/sppoky-epoch-0010_params.json}"
+export KARML_CKPT="${KARML_CKPT:-examples/sppoky-epoch-0010_params.json}"
 OUT="${OUT:-artifacts/tria_phi_psi_scan}"
 
 # Use --phi=... (equals form): a bare '-180:...' is parsed as a flag by argparse.
 if [[ "${SKIP_GAS:-0}" != "1" ]]; then
   uv run python scripts/scan_trialanine_phi_psi_pes.py \
-    --checkpoint "$MMML_CKPT" \
+    --checkpoint "$KARML_CKPT" \
     --phi=-180:180:60 --psi=-180:180:60 \
     --out "$OUT/gas" \
     --mm-sd-steps 50 --mm-abnr-steps 50 \

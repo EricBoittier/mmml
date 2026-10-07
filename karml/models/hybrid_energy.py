@@ -16,8 +16,8 @@ decomposition::
             = (1 - s) * (E_A + E_B) + s * E_AB + E_MM
 
 Both scale factors come from the shared single source of truth
-(:mod:`mmml.interfaces.pycharmmInterface.calculator_utils`), and ``E_MM``
-(switched LJ + electrostatics) from :mod:`mmml.models.cgenff_mm` -- CHARMM-free
+(:mod:`karml.interfaces.pycharmmInterface.calculator_utils`), and ``E_MM``
+(switched LJ + electrostatics) from :mod:`karml.models.cgenff_mm` -- CHARMM-free
 but formula- and parameter-matched to ``mm_energy_forces``; see
 ``tests/unit/test_cgenff_lj_parity.py`` and ``tests/unit/test_cgenff_mm_energy.py``.
 
@@ -30,7 +30,7 @@ Dropping that ``ds/dR`` term (tempting, since the model already hands back
 forces) silently breaks energy conservation in the handoff region.
 
 MM Coulomb charges follow the taxonomy in
-:mod:`mmml.models.mm_charge_mode` (and ``docs/hybrid-mm-charges.md``):
+:mod:`karml.models.mm_charge_mode` (and ``docs/hybrid-mm-charges.md``):
 **fixed**, **q0** (Q⁰ unperturbed monomers; train+liquid), **latent**/``q1``
 (Q¹ AB-perturbed; dimer-only), **fixed_plus_latent**.
 ``include_electrostatics`` inside ``E_ML`` is a separate channel.
@@ -43,28 +43,28 @@ import dataclasses
 import jax
 import jax.numpy as jnp
 
-from mmml.data.units import KCAL_MOL_TO_EV
-from mmml.interfaces.pycharmmInterface.calculator_utils import (
+from karml.data.units import KCAL_MOL_TO_EV
+from karml.interfaces.pycharmmInterface.calculator_utils import (
     ml_switch_scale,
     mm_switch_scale,
 )
-from mmml.models.cgenff_mm import (
+from karml.models.cgenff_mm import (
     cgenff_lj_energy,
     cgenff_mm_energy,
     monomer_centroids,
 )
-from mmml.models.ewald_hybrid_coulomb import (
+from karml.models.ewald_hybrid_coulomb import (
     hybrid_ewald_coulomb_energy,
 )
-from mmml.models.nvalchemiops_hybrid_coulomb import (
+from karml.models.nvalchemiops_hybrid_coulomb import (
     hybrid_nvalchemiops_pme_coulomb_energy,
 )
-from mmml.models.short_range_wall import (
+from karml.models.short_range_wall import (
     DEFAULT_WALL_K_EV_A2,
     DEFAULT_WALL_R_ON_A,
     inter_monomer_wall_energy,
 )
-from mmml.models.mm_charge_mode import (
+from karml.models.mm_charge_mode import (
     MMChargeMode,
     apply_mm_charge_mode,
     assemble_q0_from_monomer_forwards,
@@ -74,7 +74,7 @@ from mmml.models.mm_charge_mode import (
     require_charge_head_for_mode,
     resolve_hybrid_mm_charge_mode,
 )
-from mmml.models.mm_lj_scales import apply_mm_lj_scales, split_mm_lj_scale_params
+from karml.models.mm_lj_scales import apply_mm_lj_scales, split_mm_lj_scale_params
 
 Array = jnp.ndarray
 
@@ -373,7 +373,7 @@ def hybrid_forward(
     Costs three forwards per step (AB, A, B).
 
     ``mm_charge_mode`` selects MM Coulomb charges (see
-    :mod:`mmml.models.mm_charge_mode`).  Legacy ``charge_correction=True`` is
+    :mod:`karml.models.mm_charge_mode`).  Legacy ``charge_correction=True`` is
     Mode C.  ``q0`` (Q⁰) uses isolated A/B charge heads — same operator as
     liquid MD monomer slots.  ``latent``/``q1`` (Q¹) and Mode C use AB-context
     ``q_ML`` (dimer-only).
@@ -461,7 +461,7 @@ def hybrid_forward(
 
         def _emm(x):
             # UNITS: MM helpers return kcal/mol; training targets are eV. Convert
-            # at this boundary (same as mmml_calculator). Pinned by
+            # at this boundary (same as karml_calculator). Pinned by
             # tests/unit/test_hybrid_mm_units.py.
             #
             # Ewald / nvalchemiops_pme (#139):

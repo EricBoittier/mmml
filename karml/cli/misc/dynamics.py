@@ -15,21 +15,21 @@ Features:
 
 Usage:
     # Geometry optimization (ASE)
-    python -m mmml.cli.dynamics --checkpoint model/ --molecule CO2 --optimize
+    python -m karml.cli.dynamics --checkpoint model/ --molecule CO2 --optimize
     
     # Vibrational analysis
-    python -m mmml.cli.dynamics --checkpoint model/ --molecule CO2 --frequencies --ir-spectra
+    python -m karml.cli.dynamics --checkpoint model/ --molecule CO2 --frequencies --ir-spectra
     
     # MD with ASE (CPU/GPU, good for small systems)
-    python -m mmml.cli.dynamics --checkpoint model/ --molecule CO2 \
+    python -m karml.cli.dynamics --checkpoint model/ --molecule CO2 \
         --md --framework ase --ensemble nvt --temperature 300 --timestep 0.5 --nsteps 10000
     
     # MD with JAX MD (GPU-accelerated, best for large systems)
-    python -m mmml.cli.dynamics --checkpoint model/ --molecule CO2 \
+    python -m karml.cli.dynamics --checkpoint model/ --molecule CO2 \
         --md --framework jaxmd --ensemble nvt --temperature 300 --timestep 0.5 --nsteps 100000
     
     # Load structure from file
-    python -m mmml.cli.dynamics --checkpoint model/ --structure molecule.xyz \
+    python -m karml.cli.dynamics --checkpoint model/ --structure molecule.xyz \
         --md --framework jaxmd --ensemble nve --nsteps 50000
 """
 
@@ -77,12 +77,12 @@ try:
 except ImportError:
     HAS_MATPLOTLIB = False
 
-# Import MMML calculator
+# Import KARML calculator
 try:
-    from mmml.cli.calculator import MMMLCalculator
+    from karml.cli.calculator import KARMLCalculator
 except ImportError:
-    print("⚠️  Could not import MMMLCalculator from mmml.cli.calculator")
-    MMMLCalculator = None
+    print("⚠️  Could not import KARMLCalculator from karml.cli.calculator")
+    KARMLCalculator = None
 
 
 # =============================================================================
@@ -496,7 +496,7 @@ def run_md_jaxmd(
     atoms : Atoms
         Initial structure
     model : Any
-        MMML model
+        KARML model
     params : Any
         Model parameters
     ensemble : str
@@ -550,21 +550,21 @@ def main():
         epilog="""
 Examples:
   # Optimize geometry
-  python -m mmml.cli.dynamics --checkpoint model/ --molecule CO2 --optimize
+  python -m karml.cli.dynamics --checkpoint model/ --molecule CO2 --optimize
   
   # Calculate vibrational frequencies
-  python -m mmml.cli.dynamics --checkpoint model/ --molecule CO2 --frequencies
+  python -m karml.cli.dynamics --checkpoint model/ --molecule CO2 --frequencies
   
   # Full vibrational analysis with IR
-  python -m mmml.cli.dynamics --checkpoint model/ --molecule CO2 \\
+  python -m karml.cli.dynamics --checkpoint model/ --molecule CO2 \\
       --optimize --frequencies --ir-spectra --output-dir co2_analysis
   
   # Molecular dynamics (ASE, NVT ensemble)
-  python -m mmml.cli.dynamics --checkpoint model/ --molecule CO2 \\
+  python -m karml.cli.dynamics --checkpoint model/ --molecule CO2 \\
       --md --framework ase --ensemble nvt --temperature 300 --nsteps 10000
   
   # Load structure from file
-  python -m mmml.cli.dynamics --checkpoint model/ --structure molecule.xyz \\
+  python -m karml.cli.dynamics --checkpoint model/ --structure molecule.xyz \\
       --optimize --output-dir molecule_analysis
         """
     )
@@ -663,7 +663,7 @@ Examples:
     if verbose:
         print(f"\n🔧 Loading calculator from: {args.checkpoint}")
     
-    calc = MMMLCalculator.from_checkpoint(
+    calc = KARMLCalculator.from_checkpoint(
         args.checkpoint,
         cutoff=args.cutoff,
         use_dcmnet_dipole=args.use_dcmnet_dipole,

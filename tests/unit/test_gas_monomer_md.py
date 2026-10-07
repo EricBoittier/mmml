@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from mmml.distill.gas_monomer_md import KB_KCAL, block_mean_std, delta_hvap, langevin_gas_md
+from karml.distill.gas_monomer_md import KB_KCAL, block_mean_std, delta_hvap, langevin_gas_md
 
 
 class _Trap:

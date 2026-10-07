@@ -19,7 +19,7 @@ Related: [MLpot switching reference](mlpot-settings.md) (COM handoff), [Tri-alan
 Entry point for a full MM evaluation:
 
 ```python
-from mmml.interfaces.pycharmmInterface.mm_system_energy import (
+from karml.interfaces.pycharmmInterface.mm_system_energy import (
     CharmmNbondSettings,
     mm_system_energy_and_forces,
 )
@@ -28,7 +28,7 @@ from mmml.interfaces.pycharmmInterface.mm_system_energy import (
 Bonded-only (no nonbonded):
 
 ```python
-from mmml.interfaces.pycharmmInterface.cgenff_bonded import bonded_energy_and_forces
+from karml.interfaces.pycharmmInterface.cgenff_bonded import bonded_energy_and_forces
 ```
 
 ---
@@ -49,7 +49,7 @@ JAX bonded formulas follow `jax_md.mm_forcefields.oplsaa.energy` so they can be 
 Live cross-check (requires PyCHARMM):
 
 ```bash
-./scripts/mmml-charmm-mpirun.sh python -m pytest \
+./scripts/karml-charmm-mpirun.sh python -m pytest \
   tests/functionality/charmm/test_cgenff_bonded_pycharmm.py -m pycharmm -v
 ```
 
@@ -118,7 +118,7 @@ uv run pytest tests/unit/test_mm_system_energy.py -q
 
 ## Two switching layers (do not conflate)
 
-MMML uses **two independent** switching systems:
+KARML uses **two independent** switching systems:
 
 | Switching | Distance variable | Where | Purpose |
 |-----------|-------------------|-------|---------|
@@ -145,7 +145,7 @@ Remaining nonbonded gaps (see [trialanine-water-box.md](trialanine-water-box.md)
 Diagnostic:
 
 ```bash
-./scripts/mmml-charmm-mpirun.sh python scripts/diagnose_trialanine_nb_mismatch.py
+./scripts/karml-charmm-mpirun.sh python scripts/diagnose_trialanine_nb_mismatch.py
 ```
 
 ---
@@ -157,5 +157,5 @@ Diagnostic:
 | Validate CGenFF bonded parameters | `cgenff_bonded.py` + `test_cgenff_bonded_pycharmm.py` |
 | jax-mm-spoof bonded vs CHARMM (DCM/ACO) | [parity report](jax-mm-spoof-charmm-parity.md) + `workflows/jaxmd_cgenff_spoof_smoke/` |
 | Full-system CHARMM MM vs JAX | `mm_system_energy.py` + tri-alanine tests |
-| Production hybrid ML/MM MD | `mmml_calculator` / `mm_energy_forces.py` (COM switching) |
+| Production hybrid ML/MM MD | `karml_calculator` / `mm_energy_forces.py` (COM switching) |
 | CHARMM IMAGE VDW + external LR | `mm_nonbond_mode=periodic_external` |

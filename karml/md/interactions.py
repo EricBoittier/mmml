@@ -13,7 +13,7 @@ from itertools import combinations
 from pathlib import Path
 from typing import Any, Mapping
 
-from mmml.md.system import MolecularSystem
+from karml.md.system import MolecularSystem
 
 __all__ = [
     "INTERACTION_POLICY_SCHEMA_VERSION",

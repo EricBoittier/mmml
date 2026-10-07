@@ -1,4 +1,4 @@
-* MMML example append parameters: chloromethane (CH3Cl)
+* KARML example append parameters: chloromethane (CH3Cl)
 * CGenFF has CG321–CLGA1 (CLET) but not CG331–CLGA1 (methyl chloride).
 * Bonded terms analogized from CLET / DCLE; nonbonded already in base CGenFF.
 *

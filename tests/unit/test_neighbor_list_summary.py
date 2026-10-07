@@ -6,7 +6,7 @@ from io import StringIO
 
 from rich.console import Console
 
-from mmml.cli.run.summaries import print_neighbor_list_summary
+from karml.cli.run.summaries import print_neighbor_list_summary
 
 
 def test_print_neighbor_list_summary_shows_sparse_dimer_fill_bar() -> None:

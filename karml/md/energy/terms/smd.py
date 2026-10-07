@@ -14,9 +14,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from mmml.md.energy.registry import EnergyContext, TermFns, register_term
-from mmml.md.energy.terms._common import ase_contribution_from_jax
-from mmml.md.system import MolecularSystem
+from karml.md.energy.registry import EnergyContext, TermFns, register_term
+from karml.md.energy.terms._common import ase_contribution_from_jax
+from karml.md.system import MolecularSystem
 
 __all__ = ["SMDBiasTerm"]
 
@@ -58,7 +58,7 @@ class SMDBiasTerm:
             if cell_used is None:
                 disp = R[j] - R[i]
             else:
-                from mmml.interfaces.pycharmmInterface.pbc_utils_jax import (
+                from karml.interfaces.pycharmmInterface.pbc_utils_jax import (
                     mic_displacement,
                 )
 

@@ -1,6 +1,6 @@
 # CHARMM vs JAX-MM energy benchmark
 
-Compare **native PyCHARMM** ``ENER FORCE`` against **MMML JAX** loaders
+Compare **native PyCHARMM** ``ENER FORCE`` against **KARML JAX** loaders
 (``cgenff_bonded``, ``mm_system_energy``) for supported CGENFF systems.
 
 ## Supported cases

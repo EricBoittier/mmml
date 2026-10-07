@@ -3,9 +3,9 @@
 #
 # Matches fast MD periodic_external nvalchemiops (one Ewald/PME over the system).
 #
-#   mmml physnet-train --config examples/hybrid_mm_charges/train_fixed_nvalchemiops_pme.yaml
+#   karml physnet-train --config examples/hybrid_mm_charges/train_fixed_nvalchemiops_pme.yaml
 #
-# Requires: mmml[nvalchemiops-pme], NPZ with CGenFF fields, cubic box length.
+# Requires: karml[nvalchemiops-pme], NPZ with CGenFF fields, cubic box length.
 # Same keys work on the CLI (--lr-solver, --pme-box-length, ...).
 
 data: /path/to/out_combined_dedup/energies_forces_dipoles_train.npz

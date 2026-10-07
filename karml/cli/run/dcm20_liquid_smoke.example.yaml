@@ -1,26 +1,26 @@
 # Smallest practical DCM liquid-density smoke on a GPU node (A100).
 #
-# Paths use ~/... so this works from any cwd (not only the mmml repo root).
+# Paths use ~/... so this works from any cwd (not only the karml repo root).
 # Edit the paths below or override on the CLI.
 #
 # Smallest *MIC-safe* liquid DCM smoke (not bulk-ρ N=20 @ L≈13 Å — too small for MIC).
-# Default workflow: ~/mmml/scripts/run_dcm_liquid_workflow.sh (DCM:60 @ L=32 Å).
+# Default workflow: ~/karml/scripts/run_dcm_liquid_workflow.sh (DCM:60 @ L=32 Å).
 # Fast stripped path: MD_PROFILE=smoke N_DCM=20 BOX_SIZE=45 SKIP_HEALTH=1 \
-#   ~/mmml/scripts/run_dcm_liquid_workflow.sh
+#   ~/karml/scripts/run_dcm_liquid_workflow.sh
 #
 # Phase A — MM-only box certification:
-#   MMML_MPI_NP=1 ~/mmml/scripts/mmml-charmm-mpirun.sh liquid-box \
+#   KARML_MPI_NP=1 ~/karml/scripts/karml-charmm-mpirun.sh liquid-box \
 #     --composition DCM:60 --box-size 32 --target-density-g-cm3 1.326 \
 #     --profile dense -o ~/tests/boxes/dcm60_l32
 #
 # Phase B — hybrid MLpot mini (this file):
-#   export MMML_CKPT=~/mmml/mmml/models/physnetjax/defaults/hf_json/<checkpoint>.json
-#   MMML_MPI_NP=1 ~/mmml/scripts/mmml-charmm-mpirun.sh md-system \
-#     --config ~/mmml/mmml/cli/run/dcm20_liquid_smoke.example.yaml \
-#     --checkpoint "$MMML_CKPT"
+#   export KARML_CKPT=~/karml/karml/models/physnetjax/defaults/hf_json/<checkpoint>.json
+#   KARML_MPI_NP=1 ~/karml/scripts/karml-charmm-mpirun.sh md-system \
+#     --config ~/karml/karml/cli/run/dcm20_liquid_smoke.example.yaml \
+#     --checkpoint "$KARML_CKPT"
 #
 # Preflight:
-#   MMML_MPI_NP=1 ~/mmml/scripts/mmml-charmm-mpirun.sh health-check --require-gpu --live
+#   KARML_MPI_NP=1 ~/karml/scripts/karml-charmm-mpirun.sh health-check --require-gpu --live
 
 include:
   - presets/certified-box-handoff.yaml

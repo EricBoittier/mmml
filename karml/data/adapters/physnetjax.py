@@ -45,7 +45,7 @@ def prepare_physnet_batches(
     Notes
     -----
     This adapter is based on the prepare_batches function from
-    mmml/physnetjax/physnetjax/data/ but adapted to work with the
+    karml/physnetjax/physnetjax/data/ but adapted to work with the
     standardized NPZ format.
     
     TODO: This is a stub that needs full implementation

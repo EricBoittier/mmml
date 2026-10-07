@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from mmml.interfaces.pycharmmInterface.charmm_jax_energy_benchmark import (
+from karml.interfaces.pycharmmInterface.charmm_jax_energy_benchmark import (
     ForceDelta,
     LayerBenchmark,
     SUPPORTED_CASES,

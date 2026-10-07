@@ -7,10 +7,10 @@ from typing import Any, Callable, Sequence
 
 import numpy as np
 
-from mmml.md.restraints import DihedralCV, LinearDistanceCV, cv_from_spec
-from mmml.umbrella.config import UmbrellaMbarConfig
-from mmml.umbrella.energy import make_single_ml_energy_fn, numpy_bias_matrix_nd
-from mmml.umbrella.io import (
+from karml.md.restraints import DihedralCV, LinearDistanceCV, cv_from_spec
+from karml.umbrella.config import UmbrellaMbarConfig
+from karml.umbrella.energy import make_single_ml_energy_fn, numpy_bias_matrix_nd
+from karml.umbrella.io import (
     SNAPSHOTS_NPZ,
     SUMMARY_JSON,
     load_snapshots,
@@ -43,7 +43,7 @@ def fill_u_kln(
     embedding). When ``box`` is set, bias distances use minimum-image.
 
     ``atom_pairs`` entries may be ``(i, j)`` pairs or
-    :class:`~mmml.md.restraints.LinearDistanceCV` objects.
+    :class:`~karml.md.restraints.LinearDistanceCV` objects.
     """
     pos = np.asarray(positions, dtype=np.float64)
     if pos.ndim != 4:
@@ -170,7 +170,7 @@ def run_umbrella_mbar(cfg: UmbrellaMbarConfig) -> dict[str, Any]:
     import jax
     import jax.numpy as jnp
 
-    from mmml.umbrella.checkpoint import load_params_and_model
+    from karml.umbrella.checkpoint import load_params_and_model
 
     jax.config.update("jax_enable_x64", True)
 
@@ -178,7 +178,7 @@ def run_umbrella_mbar(cfg: UmbrellaMbarConfig) -> dict[str, Any]:
     snap_path = run_dir / SNAPSHOTS_NPZ
     if not snap_path.is_file():
         raise FileNotFoundError(
-            f"Missing snapshots file: {snap_path} (run mmml umbrella-sample first)"
+            f"Missing snapshots file: {snap_path} (run karml umbrella-sample first)"
         )
     snap = load_snapshots(snap_path)
 

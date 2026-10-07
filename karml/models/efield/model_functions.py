@@ -251,7 +251,7 @@ def predicted_polarizability_bohr3(
 
     ``ef_shared`` defaults to the zero field (SPICE-α / isolated-molecule DFT).
     """
-    from mmml.data.units import ANGSTROM_TO_BOHR
+    from karml.data.units import ANGSTROM_TO_BOHR
 
     if ef_shared is None:
         ef_shared = jnp.zeros((3,), dtype=positions.dtype)

@@ -9,7 +9,7 @@ import pytest
 
 
 def test_per_monomer_grms_from_forces():
-    from mmml.interfaces.pycharmmInterface.mlpot.grms_thresholds import (
+    from karml.interfaces.pycharmmInterface.mlpot.grms_thresholds import (
         per_monomer_grms_from_forces,
     )
 
@@ -29,7 +29,7 @@ def test_per_monomer_grms_from_forces():
 
 
 def test_resolve_grms_thresholds_ignores_nonfinite_charmm_tail():
-    from mmml.interfaces.pycharmmInterface.mlpot.grms_thresholds import (
+    from karml.interfaces.pycharmmInterface.mlpot.grms_thresholds import (
         MonomerGrmsStats,
         resolve_grms_thresholds_from_stats,
     )
@@ -53,7 +53,7 @@ def test_resolve_grms_thresholds_ignores_nonfinite_charmm_tail():
 
 
 def test_resolve_grms_thresholds_from_stats_scales_with_hybrid_tail():
-    from mmml.interfaces.pycharmmInterface.mlpot.grms_thresholds import (
+    from karml.interfaces.pycharmmInterface.mlpot.grms_thresholds import (
         MonomerGrmsStats,
         resolve_grms_thresholds_from_stats,
     )
@@ -77,7 +77,7 @@ def test_resolve_grms_thresholds_from_stats_scales_with_hybrid_tail():
 
 
 def test_resolve_grms_thresholds_caps_intervention_for_geometry_stress():
-    from mmml.interfaces.pycharmmInterface.mlpot.grms_thresholds import (
+    from karml.interfaces.pycharmmInterface.mlpot.grms_thresholds import (
         MonomerGrmsStats,
         resolve_grms_thresholds_from_stats,
     )
@@ -104,7 +104,7 @@ def test_resolve_grms_thresholds_caps_intervention_for_geometry_stress():
 
 def test_resolve_grms_thresholds_ignores_stale_hybrid_total_with_healthy_tails():
     """Stale global hybrid RMS must not inflate intervention when per-monomer GRMS is OK."""
-    from mmml.interfaces.pycharmmInterface.mlpot.grms_thresholds import (
+    from karml.interfaces.pycharmmInterface.mlpot.grms_thresholds import (
         MonomerGrmsStats,
         resolve_grms_thresholds_from_stats,
     )
@@ -128,7 +128,7 @@ def test_resolve_grms_thresholds_ignores_stale_hybrid_total_with_healthy_tails()
 
 
 def test_resilient_defaults_use_conservative_bulk_fraction_for_large_clusters():
-    from mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
+    from karml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
         apply_density_prep_resilient_defaults,
     )
 
@@ -152,7 +152,7 @@ def test_resilient_defaults_use_conservative_bulk_fraction_for_large_clusters():
 
 
 def test_assert_pre_mlpot_intermonomer_geometry_aborts_on_overlap():
-    from mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
+    from karml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
         assert_pre_mlpot_intermonomer_geometry,
     )
 
@@ -176,7 +176,7 @@ def test_assert_pre_mlpot_intermonomer_geometry_aborts_on_overlap():
 
 
 def test_run_pre_mlpot_geometry_gate_disabled_without_liquid_prep():
-    from mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
+    from karml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
         run_pre_mlpot_geometry_gate,
     )
 
@@ -198,7 +198,7 @@ def test_run_pre_mlpot_geometry_gate_disabled_without_liquid_prep():
 
 
 def test_atomic_fmax_picks_largest_atom_not_rms():
-    from mmml.interfaces.pycharmmInterface.mlpot.grms_thresholds import (
+    from karml.interfaces.pycharmmInterface.mlpot.grms_thresholds import (
         atomic_fmax_kcalmol_A,
     )
 
@@ -210,7 +210,7 @@ def test_atomic_fmax_picks_largest_atom_not_rms():
 
 
 def test_geometry_gate_rejects_high_fmax_with_safe_grms():
-    from mmml.interfaces.pycharmmInterface.mlpot.grms_thresholds import (
+    from karml.interfaces.pycharmmInterface.mlpot.grms_thresholds import (
         DEFAULT_FMAX_CEILING_KCALMOL_A,
         GrmsThresholds,
         MonomerGrmsStats,
@@ -240,7 +240,7 @@ def test_geometry_gate_rejects_high_fmax_with_safe_grms():
 
 
 def test_geometry_gate_accepts_low_grms_and_low_fmax():
-    from mmml.interfaces.pycharmmInterface.mlpot.grms_thresholds import (
+    from karml.interfaces.pycharmmInterface.mlpot.grms_thresholds import (
         DEFAULT_FMAX_CEILING_KCALMOL_A,
         GrmsThresholds,
         MonomerGrmsStats,
@@ -268,7 +268,7 @@ def test_geometry_gate_accepts_low_grms_and_low_fmax():
 
 
 def test_geometry_gate_rejects_high_grms_even_with_low_fmax():
-    from mmml.interfaces.pycharmmInterface.mlpot.grms_thresholds import (
+    from karml.interfaces.pycharmmInterface.mlpot.grms_thresholds import (
         DEFAULT_FMAX_CEILING_KCALMOL_A,
         GrmsThresholds,
         MonomerGrmsStats,
@@ -297,7 +297,7 @@ def test_geometry_gate_rejects_high_grms_even_with_low_fmax():
 
 
 def test_per_monomer_fmax_and_selection():
-    from mmml.interfaces.pycharmmInterface.mlpot.grms_thresholds import (
+    from karml.interfaces.pycharmmInterface.mlpot.grms_thresholds import (
         per_monomer_fmax_from_forces,
         select_stressed_monomers,
     )
@@ -319,7 +319,7 @@ def test_per_monomer_fmax_and_selection():
 
 
 def test_select_stressed_monomers_ignores_nonfinite():
-    from mmml.interfaces.pycharmmInterface.mlpot.grms_thresholds import (
+    from karml.interfaces.pycharmmInterface.mlpot.grms_thresholds import (
         select_stressed_monomers,
     )
 

@@ -2,7 +2,7 @@
 
 Runs ``n_copies`` independent Langevin (BAOAB) trajectories of one molecule at
 once through any evaluator with ``evaluate(structures) -> (E, F)`` in
-kcal/mol and kcal/mol/A (:class:`mmml.distill.box_cohesion.PhysNetPairEvaluator`)
+kcal/mol and kcal/mol/A (:class:`karml.distill.box_cohesion.PhysNetPairEvaluator`)
 or a metatomic teacher wrapped by :class:`TeacherKcal`. Returns per-copy mean
 potential energies after ``equil_steps`` so a mean +- std over copies is
 available without block analysis.
@@ -15,7 +15,7 @@ from typing import Sequence
 
 import numpy as np
 
-from mmml.models.mm_nonbonded_tune import EV_TO_KCAL
+from karml.models.mm_nonbonded_tune import EV_TO_KCAL
 
 KB_KCAL = 0.0019872043  # kcal/mol/K
 # 1 amu*A^2/fs^2 = 2390.057 kcal/mol

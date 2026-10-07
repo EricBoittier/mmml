@@ -1,6 +1,6 @@
 # Free-energy surfaces from an ASE trajectory
 
-MMML can estimate a one- or two-dimensional free-energy surface (FES) from
+KARML can estimate a one- or two-dimensional free-energy surface (FES) from
 scalar coordinates evaluated on an ASE trajectory. The estimator constructs a
 histogram and calculates
 
@@ -36,7 +36,7 @@ be arbitrary Python callables that accept one `ase.Atoms` frame and return one
 scalar.
 
 ```python
-from mmml.utils.plotting import fes_from_trajectory, plot_fes
+from karml.utils.plotting import fes_from_trajectory, plot_fes
 
 phi = lambda atoms: atoms.get_dihedral(4, 6, 8, 14, mic=True)
 psi = lambda atoms: atoms.get_dihedral(6, 8, 14, 16, mic=True)
@@ -93,7 +93,7 @@ For biased or reweighted trajectories, evaluate coordinates explicitly and
 pass one statistical weight per frame to `calculate_fes`:
 
 ```python
-from mmml.utils.plotting import calculate_fes, evaluate_coordinates
+from karml.utils.plotting import calculate_fes, evaluate_coordinates
 
 samples = evaluate_coordinates(frames, [phi, psi])
 surface = calculate_fes(samples, weights=frame_weights, bins=(36, 36))
@@ -108,7 +108,7 @@ The companion structural-analysis utilities operate directly on the same list
 of ASE frames:
 
 ```python
-from mmml.utils.plotting.trajectory_structure import (
+from karml.utils.plotting.trajectory_structure import (
     element_pair_rdfs,
     internal_coordinate_distributions,
 )
@@ -147,7 +147,7 @@ from this comparison. All distances and nearest-neighbor vectors use the
 periodic minimum-image convention.
 
 ```python
-from mmml.utils.plotting.trajectory_structure import water_tetrahedrality
+from karml.utils.plotting.trajectory_structure import water_tetrahedrality
 
 tetrahedrality = water_tetrahedrality(
     frames,
@@ -167,7 +167,7 @@ treated as acceptors and as donors when covalently bound to hydrogen. Distances
 and angles use periodic minimum-image vectors.
 
 ```python
-from mmml.utils.plotting.trajectory_structure import hydrogen_bond_analysis
+from karml.utils.plotting.trajectory_structure import hydrogen_bond_analysis
 
 hydrogen_bonds = hydrogen_bond_analysis(
     frames,
@@ -198,7 +198,7 @@ The corresponding arrays and edge occupancies are saved in
 ## Radius of gyration, MSD, and diffusion
 
 Wrapped coordinates must not be used directly for mean-squared displacement.
-MMML reconstructs continuous fractional coordinates from frame-to-frame
+KARML reconstructs continuous fractional coordinates from frame-to-frame
 minimum-image displacements and raises if a displacement reaches the half-cell
 ambiguity limit. The peptide radius of gyration is mass weighted and calculated
 from these unwrapped coordinates. End-to-end distance is the direct unwrapped
@@ -212,7 +212,7 @@ water oxygen atoms:
 \]
 
 ```python
-from mmml.utils.plotting.trajectory_structure import (
+from karml.utils.plotting.trajectory_structure import (
     radius_of_gyration_and_diffusion,
     unwrap_trajectory_positions,
 )
@@ -244,13 +244,13 @@ linear diffusive regime and assess fit-window sensitivity.
 
 For conformational dimensionality reduction, raw Cartesian coordinates are a
 poor default because translations and rotations dominate their variance.
-Instead, MMML computes every pair distance among the peptide heavy atoms,
+Instead, KARML computes every pair distance among the peptide heavy atoms,
 standardizes each distance feature, and embeds the resulting frame-by-feature
 matrix with two-dimensional UMAP. For this peptide there are 10 heavy atoms and
 45 pair-distance features.
 
 ```python
-from mmml.utils.plotting.trajectory_structure import heavy_atom_pair_distance_umap
+from karml.utils.plotting.trajectory_structure import heavy_atom_pair_distance_umap
 
 embedding, pair_distances, heavy_atom_pairs = heavy_atom_pair_distance_umap(
     frames,

@@ -7,17 +7,17 @@ import time
 import numpy as np
 import pytest
 
-from mmml.interfaces.pycharmmInterface.jax_pme_cross_monomer import (
+from karml.interfaces.pycharmmInterface.jax_pme_cross_monomer import (
     compute_jax_pme_cross_monomer_power_law,
     resolve_jax_pme_cross_kernel,
     resolve_jax_pme_intra_mode,
 )
-from mmml.interfaces.pycharmmInterface.jax_pme_hybrid_coulomb import (
+from karml.interfaces.pycharmmInterface.jax_pme_hybrid_coulomb import (
     _intra_monomer_jax_pme_power_law,
     hybrid_jax_pme_coulomb_correction,
     hybrid_jax_pme_mm_lr_correction,
 )
-from mmml.interfaces.pycharmmInterface.long_range_backend import (
+from karml.interfaces.pycharmmInterface.long_range_backend import (
     DEFAULT_JAX_PME_LJ_PREFACTOR,
     compute_jax_pme_power_law,
 )
@@ -69,9 +69,9 @@ def _legacy_cross_reference(
 def test_resolve_jax_pme_intra_mode_defaults_cross_for_ewald(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.delenv("MMML_JAX_PME_INTRA_MODE", raising=False)
+    monkeypatch.delenv("KARML_JAX_PME_INTRA_MODE", raising=False)
     assert resolve_jax_pme_intra_mode("ewald") == "cross"
-    monkeypatch.setenv("MMML_JAX_PME_INTRA_MODE", "full_minus_intra")
+    monkeypatch.setenv("KARML_JAX_PME_INTRA_MODE", "full_minus_intra")
     assert resolve_jax_pme_intra_mode("ewald") == "full_minus_intra"
 
 
@@ -141,7 +141,7 @@ def test_cross_monomer_matches_legacy_cluster() -> None:
 
 
 def test_hybrid_correction_uses_cross_mode_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("MMML_JAX_PME_INTRA_MODE", raising=False)
+    monkeypatch.delenv("KARML_JAX_PME_INTRA_MODE", raising=False)
     system = ion_dimer_system(separation_A=6.0, box_length_A=40.0)
     offsets = np.array([0, 1, 2], dtype=np.int64)
     cell = np.eye(3) * system.box_length_A
@@ -156,7 +156,7 @@ def test_hybrid_correction_uses_cross_mode_by_default(monkeypatch: pytest.Monkey
         mm_switch_on=6.0,
         mm_switch_width=2.0,
     )
-    monkeypatch.setenv("MMML_JAX_PME_INTRA_MODE", "full_minus_intra")
+    monkeypatch.setenv("KARML_JAX_PME_INTRA_MODE", "full_minus_intra")
     legacy = hybrid_jax_pme_coulomb_correction(
         system.positions_A,
         system.charges_e,
@@ -190,7 +190,7 @@ def test_structure_factor_kernel_matches_masked(
     chg = rng.normal(0.0, 0.1, n)
     offsets = np.arange(0, n + 1, size, dtype=np.int64)
     box_L = 28.0
-    monkeypatch.setenv("MMML_JAX_PME_CROSS_KERNEL", "masked")
+    monkeypatch.setenv("KARML_JAX_PME_CROSS_KERNEL", "masked")
     masked = compute_jax_pme_cross_monomer_power_law(
         pos,
         chg,
@@ -201,7 +201,7 @@ def test_structure_factor_kernel_matches_masked(
         exponent=1,
         prefactor=float(jpref.kcalmol_A),
     )
-    monkeypatch.setenv("MMML_JAX_PME_CROSS_KERNEL", "structure_factor")
+    monkeypatch.setenv("KARML_JAX_PME_CROSS_KERNEL", "structure_factor")
     sf = compute_jax_pme_cross_monomer_power_law(
         pos,
         chg,
@@ -222,7 +222,7 @@ def test_structure_factor_kernel_matches_masked(
 
 
 def test_com_switch_chain_rule_differs_from_naive_scale() -> None:
-    from mmml.interfaces.pycharmmInterface.jax_pme_hybrid_coulomb import (
+    from karml.interfaces.pycharmmInterface.jax_pme_hybrid_coulomb import (
         _scale_lr_with_com_switch,
     )
 
@@ -287,7 +287,7 @@ def test_cross_mode_faster_than_legacy_loop(monkeypatch: pytest.MonkeyPatch) -> 
         mm_switch_on=6.0,
         mm_switch_width=2.0,
     )
-    monkeypatch.setenv("MMML_JAX_PME_INTRA_MODE", "full_minus_intra")
+    monkeypatch.setenv("KARML_JAX_PME_INTRA_MODE", "full_minus_intra")
     for _ in range(2):
         hybrid_jax_pme_mm_lr_correction(
             pos,
@@ -317,7 +317,7 @@ def test_cross_mode_faster_than_legacy_loop(monkeypatch: pytest.MonkeyPatch) -> 
         )
     legacy_ms = (time.perf_counter() - t0) * 1000.0 / 3.0
 
-    monkeypatch.setenv("MMML_JAX_PME_INTRA_MODE", "cross")
+    monkeypatch.setenv("KARML_JAX_PME_INTRA_MODE", "cross")
     for _ in range(2):
         hybrid_jax_pme_mm_lr_correction(
             pos,

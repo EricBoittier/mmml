@@ -8,12 +8,12 @@ import numpy as np
 from ase import Atoms
 from ase.calculators.calculator import Calculator
 
-from mmml.interfaces.energy_forces.protocol import (
+from karml.interfaces.energy_forces.protocol import (
     EnergyForcesProvider,
     ProviderCapabilities,
     ProviderKind,
 )
-from mmml.interfaces.qc_backends.npz_output import stack_frame_results
+from karml.interfaces.qc_backends.npz_output import stack_frame_results
 
 
 class AseCalculatorProvider:

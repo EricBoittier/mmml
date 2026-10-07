@@ -40,8 +40,8 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 
-from mmml.md.results import energy_drift_metrics
-from mmml.utils.plotting.styles import apply_plot_style, legend_outside, seed_symbol
+from karml.md.results import energy_drift_metrics
+from karml.utils.plotting.styles import apply_plot_style, legend_outside, seed_symbol
 
 _STYLE_NAME = "icml"  # see docs/plot-style-gallery.md
 
@@ -85,7 +85,7 @@ def plot_energy_traces(rows: list[dict[str, str]], results_dir: Path, out: Path)
     Plotting relative to each trace's own starting energy puts water_box
     (~-75 eV) and peptide_water (~-500 to -560 eV, or the mixed_core_vdw
     outlier's ~1.7M eV -- see README.md/docs §11) on one comparable axis. The
-    dashed trend line is the same linear fit `mmml.md.results.energy_drift_metrics`
+    dashed trend line is the same linear fit `karml.md.results.energy_drift_metrics`
     reports as `energy_trend_ev_per_frame` -- the systematic tendency, as
     distinct from the shaded $\pm\sigma$ fluctuation band around it.
     """

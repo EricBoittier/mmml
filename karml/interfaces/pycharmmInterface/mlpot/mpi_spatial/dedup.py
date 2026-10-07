@@ -6,8 +6,8 @@ from typing import Optional
 
 import numpy as np
 
-from mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.active_set import RankActiveSet
-from mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domain import (
+from karml.interfaces.pycharmmInterface.mlpot.mpi_spatial.active_set import RankActiveSet
+from karml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domain import (
     SpatialDomainGrid,
     dimer_com_mic,
 )

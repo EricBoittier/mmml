@@ -9,14 +9,14 @@ term — one PME call over the whole charged system.  Intramolecular Coulomb
 is intentionally left in (the model trains against that same operator).
 
 Forces should come from ``jax.value_and_grad`` of this energy
-(see :func:`mmml.models.hybrid_energy.hybrid_forward`).
+(see :func:`karml.models.hybrid_energy.hybrid_forward`).
 """
 
 from __future__ import annotations
 
 import jax.numpy as jnp
 
-from mmml.interfaces.pycharmmInterface.long_range_backend import (
+from karml.interfaces.pycharmmInterface.long_range_backend import (
     nvalchemiops_pme_coulomb_energy_jax,
 )
 

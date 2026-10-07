@@ -1,4 +1,4 @@
-"""Compact CLI help catalog for ``mmml`` (used by ``-h``, ``commands``, ``examples``)."""
+"""Compact CLI help catalog for ``karml`` (used by ``-h``, ``commands``, ``examples``)."""
 
 from __future__ import annotations
 
@@ -36,7 +36,7 @@ COMMAND_GROUPS: tuple[tuple[str, tuple[CommandInfo, ...]], ...] = (
             CommandInfo("warmup-mlpot-jax", "Serial JAX JIT warmup for MLpot"),
             CommandInfo("mpi-check", "Validate OpenMPI/CHARMM/mpi4py for MLpot"),
             CommandInfo("mpi-launch", "Launch OpenMPI with an explicit JAX execution policy"),
-            CommandInfo("health-check", "Validate MMML/PyCHARMM/JAX interface health"),
+            CommandInfo("health-check", "Validate KARML/PyCHARMM/JAX interface health"),
         ),
     ),
     (
@@ -113,54 +113,54 @@ EXAMPLE_BLOCKS: tuple[tuple[str, tuple[str, ...]], ...] = (
     (
         "Residues & boxes",
         (
-            "mmml make-res --list-residues",
-            "mmml make-res --res CYBZ",
-            "mmml make-box --res CYBZ --n 50 --box-size 25.0",
-            "mmml liquid-box --composition DCM:206 --target-density-g-cm3 1.326 -o boxes/dcm206",
-            "mmml health-check --require-gpu",
+            "karml make-res --list-residues",
+            "karml make-res --res CYBZ",
+            "karml make-box --res CYBZ --n 50 --box-size 25.0",
+            "karml liquid-box --composition DCM:206 --target-density-g-cm3 1.326 -o boxes/dcm206",
+            "karml health-check --require-gpu",
         ),
     ),
     (
         "MD & campaigns",
         (
-            "mmml configure",
-            "mmml md-system --setup pbc_npt --composition MEOH:5,TIP3:5 --temperature 300",
-            "mmml md-system --config examples/pet_mad_etoh_pbc/yaml/pbc_nvt.yaml --job-id nve_smoke",
-            "mmml metatomic-pbc-md --ensemble nve --minimize-steps 60 --n-steps 400",
-            "mmml md-system --config campaign.yaml --run-all",
-            "mmml warmup-mlpot-jax --checkpoint \"$MMML_CKPT\" --n-monomers 20",
-            "mmml analyze-liquid --campaign-dir artifacts/lj_scales/liquid_dcm -o analysis/",
+            "karml configure",
+            "karml md-system --setup pbc_npt --composition MEOH:5,TIP3:5 --temperature 300",
+            "karml md-system --config examples/pet_mad_etoh_pbc/yaml/pbc_nvt.yaml --job-id nve_smoke",
+            "karml metatomic-pbc-md --ensemble nve --minimize-steps 60 --n-steps 400",
+            "karml md-system --config campaign.yaml --run-all",
+            "karml warmup-mlpot-jax --checkpoint \"$KARML_CKPT\" --n-monomers 20",
+            "karml analyze-liquid --campaign-dir artifacts/lj_scales/liquid_dcm -o analysis/",
         ),
     ),
     (
         "QM pipeline",
         (
-            "mmml fix-and-split --efd data.npz --output-dir ./splits",
-            "mmml fix-and-split --efd spice.npz -o ./splits --preserve-units",
-            "mmml npz2traj data.npz -o trajectory.traj",
-            "mmml pyscf-evaluate -i traj.npz -o out.npz --EF --esp",
-            "mmml compare-charmm-ml --checkpoint ~/ckpts/eg_joint "
+            "karml fix-and-split --efd data.npz --output-dir ./splits",
+            "karml fix-and-split --efd spice.npz -o ./splits --preserve-units",
+            "karml npz2traj data.npz -o trajectory.traj",
+            "karml pyscf-evaluate -i traj.npz -o out.npz --EF --esp",
+            "karml compare-charmm-ml --checkpoint ~/ckpts/eg_joint "
             "--valid-efd splits/energies_forces_dipoles_test.npz "
             "--valid-esp splits/grids_esp_test.npz --pdb pdb/initial.pdb "
             "--n-samples 50 --out-dir charmm_ml_comparison",
-            "mmml physnet-train --config train.yaml",
-            "mmml label-acquire --config workflows/label_acquisition/config.smoke.yaml all",
-            "mmml efield-train --train-npz splits/energies_forces_dipoles_train.npz "
+            "karml physnet-train --config train.yaml",
+            "karml label-acquire --config workflows/label_acquisition/config.smoke.yaml all",
+            "karml efield-train --train-npz splits/energies_forces_dipoles_train.npz "
             "--valid-npz splits/energies_forces_dipoles_valid.npz "
             "--polar_weight 1 --polar-at-zero-field",
-            "mmml pet-physnet-distill --checkpoint pet-mad.pt --out-dir ./acetone_pet_distill --preset smoke",
-            "mmml pet-interaction-pes --checkpoint \"$PET_MAD_CKPT\"",
-            "mmml mode-check --composition TIP3:1 --checkpoint \"$MMML_CKPT\" --output-dir ./mode_tip3_1",
-            "mmml mode-check --composition TIP3:2 --checkpoint \"$MMML_CKPT\" --output-dir ./mode_tip3_2 --checks minimize,fd,bond-scan,vibrations,kick",
-            "mmml mode-check --pbc-fd --checkpoint \"$MMML_CKPT\" --output artifacts/fd_force_check.json",
-            "mmml neb --config examples/m/yaml/neb.yaml --overwrite",
-            "mmml neb --checkpoint examples/m/kl.json "
+            "karml pet-physnet-distill --checkpoint pet-mad.pt --out-dir ./acetone_pet_distill --preset smoke",
+            "karml pet-interaction-pes --checkpoint \"$PET_MAD_CKPT\"",
+            "karml mode-check --composition TIP3:1 --checkpoint \"$KARML_CKPT\" --output-dir ./mode_tip3_1",
+            "karml mode-check --composition TIP3:2 --checkpoint \"$KARML_CKPT\" --output-dir ./mode_tip3_2 --checks minimize,fd,bond-scan,vibrations,kick",
+            "karml mode-check --pbc-fd --checkpoint \"$KARML_CKPT\" --output artifacts/fd_force_check.json",
+            "karml neb --config examples/m/yaml/neb.yaml --overwrite",
+            "karml neb --checkpoint examples/m/kl.json "
             "--initial examples/m/neb/reag_0_opt.xyz "
             "--final examples/m/neb/prod_0_opt.xyz "
             "--output-dir artifacts/nh3_ch3cl/neb --n-images 11 --fmax 0.05",
-            "mmml dmc --natm 20 --nwalker 512 --stepsize 5e-4 --nstep 5000 --eqstep 1000 "
-            "--alpha 1200.0 --checkpoint \"$MMML_CKPT\" "
-            "--input mmml/generate/dmc/examples/acetone_dmc.extxyz",
+            "karml dmc --natm 20 --nwalker 512 --stepsize 5e-4 --nstep 5000 --eqstep 1000 "
+            "--alpha 1200.0 --checkpoint \"$KARML_CKPT\" "
+            "--input karml/generate/dmc/examples/acetone_dmc.extxyz",
         ),
     ),
 )
@@ -175,7 +175,7 @@ def all_commands() -> list[str]:
 
 def format_commands_help(*, width: int = 78) -> str:
     lines = [
-        "MMML subcommands (grouped). For flag help: mmml <command> --help",
+        "KARML subcommands (grouped). For flag help: karml <command> --help",
         "",
     ]
     for group, cmds in COMMAND_GROUPS:
@@ -184,9 +184,9 @@ def format_commands_help(*, width: int = 78) -> str:
             pad = max(1, 22 - len(cmd.name))
             lines.append(f"  {cmd.name}{' ' * pad}{cmd.summary}")
         lines.append("")
-    lines.append("Find checkpoints / env paths: mmml env")
-    lines.append("Setup wizard:  mmml configure")
-    lines.append("More examples: mmml examples")
+    lines.append("Find checkpoints / env paths: karml env")
+    lines.append("Setup wizard:  karml configure")
+    lines.append("More examples: karml examples")
     return "\n".join(lines).rstrip()
 
 
@@ -197,19 +197,19 @@ def format_examples_help() -> str:
         for ex in examples:
             lines.append(f"  {ex}")
         lines.append("")
-    lines.append("Per-command flags: mmml <command> --help")
+    lines.append("Per-command flags: karml <command> --help")
     return "\n".join(lines).rstrip()
 
 
-def format_top_level_help(prog: str = "mmml") -> str:
-    """Short help for ``mmml -h`` (no giant epilog)."""
-    from mmml.cli.registry import _DISPATCH_COMMANDS
+def format_top_level_help(prog: str = "karml") -> str:
+    """Short help for ``karml -h`` (no giant epilog)."""
+    from karml.cli.registry import _DISPATCH_COMMANDS
 
     n_cmds = len(_DISPATCH_COMMANDS)
     lines = [
         f"usage: {prog} [-h] <command> ...",
         "",
-        "MMML: Machine Learning for Molecular Modeling",
+        "KARML: Machine Learning for Molecular Modeling",
         "",
         f"Subcommands ({n_cmds} total). Common:",
         "  md-system      mixed-composition MD (YAML + campaigns)",
@@ -218,13 +218,13 @@ def format_top_level_help(prog: str = "mmml") -> str:
         "  env            find resolved/bundled checkpoints and CHARMM paths",
         "  liquid-box     build periodic liquid boxes",
         "",
-        "Browse:   mmml commands",
-        "Setup:    mmml configure",
-        "Examples: mmml examples",
-        "Flags:    mmml <command> --help",
+        "Browse:   karml commands",
+        "Setup:    karml configure",
+        "Examples: karml examples",
+        "Flags:    karml <command> --help",
         "",
         "Tab completion (bash/zsh/fish):",
-        "  pip install 'mmml[cli]'",
+        "  pip install 'karml[cli]'",
         f"  eval \"$(register-python-argcomplete {prog})\"",
         "",
         f"options:",
@@ -244,4 +244,4 @@ def validate_command(name: str, *, allowed: Iterable[str]) -> str | None:
     if not close and len(name) >= 3:
         close = [c for c in allowed_list if c.startswith(name[:3])][:5]
     hint = f" Did you mean: {', '.join(close)}?" if close else ""
-    return f"Unknown command {name!r}.{hint} Run 'mmml commands'."
+    return f"Unknown command {name!r}.{hint} Run 'karml commands'."

@@ -19,7 +19,7 @@ AVOGADRO = 6.02214076e23
 
 def ml_atoms_for_cell(solvent: str, n_monomers: int) -> int:
     """ML atom count for a burst matrix cell (CGenFF all-atom monomer)."""
-    from mmml.interfaces.pycharmmInterface.mlpot.mlpot_limits import estimate_ml_atoms
+    from karml.interfaces.pycharmmInterface.mlpot.mlpot_limits import estimate_ml_atoms
 
     return estimate_ml_atoms(int(n_monomers), solvent=solvent)
 

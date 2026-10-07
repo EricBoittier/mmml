@@ -7,7 +7,7 @@ from unittest import mock
 
 import pytest
 
-from mmml.interfaces.pycharmmInterface.mlpot import mlpot_limits
+from karml.interfaces.pycharmmInterface.mlpot import mlpot_limits
 
 
 def _clear_limits_cache() -> None:
@@ -15,8 +15,8 @@ def _clear_limits_cache() -> None:
 
 
 def test_validate_rejects_too_many_ml_atoms(monkeypatch):
-    monkeypatch.setenv("MMML_CHARMM_MLPOT_MAX_ML", "100")
-    monkeypatch.setenv("MMML_CHARMM_MLPOT_MAX_PAIRS", "100000")
+    monkeypatch.setenv("KARML_CHARMM_MLPOT_MAX_ML", "100")
+    monkeypatch.setenv("KARML_CHARMM_MLPOT_MAX_PAIRS", "100000")
     try:
         mlpot_limits.validate_mlpot_system_size(450)
         assert False, "expected ValueError"
@@ -25,8 +25,8 @@ def test_validate_rejects_too_many_ml_atoms(monkeypatch):
 
 
 def test_validate_accepts_within_limits(monkeypatch):
-    monkeypatch.setenv("MMML_CHARMM_MLPOT_MAX_ML", "512")
-    monkeypatch.setenv("MMML_CHARMM_MLPOT_MAX_PAIRS", "300000")
+    monkeypatch.setenv("KARML_CHARMM_MLPOT_MAX_ML", "512")
+    monkeypatch.setenv("KARML_CHARMM_MLPOT_MAX_PAIRS", "300000")
     mlpot_limits.validate_mlpot_system_size(450)
 
 
@@ -99,8 +99,8 @@ def test_preflight_mlpot_registration_limits_delegates(monkeypatch):
 
 
 def test_ensure_mlpot_limits_for_system_raises_with_tier(monkeypatch):
-    monkeypatch.setenv("MMML_CHARMM_MLPOT_MAX_ML", "50000")
-    monkeypatch.setenv("MMML_CHARMM_MLPOT_MAX_PAIRS", "3998000")
+    monkeypatch.setenv("KARML_CHARMM_MLPOT_MAX_ML", "50000")
+    monkeypatch.setenv("KARML_CHARMM_MLPOT_MAX_PAIRS", "3998000")
     with pytest.raises(ValueError, match="ensure_charmm_mlpot_limits"):
         mlpot_limits.ensure_mlpot_limits_for_system(2195)
 
@@ -167,8 +167,8 @@ def test_select_npr_tier_for_build_aco_266_dense_l32():
 
 
 def test_validate_pbc_needs_larger_npr_than_vacuum(monkeypatch):
-    monkeypatch.setenv("MMML_CHARMM_MLPOT_MAX_ML", "50000")
-    monkeypatch.setenv("MMML_CHARMM_MLPOT_MAX_PAIRS", "12000000")
+    monkeypatch.setenv("KARML_CHARMM_MLPOT_MAX_ML", "50000")
+    monkeypatch.setenv("KARML_CHARMM_MLPOT_MAX_PAIRS", "12000000")
     _clear_limits_cache()
     # Vacuum estimate (~2.7M pairs) fits xlarge; PBC estimate (~16M) does not.
     mlpot_limits.validate_mlpot_system_size(1650, pbc=False)
@@ -177,22 +177,22 @@ def test_validate_pbc_needs_larger_npr_than_vacuum(monkeypatch):
 
 
 def test_validate_dense_aco_200_l32_needs_xxxlarge(monkeypatch):
-    monkeypatch.setenv("MMML_CHARMM_MLPOT_MAX_ML", "50000")
-    monkeypatch.setenv("MMML_CHARMM_MLPOT_MAX_PAIRS", "36000000")
+    monkeypatch.setenv("KARML_CHARMM_MLPOT_MAX_ML", "50000")
+    monkeypatch.setenv("KARML_CHARMM_MLPOT_MAX_PAIRS", "36000000")
     _clear_limits_cache()
     with pytest.raises(ValueError, match="max_Npr"):
         mlpot_limits.validate_mlpot_system_size(2000, pbc=True, box_side_A=32.0)
-    monkeypatch.setenv("MMML_CHARMM_MLPOT_MAX_PAIRS", "56000000")
+    monkeypatch.setenv("KARML_CHARMM_MLPOT_MAX_PAIRS", "56000000")
     _clear_limits_cache()
     mlpot_limits.validate_mlpot_system_size(2000, pbc=True, box_side_A=32.0)
 
 
 def test_register_mlpot_validates_pbc_pair_budget(monkeypatch):
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import register_mlpot
+    from karml.interfaces.pycharmmInterface.mlpot.setup import register_mlpot
 
     # Fully-mocked unit test of the PBC pair-budget path; bypass the MPI-launcher
     # gate that would otherwise refuse serial python for MPI-linked libcharmm.
-    monkeypatch.setenv("MMML_ALLOW_SERIAL_MPI_CHARMM", "1")
+    monkeypatch.setenv("KARML_ALLOW_SERIAL_MPI_CHARMM", "1")
 
     calls: list[tuple[int, bool, float | None]] = []
 
@@ -200,54 +200,54 @@ def test_register_mlpot_validates_pbc_pair_budget(monkeypatch):
         calls.append((n_ml, pbc, box_side_A))
 
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.mlpot_limits.validate_mlpot_system_size",
+        "karml.interfaces.pycharmmInterface.mlpot.mlpot_limits.validate_mlpot_system_size",
         _capture,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup._import_pycharmm",
+        "karml.interfaces.pycharmmInterface.mlpot.setup._import_pycharmm",
         lambda: mock.MagicMock(),
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.physnet_ml_atomic_numbers",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.physnet_ml_atomic_numbers",
         lambda z: z,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup._registration_pbc_box_side_A",
+        "karml.interfaces.pycharmmInterface.mlpot.setup._registration_pbc_box_side_A",
         lambda *_a, **_k: 32.0,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.mlpot_limits.mlpot_limits_status",
+        "karml.interfaces.pycharmmInterface.mlpot.mlpot_limits.mlpot_limits_status",
         lambda: mock.MagicMock(max_npr=100_000, source="test"),
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup._suspend_pbc_for_cgenff_param_read",
+        "karml.interfaces.pycharmmInterface.mlpot.setup._suspend_pbc_for_cgenff_param_read",
         lambda *args, **kwargs: None,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup._finalize_pbc_mlpot_exclusions_after_param_read",
+        "karml.interfaces.pycharmmInterface.mlpot.setup._finalize_pbc_mlpot_exclusions_after_param_read",
         lambda *args, **kwargs: None,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup._require_mlpot_skip_iblo_support",
+        "karml.interfaces.pycharmmInterface.mlpot.setup._require_mlpot_skip_iblo_support",
         lambda *_a, **_k: None,
     )
     sel = mock.MagicMock()
     sel.get_atom_indexes.return_value = list(range(1650))
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.charmm_levels.charmm_relaxed_bomlev",
+        "karml.interfaces.pycharmmInterface.charmm_levels.charmm_relaxed_bomlev",
         return_value=mock.MagicMock(
             __enter__=mock.Mock(return_value=None),
             __exit__=mock.Mock(return_value=False),
         ),
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.block_terms.apply_mlpot_registration_mm_off",
+        "karml.interfaces.pycharmmInterface.mlpot.block_terms.apply_mlpot_registration_mm_off",
         return_value="all",
-    ), mock.patch("mmml.interfaces.pycharmmInterface.mlpot.setup._require_mlpot_skip_iblo_support"), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup._install_ml_exclusions"
+    ), mock.patch("karml.interfaces.pycharmmInterface.mlpot.setup._require_mlpot_skip_iblo_support"), mock.patch(
+        "karml.interfaces.pycharmmInterface.mlpot.setup._install_ml_exclusions"
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.assert_charmm_pbc_lattice_ready_for_mlpot",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.assert_charmm_pbc_lattice_ready_for_mlpot",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.charmm_image_geometry.run_mlpot_pbc_image_registration_gate",
+        "karml.interfaces.pycharmmInterface.charmm_image_geometry.run_mlpot_pbc_image_registration_gate",
     ):
         register_mlpot(mock.MagicMock(), list(range(1650)), sel, use_pbc=True)
     assert calls == [(1650, True, None)]
@@ -283,8 +283,8 @@ def test_limits_status_reads_tier_api_func(tmp_path, monkeypatch):
     monkeypatch.setenv("CHARMM_LIB_DIR", str(lib_dir))
     monkeypatch.setenv("CHARMM_HOME", str(charmm_home))
     # This asserts which api_func.F90 discovery picks, not whether a build
-    # exists, so it must not inherit `make test-ci`'s MMML_DISABLE_CHARMM=1.
-    monkeypatch.delenv("MMML_DISABLE_CHARMM", raising=False)
+    # exists, so it must not inherit `make test-ci`'s KARML_DISABLE_CHARMM=1.
+    monkeypatch.delenv("KARML_DISABLE_CHARMM", raising=False)
     _clear_limits_cache()
 
     status = mlpot_limits.mlpot_limits_status()

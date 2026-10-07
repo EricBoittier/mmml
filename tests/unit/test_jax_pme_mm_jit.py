@@ -10,11 +10,11 @@ import pytest
 jax = pytest.importorskip("jax")
 import jax.numpy as jnp
 
-from mmml.interfaces.pycharmmInterface.jax_pme_hybrid_coulomb import (
+from karml.interfaces.pycharmmInterface.jax_pme_hybrid_coulomb import (
     HybridJaxPmeCorrectionResult,
     HybridJaxPmeMmResult,
 )
-from mmml.interfaces.pycharmmInterface.mm_energy_forces import (
+from karml.interfaces.pycharmmInterface.mm_energy_forces import (
     _box_length_from_cell_jax,
     _wrap_mm_fn_with_jax_pme_coulomb,
 )
@@ -98,7 +98,7 @@ def test_wrap_mm_fn_jax_pme_static_path_under_jit(monkeypatch) -> None:
         return _fake_hybrid_lr(np.asarray(args[0], dtype=np.float64))
 
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.jax_pme_hybrid_coulomb.hybrid_jax_pme_mm_lr_correction",
+        "karml.interfaces.pycharmmInterface.jax_pme_hybrid_coulomb.hybrid_jax_pme_mm_lr_correction",
         _fake,
     )
     wrapped = _wrap_mm_fn_with_jax_pme_coulomb(_lj_only_mm_fn, **_wrap_kwargs(dynamic=False))
@@ -114,7 +114,7 @@ def test_wrap_mm_fn_jax_pme_dynamic_path_under_jit(monkeypatch) -> None:
         return _fake_hybrid_lr(np.asarray(args[0], dtype=np.float64))
 
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.jax_pme_hybrid_coulomb.hybrid_jax_pme_mm_lr_correction",
+        "karml.interfaces.pycharmmInterface.jax_pme_hybrid_coulomb.hybrid_jax_pme_mm_lr_correction",
         _fake,
     )
     wrapped = _wrap_mm_fn_with_jax_pme_coulomb(
@@ -144,7 +144,7 @@ def test_wrap_mm_fn_jax_pme_dynamic_path_uses_static_pbc_when_box_missing(monkey
         return _fake_hybrid_lr(np.zeros((5, 3), dtype=np.float64))
 
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.jax_pme_hybrid_coulomb.hybrid_jax_pme_mm_lr_correction",
+        "karml.interfaces.pycharmmInterface.jax_pme_hybrid_coulomb.hybrid_jax_pme_mm_lr_correction",
         _fake,
     )
     wrapped = _wrap_mm_fn_with_jax_pme_coulomb(
@@ -173,7 +173,7 @@ def test_wrap_mm_fn_pme_pure_callback_enters_host_context(monkeypatch) -> None:
         yield
 
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.long_range_backend.jax_pme_pure_callback_host_context",
+        "karml.interfaces.pycharmmInterface.long_range_backend.jax_pme_pure_callback_host_context",
         _track_ctx,
     )
 
@@ -182,7 +182,7 @@ def test_wrap_mm_fn_pme_pure_callback_enters_host_context(monkeypatch) -> None:
         return _fake_hybrid_lr(np.asarray(args[0], dtype=np.float64))
 
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.jax_pme_hybrid_coulomb.hybrid_jax_pme_mm_lr_correction",
+        "karml.interfaces.pycharmmInterface.jax_pme_hybrid_coulomb.hybrid_jax_pme_mm_lr_correction",
         _fake,
     )
     kw = _wrap_kwargs(dynamic=False)

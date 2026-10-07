@@ -25,13 +25,13 @@ from typing import Any
 
 import numpy as np
 
-from mmml.analysis.crystal_contacts import (
+from karml.analysis.crystal_contacts import (
     Contact,
     collapse_equivalent,
     element_pair_contacts,
     molecular_frames,
 )
-from mmml.analysis.lattice_energy import SublimationReference
+from karml.analysis.lattice_energy import SublimationReference
 
 __all__ = [
     "AcetonePhase",
@@ -88,7 +88,7 @@ class AcetonePhase:
         return self.ordered_hydrogens
 
     def cif_path(self):
-        from mmml.paths import default_acetone_crystal_cif
+        from karml.paths import default_acetone_crystal_cif
 
         return default_acetone_crystal_cif(self.key)
 
@@ -290,7 +290,7 @@ def carbonyl_contacts(
     list reads like the distances quoted in a crystallographic paper rather
     than a per-atom dump.
     """
-    from mmml.analysis.lattice_energy import lattice_shift_vectors, molecular_reach_A
+    from karml.analysis.lattice_energy import lattice_shift_vectors, molecular_reach_A
 
     mol_id, positions, cell = molecular_frames(atoms)
     z = np.asarray(atoms.get_atomic_numbers(), dtype=int)

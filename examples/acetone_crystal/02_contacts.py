@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import sys
 
-from mmml.analysis.acetone_crystal import (
+from karml.analysis.acetone_crystal import (
     ACETONE_CRYSTAL_PHASES,
     carbonyl_contacts,
     ch_o_contacts,

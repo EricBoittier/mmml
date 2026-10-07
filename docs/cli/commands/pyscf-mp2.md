@@ -1,4 +1,4 @@
-# `mmml pyscf-mp2`
+# `karml pyscf-mp2`
 
 GPU MP2.
 
@@ -6,13 +6,13 @@ GPU MP2.
 ## Usage
 
 ```bash
-mmml pyscf-mp2 --help
+karml pyscf-mp2 --help
 ```
 
 ## Options
 
 ```text
-usage: mmml pyscf-mp2 [-h] --mol MOL [--output OUTPUT] [--basis BASIS]
+usage: karml pyscf-mp2 [-h] --mol MOL [--output OUTPUT] [--basis BASIS]
                       [--spin SPIN] [--charge CHARGE] [--energy] [--gradient]
                       [--gradient-fd] [--fd-step ANG] [--log_file LOG_FILE]
 

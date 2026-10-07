@@ -9,7 +9,7 @@ GEOM_ID="${2:?usage: job_shell.sh PRESET_ID GEOM_ID}"
 
 cd "$REPO_ROOT"
 
-PY="${MMML_PYTHON:-}"
+PY="${KARML_PYTHON:-}"
 if [[ -z "$PY" && -x "$REPO_ROOT/.venv/bin/python" ]]; then
   PY="$REPO_ROOT/.venv/bin/python"
 fi
@@ -17,13 +17,13 @@ if [[ -z "$PY" ]]; then
   PY="$(command -v python3)"
 fi
 
-export MMML_BIN="${MMML_BIN:-}"
-if [[ -z "$MMML_BIN" && -x "$REPO_ROOT/.venv/bin/mmml" ]]; then
-  export MMML_BIN="$REPO_ROOT/.venv/bin/mmml"
+export KARML_BIN="${KARML_BIN:-}"
+if [[ -z "$KARML_BIN" && -x "$REPO_ROOT/.venv/bin/karml" ]]; then
+  export KARML_BIN="$REPO_ROOT/.venv/bin/karml"
 fi
 
 echo "=== cutoff sweep: preset=${PRESET_ID} geom=${GEOM_ID} ===" >&2
-echo "MMML_CKPT=${MMML_CKPT:-<unset>}" >&2
+echo "KARML_CKPT=${KARML_CKPT:-<unset>}" >&2
 
 "$PY" -c "
 import sys

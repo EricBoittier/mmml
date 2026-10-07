@@ -10,11 +10,11 @@ import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as np
 
-from mmml.models.kernnn.args import build_evaluate_parser as build_parser
-from mmml.models.kernnn.checkpoint import load_checkpoint
-from mmml.models.kernnn.kernels import print_kernel_table
-from mmml.models.kernnn.model import energy_and_forces
-from mmml.utils.cli_args import exit_if_unknown_long_options
+from karml.models.kernnn.args import build_evaluate_parser as build_parser
+from karml.models.kernnn.checkpoint import load_checkpoint
+from karml.models.kernnn.kernels import print_kernel_table
+from karml.models.kernnn.model import energy_and_forces
+from karml.utils.cli_args import exit_if_unknown_long_options
 
 EV_TO_KCAL_MOL = 23.060541945
 
@@ -22,7 +22,7 @@ EV_TO_KCAL_MOL = 23.060541945
 def get_args(argv: list[str] | None = None):
     parser = build_parser()
     args, unknown = parser.parse_known_args(argv)
-    exit_if_unknown_long_options(unknown, prog="mmml kernnn-evaluate")
+    exit_if_unknown_long_options(unknown, prog="karml kernnn-evaluate")
     return args
 
 

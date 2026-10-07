@@ -14,7 +14,7 @@ import numpy as np
 from ase import Atoms
 from ase.io import write as ase_write
 
-from mmml.interfaces.qc_backends.npz_output import stack_frame_results
+from karml.interfaces.qc_backends.npz_output import stack_frame_results
 
 _DEFAULT_SIMPLE_LINE = "! {method} {basis} EnGrad"
 _DEFAULT_PAL = 1
@@ -193,7 +193,7 @@ class OrcaQMBackend:
         for atoms in frames:
             frames_z.append(np.asarray(atoms.get_atomic_numbers(), dtype=np.int32))
             frames_r.append(np.asarray(atoms.get_positions(), dtype=np.float64))
-            with tempfile.TemporaryDirectory(prefix="mmml_orca_qm_") as tmp:
+            with tempfile.TemporaryDirectory(prefix="karml_orca_qm_") as tmp:
                 workdir = Path(tmp)
                 energy, gradient = self._run_single(atoms, workdir)
                 energies.append(float(energy))

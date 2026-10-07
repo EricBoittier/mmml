@@ -44,7 +44,7 @@ uv run python examples/lj_scales/_pad_merge_npz.py \
 # Keep LJ_DATASET in sync for step 05 when LJ_JOINT=1.
 export LJ_DATASET="${MERGED}"
 
-uv run mmml prepare-mm-dataset \
+uv run karml prepare-mm-dataset \
   --data "${MERGED}" \
   --output "${ENRICHED}" \
   --num-workers "${LJ_WORKERS:-4}" \

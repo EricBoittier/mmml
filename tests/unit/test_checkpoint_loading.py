@@ -8,12 +8,12 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from mmml.interfaces.calculators.checkpoint_loading import (
+from karml.interfaces.calculators.checkpoint_loading import (
     detect_checkpoint_format,
     load_checkpoint_bundle,
     validate_checkpoint_path,
 )
-from mmml.utils.model_checkpoint import to_jsonable
+from karml.utils.model_checkpoint import to_jsonable
 
 
 def test_detect_checkpoint_format_json_file(tmp_path: Path) -> None:

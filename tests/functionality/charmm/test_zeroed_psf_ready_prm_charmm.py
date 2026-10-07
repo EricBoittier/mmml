@@ -48,12 +48,12 @@ _TIP3_PSF = PYCHARMMETC_DIR / "psf" / "tip3-1.psf"
 
 # Locate the bundled CGenFF RTF (needed for atom type lookup even when PRM is zeroed).
 def _cgenff_rtf() -> str:
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_RTF
+    from karml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_RTF
     return CGENFF_RTF
 
 
 def _cgenff_prm_src() -> Path:
-    from mmml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap import cgenff_prm_path
+    from karml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap import cgenff_prm_path
     return cgenff_prm_path()
 
 
@@ -63,7 +63,7 @@ def _cgenff_prm_src() -> Path:
 
 def _make_zeroed_prm(tmp_path: Path, *, note: str = "", include_nonbonded_zeros: bool = False) -> Path:
     """Write the zeroed PSF-ready .prm for the current CGenFF source."""
-    from mmml.interfaces.pycharmmInterface.charmm_prm_zero import write_zeroed_psf_ready_prm
+    from karml.interfaces.pycharmmInterface.charmm_prm_zero import write_zeroed_psf_ready_prm
 
     src = _cgenff_prm_src()
     if not src.is_file():
@@ -77,8 +77,8 @@ def _load_zeroed_prm_and_psf(zeroed_prm: Path, psf_workdir_name: str, pdb_workdi
     """Read RTF + zeroed PRM + PSF + PDB into the live CHARMM session."""
     import pycharmm.read as read
 
-    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
-    from mmml.interfaces.pycharmmInterface.cgenff_bonded_reference import (
+    from karml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
+    from karml.interfaces.pycharmmInterface.cgenff_bonded_reference import (
         read_pdb_file,
         read_psf_card_file,
     )
@@ -98,7 +98,7 @@ def _run_ener_and_get_terms() -> dict[str, float]:
     import pycharmm
     import pycharmm.energy as energy
 
-    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_silent_command
+    from karml.interfaces.pycharmmInterface.charmm_levels import charmm_silent_command
 
     with charmm_silent_command():
         pycharmm.lingo.charmm_script("ENER")
@@ -118,7 +118,7 @@ def test_aco_vdw_is_zero_after_zeroed_prm_read(pycharmm_workdir: Path) -> None:
     zeroed = _make_zeroed_prm(pycharmm_workdir)
     _load_zeroed_prm_and_psf(zeroed, "aco-1.psf", "aco.pdb")
 
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import setup_default_nbonds
+    from karml.interfaces.pycharmmInterface.mlpot.setup import setup_default_nbonds
 
     setup_default_nbonds()
     terms = _run_ener_and_get_terms()
@@ -136,7 +136,7 @@ def test_aco_imnb_is_zero_after_zeroed_prm_read(pycharmm_workdir: Path) -> None:
     zeroed = _make_zeroed_prm(pycharmm_workdir)
     _load_zeroed_prm_and_psf(zeroed, "aco-1.psf", "aco.pdb")
 
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import setup_default_nbonds
+    from karml.interfaces.pycharmmInterface.mlpot.setup import setup_default_nbonds
 
     setup_default_nbonds()
     terms = _run_ener_and_get_terms()
@@ -152,7 +152,7 @@ def test_aco_bonded_terms_are_zero_after_zeroed_prm_read(pycharmm_workdir: Path)
     zeroed = _make_zeroed_prm(pycharmm_workdir)
     _load_zeroed_prm_and_psf(zeroed, "aco-1.psf", "aco.pdb")
 
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import setup_default_nbonds
+    from karml.interfaces.pycharmmInterface.mlpot.setup import setup_default_nbonds
 
     setup_default_nbonds()
     terms = _run_ener_and_get_terms()
@@ -173,7 +173,7 @@ def test_aco_elec_nonzero_charges_still_present(pycharmm_workdir: Path) -> None:
     zeroed = _make_zeroed_prm(pycharmm_workdir)
     _load_zeroed_prm_and_psf(zeroed, "aco-1.psf", "aco.pdb")
 
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import setup_default_nbonds
+    from karml.interfaces.pycharmmInterface.mlpot.setup import setup_default_nbonds
 
     setup_default_nbonds()
     terms = _run_ener_and_get_terms()
@@ -199,12 +199,12 @@ def test_full_prm_gives_nonzero_vdw_for_aco(pycharmm_workdir: Path) -> None:
     """
     import pycharmm.read as read
 
-    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
-    from mmml.interfaces.pycharmmInterface.cgenff_bonded_reference import (
+    from karml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
+    from karml.interfaces.pycharmmInterface.cgenff_bonded_reference import (
         read_pdb_file,
         read_psf_card_file,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import setup_default_nbonds
+    from karml.interfaces.pycharmmInterface.mlpot.setup import setup_default_nbonds
 
     src = _cgenff_prm_src()
     if not src.is_file():
@@ -259,13 +259,13 @@ def test_zeroed_prm_append_after_full_prm_zeros_vdw(pycharmm_workdir: Path) -> N
     """
     import pycharmm.read as read
 
-    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
-    from mmml.interfaces.pycharmmInterface.cgenff_bonded_reference import (
+    from karml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
+    from karml.interfaces.pycharmmInterface.cgenff_bonded_reference import (
         read_pdb_file,
         read_psf_card_file,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import setup_default_nbonds
-    from mmml.interfaces.pycharmmInterface.nbonds_config import (
+    from karml.interfaces.pycharmmInterface.mlpot.setup import setup_default_nbonds
+    from karml.interfaces.pycharmmInterface.nbonds_config import (
         CGENFF_PRM_BOMLEV,
         read_cgenff_prm,
     )
@@ -291,7 +291,7 @@ def test_zeroed_prm_append_after_full_prm_zeros_vdw(pycharmm_workdir: Path) -> N
 
     # Rebuild nonbond lists after READ PARAM APPEND clears them (PARMIO).
     import pycharmm
-    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_silent_command
+    from karml.interfaces.pycharmmInterface.charmm_levels import charmm_silent_command
     setup_default_nbonds()
     with charmm_silent_command():
         pycharmm.lingo.charmm_script("UPDAte")

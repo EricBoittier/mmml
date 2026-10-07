@@ -1,20 +1,20 @@
 #!/usr/bin/env bash
 # Launch pbc_liquid_density_dyn on Slurm.
 # Usage: snakemake_slurm.sh [MAX_JOBS]
-#   MMML_SNAKEMAKE_PROFILE=profiles/slurm-cpu MMML_WORKFLOW_CONFIG=config.pc-bach.cpu.yaml ...
+#   KARML_SNAKEMAKE_PROFILE=profiles/slurm-cpu KARML_WORKFLOW_CONFIG=config.pc-bach.cpu.yaml ...
 set -euo pipefail
 
 WORKFLOW_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$WORKFLOW_ROOT"
 
 REPO_ROOT="$(cd "$WORKFLOW_ROOT/../.." && pwd)"
-# shellcheck source=../../../scripts/resolve_mmml_env.sh
-source "$REPO_ROOT/scripts/resolve_mmml_env.sh"
-mmml_resolve_env "$REPO_ROOT"
-PY="${MMML_PYTHON}"
+# shellcheck source=../../../scripts/resolve_karml_env.sh
+source "$REPO_ROOT/scripts/resolve_karml_env.sh"
+karml_resolve_env "$REPO_ROOT"
+PY="${KARML_PYTHON}"
 
-PROFILE="${MMML_SNAKEMAKE_PROFILE:-profiles/slurm}"
-_cfg_raw="${MMML_WORKFLOW_CONFIG:-config.yaml}"
+PROFILE="${KARML_SNAKEMAKE_PROFILE:-profiles/slurm}"
+_cfg_raw="${KARML_WORKFLOW_CONFIG:-config.yaml}"
 if [[ "$_cfg_raw" = /* ]]; then
   CFG_PATH="$_cfg_raw"
 elif [[ "$_cfg_raw" == */* ]]; then
@@ -22,10 +22,10 @@ elif [[ "$_cfg_raw" == */* ]]; then
 else
   CFG_PATH="${WORKFLOW_ROOT}/${_cfg_raw}"
 fi
-export MMML_WORKFLOW_CONFIG="$CFG_PATH"
+export KARML_WORKFLOW_CONFIG="$CFG_PATH"
 CONFIG_ARGS=(--configfile "$CFG_PATH")
 
-_LOCK_DIR="${MMML_SNAKEMAKE_LOCK_DIR:-/tmp/mmml_snakemake_locks_${USER:-$(id -un)}}"
+_LOCK_DIR="${KARML_SNAKEMAKE_LOCK_DIR:-/tmp/karml_snakemake_locks_${USER:-$(id -un)}}"
 mkdir -p "$_LOCK_DIR"
 _CFG_LOCK="${_LOCK_DIR}/$(basename "$CFG_PATH").driver.lock"
 if ! flock -n 9; then
@@ -39,7 +39,7 @@ if [[ -z "${CHARMM_LIB_DIR:-}" ]]; then
       2>/dev/null | grep '^export CHARMM_LIB_DIR=' || true
   )"
 fi
-export CHARMM_LIB_DIR="${CHARMM_LIB_DIR:-$HOME/.cache/mmml-charmm-build/tier_56000000_nodomdec/lib}"
+export CHARMM_LIB_DIR="${CHARMM_LIB_DIR:-$HOME/.cache/karml-charmm-build/tier_56000000_nodomdec/lib}"
 IFS=$'\t' read -r DEFAULT_JOBS DEFAULT_RES <<EOF
 $("$PY" -c "
 import sys
@@ -59,13 +59,13 @@ fi
 JOBS="${1:-$DEFAULT_JOBS}"
 shift || true
 
-UV="${MMML_UV:-}"
+UV="${KARML_UV:-}"
 if [[ -z "$UV" || ! -x "$UV" ]]; then
-  echo "ERROR: uv not found (set MMML_UV or install uv in ~/.local/bin)" >&2
+  echo "ERROR: uv not found (set KARML_UV or install uv in ~/.local/bin)" >&2
   exit 1
 fi
 
-echo "Snakemake Slurm: profile=${PROFILE} config=${CFG_PATH} MMML_CKPT=${MMML_CKPT:-<unset>} -j${JOBS} --resources ${DEFAULT_RES}" >&2
+echo "Snakemake Slurm: profile=${PROFILE} config=${CFG_PATH} KARML_CKPT=${KARML_CKPT:-<unset>} -j${JOBS} --resources ${DEFAULT_RES}" >&2
 
 # Stale lock after a killed driver or overlapping launch attempts.
 # --no-project: avoid broken namespace packages in .venv (e.g. pyarrow NFS stubs)

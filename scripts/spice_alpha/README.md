@@ -4,7 +4,7 @@ No downloads. Point these scripts at the unzipped Zenodo 19205036 tree
 (`SPICE-alpha.zip` already extracted).
 
 Polarizability is trained on the **efield** model as an extra loss term:
-`α = dμ/dEf` evaluated at **Ef = 0** (`mmml.models.efield.model_functions`).
+`α = dμ/dEf` evaluated at **Ef = 0** (`karml.models.efield.model_functions`).
 Labels are converted from the release unit `e·Å²/V` to Bohr³.
 
 `train_efield_polar.sh` **forces `JAX_ENABLE_X64=0`**. SciCORE's
@@ -17,14 +17,14 @@ Do not source that prolog for this job. No CHARMM.
 # still reads the first molecule group, then (if that is also empty)
 # assumes SPICE-α README Å/eV units. Explicit Hartree/Bohr on that group
 # is refused unless --allow-atomic-units.
-scripts/spice_alpha/prepare_efield_dataset.sh ~/data/spicealpha ./spice_mmml 256
+scripts/spice_alpha/prepare_efield_dataset.sh ~/data/spicealpha ./spice_karml 256
 # dimers later: INCLUDE_DIMERS=1 scripts/spice_alpha/prepare_efield_dataset.sh ... 0
 python scripts/spice_alpha/check_efield_npz.py \
-  ./spice_mmml/splits_des_mono/energies_forces_dipoles_{train,valid}.npz
+  ./spice_karml/splits_des_mono/energies_forces_dipoles_{train,valid}.npz
 
 # 2. Full DES370K monomers (new tree; skip dimers). Prefer a CPU sbatch.
 SKIP_DIMERS=1 scripts/spice_alpha/prepare_efield_dataset.sh \
-  ~/data/spicealpha ~/data/spicealpha/mmml_efield_full 0
+  ~/data/spicealpha ~/data/spicealpha/karml_efield_full 0
 # or: sbatch scripts/spice_alpha/prepare_efield_dataset.sbatch
 
 # 3. GPU smoke, then full. MODE=full defaults POLAR_WEIGHT=100 (1 left
@@ -36,7 +36,7 @@ sbatch --time=06:00:00 --qos=rtx4090-6hours \
   scripts/spice_alpha/train_efield_polar.sbatch
 # all monomers. B=16 F=64 and B=64 F=32 both died in polar-JVP XLA autotune.
 sbatch --partition=rtx4090 --qos=rtx4090-6hours --time=06:00:00 \
-  --export=ALL,MODE=big,EPOCHS=100,BATCH_SIZE=4,SPLITS=$HOME/data/spicealpha/mmml_efield_full/splits_des_mono,CKPT=$HOME/mmml/ckpts/spice_ef_polar_big \
+  --export=ALL,MODE=big,EPOCHS=100,BATCH_SIZE=4,SPLITS=$HOME/data/spicealpha/karml_efield_full/splits_des_mono,CKPT=$HOME/karml/ckpts/spice_ef_polar_big \
   scripts/spice_alpha/train_efield_polar.sbatch
 ```
 
@@ -44,7 +44,7 @@ Interactive GPU (after an allocation):
 
 ```bash
 BATCH_SIZE=8 FEATURES=16 MAX_DEGREE=1 \
-  scripts/spice_alpha/train_efield_polar.sh ./spice_mmml/splits_des_mono ./ckpts/spice_ef_polar 2
+  scripts/spice_alpha/train_efield_polar.sh ./spice_karml/splits_des_mono ./ckpts/spice_ef_polar 2
 ```
 
 Equivalent one-liners: `docs/spice-alpha.md`.

@@ -4,7 +4,7 @@ import jax
 import jax.numpy as jnp
 import jax.scipy.special
 
-from mmml.models.physnetjax.physnetjax.models.mpnn_kernels import (
+from karml.models.physnetjax.physnetjax.models.mpnn_kernels import (
     encode_geometry_and_basis,
 )
 

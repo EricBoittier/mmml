@@ -215,7 +215,7 @@ python abfe_script.py --sdf path/to/ligand.sdf --pdb path/to/protein.pdb
 python abfe_script.py --sdf ligand.sdf --pdb protein.pdb -o my_results --protocol-repeats 3
 
 
-from mmml.interfaces.openfeInterface.abfe_script import run_abfe
+from karml.interfaces.openfeInterface.abfe_script import run_abfe
 
 config = {"sdf": "toluene.sdf", "pdb": "t4_lysozyme.pdb"}
 result = run_abfe(config, output_dir="abfe_results")

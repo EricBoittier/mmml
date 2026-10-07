@@ -15,7 +15,7 @@ if [[ ! -f examples/m/neb/reag_0_opt.xyz ]]; then
 fi
 
 echo "=== umbrella-sample: $(basename "${CFG}") ==="
-uv run mmml umbrella-sample --config "${CFG}" --output-dir "${OUT}" --overwrite
+uv run karml umbrella-sample --config "${CFG}" --output-dir "${OUT}" --overwrite
 
 SUMMARY="${OUT}/umbrella_summary.json"
 SNAP="${OUT}/umbrella_snapshots.npz"

@@ -8,7 +8,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from mmml.analysis.npz_comparison import (
+from karml.analysis.npz_comparison import (
     align_npz_arrays,
     compare_npz_arrays,
     compute_element_force_metrics,
@@ -18,7 +18,7 @@ from mmml.analysis.npz_comparison import (
     plot_comparison,
     write_comparison_report,
 )
-from mmml.interfaces.pyscf4gpuInterface.finite_difference import (
+from karml.interfaces.pyscf4gpuInterface.finite_difference import (
     central_difference_gradient,
 )
 
@@ -101,7 +101,7 @@ def test_central_difference_quadratic():
     grad = central_difference_gradient(energy_fn, r0, step_ang=1e-4)
     # dE/dx = 2x Ha/Å -> convert to Ha/Bohr
     expected_ha_ang = 2.0 * r0
-    from mmml.data.units import EV_ANGSTROM_TO_HARTREE_BOHR, HARTREE_TO_EV
+    from karml.data.units import EV_ANGSTROM_TO_HARTREE_BOHR, HARTREE_TO_EV
 
     expected = expected_ha_ang * HARTREE_TO_EV * EV_ANGSTROM_TO_HARTREE_BOHR
     np.testing.assert_allclose(grad, expected, rtol=1e-3, atol=1e-3)

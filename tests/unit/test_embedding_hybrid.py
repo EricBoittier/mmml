@@ -8,7 +8,7 @@ from unittest import mock
 
 import pytest
 
-from mmml.interfaces.pycharmmInterface.mlpot.embedding_hybrid import (
+from karml.interfaces.pycharmmInterface.mlpot.embedding_hybrid import (
     EmbeddingValidationResult,
     export_embedding_checkpoint,
     validate_embedding_monomer_potential,
@@ -18,7 +18,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.embedding_hybrid import (
 def test_partial_mlmm_config_forwards_pbc_to_register() -> None:
     from unittest import mock
 
-    from mmml.interfaces.pycharmmInterface.mlpot.partial_mm import (
+    from karml.interfaces.pycharmmInterface.mlpot.partial_mm import (
         PartialMlMmConfig,
         register_mlpot_partial_mm,
     )
@@ -29,10 +29,10 @@ def test_partial_mlmm_config_forwards_pbc_to_register() -> None:
         cubic_box_side_A=28.0,
     )
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.select_by_seg_id",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.select_by_seg_id",
         return_value=mock.Mock(),
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.partial_mm.register_mlpot",
+        "karml.interfaces.pycharmmInterface.mlpot.partial_mm.register_mlpot",
         return_value="ctx",
     ) as reg:
         out = register_mlpot_partial_mm(object(), [1, 6, 1], cfg)
@@ -42,7 +42,7 @@ def test_partial_mlmm_config_forwards_pbc_to_register() -> None:
 
 
 def test_read_crd_coordinates_parses_ext_card(tmp_path: Path) -> None:
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         read_crd_coordinates,
     )
 
@@ -66,7 +66,7 @@ def test_embedding_run_uses_apply_crd_not_coor_card() -> None:
     """Regression: md-embedding run must not call pycharmm read.coor_card."""
     import inspect
 
-    from mmml.interfaces.pycharmmInterface.mlpot import embedding_workflow
+    from karml.interfaces.pycharmmInterface.mlpot import embedding_workflow
 
     src = inspect.getsource(embedding_workflow.run_embedding_phase)
     code_lines = [
@@ -84,10 +84,10 @@ def test_export_embedding_checkpoint_calls_orbax_to_json(tmp_path: Path) -> None
     epoch.mkdir()
     out_json = tmp_path / "params.json"
     with mock.patch(
-        "mmml.utils.model_checkpoint.orbax_to_json",
+        "karml.utils.model_checkpoint.orbax_to_json",
         return_value=out_json,
     ) as orbax_fn, mock.patch(
-        "mmml.cli.base.resolve_checkpoint_paths",
+        "karml.cli.base.resolve_checkpoint_paths",
         return_value=(tmp_path, epoch),
     ):
         path = export_embedding_checkpoint(epoch, out_json)

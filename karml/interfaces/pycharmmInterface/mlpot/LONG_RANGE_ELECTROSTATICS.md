@@ -17,7 +17,7 @@ MLpot runs a **dual-stack** nonbond model:
 
 Neither path applies a **k-space Ewald/PME correction** beyond the JAX pair cutoff. For large periodic clusters or boxes where 13 Å real-space Coulomb is insufficient, forces and energies can drift from a fully converged PME reference.
 
-ScaFaCoS and jax-pme are optional backends to close that gap without moving all electrostatics back into CHARMM Ewald (which is disabled in current MMML `nbonds_config` presets).
+ScaFaCoS and jax-pme are optional backends to close that gap without moving all electrostatics back into CHARMM Ewald (which is disabled in current KARML `nbonds_config` presets).
 
 ---
 
@@ -57,7 +57,7 @@ flowchart TB
 
 1. **Keep MLpot callback structure** — Python still returns USER energy/forces; no change to CHARMM integrator ownership.
 2. **Optional dependencies** — default install works without ScaFaCoS binaries; `have_scafacos()` probes at runtime.
-3. **Mirror `nl_backend.py`** — env `MMML_LR_SOLVER`, default `mic`, explicit opt-in for k-space backends.
+3. **Mirror `nl_backend.py`** — env `KARML_LR_SOLVER`, default `mic`, explicit opt-in for k-space backends.
 4. **CHARMM unit consistency** — \(k = 332.063711\) kcal·Å/e² throughout.
 
 ---
@@ -70,14 +70,14 @@ Implementation: [`long_range_backend.py`](../long_range_backend.py).
 |------|-------------|--------|
 | `mic` | Default (unset env/YAML) or explicit | **Production default** — truncated MIC in pair loop |
 | `auto` | Legacy alias | Same as `mic` |
-| `jax_pme` | `lr_solver: jax_pme` or `MMML_LR_SOLVER=jax_pme` | Opt-in — jax-pme Ewald/PME/P3M + switched MM |
-| `scafacos` | `MMML_LR_SOLVER=scafacos` and `libfcs` loads | Opt-in — full-box Coulomb via ScaFaCoS |
+| `jax_pme` | `lr_solver: jax_pme` or `KARML_LR_SOLVER=jax_pme` | Opt-in — jax-pme Ewald/PME/P3M + switched MM |
+| `scafacos` | `KARML_LR_SOLVER=scafacos` and `libfcs` loads | Opt-in — full-box Coulomb via ScaFaCoS |
 | `nvalchemiops_pme` | Explicit opt-in | Opt-in — full-box PME via nvalchemiops |
 
 Log probe:
 
 ```bash
-python -c "from mmml.interfaces.pycharmmInterface.long_range_backend import describe_lr_solver; print(describe_lr_solver())"
+python -c "from karml.interfaces.pycharmmInterface.long_range_backend import describe_lr_solver; print(describe_lr_solver())"
 ```
 
 ---
@@ -108,11 +108,11 @@ Wrapped by `ScaFaCoSSession` (context manager) and `compute_scafacos_coulomb()` 
 
 ### MPI
 
-ScaFaCoS expects an MPI communicator. MMML passes `MPI.COMM_WORLD.py2f()` when `mpi4py` is available, else `0` (serial). For domain-decomposed CHARMM runs, the communicator must match the MD code’s partition — future work.
+ScaFaCoS expects an MPI communicator. KARML passes `MPI.COMM_WORLD.py2f()` when `mpi4py` is available, else `0` (serial). For domain-decomposed CHARMM runs, the communicator must match the MD code’s partition — future work.
 
 ### Short-range / long-range splitting
 
-ScaFaCoS supports a `short_range_flag` in `fcs_set_common` so the library can compute only the k-space part while a local pair list supplies the real-space term. MMML’s planned wiring:
+ScaFaCoS supports a `short_range_flag` in `fcs_set_common` so the library can compute only the k-space part while a local pair list supplies the real-space term. KARML’s planned wiring:
 
 1. JAX pair loop keeps **switched LJ + short-range Coulomb** inside `mm_switch_on + mm_switch_width`.
 2. ScaFaCoS evaluates **total** or **k-space-only** Coulomb for the same atom subset.
@@ -125,13 +125,13 @@ This split is **not yet applied inside `build_mm_energy_forces_fn`** — the int
 
 ## jax-pme (reserved)
 
-`jax-pme` is a core MMML dependency (git pin in `pyproject.toml`) for a **pure-JAX** PME path without Fortran/MPI binaries. It will share the same `LongRangeCoulombSolver` protocol once implemented, giving laptops and CI a long-range option when ScaFaCoS is unavailable.
+`jax-pme` is a core KARML dependency (git pin in `pyproject.toml`) for a **pure-JAX** PME path without Fortran/MPI binaries. It will share the same `LongRangeCoulombSolver` protocol once implemented, giving laptops and CI a long-range option when ScaFaCoS is unavailable.
 
 ---
 
-## CHARMM Ewald (not used by MMML workflows)
+## CHARMM Ewald (not used by KARML workflows)
 
-Vendored CHARMM sources include PME (`pme.F90`), helPME (`helpme_wrapper.F90`), and FMM (`grape.F90`). MMML production presets use `vacuum_nbond_kwargs()` / PBC variants with **`cdie` only** — no `ewald` / `pmewald` keywords from Python.
+Vendored CHARMM sources include PME (`pme.F90`), helPME (`helpme_wrapper.F90`), and FMM (`grape.F90`). KARML production presets use `vacuum_nbond_kwargs()` / PBC variants with **`cdie` only** — no `ewald` / `pmewald` keywords from Python.
 
 A CHARMM-native ScaFaCoS hook (Fortran `iso_c_binding` wrapper, analogous to helPME) remains a secondary integration path if residual MM atoms need reciprocal-space treatment inside Fortran rather than in the MLpot callback.
 
@@ -149,7 +149,7 @@ Requires **full PBC** (`--setup pbc_nve|pbc_nvt|pbc_npt`), **ML MIC** (default f
 
 ```bash
 export SCAFACOS_LIB=/path/to/libfcs.so
-mmml md-system --setup pbc_nvt --backend pycharmm \
+karml md-system --setup pbc_nvt --backend pycharmm \
   --composition DCM:20 --box-size 45 \
   --mm-nonbond-mode periodic_external --lr-solver scafacos
 ```
@@ -159,7 +159,7 @@ mmml md-system --setup pbc_nvt --backend pycharmm \
 ScaFaCoS Coulomb with CHARMM VDW and JAX real-space MM both off:
 
 ```bash
-mmml md-system --setup pbc_nvt --backend pycharmm \
+karml md-system --setup pbc_nvt --backend pycharmm \
   --composition DCM:20 --box-size 45 \
   --mm-nonbond-mode periodic_external --lr-solver scafacos \
   --no-periodic-charmm-vdw
@@ -190,7 +190,7 @@ The cubic edge must satisfy:
 
 | Flag / key | Maps to |
 |------------|---------|
-| `MMML_LR_SOLVER` | `pick_lr_solver()` |
+| `KARML_LR_SOLVER` | `pick_lr_solver()` |
 | `SCAFACOS_METHOD` | `fcs_init` method string |
 | `SCAFACOS_LIB` | `load_scafacos_library()` |
 | `--lr-solver` (future) | staged-workflow / `md-system` |
@@ -208,7 +208,7 @@ When ScaFaCoS is installed on a cluster node:
 1. **Library probe** — `have_scafacos()` true.
 2. **Neutral cluster** — two-opposite-charge dimer in cubic box; compare `compute_scafacos_coulomb` energy to analytical limits at large separation.
 3. **vs MIC** — same geometry, compare ScaFaCoS total to JAX pair Coulomb at small `L` (should agree within tolerance when all pairs are inside cutoff).
-4. **MLpot callback** (future) — NVE drift with `MMML_LR_SOLVER=scafacos` on a 13+ Å box where MIC-only shows energy drift.
+4. **MLpot callback** (future) — NVE drift with `KARML_LR_SOLVER=scafacos` on a 13+ Å box where MIC-only shows energy drift.
 
 Scripts belong under `tests/functionality/long_range/` (to be added when callback wiring lands).
 

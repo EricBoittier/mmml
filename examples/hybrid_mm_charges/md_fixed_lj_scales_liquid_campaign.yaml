@@ -14,7 +14,7 @@
 #   NpT/NVE keep tighter NL (cell / E_tot). Recording ~1 ps/frame on NVT.
 
 #
-#   uv run mmml md-system \
+#   uv run karml md-system \
 #     --config examples/hybrid_mm_charges/md_fixed_lj_scales_liquid_campaign.yaml \
 #     --run-all \
 #     --checkpoint CKPT --mm-lj-scales-file SIDECAR \

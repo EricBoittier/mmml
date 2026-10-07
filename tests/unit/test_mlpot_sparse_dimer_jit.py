@@ -11,12 +11,12 @@ import pytest
 
 os.environ.setdefault("JAX_PLATFORMS", "cpu")
 
-from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
+from karml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
 
 
 def test_sparse_dimer_jit_with_traced_box() -> None:
     """Sparse dimer filtering must not Python-branch on traced cell values."""
-    from mmml.interfaces.pycharmmInterface.mmml_calculator import setup_calculator
+    from karml.interfaces.pycharmmInterface.karml_calculator import setup_calculator
 
     n_mono = 5
     n_monomers = 8
@@ -40,7 +40,7 @@ def test_sparse_dimer_jit_with_traced_box() -> None:
         return fake_mm_fn
 
     with patch(
-        "mmml.interfaces.pycharmmInterface.mmml_calculator.build_mm_energy_forces_fn",
+        "karml.interfaces.pycharmmInterface.karml_calculator.build_mm_energy_forces_fn",
         side_effect=fake_build_mm,
     ):
         factory = setup_calculator(
@@ -96,7 +96,7 @@ def test_sparse_dimer_padded_slots_add_no_forces(close_pair: str) -> None:
     last pair, so a close last pair used to get its switched force added once
     per spare slot.
     """
-    from mmml.interfaces.pycharmmInterface.mmml_calculator import setup_calculator
+    from karml.interfaces.pycharmmInterface.karml_calculator import setup_calculator
 
     n_mono, n_monomers, box = 5, 6, 40.0
     n_atoms = n_mono * n_monomers
@@ -124,7 +124,7 @@ def test_sparse_dimer_padded_slots_add_no_forces(close_pair: str) -> None:
     def evaluate(sparse: bool, positions=None):
         pos = r0 if positions is None else jnp.asarray(positions)
         with patch(
-            "mmml.interfaces.pycharmmInterface.mmml_calculator.build_mm_energy_forces_fn",
+            "karml.interfaces.pycharmmInterface.karml_calculator.build_mm_energy_forces_fn",
             side_effect=fake_build_mm,
         ):
             factory = setup_calculator(
@@ -189,10 +189,10 @@ def test_sparse_dimer_padded_slots_add_no_forces(close_pair: str) -> None:
 
 def test_sparse_dimer_cap_overflow_fails_closed() -> None:
     """Two in-range pairs and cap=1 must abort, not drop a dimer."""
-    from mmml.interfaces.pycharmmInterface.mlpot.mlpot_sparse_dimer_policy import (
+    from karml.interfaces.pycharmmInterface.mlpot.mlpot_sparse_dimer_policy import (
         SparseDimerCapOverflow,
     )
-    from mmml.interfaces.pycharmmInterface.mmml_calculator import setup_calculator
+    from karml.interfaces.pycharmmInterface.karml_calculator import setup_calculator
 
     n_mono, n_monomers, box = 5, 3, 40.0
     n_atoms = n_mono * n_monomers
@@ -216,7 +216,7 @@ def test_sparse_dimer_cap_overflow_fails_closed() -> None:
 
     cp = CutoffParameters(mm_switch_on=6.0, ml_switch_width=1.5)
     with patch(
-        "mmml.interfaces.pycharmmInterface.mmml_calculator.build_mm_energy_forces_fn",
+        "karml.interfaces.pycharmmInterface.karml_calculator.build_mm_energy_forces_fn",
         side_effect=fake_build_mm,
     ):
         factory = setup_calculator(
@@ -264,7 +264,7 @@ def test_dimer_active_margin_does_not_change_energy_or_forces() -> None:
     and the old margin band (6.0-7.5 A); energy and forces must match to float
     precision with the margin at 0 and at ml_switch_width.
     """
-    from mmml.interfaces.pycharmmInterface.mmml_calculator import setup_calculator
+    from karml.interfaces.pycharmmInterface.karml_calculator import setup_calculator
 
     n_mono, box = 5, 40.0
     rng = np.random.default_rng(1)
@@ -290,7 +290,7 @@ def test_dimer_active_margin_does_not_change_energy_or_forces() -> None:
 
     def evaluate(margin: float):
         with patch(
-            "mmml.interfaces.pycharmmInterface.mmml_calculator.build_mm_energy_forces_fn",
+            "karml.interfaces.pycharmmInterface.karml_calculator.build_mm_energy_forces_fn",
             side_effect=fake_build_mm,
         ):
             factory = setup_calculator(
@@ -346,7 +346,7 @@ def test_monomer_own_pad_matches_shared_padded_batch(monkeypatch) -> None:
     uses the repo's DESdimers checkpoint.
     """
     from pathlib import Path
-    from mmml.interfaces.pycharmmInterface.mmml_calculator import setup_calculator
+    from karml.interfaces.pycharmmInterface.karml_calculator import setup_calculator
 
     n_mono, box = 5, 40.0
     rng = np.random.default_rng(2)
@@ -373,9 +373,9 @@ def test_monomer_own_pad_matches_shared_padded_batch(monkeypatch) -> None:
         pytest.skip(f"missing {ckpt}")
 
     def evaluate(own_pad: str):
-        monkeypatch.setenv("MMML_ML_MONOMER_OWN_PAD", own_pad)
+        monkeypatch.setenv("KARML_ML_MONOMER_OWN_PAD", own_pad)
         with patch(
-            "mmml.interfaces.pycharmmInterface.mmml_calculator.build_mm_energy_forces_fn",
+            "karml.interfaces.pycharmmInterface.karml_calculator.build_mm_energy_forces_fn",
             side_effect=fake_build_mm,
         ):
             factory = setup_calculator(

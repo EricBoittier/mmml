@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# Reap orphaned mmml MPI rank-0 workers left after Ctrl+C, prterun exit, or crashes.
+# Reap orphaned karml MPI rank-0 workers left after Ctrl+C, prterun exit, or crashes.
 #
 # Orphans typically show PPID=1 (reparented init) while still holding CPU/GPU.
 #
 # Usage:
-#   ./scripts/mmml-kill-orphans.sh              # list candidates (dry-run)
-#   ./scripts/mmml-kill-orphans.sh --kill       # SIGTERM, then SIGKILL after 5s
-#   ./scripts/mmml-kill-orphans.sh --kill --all # all mmml.cli workers, not only orphans
-#   ./scripts/mmml-kill-orphans.sh --kill --keep 350967
+#   ./scripts/karml-kill-orphans.sh              # list candidates (dry-run)
+#   ./scripts/karml-kill-orphans.sh --kill       # SIGTERM, then SIGKILL after 5s
+#   ./scripts/karml-kill-orphans.sh --kill --all # all karml.cli workers, not only orphans
+#   ./scripts/karml-kill-orphans.sh --kill --keep 350967
 #
 set -euo pipefail
 
@@ -23,19 +23,19 @@ usage() {
   cat <<EOF
 Usage: $(basename "$0") [OPTIONS]
 
-List or kill orphaned mmml rank-0 Python workers (mmml.cli / md-system under mpirun).
+List or kill orphaned karml rank-0 Python workers (karml.cli / md-system under mpirun).
 
 Options:
   --kill, -k       Send signals (default: dry-run listing only)
-  --all            Kill every mmml.cli worker for \$USER, not only orphans (PPID=1)
+  --all            Kill every karml.cli worker for \$USER, not only orphans (PPID=1)
   --keep PID       Do not kill this PID (repeatable)
   --quiet, -q      Suppress non-error output unless something would be killed
   -h, --help       Show this help
 
 Examples:
-  $ROOT/scripts/mmml-kill-orphans.sh
-  $ROOT/scripts/mmml-kill-orphans.sh --kill
-  $ROOT/scripts/mmml-kill-orphans.sh --kill --keep "\$(pgrep -f 'mmml.cli.__main__' | head -1)"
+  $ROOT/scripts/karml-kill-orphans.sh
+  $ROOT/scripts/karml-kill-orphans.sh --kill
+  $ROOT/scripts/karml-kill-orphans.sh --kill --keep "\$(pgrep -f 'karml.cli.__main__' | head -1)"
 EOF
 }
 
@@ -76,18 +76,18 @@ is_kept() {
   return 1
 }
 
-mmml_worker_pids() {
+karml_worker_pids() {
   local pid cmd
   while IFS= read -r pid; do
     [[ -n "$pid" ]] || continue
     cmd=$(ps -o args= -p "$pid" 2>/dev/null || true)
     [[ -n "$cmd" ]] || continue
-    if [[ "$cmd" == *"mmml.cli.__main__"* ]] \
-      || [[ "$cmd" == *"mmml md-system"* ]] \
-      || [[ "$cmd" == *"/mmml/.venv/bin/python"* && "$cmd" == *"mmml"* && "$cmd" == *"md-system"* ]]; then
+    if [[ "$cmd" == *"karml.cli.__main__"* ]] \
+      || [[ "$cmd" == *"karml md-system"* ]] \
+      || [[ "$cmd" == *"/karml/.venv/bin/python"* && "$cmd" == *"karml"* && "$cmd" == *"md-system"* ]]; then
       printf '%s\n' "$pid"
     fi
-  done < <(pgrep -u "$USER" -f 'mmml\.cli\.__main__|mmml md-system' 2>/dev/null || true)
+  done < <(pgrep -u "$USER" -f 'karml\.cli\.__main__|karml md-system' 2>/dev/null || true)
 }
 
 is_orphan_worker() {
@@ -116,22 +116,22 @@ while IFS= read -r pid; do
   if [[ "$KILL_ALL" == 1 ]] || is_orphan_worker "$pid"; then
     TARGET_PIDS+=("$pid")
   fi
-done < <(mmml_worker_pids | sort -u)
+done < <(karml_worker_pids | sort -u)
 
 if [[ ${#TARGET_PIDS[@]} -eq 0 ]]; then
-  [[ "$QUIET" == 0 ]] && echo "mmml-kill-orphans: no matching workers"
+  [[ "$QUIET" == 0 ]] && echo "karml-kill-orphans: no matching workers"
   exit 0
 fi
 
 if [[ "$DRY_RUN" == 1 ]]; then
-  echo "mmml-kill-orphans: would kill ${#TARGET_PIDS[@]} worker(s) (use --kill):"
+  echo "karml-kill-orphans: would kill ${#TARGET_PIDS[@]} worker(s) (use --kill):"
   for pid in "${TARGET_PIDS[@]}"; do
     ps -o pid=,ppid=,pcpu=,etime=,args= -p "$pid" 2>/dev/null || true
   done
   exit 0
 fi
 
-echo "mmml-kill-orphans: stopping ${#TARGET_PIDS[@]} worker(s)..." >&2
+echo "karml-kill-orphans: stopping ${#TARGET_PIDS[@]} worker(s)..." >&2
 for pid in "${TARGET_PIDS[@]}"; do
   kill -TERM "$pid" 2>/dev/null || true
 done
@@ -148,17 +148,17 @@ done
 
 for pid in "${TARGET_PIDS[@]}"; do
   if kill -0 "$pid" 2>/dev/null; then
-    echo "mmml-kill-orphans: SIGKILL pid=$pid" >&2
+    echo "karml-kill-orphans: SIGKILL pid=$pid" >&2
     kill -KILL "$pid" 2>/dev/null || true
   fi
 done
 
 for pid in "${TARGET_PIDS[@]}"; do
   if kill -0 "$pid" 2>/dev/null; then
-    echo "mmml-kill-orphans: warning: pid=$pid still alive" >&2
+    echo "karml-kill-orphans: warning: pid=$pid still alive" >&2
     exit 1
   fi
 done
 
-[[ "$QUIET" == 0 ]] && echo "mmml-kill-orphans: done"
+[[ "$QUIET" == 0 ]] && echo "karml-kill-orphans: done"
 exit 0

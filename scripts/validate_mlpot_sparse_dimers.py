@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Validate sparse ML dimer cap vs near-neighbor count for a cluster geometry.
 
-Counts dimers with COM distance < mm_switch_on (same rule as ``mmml_calculator``)
+Counts dimers with COM distance < mm_switch_on (same rule as ``karml_calculator``)
 and compares to ``resolve_max_active_dimers``.
 
 Examples
@@ -188,7 +188,7 @@ def main() -> int:
             file=sys.stderr,
         )
 
-    from mmml.interfaces.pycharmmInterface.mlpot.mlpot_sparse_dimer_policy import (
+    from karml.interfaces.pycharmmInterface.mlpot.mlpot_sparse_dimer_policy import (
         resolve_max_active_dimers,
         validate_sparse_dimer_cap,
     )
@@ -236,7 +236,7 @@ def main() -> int:
     print(f"\n{stats['verdict']}")
     if not stats["ok"]:
         print(
-            "\nSuggest: raise --ml-max-active-dimers or export MMML_MLPOT_MAX_ACTIVE_DIMERS; "
+            "\nSuggest: raise --ml-max-active-dimers or export KARML_MLPOT_MAX_ACTIVE_DIMERS; "
             "re-run this script after mini. Watch GPU memory (cap raises PhysNet batch size).",
             file=sys.stderr,
         )

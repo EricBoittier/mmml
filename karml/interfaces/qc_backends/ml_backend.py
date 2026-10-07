@@ -8,11 +8,11 @@ from typing import Any
 import numpy as np
 from ase import Atoms
 
-from mmml.interfaces.qc_backends.npz_output import stack_frame_results
+from karml.interfaces.qc_backends.npz_output import stack_frame_results
 
 
 class MLBackend:
-    """Evaluate structures with an MMML checkpoint (SimpleInferenceCalculator)."""
+    """Evaluate structures with an KARML checkpoint (SimpleInferenceCalculator)."""
 
     name = "ml"
 
@@ -48,7 +48,7 @@ class MLBackend:
         if self._calculator_factory is not None:
             self._calc = self._calculator_factory(self.checkpoint)
             return self._calc
-        from mmml.interfaces.calculators.simple_inference import (
+        from karml.interfaces.calculators.simple_inference import (
             create_calculator_from_checkpoint,
         )
 

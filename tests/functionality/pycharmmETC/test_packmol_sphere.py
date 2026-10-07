@@ -9,7 +9,7 @@ import pytest
 
 
 def test_resolve_packmol_use_defaults():
-    from mmml.interfaces.pycharmmInterface.packmol_placement import (
+    from karml.interfaces.pycharmmInterface.packmol_placement import (
         resolve_packmol_sphere_use,
         resolve_packmol_use,
     )
@@ -27,7 +27,7 @@ def test_resolve_packmol_use_defaults():
 
 
 def test_resolve_packmol_cube_side():
-    from mmml.interfaces.pycharmmInterface.packmol_placement import resolve_packmol_cube_side
+    from karml.interfaces.pycharmmInterface.packmol_placement import resolve_packmol_cube_side
 
     assert resolve_packmol_cube_side(box_size=38.0) == 38.0
     assert resolve_packmol_cube_side(packmol_radius=20.0) == 40.0
@@ -37,14 +37,14 @@ def test_resolve_packmol_cube_side():
 
 
 def test_packmol_cube_origin():
-    from mmml.interfaces.pycharmmInterface.packmol_placement import packmol_cube_origin
+    from karml.interfaces.pycharmmInterface.packmol_placement import packmol_cube_origin
 
     assert packmol_cube_origin((0.0, 0.0, 0.0), 40.0) == (-20.0, -20.0, -20.0)
     assert packmol_cube_origin((10.0, 0.0, -5.0), 20.0) == (0.0, -10.0, -15.0)
 
 
 def test_resolve_packmol_sphere_radius_separate():
-    from mmml.interfaces.pycharmmInterface.packmol_placement import resolve_packmol_sphere_radius
+    from karml.interfaces.pycharmmInterface.packmol_placement import resolve_packmol_sphere_radius
 
     assert resolve_packmol_sphere_radius(25.0, 20.0) == 25.0
     assert resolve_packmol_sphere_radius(None, 20.0) == 20.0
@@ -56,7 +56,7 @@ def test_write_monomer_pdb_uses_psf_atomic_numbers(tmp_path):
     """Chlorinated residues (Z=17) must become ASE symbol Cl, not CL."""
     from ase.io import read as ase_read
 
-    from mmml.interfaces.pycharmmInterface.packmol_placement import (
+    from karml.interfaces.pycharmmInterface.packmol_placement import (
         write_monomer_pdb_for_packmol,
     )
 
@@ -70,7 +70,7 @@ def test_write_monomer_pdb_uses_psf_atomic_numbers(tmp_path):
 
 def test_write_monomer_pdb_charmm_names_not_carbon_for_cl(tmp_path):
     """Regression: coord loop variable must not shadow atomic_numbers (CL1 -> Cl)."""
-    from mmml.interfaces.pycharmmInterface.packmol_placement import (
+    from karml.interfaces.pycharmmInterface.packmol_placement import (
         write_monomer_pdb_for_packmol,
     )
 
@@ -91,7 +91,7 @@ def test_write_monomer_pdb_charmm_names_not_carbon_for_cl(tmp_path):
 
 
 def test_run_packmol_sphere_mixed_writes_inp(tmp_path, monkeypatch):
-    from mmml.interfaces.pycharmmInterface import packmol_placement
+    from karml.interfaces.pycharmmInterface import packmol_placement
 
     captured: dict[str, str] = {}
 
@@ -125,7 +125,7 @@ def test_run_packmol_sphere_mixed_writes_inp(tmp_path, monkeypatch):
 
 
 def test_run_packmol_cube_mixed_writes_inp(tmp_path, monkeypatch):
-    from mmml.interfaces.pycharmmInterface import packmol_placement
+    from karml.interfaces.pycharmmInterface import packmol_placement
 
     captured: dict[str, str] = {}
 

@@ -4,11 +4,11 @@ CHARMM MPI builds pin ``OMP_NUM_THREADS=1`` for ``upinb`` safety. GPU JIT compil
 mostly CPU-bound (LLVM, Eigen, ``ptxas``); :func:`jax_compile_threads_context` bumps
 BLAS/OpenMP **only during compile/warmup** and restores the CHARMM pin afterward.
 
-Enable (default): ``MMML_JAX_COMPILE_THREADS`` (default ``min(16, cpu_count)``).
-Disable with ``MMML_NO_JAX_COMPILE_THREADS=1``.
+Enable (default): ``KARML_JAX_COMPILE_THREADS`` (default ``min(16, cpu_count)``).
+Disable with ``KARML_NO_JAX_COMPILE_THREADS=1``.
 
 For XLA's Eigen pool, also call :func:`apply_jax_compile_xla_flags` before the first
-``import jax`` (``md-system`` and ``mmml-charmm-mpirun.sh`` do this).
+``import jax`` (``md-system`` and ``karml-charmm-mpirun.sh`` do this).
 """
 
 from __future__ import annotations
@@ -47,23 +47,23 @@ def sanitize_xla_flags_env(*, quiet: bool = False) -> bool:
         os.environ["XLA_FLAGS"] = cleaned
     else:
         os.environ.pop("XLA_FLAGS", None)
-    if not quiet and not _truthy("MMML_QUIET"):
+    if not quiet and not _truthy("KARML_QUIET"):
         print(
-            "mmml: stripped unsupported xla_cpu_thread_pool_size from XLA_FLAGS",
+            "karml: stripped unsupported xla_cpu_thread_pool_size from XLA_FLAGS",
             flush=True,
         )
     return True
 
 
 def jax_compile_threads_enabled() -> bool:
-    return not _truthy("MMML_NO_JAX_COMPILE_THREADS")
+    return not _truthy("KARML_NO_JAX_COMPILE_THREADS")
 
 
 def resolve_jax_compile_thread_count() -> int:
     """Thread budget for JAX compile warmup (0 when disabled)."""
     if not jax_compile_threads_enabled():
         return 0
-    explicit = (os.environ.get("MMML_JAX_COMPILE_THREADS") or "").strip()
+    explicit = (os.environ.get("KARML_JAX_COMPILE_THREADS") or "").strip()
     if explicit:
         try:
             n = int(explicit)
@@ -88,22 +88,22 @@ def apply_jax_compile_xla_flags(*, quiet: bool = False) -> int:
     )
     existing = (os.environ.get("XLA_FLAGS") or "").strip()
     if "xla_cpu_multi_thread_eigen" in existing or "intra_op_parallelism_threads" in existing:
-        if not quiet and not _truthy("MMML_QUIET"):
-            from mmml.utils.rich_report import emit_tagged
+        if not quiet and not _truthy("KARML_QUIET"):
+            from karml.utils.rich_report import emit_tagged
 
             emit_tagged(
-                "mmml",
+                "karml",
                 f"JAX CPU thread XLA_FLAGS already present; using existing flags: {existing}",
                 tag_style="bold magenta",
             )
         return n
     merged = f"{existing} {flags}".strip() if existing else flags
     os.environ["XLA_FLAGS"] = merged
-    if not quiet and not _truthy("MMML_QUIET"):
-        from mmml.utils.rich_report import emit_tagged
+    if not quiet and not _truthy("KARML_QUIET"):
+        from karml.utils.rich_report import emit_tagged
 
         emit_tagged(
-            "mmml",
+            "karml",
             f"JAX compile XLA_FLAGS intra_op_parallelism_threads={n}",
             tag_style="bold magenta",
         )
@@ -122,9 +122,9 @@ def jax_compile_threads_context(*, quiet: bool = False) -> Iterator[int]:
     thread_s = str(n)
     for key in _OPENMP_LIKE_VARS:
         os.environ[key] = thread_s
-    if not quiet and not _truthy("MMML_QUIET"):
+    if not quiet and not _truthy("KARML_QUIET"):
         prev_omp = saved.get("OMP_NUM_THREADS")
-        from mmml.utils.rich_report import get_reporter
+        from karml.utils.rich_report import get_reporter
 
         get_reporter().status(
             "info",

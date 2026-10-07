@@ -6,7 +6,7 @@ import time
 
 import numpy as np
 
-from mmml.interfaces.pycharmmInterface.mm_system_energy import (
+from karml.interfaces.pycharmmInterface.mm_system_energy import (
     _build_pair_indices,
     _build_pair_indices_vectorized,
 )

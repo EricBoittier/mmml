@@ -6,7 +6,7 @@
 #
 #   LJ_JOINT=1 LJ_MD_PROD=1 bash examples/lj_scales/07_deploy_md.sh
 #
-#   uv run mmml md-system \
+#   uv run karml md-system \
 #     --config examples/hybrid_mm_charges/md_lj_scales_liquid_campaign.prod.yaml \
 #     --run-all \
 #     --checkpoint CKPT --mm-lj-scales-file SIDECAR \

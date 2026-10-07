@@ -5,31 +5,31 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from mmml.interfaces.pycharmmInterface.mlpot.medium_pbc_validation import (
+from karml.interfaces.pycharmmInterface.mlpot.medium_pbc_validation import (
     lattice_positions_cubic_pbc,
 )
-from mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.active_set import (
+from karml.interfaces.pycharmmInterface.mlpot.mpi_spatial.active_set import (
     build_all_rank_active_sets,
     global_near_dimer_mask,
 )
-from mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.dedup import (
+from karml.interfaces.pycharmmInterface.mlpot.mpi_spatial.dedup import (
     assign_canonical_dimer_owner,
     union_active_dimer_ids,
     verify_unique_dimer_coverage,
 )
-from mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domain import (
+from karml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domain import (
     SpatialDomainGrid,
     compute_monomer_coms,
     resolve_halo_radius,
 )
-from mmml.interfaces.pycharmmInterface.mlpot.mlpot_sparse_dimer_policy import (
+from karml.interfaces.pycharmmInterface.mlpot.mlpot_sparse_dimer_policy import (
     build_monomer_dimer_index_arrays,
 )
-from mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domdec_info import survey_domdec_api
-from mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.force_exchange import (
+from karml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domdec_info import survey_domdec_api
+from karml.interfaces.pycharmmInterface.mlpot.mpi_spatial.force_exchange import (
     merge_partial_forces,
 )
-from mmml.interfaces.pycharmmInterface.cutoffs import DEFAULT_MM_SWITCH_ON
+from karml.interfaces.pycharmmInterface.cutoffs import DEFAULT_MM_SWITCH_ON
 
 
 def _fixture_geometry(
@@ -57,7 +57,7 @@ def test_survey_domdec_api_capabilities():
     # Both atom-map APIs are now implemented via domdec_atoms.py ctypes reader
     assert survey.pycharmm_local_atom_api is True
     assert survey.pycharmm_ghost_atom_api is True
-    assert survey.mmml_disable_domdec_for_mlpot is True
+    assert survey.karml_disable_domdec_for_mlpot is True
 
 
 def test_rank_for_com_slab_partition():

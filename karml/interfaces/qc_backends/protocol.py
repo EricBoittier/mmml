@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Mapping
 
-from mmml.interfaces.energy_forces.protocol import EnergyForcesProvider, QCEvaluator
+from karml.interfaces.energy_forces.protocol import EnergyForcesProvider, QCEvaluator
 
 __all__ = ["BackendSpec", "EnergyForcesProvider", "QCEvaluator"]
 

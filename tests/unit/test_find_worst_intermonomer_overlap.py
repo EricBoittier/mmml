@@ -17,7 +17,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from mmml.utils.geometry_checks import (
+from karml.utils.geometry_checks import (
     _cell_matrix,
     _mic,
     find_worst_intermonomer_overlap,

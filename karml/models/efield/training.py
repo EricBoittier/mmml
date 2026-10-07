@@ -23,15 +23,15 @@ from flax import linen as nn
 import e3x
 
 # ZBL repulsion (optional short-range nuclear repulsion)
-from mmml.models.physnetjax.physnetjax.models.zbl import ZBLRepulsion
+from karml.models.physnetjax.physnetjax.models.zbl import ZBLRepulsion
 
 from ase.visualize import view as view  # optional; kept because you had it
 
-from mmml.data.units import ANGSTROM_TO_BOHR, EV_TO_KCAL_MOL, HARTREE_TO_EV
-from mmml.models.efield.args import build_train_parser as build_parser
-from mmml.models.efield.model_functions import predicted_polarizability_bohr3
-from mmml.utils.cli_args import exit_if_unknown_long_options
-from mmml.models.efield.checkpointing import (
+from karml.data.units import ANGSTROM_TO_BOHR, EV_TO_KCAL_MOL, HARTREE_TO_EV
+from karml.models.efield.args import build_train_parser as build_parser
+from karml.models.efield.model_functions import predicted_polarizability_bohr3
+from karml.utils.cli_args import exit_if_unknown_long_options
+from karml.models.efield.checkpointing import (
     ORBAX_SUBDIR,
     append_history,
     epoch_record,
@@ -46,8 +46,8 @@ from mmml.models.efield.checkpointing import (
     write_json,
     write_run_meta,
 )
-from mmml.utils.model_checkpoint import to_jsonable
-from mmml.utils.rotations import rotate_batched_rank2_tensors, rotate_batched_vectors, sample_random_rotations
+from karml.utils.model_checkpoint import to_jsonable
+from karml.utils.rotations import rotate_batched_rank2_tensors, rotate_batched_vectors, sample_random_rotations
 
 
 def print_params_structure(params, label="params", max_depth=3, verbose=False):
@@ -191,7 +191,7 @@ def get_args(**overrides):
         args = get_args(features=32, cutoff=8.0)   # override specific params
     """
     args, unknown = build_parser().parse_known_args()
-    exit_if_unknown_long_options(unknown, prog="mmml ef-train")
+    exit_if_unknown_long_options(unknown, prog="karml ef-train")
 
     # Apply keyword overrides (for notebook usage)
     for key, value in overrides.items():
@@ -1438,7 +1438,7 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
         rot_perturbation=rot_perturbation,
     )
 
-    from mmml.models.physnetjax.physnetjax.data.data import print_shapes
+    from karml.models.physnetjax.physnetjax.data.data import print_shapes
 
     print_shapes(valid_batches[0], name="Validation Batch[0]")
     n_train = int(np.asarray(train_data["electric_field"]).shape[0])

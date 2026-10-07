@@ -31,7 +31,7 @@ export EXAMPLE_DIR
 #     LJ_DEVICE=gpu bash examples/lj_scales/05_train.sh
 #     LJ_DEVICE=gpu bash examples/lj_scales/07_deploy_md.sh
 #
-# An explicitly pre-set JAX_PLATFORMS / MMML_MLPOT_DEVICE is honoured only when
+# An explicitly pre-set JAX_PLATFORMS / KARML_MLPOT_DEVICE is honoured only when
 # LJ_DEVICE was NOT given: a stale `export JAX_PLATFORMS=cpu` in a login profile
 # must not silently downgrade a run that asked for the GPU. Same precedence rule
 # as examples/m/_env.sh.
@@ -43,15 +43,15 @@ if [[ -n "${LJ_DEVICE:-}" ]]; then
        return 1 2>/dev/null || exit 1 ;;
   esac
   export JAX_PLATFORMS="${_lj_platforms}"
-  export MMML_MLPOT_DEVICE="${_lj_mlpot}"
-  export MMML_JAX_WARMUP_DEVICE="${_lj_mlpot}"
+  export KARML_MLPOT_DEVICE="${_lj_mlpot}"
+  export KARML_JAX_WARMUP_DEVICE="${_lj_mlpot}"
   unset _lj_platforms _lj_mlpot
 else
   export JAX_PLATFORMS="${JAX_PLATFORMS:-cpu}"
-  export MMML_MLPOT_DEVICE="${MMML_MLPOT_DEVICE:-cpu}"
-  export MMML_JAX_WARMUP_DEVICE="${MMML_JAX_WARMUP_DEVICE:-cpu}"
+  export KARML_MLPOT_DEVICE="${KARML_MLPOT_DEVICE:-cpu}"
+  export KARML_JAX_WARMUP_DEVICE="${KARML_JAX_WARMUP_DEVICE:-cpu}"
   # Those three inherit independently, so they can end up disagreeing: sourcing
-  # examples/m/_env.sh earlier in the same shell leaves MMML_MLPOT_DEVICE=gpu
+  # examples/m/_env.sh earlier in the same shell leaves KARML_MLPOT_DEVICE=gpu
   # behind while JAX_PLATFORMS falls back to cpu here. JAX_PLATFORMS is the hard
   # gate — at cpu, JAX never enumerates the GPU — so the gpu half is a lie that
   # still reads as a GPU run downstream. Make the pair agree, loudly.
@@ -59,11 +59,11 @@ else
     *cuda*|*gpu*|*rocm*) _lj_eff="gpu" ;;
     *) _lj_eff="cpu" ;;
   esac
-  if [[ "${MMML_MLPOT_DEVICE}" != "${_lj_eff}" ]]; then
-    printf 'examples/lj_scales: inherited MMML_MLPOT_DEVICE=%s conflicts with JAX_PLATFORMS=%s; forcing %s (use LJ_DEVICE=gpu to run on the GPU)\n' \
-      "${MMML_MLPOT_DEVICE}" "${JAX_PLATFORMS}" "${_lj_eff}" >&2
-    export MMML_MLPOT_DEVICE="${_lj_eff}"
-    export MMML_JAX_WARMUP_DEVICE="${_lj_eff}"
+  if [[ "${KARML_MLPOT_DEVICE}" != "${_lj_eff}" ]]; then
+    printf 'examples/lj_scales: inherited KARML_MLPOT_DEVICE=%s conflicts with JAX_PLATFORMS=%s; forcing %s (use LJ_DEVICE=gpu to run on the GPU)\n' \
+      "${KARML_MLPOT_DEVICE}" "${JAX_PLATFORMS}" "${_lj_eff}" >&2
+    export KARML_MLPOT_DEVICE="${_lj_eff}"
+    export KARML_JAX_WARMUP_DEVICE="${_lj_eff}"
   fi
   unset _lj_eff
 fi
@@ -75,10 +75,10 @@ export JAX_ENABLE_X64="${JAX_ENABLE_X64:-1}"
 # also repairs this at runtime).
 # Prefer GPU Vesin NL rebuilds on GPU nodes (safe CPU fallback if CuPy JIT fails).
 if [[ "${LJ_DEVICE:-}" == "gpu" || "${LJ_DEVICE:-}" == "cuda" ]]; then
-  export MMML_MM_NL_DEVICE="${MMML_MM_NL_DEVICE:-gpu}"
+  export KARML_MM_NL_DEVICE="${KARML_MM_NL_DEVICE:-gpu}"
 fi
 
-if [[ "${MMML_MM_NL_DEVICE:-}" == "gpu" || "${LJ_DEVICE:-}" == "gpu" || "${LJ_DEVICE:-}" == "cuda" ]]; then
+if [[ "${KARML_MM_NL_DEVICE:-}" == "gpu" || "${LJ_DEVICE:-}" == "gpu" || "${LJ_DEVICE:-}" == "cuda" ]]; then
   _lj_wheel_rt=""
   for _lj_cand in \
     "${REPO_ROOT}/.venv/lib/python"*/site-packages/nvidia/cuda_runtime \
@@ -103,10 +103,10 @@ _lj_prepend_opencl_lib() {
   for cand in \
     "${CONDA_PREFIX:-}/lib" \
     "${CONDA_PREFIX:-}/targets/x86_64-linux/lib" \
-    "${MAMBA_ROOT_PREFIX:-${HOME}/micromamba}/envs/mmml-full/targets/x86_64-linux/lib" \
-    "${MAMBA_ROOT_PREFIX:-${HOME}/micromamba}/envs/mmml-full/lib" \
-    "/mmhome/boittier/home/micromamba/envs/mmml-full/targets/x86_64-linux/lib" \
-    "/mmhome/boittier/home/micromamba/envs/mmml-full/lib"
+    "${MAMBA_ROOT_PREFIX:-${HOME}/micromamba}/envs/karml-full/targets/x86_64-linux/lib" \
+    "${MAMBA_ROOT_PREFIX:-${HOME}/micromamba}/envs/karml-full/lib" \
+    "/mmhome/boittier/home/micromamba/envs/karml-full/targets/x86_64-linux/lib" \
+    "/mmhome/boittier/home/micromamba/envs/karml-full/lib"
   do
     if [[ -n "${cand}" && -e "${cand}/libOpenCL.so.1" ]]; then
       case ":${LD_LIBRARY_PATH:-}:" in
@@ -253,8 +253,8 @@ lj_scales_banner() {
   local _eff="cpu"
   case ":${JAX_PLATFORMS}:" in *cuda*|*gpu*|*rocm*) _eff="gpu" ;; esac
   printf 'examples/lj_scales inputs\n'
-  printf '  device    : %s  (JAX_PLATFORMS=%s, MMML_MLPOT_DEVICE=%s)\n' \
-    "${_eff}" "${JAX_PLATFORMS}" "${MMML_MLPOT_DEVICE}"
+  printf '  device    : %s  (JAX_PLATFORMS=%s, KARML_MLPOT_DEVICE=%s)\n' \
+    "${_eff}" "${JAX_PLATFORMS}" "${KARML_MLPOT_DEVICE}"
   [[ "${_eff}" == "cpu" ]] && \
     printf '              (CPU by default — LJ_DEVICE=gpu for steps 05 and 07)\n'
   printf '  joint     : %s\n' "${LJ_JOINT}"

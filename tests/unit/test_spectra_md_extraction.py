@@ -1,4 +1,4 @@
-"""Unit tests for mmml.spectra.spectra_md's ASE-trajectory/HDF5 extraction
+"""Unit tests for karml.spectra.spectra_md's ASE-trajectory/HDF5 extraction
 and ML-calculator-dependent batched inference paths.
 
 These don't need a real trained model or PyCHARMM/GPU: the batched-inference
@@ -16,14 +16,14 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from mmml.spectra.spectra_md import (
+from karml.spectra.spectra_md import (
     compute_polarizability_batched,
     extract_dipoles_batched,
     extract_properties,
     extract_properties_hdf5,
     load_hdf5_trajectory,
 )
-import mmml.spectra.spectra_md as spectra_md
+import karml.spectra.spectra_md as spectra_md
 
 
 # ---------------------------------------------------------------------------

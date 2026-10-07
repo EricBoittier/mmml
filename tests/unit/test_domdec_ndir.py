@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from mmml.utils.domdec_ndir import (
+from karml.utils.domdec_ndir import (
     format_domdec_charmm_commands,
     format_domdec_ndir,
     format_domdec_tier3_energy_block,

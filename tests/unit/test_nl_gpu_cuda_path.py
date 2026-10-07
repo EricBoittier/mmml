@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from mmml.interfaces.pycharmmInterface.nl_gpu import (
+from karml.interfaces.pycharmmInterface.nl_gpu import (
     cuda_path_looks_broken,
     ensure_cupy_cuda_path,
     is_device_array,
@@ -40,7 +40,7 @@ def test_cuda_path_ok_for_modern_wheel_style_header(tmp_path: Path):
 
 
 def test_ensure_cupy_cuda_path_overrides_broken_system_path(tmp_path: Path, monkeypatch):
-    import mmml.interfaces.pycharmmInterface.nl_gpu as nl_gpu
+    import karml.interfaces.pycharmmInterface.nl_gpu as nl_gpu
 
     monkeypatch.setattr(nl_gpu, "_CUDA_PATH_ENSURED", False)
     ancient = tmp_path / "cuda-9.0"
@@ -76,7 +76,7 @@ def test_is_device_array_rejects_numpy_host():
 
 
 def test_vesin_gpu_version_gate(monkeypatch):
-    import mmml.interfaces.pycharmmInterface.nl_gpu as nl_gpu
+    import karml.interfaces.pycharmmInterface.nl_gpu as nl_gpu
 
     monkeypatch.setattr(nl_gpu, "have_vesin", lambda: True)
     monkeypatch.setattr(nl_gpu, "_vesin_version_tuple", lambda: (0, 5, 8))
@@ -97,7 +97,7 @@ def test_cupy_runtime_ok_after_ensure_when_gpu_present():
     except Exception:
         pytest.skip("no JAX GPU")
 
-    import mmml.interfaces.pycharmmInterface.nl_gpu as nl_gpu
+    import karml.interfaces.pycharmmInterface.nl_gpu as nl_gpu
 
     if nl_gpu._nvidia_wheel_cuda_runtime_root() is None:
         pytest.skip("nvidia-cuda-runtime wheel headers not installed")

@@ -127,7 +127,7 @@ class RecoveryProgressStore:
         self._steps.append(entry)
         self._write_journal()
         if not self.quiet:
-            from mmml.interfaces.pycharmmInterface.mpi_rank_io import rank0_print
+            from karml.interfaces.pycharmmInterface.mpi_rank_io import rank0_print
 
             rank0_print(
                 f"{self.category}: checkpoint {self._index:03d} → {self.root.name}/{stem} "
@@ -137,7 +137,7 @@ class RecoveryProgressStore:
         return files
 
     def finish(self, summary: dict[str, Any] | None = None) -> None:
-        from mmml.interfaces.pycharmmInterface.mpi_rank_io import is_mpi_rank_zero
+        from karml.interfaces.pycharmmInterface.mpi_rank_io import is_mpi_rank_zero
 
         if not is_mpi_rank_zero():
             return
@@ -155,7 +155,7 @@ class RecoveryProgressStore:
         self._write_journal()
 
     def _write_journal(self) -> None:
-        from mmml.interfaces.pycharmmInterface.mpi_rank_io import is_mpi_rank_zero
+        from karml.interfaces.pycharmmInterface.mpi_rank_io import is_mpi_rank_zero
 
         if not is_mpi_rank_zero():
             return
@@ -180,7 +180,7 @@ def _save_geometry_checkpoint(
     positions: Any | None = None,
     save_psf: bool = True,
 ) -> dict[str, Path]:
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import save_minimization_results
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import save_minimization_results
 
     directory.mkdir(parents=True, exist_ok=True)
     pdb_path = directory / f"{stem}.pdb"

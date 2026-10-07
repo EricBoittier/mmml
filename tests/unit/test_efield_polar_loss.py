@@ -7,21 +7,21 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from mmml.data.units import (
+from karml.data.units import (
     ANGSTROM_TO_BOHR,
     E_ANGSTROM2_PER_VOLT_TO_BOHR3,
     polar_bohr3_to_e_angstrom2_per_volt,
     polar_e_angstrom2_per_volt_to_bohr3,
 )
-from mmml.models.efield.args import build_train_parser
-from mmml.models.efield.model_functions import predicted_polarizability_bohr3
-from mmml.models.efield.training import (
+from karml.models.efield.args import build_train_parser
+from karml.models.efield.model_functions import predicted_polarizability_bohr3
+from karml.models.efield.training import (
     load_ef_npz,
     polarizability_loss_and_mae,
     prepare_batches,
     require_drop_last_batches,
 )
-from mmml.utils.rotations import rotate_batched_rank2_tensors
+from karml.utils.rotations import rotate_batched_rank2_tensors
 
 pytestmark = pytest.mark.data_loading
 

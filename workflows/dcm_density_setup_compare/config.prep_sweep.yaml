@@ -5,7 +5,7 @@
 #
 # Run:
 #   cd workflows/dcm_density_setup_compare
-#   MMML_WORKFLOW_CONFIG=config.prep_sweep.yaml bash scripts/preflight.sh
+#   KARML_WORKFLOW_CONFIG=config.prep_sweep.yaml bash scripts/preflight.sh
 #   nohup bash scripts/snakemake_prep_sweep.sh > snakemake_prep_sweep.log 2>&1 &
 #   bash scripts/collect_prep_sweep.sh
 #
@@ -20,7 +20,7 @@ cluster_sizes: [52]
 temperatures: [50.0]
 box_sizes: [38.0]
 
-checkpoint: ${MMML_CKPT}
+checkpoint: ${KARML_CKPT}
 output_root: artifacts/dcm_density_setup_compare
 seed_base: 4242
 

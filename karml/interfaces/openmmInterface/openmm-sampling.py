@@ -272,7 +272,7 @@ def parse_args():
 if __name__ == "__main__":
     """
     example command:
-    python openmm-sampling.py --psf_file /pchem-data/meuwly/boittier/home/project-mmml/proh/proh-262.psf --pdb_file /pchem-data/meuwly/boittier/home/project-mmml/proh/mini.pdb --rtf_file /pchem-data/meuwly/boittier/home/charmm/toppar/top_all36_cgenff.rtf --prm_file /pchem-data/meuwly/boittier/home/charmm/toppar/par_all36_cgenff.prm --working_dir /pchem-data/meuwly/boittier/home/project-mmml/proh/openmm-test1 --temperatures 100 200 300 --pressures 1.0 2.0 3.0 --simulation_schedule minimization equilibration NPT NVE --integrator Langevin
+    python openmm-sampling.py --psf_file /pchem-data/meuwly/boittier/home/project-karml/proh/proh-262.psf --pdb_file /pchem-data/meuwly/boittier/home/project-karml/proh/mini.pdb --rtf_file /pchem-data/meuwly/boittier/home/charmm/toppar/top_all36_cgenff.rtf --prm_file /pchem-data/meuwly/boittier/home/charmm/toppar/par_all36_cgenff.prm --working_dir /pchem-data/meuwly/boittier/home/project-karml/proh/openmm-test1 --temperatures 100 200 300 --pressures 1.0 2.0 3.0 --simulation_schedule minimization equilibration NPT NVE --integrator Langevin
     """
     
     # parse command line arguments

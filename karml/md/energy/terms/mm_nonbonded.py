@@ -54,10 +54,10 @@ from typing import Any
 
 import numpy as np
 
-from mmml.data.units import KCAL_MOL_TO_EV
-from mmml.md.energy.capacity import COMPUTE_DTYPE
-from mmml.md.energy.registry import EnergyContext, NeighborRequest, TermFns, register_term
-from mmml.md.system import FFParams, MolecularSystem
+from karml.data.units import KCAL_MOL_TO_EV
+from karml.md.energy.capacity import COMPUTE_DTYPE
+from karml.md.energy.registry import EnergyContext, NeighborRequest, TermFns, register_term
+from karml.md.system import FFParams, MolecularSystem
 
 __all__ = ["MMNonbondedTerm"]
 
@@ -66,7 +66,7 @@ _DEFAULT_CUTOFFS = {"cutnb": 12.0, "ctonnb": 10.0, "ctofnb": 12.0}
 
 def _nbdata_from_ffparams(ff: FFParams):
     """Reconstruct a ``NonbondedSystemData`` (the reference's input) from FFParams."""
-    from mmml.interfaces.pycharmmInterface.mm_system_energy import NonbondedSystemData
+    from karml.interfaces.pycharmmInterface.mm_system_energy import NonbondedSystemData
 
     return NonbondedSystemData(
         charges=np.asarray(ff.charges, dtype=np.float64),
@@ -105,7 +105,7 @@ class MMNonbondedTerm:
     def _resolve_settings(self, ctx: EnergyContext):
         if self.settings is not None:
             return self.settings
-        from mmml.interfaces.pycharmmInterface.mm_system_energy import CharmmNbondSettings
+        from karml.interfaces.pycharmmInterface.mm_system_energy import CharmmNbondSettings
 
         opts = dict(ctx.options)
         return CharmmNbondSettings(
@@ -123,7 +123,7 @@ class MMNonbondedTerm:
 
     def _host_pairs(self, pos, settings, ff: FFParams, mol_id):
         """Build (pair_i, pair_j, e14_scale, vdw14_scale) exactly as the reference."""
-        from mmml.interfaces.pycharmmInterface.mm_system_energy import _build_pair_indices
+        from karml.interfaces.pycharmmInterface.mm_system_energy import _build_pair_indices
 
         excluded = frozenset(map(tuple, ff.exclusions.tolist()))
         cell = np.asarray(self._cell_np)
@@ -150,7 +150,7 @@ class MMNonbondedTerm:
         import jax
         import jax.numpy as jnp
 
-        from mmml.interfaces.pycharmmInterface.mm_system_energy import (
+        from karml.interfaces.pycharmmInterface.mm_system_energy import (
             COULOMB_KCAL,
             _pair_elec_energy,
             _pair_lj_epsilon,
@@ -158,7 +158,7 @@ class MMNonbondedTerm:
             charmm_fswitch_coeffs,
             charmm_vfswitch_coeffs,
         )
-        from mmml.interfaces.pycharmmInterface.pbc_utils_jax import mic_displacement
+        from karml.interfaces.pycharmmInterface.pbc_utils_jax import mic_displacement
 
         ff = system.ff_params
         settings = self._resolve_settings(ctx)
@@ -173,7 +173,7 @@ class MMNonbondedTerm:
         eps_scale = float(settings.eps)
 
         if self.lr_solver == "ewald":
-            from mmml.interfaces.pycharmmInterface.ewald_native import (
+            from karml.interfaces.pycharmmInterface.ewald_native import (
                 build_kspace_integers,
                 default_ewald_alpha,
                 ewald_reciprocal_energy,
@@ -294,7 +294,7 @@ class MMNonbondedTerm:
             )
 
         def ase_contribution(atoms):
-            from mmml.interfaces.pycharmmInterface.mm_system_energy import (
+            from karml.interfaces.pycharmmInterface.mm_system_energy import (
                 nonbonded_energy_and_forces,
             )
 

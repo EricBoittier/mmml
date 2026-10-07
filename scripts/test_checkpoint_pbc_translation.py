@@ -35,12 +35,12 @@ def main() -> int:
     args = parser.parse_args()
     output = args.output.expanduser().resolve()
 
-    from mmml.interfaces.pycharmmInterface import import_pycharmm as ipy
-    from mmml.interfaces.pycharmmInterface.cgenff_bonded_reference import (
+    from karml.interfaces.pycharmmInterface import import_pycharmm as ipy
+    from karml.interfaces.pycharmmInterface.cgenff_bonded_reference import (
         read_psf_card_file,
     )
-    from mmml.interfaces.pycharmmInterface.nbonds_config import read_cgenff_toppar
-    from mmml.cli.run.md_evaluate_npz import _attach_ase_mmml_calculator
+    from karml.interfaces.pycharmmInterface.nbonds_config import read_cgenff_toppar
+    from karml.cli.run.md_evaluate_npz import _attach_ase_karml_calculator
 
     if not ipy.ensure_pycharmm_loaded():
         raise RuntimeError("PyCHARMM is unavailable")
@@ -81,7 +81,7 @@ def main() -> int:
         mm_charge_correction=False,
         mm_latent_charge_template=None,
     )
-    _attach_ase_mmml_calculator(
+    _attach_ase_karml_calculator(
         calc_args,
         atoms=atoms,
         z=z,

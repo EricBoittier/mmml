@@ -1,21 +1,21 @@
 # Environment and HPCs
 
-Getting MMML to run *where* you need it: resolving checkpoints and CHARMM paths,
+Getting KARML to run *where* you need it: resolving checkpoints and CHARMM paths,
 diagnosing a broken environment, and the MPI / threading / launcher details that
 decide whether a cluster job is fast or merely running.
 
 ```bash
-mmml doctor                    # is this machine ready? (JAX, CHARMM, Packmol)
-mmml env                       # resolved + bundled checkpoints, CHARMM paths
-mmml env --json                # same, parseable
-mmml health-check --require-gpu
+karml doctor                    # is this machine ready? (JAX, CHARMM, Packmol)
+karml env                       # resolved + bundled checkpoints, CHARMM paths
+karml env --json                # same, parseable
+karml health-check --require-gpu
 ```
 
 If `doctor` is clean but MLpot still misbehaves under MPI:
 
 ```bash
-mmml mpi-check                 # validate OpenMPI / CHARMM / mpi4py
-mmml mpi-launch ...            # launch with an explicit JAX execution policy
+karml mpi-check                 # validate OpenMPI / CHARMM / mpi4py
+karml mpi-launch ...            # launch with an explicit JAX execution policy
 ```
 
 ## What's here
@@ -46,5 +46,5 @@ mmml mpi-launch ...            # launch with an explicit JAX execution policy
 ## A warning about JIT
 
 A first `md-system` step on a GPU node can spend minutes in XLA compilation, and
-that time is easy to misread as a slow simulation. `mmml warmup-mlpot-jax` pays
+that time is easy to misread as a slow simulation. `karml warmup-mlpot-jax` pays
 it once, up front — see [MD & campaigns](md-campaigns.md).

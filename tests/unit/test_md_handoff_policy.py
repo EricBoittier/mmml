@@ -8,7 +8,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from mmml.cli.run.md_handoff import (
+from karml.cli.run.md_handoff import (
     MdHandoffState,
     handoff_skip_pre_min,
     resolve_handoff_box,
@@ -20,7 +20,7 @@ from mmml.cli.run.md_handoff import (
 
 
 def test_handoff_zero_first_fire_does_not_skip_pbc_fire() -> None:
-    from mmml.cli.run.jaxmd_runner import should_skip_redundant_pbc_fire
+    from karml.cli.run.jaxmd_runner import should_skip_redundant_pbc_fire
 
     assert (
         should_skip_redundant_pbc_fire(first_fire_steps=0, use_pbc=True) is False
@@ -151,7 +151,7 @@ def test_write_handoff_policy_json(tmp_path: Path) -> None:
 
 
 def test_enrich_handoff_from_restart_files_uses_staged_res(tmp_path: Path) -> None:
-    from mmml.cli.run.md_handoff import enrich_handoff_from_restart_files
+    from karml.cli.run.md_handoff import enrich_handoff_from_restart_files
 
     heat_res = Path(
         "examples/other/notebooks/ffFIT/example-general/heat.res"

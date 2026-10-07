@@ -7,16 +7,16 @@ from pathlib import Path
 
 import pytest
 
-from mmml.cli.run.md_system import build_pycharmm_command, parse_md_system_args
-from mmml.interfaces.pycharmmInterface.charmm_paths import mmml_repo_root
-from mmml.interfaces.pycharmmInterface.heme_electronic import (
+from karml.cli.run.md_system import build_pycharmm_command, parse_md_system_args
+from karml.interfaces.pycharmmInterface.charmm_paths import karml_repo_root
+from karml.interfaces.pycharmmInterface.heme_electronic import (
     resolve_metatomic_electronic_state,
 )
-from mmml.interfaces.pycharmmInterface.ml_cut import load_ml_cut, partition_ml_cut
-from mmml.interfaces.pycharmmInterface.mlpot.charmm_energy_policy import (
+from karml.interfaces.pycharmmInterface.ml_cut import load_ml_cut, partition_ml_cut
+from karml.interfaces.pycharmmInterface.mlpot.charmm_energy_policy import (
     resolve_charmm_energy_term_policies,
 )
-from mmml.interfaces.pycharmmInterface.myoglobin import (
+from karml.interfaces.pycharmmInterface.myoglobin import (
     his93_partition_columns,
     load_mbco,
 )
@@ -38,7 +38,7 @@ def test_his93_yaml_matches_the_preset_partition() -> None:
     structure = load_mbco()
     columns = _columns(structure)
     preset_ml, preset_links = his93_partition_columns(*columns)
-    spec = load_ml_cut(mmml_repo_root() / HIS93_YAML)
+    spec = load_ml_cut(karml_repo_root() / HIS93_YAML)
     ml, links = partition_ml_cut(spec, *columns)
     assert spec.charge == -2
     assert spec.spin_multiplicity == 1
@@ -49,7 +49,7 @@ def test_his93_yaml_matches_the_preset_partition() -> None:
 
 
 def test_mbco_yaml_points_at_the_cut_file_and_forwards_it() -> None:
-    from mmml.cli.run.md_pbc_suite import pycharmm_mlpot
+    from karml.cli.run.md_pbc_suite import pycharmm_mlpot
 
     args = parse_md_system_args(
         ["--config", "examples/pet_omol_heme/yaml/mbco_nve.yaml"]
@@ -66,7 +66,7 @@ def test_cut_file_sets_charge_and_spin_and_keeps_protein_vdw() -> None:
     args = Namespace(
         residue="MBCO",
         composition=None,
-        ml_cut=str(mmml_repo_root() / HIS93_YAML),
+        ml_cut=str(karml_repo_root() / HIS93_YAML),
         mm_region=None,
         charge=None,
         spin_multiplicity=None,
@@ -84,7 +84,7 @@ def test_cut_file_sets_charge_and_spin_and_keeps_protein_vdw() -> None:
 
 
 def test_ml_cut_rejects_mm_region(tmp_path: Path) -> None:
-    from mmml.interfaces.pycharmmInterface.ml_cut import ml_cut_from_args
+    from karml.interfaces.pycharmmInterface.ml_cut import ml_cut_from_args
 
     cut = tmp_path / "cut.yaml"
     cut.write_text(

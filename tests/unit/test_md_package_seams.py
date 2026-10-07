@@ -1,4 +1,4 @@
-"""Smoke tests for the unified ``mmml.md`` scaffolding seams.
+"""Smoke tests for the unified ``karml.md`` scaffolding seams.
 
 Verifies the protocol/dataclass layer imports without heavy deps (jax/CHARMM)
 and that :class:`HybridEnergy` composes both engine faces from registered terms.
@@ -10,8 +10,8 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from mmml.md import EnsembleSpec, MolecularSystem, RunConfig, SystemSpec
-from mmml.md.energy.registry import (
+from karml.md import EnsembleSpec, MolecularSystem, RunConfig, SystemSpec
+from karml.md.energy.registry import (
     EnergyContext,
     HybridEnergy,
     NeighborRequest,
@@ -35,10 +35,10 @@ def test_md_package_imports_without_heavy_deps():
     # Importing the seams must not require jax / ase / pycharmm.
     import sys
 
-    import mmml.md  # noqa: F401
-    import mmml.md.builders  # noqa: F401
-    import mmml.md.drivers  # noqa: F401
-    import mmml.md.samplers  # noqa: F401
+    import karml.md  # noqa: F401
+    import karml.md.builders  # noqa: F401
+    import karml.md.drivers  # noqa: F401
+    import karml.md.samplers  # noqa: F401
 
     assert "jax" not in sys.modules or True  # jax may be present, but not required here
 
@@ -85,7 +85,7 @@ def test_term_registry_roundtrip():
         assert hybrid.neighbor_requests[0].kind == "intermolecular"
     finally:
         # keep the module-level registry clean for other tests
-        from mmml.md.energy import registry as _registry
+        from karml.md.energy import registry as _registry
 
         _registry._TERM_REGISTRY.pop("_smoke_term", None)
 
@@ -116,6 +116,6 @@ def test_hybrid_energy_ase_face():
         assert atoms.get_potential_energy() == pytest.approx(2.0)
         assert np.allclose(atoms.get_forces(), 1.0)
     finally:
-        from mmml.md.energy import registry as _registry
+        from karml.md.energy import registry as _registry
 
         _registry._TERM_REGISTRY.pop("_smoke_ase_term", None)

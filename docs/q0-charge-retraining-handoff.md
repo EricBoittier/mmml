@@ -126,7 +126,7 @@ first 45 steps. Do not relax the safety threshold to make this checkpoint run.
 
 Use `ssh -F /dev/null boittier@pc-studix.chemie.unibas.ch` because the local SSH
 config points at a missing RSA key. Repository path is
-`/mmhome/boittier/home/mmml`.
+`/mmhome/boittier/home/karml`.
 
 | Job | Name | Purpose | State at last check |
 |---|---|---|---|
@@ -161,11 +161,11 @@ architecture matching, device count, or auto-batching.
 
 The current SO3LR training entry point is
 `scripts/train_so3lr_spooky_extxyz.py`. It does not yet implement teacher
-distillation. The existing `mmml physnet-train --distill` path is a separate
+distillation. The existing `karml physnet-train --distill` path is a separate
 generic PhysNet pipeline and must not be presented as equivalent.
 
 Port the tested loss helpers from
-`mmml/models/physnetjax/physnetjax/training/distill.py` into the Spooky trainer.
+`karml/models/physnetjax/physnetjax/training/distill.py` into the Spooky trainer.
 Required behavior:
 
 1. accept a separate `--teacher-checkpoint`;

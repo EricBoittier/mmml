@@ -19,7 +19,7 @@ import numpy as np
 from matplotlib import image as mpimg
 from matplotlib.gridspec import GridSpec
 
-from mmml.utils.plotting.styles import apply_plot_style, comparison_colors
+from karml.utils.plotting.styles import apply_plot_style, comparison_colors
 
 REPO = Path(__file__).resolve().parents[1]
 RUNS = REPO / "artifacts" / "npt_argon_water" / "runs"
@@ -259,7 +259,7 @@ def main() -> int:
         note = (
             "CHARMM CPT (AR1:500)\n"
             "• 20 × 10 ps DynamicsScript segments\n"
-            "• MMML_CPT_DYNAMICS_CHUNK_NSTEP=500k\n"
+            "• KARML_CPT_DYNAMICS_CHUNK_NSTEP=500k\n"
             "  (no 250-step micro-chunks / reseed)\n"
             "• mild expansion only (ρ≈1.28 vs 1.38)\n"
             "  — far better than AR1:108 gas-like\n"
@@ -269,7 +269,7 @@ def main() -> int:
         note = (
             "CHARMM CPT (this plot)\n"
             "• 20 × 10 ps DynamicsScript segments\n"
-            "• MMML_CPT_DYNAMICS_CHUNK_NSTEP=500k\n"
+            "• KARML_CPT_DYNAMICS_CHUNK_NSTEP=500k\n"
             "  (no 250-step micro-chunks)\n"
             "• in-memory continuation (no iasvel=1)\n"
             "→ continuous velocities, but box still\n"

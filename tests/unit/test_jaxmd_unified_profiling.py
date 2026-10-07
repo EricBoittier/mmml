@@ -1,6 +1,6 @@
 """Profiling / performance-regression harness for the jaxmd-unified stack.
 
-Times the hot paths of the ``mmml.md`` pipeline on the synthetic water box
+Times the hot paths of the ``karml.md`` pipeline on the synthetic water box
 (no CHARMM, no checkpoint): energy-function build+compile, steady-state MD
 throughput, neighbor-list rebuild, and how throughput scales with system size.
 
@@ -9,7 +9,7 @@ so the default fast suite skips them::
 
     pytest tests/unit/test_jaxmd_unified_profiling.py -m slow
 
-A JSON report is written to ``MMML_PROFILE_OUT`` if that env var is set, so a
+A JSON report is written to ``KARML_PROFILE_OUT`` if that env var is set, so a
 CI job can diff throughput over time; otherwise each test prints a ``PROFILE``
 line (visible with ``pytest -s``). The assertions are deliberately loose
 floors: they catch catastrophic regressions (an accidental recompile per step,
@@ -26,9 +26,9 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from mmml.md import EnsembleSpec, RunConfig, SystemSpec, assemble_and_run
-from mmml.md.assemble import _auto_neighbor_fn, build_hybrid_energy
-from mmml.md.drivers import JaxmdDriver
+from karml.md import EnsembleSpec, RunConfig, SystemSpec, assemble_and_run
+from karml.md.assemble import _auto_neighbor_fn, build_hybrid_energy
+from karml.md.drivers import JaxmdDriver
 
 pytestmark = [pytest.mark.unit, pytest.mark.slow]
 
@@ -54,12 +54,12 @@ def _block(x):
 
 
 def _report(record: dict) -> None:
-    """Append ``record`` to the JSON report at ``MMML_PROFILE_OUT`` if set.
+    """Append ``record`` to the JSON report at ``KARML_PROFILE_OUT`` if set.
 
     When unset (the default), the ``PROFILE ...`` line printed by each test is
     the record — visible with ``pytest -s`` or on failure.
     """
-    out = os.environ.get("MMML_PROFILE_OUT")
+    out = os.environ.get("KARML_PROFILE_OUT")
     if not out:
         return
     path = Path(out)

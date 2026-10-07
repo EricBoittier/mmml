@@ -18,7 +18,7 @@ Geometry sampling is imported from scan_dimer_orientations, so a dataset built
 here is directly comparable to the diagnostics that motivated it.
 
 Units: pyscf returns Hartree and Hartree/Bohr; this writes **eV and eV/Angstrom**
-to match the training pipeline (mmml/data/units.py declares eV canonical).
+to match the training pipeline (karml/data/units.py declares eV canonical).
 Getting that wrong is a silent 27x error -- it has already happened once in this
 codebase.
 
@@ -277,7 +277,7 @@ def main() -> int:
     # Must precede the tblite import: OpenMP reads it at load time.
     os.environ.setdefault("OMP_NUM_THREADS", str(args.omp_threads))
 
-    from mmml.data.units import (
+    from karml.data.units import (
         BOHR_TO_ANGSTROM,
         HARTREE_BOHR_TO_EV_ANGSTROM,
         HARTREE_TO_EV,
@@ -432,7 +432,7 @@ def main() -> int:
             D=np.zeros((n_tot, 3)),
             mol_id=M_out, cgenff_type_idx=T_out, cgenff_charge=Q_out,
             res_name=np.array(names),
-            _mmml_units=np.array([
+            _karml_units=np.array([
                 "coords=Angstrom", "geometry_only=true",
                 "labels=pending (ORCA / other LoT)",
             ]),
@@ -577,7 +577,7 @@ def main() -> int:
         atom_ref_energies=refs,
         cgenff_master_sigmas=np.asarray(raw["cgenff_master_sigmas"]),
         cgenff_master_epsilons=np.asarray(raw["cgenff_master_epsilons"]),
-        _mmml_units=np.array(["energy=eV", "forces=eV/Angstrom", "coords=Angstrom",
+        _karml_units=np.array(["energy=eV", "forces=eV/Angstrom", "coords=Angstrom",
                               "dipole=e*Angstrom", f"method={label}",
                               "E=atom-referenced (add atom_ref_energies back for totals)",
                               "E_total=raw"]),
@@ -597,7 +597,7 @@ def main() -> int:
         print(f"-> {f}  ({len(sel)} structures)")
     print(f"\n{label}; eV, eV/A, dipole e*A. CGenFF types/charges carried from the "
           f"source monomers; master tables ({len(common['cgenff_master_sigmas'])} types) copied.")
-    print("Ready for: mmml physnet-train --hybrid-mm --data <base>_train.npz "
+    print("Ready for: karml physnet-train --hybrid-mm --data <base>_train.npz "
           "--valid-data <base>_valid.npz")
     if args.method == "hf":
         print("NOTE: HF has NO dispersion and this applies no counterpoise correction. "

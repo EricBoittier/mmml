@@ -31,7 +31,7 @@ from typing import TYPE_CHECKING, Literal
 if TYPE_CHECKING:  # pragma: no cover - typing only
     import argparse
 
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
 
 MdStage = Literal["mini", "heat", "nve", "equi", "prod"]
 
@@ -57,7 +57,7 @@ def _is_dynamics_stage_restart_path(path: Path | str | None) -> bool:
     if path is None:
         return False
     p = Path(path)
-    from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
+    from karml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
         is_handoff_seed_restart_path,
         is_heat_segment_restart_path,
         is_pretreat_mm_restart_path,
@@ -100,7 +100,7 @@ def _should_skip_pre_dyn_fmax_gate(
     if _is_dynamics_stage_restart_path(restart_from):
         return True
     if restart_from is not None:
-        from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
+        from karml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
             is_handoff_seed_restart_path,
         )
 
@@ -128,7 +128,7 @@ def _restart_coord_read_candidates(path: Path) -> list[Path]:
 
     _add(path)
     try:
-        from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+        from karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
             _staging_alias_for_restart,
         )
 
@@ -139,7 +139,7 @@ def _restart_coord_read_candidates(path: Path) -> list[Path]:
 
 
 def _heat_restart_path(paths: dict[str, Path], tag: str, n_heat_segments: int) -> Path:
-    from mmml.interfaces.pycharmmInterface.mlpot.artifact_paths import stage_segment_restart
+    from karml.interfaces.pycharmmInterface.mlpot.artifact_paths import stage_segment_restart
 
     if n_heat_segments > 1:
         return stage_segment_restart(paths["heat_res"].parent, "heat", n_heat_segments - 1)
@@ -155,7 +155,7 @@ def _prior_restart_for_stage(
     n_heat_segments: int = 1,
 ) -> Path | None:
     if stage == "heat":
-        from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
+        from karml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
             is_handoff_seed_restart_path,
             is_pretreat_mm_restart_path,
         )
@@ -168,7 +168,7 @@ def _prior_restart_for_stage(
                 return restart_from
         return None
     if restart_from is not None:
-        from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
+        from karml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
             is_handoff_seed_restart_path,
             is_pretreat_mm_restart_path,
         )
@@ -206,7 +206,7 @@ def _is_geometry_baseline_snapshot(
 ) -> bool:
     """True when ``rread`` is the geometry baseline (``baseline.res``), not a dyna restart.
 
-    ``baseline.res`` is an MMML coordinate snapshot of the live CHARMM state,
+    ``baseline.res`` is an KARML coordinate snapshot of the live CHARMM state,
     rewritten just before dynamics.  It is not a CHARMM dynamics restart
     (``READYN`` aborts with a Fortran read error), so a heat stage whose only
     prior artifact is the baseline must ``start`` from in-memory coordinates
@@ -239,7 +239,7 @@ def _trajectory_outputs(path: Path | None) -> list[Path]:
     outputs: list[Path] = []
     if stage_path.is_file() and stage_path.stat().st_size > 0:
         outputs.append(stage_path)
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         overlap_chunk_dcd_paths,
     )
 
@@ -275,7 +275,7 @@ def _valid_restart_file_lazy(path: Path):
     ``dynamics`` pulls in the CHARMM stack at import time; importing it at module
     scope here would undo the point of the extraction.
     """
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import _valid_restart_file
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import _valid_restart_file
 
     return _valid_restart_file(path)
 
@@ -316,7 +316,7 @@ def _latest_valid_stage_restart(out_dir: Path, stage: str) -> Path | None:
         if match is not None:
             numbered.append((int(match.group(1)), candidate))
     ordered = [path for _, path in sorted(numbered, reverse=True)]
-    from mmml.interfaces.pycharmmInterface.mlpot.artifact_paths import stage_restart
+    from karml.interfaces.pycharmmInterface.mlpot.artifact_paths import stage_restart
 
     ordered.append(stage_restart(out_dir, stage))
     for candidate in ordered:

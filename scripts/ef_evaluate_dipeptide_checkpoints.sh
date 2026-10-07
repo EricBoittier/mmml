@@ -52,7 +52,7 @@ RUNS=(
   "1ptTbothPert|${CKPT_ROOT}/dipetidePert_ef2_ptT_run1|config-bd8b7a90-13fa-4943-9453-6b3ef7bf4433.json|params-bd8b7a90-13fa-4943-9453-6b3ef7bf4433.json"
 )
 
-# Extra mmml ef-evaluate flags (not rot-*); rot sweep is controlled by env vars above.
+# Extra karml ef-evaluate flags (not rot-*); rot sweep is controlled by env vars above.
 EXTRA_ARGS=("$@")
 
 echo "Test NPZ:          ${TEST_NPZ}"
@@ -80,7 +80,7 @@ run_eval() {
   echo "Output: ${out_dir}"
   echo "============================================================"
 
-  mmml ef-evaluate \
+  karml ef-evaluate \
     --params "${params_path}" \
     --config "${config_path}" \
     --test-npz "${TEST_NPZ}" \

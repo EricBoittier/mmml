@@ -2,7 +2,7 @@
 PhysNet model with Total Charge and Total Spin conditioning.
 
 .. deprecated::
-    Prefer :class:`~mmml.models.physnetjax.physnetjax.models.spooky_model.SpookyPhysNet`
+    Prefer :class:`~karml.models.physnetjax.physnetjax.models.spooky_model.SpookyPhysNet`
     for Q/S-conditioned training and hybrid MD. This fork remains only for
     loading historical checkpoints; do not extend it.
 """
@@ -19,9 +19,9 @@ import jax
 import jax.numpy as jnp
 from jax import Array
 
-from mmml.models.physnetjax.physnetjax.models.euclidean_fast_attention import fast_attention as efa
-from mmml.models.physnetjax.physnetjax.models.physnet_family import PhysNetFamilyMixin
-from mmml.models.physnetjax.physnetjax.models.zbl import (
+from karml.models.physnetjax.physnetjax.models.euclidean_fast_attention import fast_attention as efa
+from karml.models.physnetjax.physnetjax.models.physnet_family import PhysNetFamilyMixin
+from karml.models.physnetjax.physnetjax.models.zbl import (
     ZBLRepulsion,
     geometric_pair_distances,
 )
@@ -108,7 +108,7 @@ class PhysNetChargeSpin(PhysNetFamilyMixin, nn.Module):
     # before this field existed was implicitly hardcoded to -- changing them
     # changes electrostatics behavior and is NOT backward compatible with
     # checkpoints trained under the old defaults. See the identical fix (and
-    # full rationale) on mmml.models.physnetjax.physnetjax.models.spooky_model.SpookyPhysNet.
+    # full rationale) on karml.models.physnetjax.physnetjax.models.spooky_model.SpookyPhysNet.
     switch_start: float = 1.0
     switch_end: float = 10.0
     electrostatics_off_start: float = 8.0

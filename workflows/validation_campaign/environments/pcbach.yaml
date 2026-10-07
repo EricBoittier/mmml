@@ -1,7 +1,7 @@
 name: pcbach
 kind: slurm
 role: CPU-heavy reference generation, cache building, classical MM, and analysis
-repo_root: ~/mmml
+repo_root: ~/karml
 partition: compute
 account: null
 qos: null
@@ -13,9 +13,9 @@ runtime_min: 1440
 gpus: 0
 gpu_constraint: null
 max_concurrent: 8
-launcher: scripts/mmml-charmm-mpirun.sh
+launcher: scripts/karml-charmm-mpirun.sh
 environment:
   JAX_ENABLE_X64: "1"
-  MMML_ML_DTYPE: float64
+  KARML_ML_DTYPE: float64
   OMP_NUM_THREADS: "32"
 

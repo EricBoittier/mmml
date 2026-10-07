@@ -7,14 +7,14 @@
 #
 # Usage:
 #   cd workflows/dcm_density_setup_compare
-#   export MMML_CKPT=/path/to/params.json
+#   export KARML_CKPT=/path/to/params.json
 #   export JAX_ENABLE_X64=1
 #   bash scripts/profile_gpu_heat.sh [--heat-only] [RUN_TAG]
 set -euo pipefail
 
 WORKFLOW_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 REPO_ROOT="$(cd "$WORKFLOW_ROOT/../.." && pwd)"
-CFG="${MMML_WORKFLOW_CONFIG:-$WORKFLOW_ROOT/config.profile.dcm30_l30.yaml}"
+CFG="${KARML_WORKFLOW_CONFIG:-$WORKFLOW_ROOT/config.profile.dcm30_l30.yaml}"
 HEAT_ONLY=0
 TAG=""
 for arg in "$@"; do
@@ -26,14 +26,14 @@ done
 TAG="${TAG:-minimal_dcm_30_t50_l30_ht_bussi}"
 LOG="${PROFILE_LOG:-$WORKFLOW_ROOT/profile_gpu_heat.log}"
 
-export MMML_WORKFLOW_CONFIG="$CFG"
+export KARML_WORKFLOW_CONFIG="$CFG"
 export JAX_ENABLE_X64="${JAX_ENABLE_X64:-1}"
 export JAX_PLATFORMS="${JAX_PLATFORMS:-cuda,cpu}"
 export XLA_PYTHON_CLIENT_PREALLOCATE="${XLA_PYTHON_CLIENT_PREALLOCATE:-false}"
 
-export MMML_MLPOT_PROFILE="${MMML_MLPOT_PROFILE:-1}"
-export MMML_JAX_COMPILE_TIMERS="${MMML_JAX_COMPILE_TIMERS:-1}"
-export MMML_JAX_PME_PROFILE="${MMML_JAX_PME_PROFILE:-1}"
+export KARML_MLPOT_PROFILE="${KARML_MLPOT_PROFILE:-1}"
+export KARML_JAX_COMPILE_TIMERS="${KARML_JAX_COMPILE_TIMERS:-1}"
+export KARML_JAX_PME_PROFILE="${KARML_JAX_PME_PROFILE:-1}"
 export JAX_COMPILATION_CACHE_DIR="${JAX_COMPILATION_CACHE_DIR:-$WORKFLOW_ROOT/.jax_cache_profile_dcm30}"
 
 mkdir -p "$(dirname "$LOG")" "$JAX_COMPILATION_CACHE_DIR"
@@ -48,11 +48,11 @@ bash scripts/preflight.sh 2>&1 | tee -a "$LOG"
 
 if [[ "$HEAT_ONLY" != "1" ]]; then
   echo "=== build + validate cluster (Packmol) ===" | tee -a "$LOG"
-  # shellcheck source=../../../scripts/resolve_mmml_env.sh
-  source "$REPO_ROOT/scripts/resolve_mmml_env.sh"
-  mmml_resolve_env "$REPO_ROOT"
+  # shellcheck source=../../../scripts/resolve_karml_env.sh
+  source "$REPO_ROOT/scripts/resolve_karml_env.sh"
+  karml_resolve_env "$REPO_ROOT"
   set +e
-  "${MMML_PYTHON}" "$WORKFLOW_ROOT/scripts/build_validate_cluster.py" \
+  "${KARML_PYTHON}" "$WORKFLOW_ROOT/scripts/build_validate_cluster.py" \
     --config "$CFG" --tag "$TAG" --mic-check 2>&1 | tee -a "$LOG"
   BUILD_RC=${PIPESTATUS[0]}
   set -e

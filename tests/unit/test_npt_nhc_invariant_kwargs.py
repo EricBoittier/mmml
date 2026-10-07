@@ -5,7 +5,7 @@ import ast
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-RUNNER = ROOT / "mmml/cli/run/jaxmd_runner.py"
+RUNNER = ROOT / "karml/cli/run/jaxmd_runner.py"
 
 
 def test_npt_nose_hoover_invariant_call_omits_box_kwarg():

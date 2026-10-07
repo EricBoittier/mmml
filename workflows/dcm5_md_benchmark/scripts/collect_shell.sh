@@ -22,7 +22,7 @@ MD_PATH="$(_resolve_out "$MD_ARG")"
 REPO_ROOT="$(cd "$WORKFLOW_ROOT/../.." && pwd)"
 cd "$REPO_ROOT"
 
-PY="${MMML_PYTHON:-}"
+PY="${KARML_PYTHON:-}"
 if [[ -z "$PY" && -x "$REPO_ROOT/.venv/bin/python" ]]; then
   PY="$REPO_ROOT/.venv/bin/python"
 fi

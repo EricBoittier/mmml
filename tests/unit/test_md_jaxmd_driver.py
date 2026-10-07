@@ -7,10 +7,10 @@ import pytest
 
 pytest.importorskip("jax_md")
 
-from mmml.md.config import EnsembleSpec
-from mmml.md.drivers import JaxmdDriver
-from mmml.md.energy import EnergyContext, HybridEnergy, TermFns
-from mmml.md.system import MolecularSystem
+from karml.md.config import EnsembleSpec
+from karml.md.drivers import JaxmdDriver
+from karml.md.energy import EnergyContext, HybridEnergy, TermFns
+from karml.md.system import MolecularSystem
 
 
 class _HarmonicTerm:
@@ -533,7 +533,7 @@ def test_temperature_schedule_builds_one_integrator_per_temperature(monkeypatch)
     """Several blocks at one temperature share one thermostat closure."""
     import jax_md.simulate as simulate
 
-    from mmml.md.temperature import parse_temperature_schedule
+    from karml.md.temperature import parse_temperature_schedule
 
     calls = {"n": 0}
     real = simulate.nvt_langevin

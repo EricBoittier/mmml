@@ -99,7 +99,7 @@ def cubic_box_length_from_geometry(
 
 def _read_charmm_box_sides_A() -> tuple[float, float, float]:
     """Read CHARMM periodic box lengths (Å) via ``pbound_get_size``."""
-    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401 — CHARMM env
+    import karml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401 — CHARMM env
     import pycharmm.lib as lib
 
     size_x = ctypes.c_double(0.0)
@@ -550,7 +550,7 @@ def _ensure_crystal_image_str() -> None:
     """Copy bundled ``crystal_image.str`` into cwd when missing (no setupBox import)."""
     import shutil
 
-    from mmml.paths import crystal_image_str_source
+    from karml.paths import crystal_image_str_source
 
     dst = Path("crystal_image.str")
     if dst.exists():
@@ -595,15 +595,15 @@ def prepare_charmm_pbc(
     """Install CHARMM crystal + IMAGE for a cubic cell."""
     import pycharmm.crystal as crystal
 
-    from mmml.interfaces.pycharmmInterface.charmm_levels import (
+    from karml.interfaces.pycharmmInterface.charmm_levels import (
         charmm_quiet_output,
         suppress_charmm_fortran_io,
     )
-    from mmml.interfaces.pycharmmInterface.charmm_mpi import mpi_charmm_script
-    from mmml.interfaces.pycharmmInterface.nbonds_config import (
+    from karml.interfaces.pycharmmInterface.charmm_mpi import mpi_charmm_script
+    from karml.interfaces.pycharmmInterface.nbonds_config import (
         PBC_NBOND_BOX_MARGIN_A,
     )
-    from mmml.interfaces.pycharmmInterface.pycharmmCommands import pbcset
+    from karml.interfaces.pycharmmInterface.pycharmmCommands import pbcset
 
     L = float(cubic_box_side_A)
     if L <= 0.0:
@@ -614,7 +614,7 @@ def prepare_charmm_pbc(
         mpi_charmm_script(pbcset.format(SIDELENGTH=L), quiet=True)
         if not crystal.define_cubic(L):
             raise RuntimeError(f"crystal.define_cubic failed for L={L} Å")
-        from mmml.interfaces.pycharmmInterface.nbonds_config import (
+        from karml.interfaces.pycharmmInterface.nbonds_config import (
             apply_nbonds_kwargs,
             apply_switch_nbond_cutoffs_before_cutnb,
             resolve_pbc_nbond_cutoffs,
@@ -661,14 +661,14 @@ def apply_pbc_nbonds(
     """Nonbond list for periodic CHARMM (``cutim >= cutnb``).
 
     When ``cubic_box_side_A`` is set, clamp all cutoffs to stay below half the box.
-    By default (no explicit ``cutnb``), ``cutnb`` follows MMML switches
+    By default (no explicit ``cutnb``), ``cutnb`` follows KARML switches
     ``mm_switch_on + mm_switch_width``.  Returns the cutoffs actually applied.
     """
-    from mmml.interfaces.pycharmmInterface.cutoffs import (
+    from karml.interfaces.pycharmmInterface.cutoffs import (
         DEFAULT_MM_SWITCH_ON,
         DEFAULT_MM_SWITCH_WIDTH,
     )
-    from mmml.interfaces.pycharmmInterface.nbonds_config import (
+    from karml.interfaces.pycharmmInterface.nbonds_config import (
         PbcNbondCutoffs,
         apply_nbonds_kwargs,
         pbc_nbond_cutoffs,
@@ -728,7 +728,7 @@ def reassert_pbc_nbond_cutoffs(
     ``crystal.build`` can assign ``cutnb`` before switch radii are lowered.  Call
     after image registration ``UPDATE`` and before hybrid ``ENER``.
     """
-    from mmml.interfaces.pycharmmInterface.nbonds_config import (
+    from karml.interfaces.pycharmmInterface.nbonds_config import (
         apply_switch_nbond_cutoffs_before_cutnb,
         assert_pbc_nbond_cutoffs_before_upinb,
         charmm_has_vacuum_nbond_preset,
@@ -782,7 +782,7 @@ def setup_charmm_environment(
     workflow_args: Any = None,
 ) -> dict[str, Any]:
     """Vacuum or PBC CHARMM environment before MLpot registration."""
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+    from karml.interfaces.pycharmmInterface.mlpot.setup import (
         prepare_charmm_vacuum,
         setup_default_nbonds,
     )
@@ -863,7 +863,7 @@ def sync_workflow_pbc_box_side_after_mm_pretreat(
         )
     if args is not None and getattr(args, "box_size", None) is not None:
         try:
-            from mmml.interfaces.pycharmmInterface.mlpot.run_workflow import (
+            from karml.interfaces.pycharmmInterface.mlpot.run_workflow import (
                 _pretreat_use_fixed_box_nvt,
             )
 
@@ -894,10 +894,10 @@ def sync_charmm_crystal_after_mm_pretreat(
         return False
     if charmm_crystal_is_active():
         return False
-    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+    import karml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
     import pycharmm
 
-    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
+    from karml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
 
     with charmm_relaxed_bomlev():
         pycharmm.lingo.charmm_script("UPDATE\n")
@@ -926,7 +926,7 @@ def find_latest_pretreat_mm_restart(paths: dict[str, Path]) -> Path | None:
     return None
 
 
-from mmml.interfaces.pycharmmInterface.nbonds_config import (  # noqa: E402
+from karml.interfaces.pycharmmInterface.nbonds_config import (  # noqa: E402
     PbcNbondCutoffs,
     pbc_nbond_cutoffs,
 )

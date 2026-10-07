@@ -8,24 +8,24 @@ from unittest.mock import patch
 import pytest
 import yaml
 
-from mmml.cli import __main__ as cli_main
-from mmml.cli.commands_help import commands_main, examples_main
-from mmml.cli.completion import MMML_COMMANDS, get_subcommand_parser
-from mmml.cli.configure import ConfigureCancelled, configure_main, run_wizard
-from mmml.cli.help_text import format_top_level_help
+from karml.cli import __main__ as cli_main
+from karml.cli.commands_help import commands_main, examples_main
+from karml.cli.completion import KARML_COMMANDS, get_subcommand_parser
+from karml.cli.configure import ConfigureCancelled, configure_main, run_wizard
+from karml.cli.help_text import format_top_level_help
 
 
-def test_mmml_commands_match_dispatch():
+def test_karml_commands_match_dispatch():
     dispatch = set(cli_main._DISPATCH_COMMANDS)
-    listed = {c for c in MMML_COMMANDS if c != "completion"}
+    listed = {c for c in KARML_COMMANDS if c != "completion"}
     assert dispatch == listed
 
 
 def test_top_level_help_is_compact():
     text = format_top_level_help()
-    assert "MMML: Machine Learning" in text
-    assert "mmml commands" in text
-    assert "mmml configure" in text
+    assert "KARML: Machine Learning" in text
+    assert "karml commands" in text
+    assert "karml configure" in text
     assert "env            find resolved/bundled checkpoints" in text
     assert "make-res    Generate residue" not in text
     assert len(text.splitlines()) < 25
@@ -35,14 +35,14 @@ def test_commands_main_lists_md_system(capsys):
     assert commands_main([]) == 0
     out = capsys.readouterr().out
     assert "md-system" in out
-    assert "Find checkpoints / env paths: mmml env" in out
+    assert "Find checkpoints / env paths: karml env" in out
     assert "configure" in out
 
 
 def test_examples_main(capsys):
     assert examples_main([]) == 0
     out = capsys.readouterr().out
-    assert "mmml configure" in out
+    assert "karml configure" in out
 
 
 def test_configure_non_interactive(capsys):
@@ -90,7 +90,7 @@ def test_configure_md_single_writes_yaml(tmp_path: Path):
             "5",  # setup: pbc_npt
             "1",  # backend: pycharmm
             "DCM:10",
-            "${MMML_CKPT}",
+            "${KARML_CKPT}",
             "260",
             "artifacts/test_run",
             "30",
@@ -232,15 +232,15 @@ def test_configure_parser_for_completion():
 
 
 def test_main_help_no_args(capsys):
-    with patch.object(cli_main.sys, "argv", ["mmml"]):
+    with patch.object(cli_main.sys, "argv", ["karml"]):
         rc = cli_main.main()
     assert rc == 0
     out = capsys.readouterr().out
-    assert "mmml commands" in out
+    assert "karml commands" in out
 
 
 def test_main_commands_dispatch(capsys):
-    with patch.object(cli_main.sys, "argv", ["mmml", "commands"]):
+    with patch.object(cli_main.sys, "argv", ["karml", "commands"]):
         rc = cli_main.main()
     assert rc == 0
     out = capsys.readouterr().out
@@ -249,7 +249,7 @@ def test_main_commands_dispatch(capsys):
 
 
 def test_main_configure_dispatch(capsys):
-    with patch.object(cli_main.sys, "argv", ["mmml", "configure", "--non-interactive"]):
+    with patch.object(cli_main.sys, "argv", ["karml", "configure", "--non-interactive"]):
         rc = cli_main.main()
     assert rc == 0
     out = capsys.readouterr().out

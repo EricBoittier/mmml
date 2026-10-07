@@ -1,9 +1,9 @@
-"""CGenFF NPZ enrichment (``mmml prepare-mm-dataset``).
+"""CGenFF NPZ enrichment (``karml prepare-mm-dataset``).
 
 Covers the dense-NPZ driver end to end on a synthetic water dimer set: the
 per-atom fields the hybrid ML/MM trainer needs, the ``-1`` padding convention,
 per-monomer charge conservation, dropping of non-dimer frames, and the shared
-core against :mod:`mmml.data.cgenff_dataset`.
+core against :mod:`karml.data.cgenff_dataset`.
 """
 
 from __future__ import annotations
@@ -11,7 +11,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from mmml.data.cgenff_dataset import assign_frame_cgenff, load_reference
+from karml.data.cgenff_dataset import assign_frame_cgenff, load_reference
 
 # One water in the (O, H, H) atom order the TIP3 template expects.
 _WATER = np.array([[0.0, 0.0, 0.0], [0.9572, 0.0, 0.0], [-0.239, 0.927, 0.0]])
@@ -68,8 +68,8 @@ def test_assign_frame_rejects_non_dimer():
 
 
 def test_enrich_npz_adds_hybrid_fields(tmp_path):
-    from mmml.cli.misc.prepare_mm_dataset import enrich_npz
-    from mmml.models.hybrid_energy import HYBRID_MM_BATCH_KEYS
+    from karml.cli.misc.prepare_mm_dataset import enrich_npz
+    from karml.models.hybrid_energy import HYBRID_MM_BATCH_KEYS
 
     inp = tmp_path / "in.npz"
     out = tmp_path / "out.npz"
@@ -111,7 +111,7 @@ def test_enrich_npz_adds_hybrid_fields(tmp_path):
 
 
 def test_enrich_npz_drops_non_dimer_frames(tmp_path):
-    from mmml.cli.misc.prepare_mm_dataset import enrich_npz
+    from karml.cli.misc.prepare_mm_dataset import enrich_npz
 
     inp = tmp_path / "in.npz"
     out = tmp_path / "out.npz"
@@ -135,7 +135,7 @@ def test_enrich_npz_drops_non_dimer_frames(tmp_path):
 
 
 def test_enrich_npz_strict_raises(tmp_path):
-    from mmml.cli.misc.prepare_mm_dataset import enrich_npz
+    from karml.cli.misc.prepare_mm_dataset import enrich_npz
 
     inp = tmp_path / "in.npz"
     out = tmp_path / "out.npz"

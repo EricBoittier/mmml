@@ -114,7 +114,7 @@ def _parse_args() -> argparse.Namespace:
 
 
 def _nbond_settings_from_cutoffs(cuts) -> object:
-    from mmml.interfaces.pycharmmInterface.mm_system_energy import CharmmNbondSettings
+    from karml.interfaces.pycharmmInterface.mm_system_energy import CharmmNbondSettings
 
     return CharmmNbondSettings(
         cutnb=float(cuts.cutnb),
@@ -125,7 +125,7 @@ def _nbond_settings_from_cutoffs(cuts) -> object:
 
 def _build_case(case: str, *, seed: int, workdir: Path):
     if case == "trialanine_water":
-        from mmml.interfaces.pycharmmInterface.trialanine_water_box import (
+        from karml.interfaces.pycharmmInterface.trialanine_water_box import (
             build_trialanine_water_box_in_charmm,
             have_trialanine_cgenff,
         )
@@ -156,10 +156,10 @@ def _build_case(case: str, *, seed: int, workdir: Path):
             },
         }
 
-    from mmml.interfaces.pycharmmInterface.charmm_jax_energy_benchmark import (
+    from karml.interfaces.pycharmmInterface.charmm_jax_energy_benchmark import (
         build_tip3_water_box,
     )
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_PRM
+    from karml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_PRM
 
     psf_path, positions, cell, cuts = build_tip3_water_box(
         n_waters=10,
@@ -183,7 +183,7 @@ def _build_case(case: str, *, seed: int, workdir: Path):
 
 def main() -> int:
     args = _parse_args()
-    from mmml.interfaces.pycharmmInterface.charmm_jax_trajectory_energy import (
+    from karml.interfaces.pycharmmInterface.charmm_jax_trajectory_energy import (
         compare_trajectory_mm_energy,
         load_trajectory_mm_context,
         read_trajectory_positions,
@@ -192,7 +192,7 @@ def main() -> int:
         run_short_nvt_dynamics_dcd,
         synthetic_trajectory_from_seed,
     )
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import ensure_pycharmm_loaded
+    from karml.interfaces.pycharmmInterface.import_pycharmm import ensure_pycharmm_loaded
 
     ensure_pycharmm_loaded()
 

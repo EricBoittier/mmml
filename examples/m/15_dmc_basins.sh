@@ -20,7 +20,7 @@ run_dmc() {
   local xyz="$2"
   local out="${ARTIFACTS_DIR}/dmc_${label}"
   echo "=== DMC ${label}: ${xyz} ==="
-  uv run mmml dmc \
+  uv run karml dmc \
     --natm 9 \
     --nwalker "${NWALKER}" \
     --stepsize 5e-4 \
@@ -29,7 +29,7 @@ run_dmc() {
     --alpha 1200.0 \
     --max-batch "${NWALKER}" \
     --seed 0 \
-    --checkpoint "${MMML_CKPT}" \
+    --checkpoint "${KARML_CKPT}" \
     --input "${xyz}" \
     --output-dir "${out}"
   local log

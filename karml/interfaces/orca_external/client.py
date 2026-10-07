@@ -1,4 +1,4 @@
-"""ORCA client that forwards external-tool jobs to a persistent MMML server."""
+"""ORCA client that forwards external-tool jobs to a persistent KARML server."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ DEFAULT_BIND = "127.0.0.1:8888"
 
 
 def send_to_server(host_port: str, arguments: list[str], *, working_directory: str) -> None:
-    """Forward a calculation request to ``mmml-orca-server``."""
+    """Forward a calculation request to ``karml-orca-server``."""
     host, port = host_port.split(":", 1)
     url = f"http://{host}:{port}/calculate"
     payload = {"arguments": arguments, "directory": working_directory}
@@ -53,8 +53,8 @@ def send_to_server(host_port: str, arguments: list[str], *, working_directory: s
 
 def build_client_parser() -> ArgumentParser:
     parser = ArgumentParser(
-        prog="mmml-orca-client",
-        description="Forward ORCA external-tool jobs to a running mmml-orca-server.",
+        prog="karml-orca-client",
+        description="Forward ORCA external-tool jobs to a running karml-orca-server.",
     )
     parser.add_argument(
         "-b",

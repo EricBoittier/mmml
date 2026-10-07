@@ -2,7 +2,7 @@
 #
 # Bulk acetone ≈ 0.784 g/cm³ → L ≈ 28.0 Å for 178 molecules (same cell scale as DCM:206).
 #
-# Prerequisites (campaign dir, e.g. mmml_tutorial/acodcm):
+# Prerequisites (campaign dir, e.g. karml_tutorial/acodcm):
 #   boxes/aco178/{model.psf,model.crd,box.json}   # liquid-box PASS
 #   checkpoint path below points at your hybrid ckpt
 #

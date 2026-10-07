@@ -7,7 +7,7 @@ set -euo pipefail
 WORKFLOW_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 REPO_ROOT="$(cd "$WORKFLOW_ROOT/../.." && pwd)"
 RUN_TAG="${1:?usage: job_shell.sh RUN_TAG (e.g. dcm_10_t300_l32)}"
-CONFIG="${MMML_BURST_CONFIG:-$WORKFLOW_ROOT/config.yaml}"
+CONFIG="${KARML_BURST_CONFIG:-$WORKFLOW_ROOT/config.yaml}"
 
 cd "$REPO_ROOT"
 
@@ -19,10 +19,10 @@ if [[ "${HOME:-}" == /scicore/* && -r "$REPO_ROOT/scripts/scicore_env.sh" ]]; th
   source "$REPO_ROOT/scripts/scicore_env.sh"
 fi
 
-# shellcheck source=../../../scripts/resolve_mmml_env.sh
-source "$REPO_ROOT/scripts/resolve_mmml_env.sh"
-mmml_resolve_env "$REPO_ROOT"
-PY="${MMML_PYTHON}"
+# shellcheck source=../../../scripts/resolve_karml_env.sh
+source "$REPO_ROOT/scripts/resolve_karml_env.sh"
+karml_resolve_env "$REPO_ROOT"
+PY="${KARML_PYTHON}"
 
 export JAX_ENABLE_X64="${JAX_ENABLE_X64:-1}"
 
@@ -38,7 +38,7 @@ fi
 echo "=== pbc_solvent_burst: ${RUN_TAG} ==="
 echo "REPO_ROOT=${REPO_ROOT}"
 echo "PY=${PY}"
-echo "MMML_CKPT=${MMML_CKPT:-<unset>}"
+echo "KARML_CKPT=${KARML_CKPT:-<unset>}"
 echo "JAX_ENABLE_X64=${JAX_ENABLE_X64}"
 
 N_ML="$("$PY" -c "

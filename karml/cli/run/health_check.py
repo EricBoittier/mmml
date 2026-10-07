@@ -1,4 +1,4 @@
-"""``mmml health-check`` — validate MMML / PyCHARMM / JAX interface health."""
+"""``karml health-check`` — validate KARML / PyCHARMM / JAX interface health."""
 
 from __future__ import annotations
 
@@ -104,7 +104,7 @@ def check_jax(*, require_gpu: bool = False) -> InterfaceCheck:
         return check
 
     try:
-        from mmml.utils.jax_gpu_warmup import (
+        from karml.utils.jax_gpu_warmup import (
             ensure_jax_cuda_runtime_libs,
             jax_cuda_runtime_libs_warning,
         )
@@ -180,7 +180,7 @@ def check_gpu_quantum() -> InterfaceCheck:
 
 
 def check_charmm() -> InterfaceCheck:
-    from mmml.interfaces.pycharmmInterface.charmm_mpi import (
+    from karml.interfaces.pycharmmInterface.charmm_mpi import (
         charmm_lib_available,
         charmm_lib_links_mpi,
         _charmm_lib_path,
@@ -205,7 +205,7 @@ def check_charmm() -> InterfaceCheck:
         return check
 
     try:
-        import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+        import karml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
 
         check.details["import_pycharmm"] = "ok"
     except Exception as exc:
@@ -215,7 +215,7 @@ def check_charmm() -> InterfaceCheck:
 
     if check.details["mpi_linked"]:
         check.warnings.append(
-            "MPI-linked libcharmm — launch MLpot via ./scripts/mmml-charmm-mpirun.sh"
+            "MPI-linked libcharmm — launch MLpot via ./scripts/karml-charmm-mpirun.sh"
         )
         check.summary = f"importable MPI-linked libcharmm @ {lib}"
     else:
@@ -226,7 +226,7 @@ def check_charmm() -> InterfaceCheck:
 def check_mlpot_symbols() -> InterfaceCheck:
     check = InterfaceCheck(name="mlpot", ok=True, summary="MLpot libcharmm symbols")
     try:
-        from mmml.interfaces.pycharmmInterface.mlpot.cli_common import check_mlpot_symbols
+        from karml.interfaces.pycharmmInterface.mlpot.cli_common import check_mlpot_symbols
 
         missing = check_mlpot_symbols()
         if missing:
@@ -251,7 +251,7 @@ def check_mlpot_symbols() -> InterfaceCheck:
 def check_packmol() -> InterfaceCheck:
     check = InterfaceCheck(name="packmol", ok=True, summary="Packmol executable")
     try:
-        from mmml.interfaces.pycharmmInterface.packmol_placement import packmol_executable
+        from karml.interfaces.pycharmmInterface.packmol_placement import packmol_executable
 
         exe = Path(packmol_executable())
         check.details["path"] = str(exe)
@@ -289,7 +289,7 @@ def _checkpoint_hint(ckpt: Path) -> str:
 def check_checkpoint(path: Path | None) -> InterfaceCheck:
     check = InterfaceCheck(name="checkpoint", ok=True, summary="PhysNet checkpoint")
     try:
-        from mmml.interfaces.pycharmmInterface.mlpot.cli_common import resolve_checkpoint
+        from karml.interfaces.pycharmmInterface.mlpot.cli_common import resolve_checkpoint
 
         ckpt = resolve_checkpoint(path)
         hint = _checkpoint_hint(ckpt)
@@ -310,7 +310,7 @@ def check_checkpoint(path: Path | None) -> InterfaceCheck:
     except FileNotFoundError as exc:
         check.ok = False
         check.errors.append(str(exc))
-        check.warnings.append("Set MMML_CKPT or pass --checkpoint for MLpot runs")
+        check.warnings.append("Set KARML_CKPT or pass --checkpoint for MLpot runs")
     except Exception as exc:
         check.ok = False
         check.errors.append(f"checkpoint load: {exc}")
@@ -318,7 +318,7 @@ def check_checkpoint(path: Path | None) -> InterfaceCheck:
 
 
 def check_mpi(*, strict: bool = False, tier2: bool = False, prelaunch: bool = False) -> InterfaceCheck:
-    from mmml.cli.run.mpi_check import run_mpi_check
+    from karml.cli.run.mpi_check import run_mpi_check
 
     mpi_report = run_mpi_check(strict=strict, prelaunch=prelaunch)
     check = InterfaceCheck(
@@ -337,7 +337,7 @@ def check_mpi(*, strict: bool = False, tier2: bool = False, prelaunch: bool = Fa
         },
     )
     if tier2:
-        from mmml.interfaces.pycharmmInterface.mlpot.spatial_mpi_validate import (
+        from karml.interfaces.pycharmmInterface.mlpot.spatial_mpi_validate import (
             validate_tier2_spatial_mpi_env,
         )
 
@@ -371,7 +371,7 @@ def check_live_mlpot(*, checkpoint: Path | None, residue: str, n_molecules: int)
         summary=f"MLpot ENER smoke ({residue}:{n_molecules})",
     )
     try:
-        from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+        from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
             all_atom_selection,
             build_ase_cluster,
             charmm_energy_row,
@@ -388,7 +388,7 @@ def check_live_mlpot(*, checkpoint: Path | None, residue: str, n_molecules: int)
             return check
 
         ckpt = resolve_checkpoint(checkpoint)
-        import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+        import karml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
         import ase
         import pycharmm
         import pycharmm.energy as energy
@@ -399,7 +399,7 @@ def check_live_mlpot(*, checkpoint: Path | None, residue: str, n_molecules: int)
         params, model = load_physnet_for_cluster(ckpt, n_atoms)
         model.natoms = n_atoms
         atoms = ase.Atoms(numbers=z, positions=r)
-        from mmml.models.physnetjax.physnetjax.calc.helper_mlp import get_pyc
+        from karml.models.physnetjax.physnetjax.calc.helper_mlp import get_pyc
 
         pyCModel = get_pyc(params, model, atoms)
         mlpot = pycharmm.MLpot(
@@ -409,7 +409,7 @@ def check_live_mlpot(*, checkpoint: Path | None, residue: str, n_molecules: int)
             ml_charge=0,
             ml_fq=True,
         )
-        from mmml.interfaces.pycharmmInterface.mlpot.callback_failstop import (
+        from karml.interfaces.pycharmmInterface.mlpot.callback_failstop import (
             install_fail_closed_energy_func,
         )
 
@@ -493,7 +493,7 @@ def render_health_report(report: HealthReport) -> str:
             "(imports/paths/symbols; not full MD/GPU readiness; add --live for ENER)"
         )
     lines = [
-        "MMML interface health check",
+        "KARML interface health check",
         "===========================",
         f"Status: {status}",
         "",
@@ -524,29 +524,29 @@ def render_health_report(report: HealthReport) -> str:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="mmml health-check",
+        prog="karml health-check",
         description=(
-            "Validate MMML interface health before PyCHARMM / MLpot jobs: "
+            "Validate KARML interface health before PyCHARMM / MLpot jobs: "
             "imports, JAX devices, libcharmm, MLpot symbols, Packmol, checkpoint, MPI."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
   # Fast preflight on a GPU node (no CHARMM energy eval):
-  mmml health-check --require-gpu
+  karml health-check --require-gpu
 
   # Under the MPI launcher (recommended on MPI-linked libcharmm):
-  MMML_MPI_NP=1 ./scripts/mmml-charmm-mpirun.sh health-check --require-gpu --strict
+  KARML_MPI_NP=1 ./scripts/karml-charmm-mpirun.sh health-check --require-gpu --strict
 
   # Include live MLpot registration + CHARMM ENER on DCM:2:
-  MMML_MPI_NP=1 ./scripts/mmml-charmm-mpirun.sh health-check --live --checkpoint "$MMML_CKPT"
+  KARML_MPI_NP=1 ./scripts/karml-charmm-mpirun.sh health-check --live --checkpoint "$KARML_CKPT"
 
   # Smallest liquid-DCM density smoke (after modules + CHARMM build):
-  mmml liquid-box --composition DCM:20 --target-density-g-cm3 1.326 \\
+  karml liquid-box --composition DCM:20 --target-density-g-cm3 1.326 \\
     --profile standard -o boxes/dcm20 --charmm-sd-steps 50 --charmm-abnr-steps 50
-  MMML_MPI_NP=1 ./scripts/mmml-charmm-mpirun.sh md-system \\
+  KARML_MPI_NP=1 ./scripts/karml-charmm-mpirun.sh md-system \\
     --from-psf boxes/dcm20/model.psf --from-crd boxes/dcm20/model.crd \\
-    --checkpoint "$MMML_CKPT" --md-stages mini --mini-nstep 20 --no-echeck --quiet
+    --checkpoint "$KARML_CKPT" --md-stages mini --mini-nstep 20 --no-echeck --quiet
 
 Checks: core, jax, charmm, mlpot, packmol, checkpoint, mpi (+ live with --live).
         """,
@@ -572,7 +572,7 @@ Checks: core, jax, charmm, mlpot, packmol, checkpoint, mpi (+ live with --live).
         "--checkpoint",
         type=Path,
         default=None,
-        help="PhysNet checkpoint (default: MMML_CKPT).",
+        help="PhysNet checkpoint (default: KARML_CKPT).",
     )
     parser.add_argument(
         "--live-residue",
@@ -614,14 +614,14 @@ Checks: core, jax, charmm, mlpot, packmol, checkpoint, mpi (+ live with --live).
 
 
 def main(argv: list[str] | None = None) -> int:
-    from mmml.interfaces.pycharmmInterface.charmm_mpi import (
-        maybe_rerun_mmml_under_mpirun,
+    from karml.interfaces.pycharmmInterface.charmm_mpi import (
+        maybe_rerun_karml_under_mpirun,
         prepare_serial_charmm_mpi_env,
     )
 
     prepare_serial_charmm_mpi_env()
     parsed_argv = list(argv) if argv is not None else sys.argv[1:]
-    rerun_code = maybe_rerun_mmml_under_mpirun(parsed_argv, subcommand="health-check")
+    rerun_code = maybe_rerun_karml_under_mpirun(parsed_argv, subcommand="health-check")
     if rerun_code is not None:
         return int(rerun_code)
 

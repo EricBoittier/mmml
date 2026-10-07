@@ -49,7 +49,7 @@ class BatchPreparation:
     def setup(self, n_samples, n_atoms):
         jax = require_jax()
         try:
-            from mmml.models.physnetjax.physnetjax.data.batches import (
+            from karml.models.physnetjax.physnetjax.data.batches import (
                 _pair_indices,
                 prepare_batches_fast,
                 prepare_batches_jit,
@@ -113,7 +113,7 @@ class BatchRotationAugmentation:
     def setup(self, rot_augment):
         jax = require_jax()
         try:
-            from mmml.models.physnetjax.physnetjax.data.batches import (
+            from karml.models.physnetjax.physnetjax.data.batches import (
                 prepare_batches_fast,
             )
         except Exception as exc:  # pragma: no cover - environment-dependent
@@ -148,7 +148,7 @@ class PairIndexCache:
     def setup(self, n_atoms, batch_size):
         require_jax()
         try:
-            from mmml.models.physnetjax.physnetjax.data.batches import _pair_indices
+            from karml.models.physnetjax.physnetjax.data.batches import _pair_indices
         except Exception as exc:  # pragma: no cover - environment-dependent
             raise skip(f"physnetjax.data.batches unavailable: {exc}") from exc
 
@@ -179,8 +179,8 @@ class DCDTrajectoryIO:
         try:
             import ase
 
-            from mmml.utils.dcd_reader import read_dcd_trajectory
-            from mmml.utils.dcd_writer import save_trajectory_dcd
+            from karml.utils.dcd_reader import read_dcd_trajectory
+            from karml.utils.dcd_writer import save_trajectory_dcd
         except Exception as exc:  # pragma: no cover - environment-dependent
             raise skip(f"DCD I/O unavailable: {exc}") from exc
 
@@ -193,7 +193,7 @@ class DCDTrajectoryIO:
         self._save = save_trajectory_dcd
         self._read = read_dcd_trajectory
 
-        self._tmpdir = tempfile.TemporaryDirectory(prefix="mmml-bench-dcd-")
+        self._tmpdir = tempfile.TemporaryDirectory(prefix="karml-bench-dcd-")
         self.path = Path(self._tmpdir.name) / "traj.dcd"
         self._save(self.path, self.positions, self.atoms, dt_ps=0.0005)
 

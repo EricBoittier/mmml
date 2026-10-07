@@ -16,7 +16,7 @@ from ase import Atoms
 from ase.io import read as ase_read
 from ase.io.extxyz import XYZError
 
-from mmml.interfaces.pycharmmInterface.cutoffs import DEFAULT_MM_SWITCH_ON
+from karml.interfaces.pycharmmInterface.cutoffs import DEFAULT_MM_SWITCH_ON
 
 ATOMS_PER_ACETONE = 10
 DIMER_ATOMS = 2 * ATOMS_PER_ACETONE

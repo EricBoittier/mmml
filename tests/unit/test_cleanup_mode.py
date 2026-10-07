@@ -34,7 +34,7 @@ def _base_args(**overrides) -> argparse.Namespace:
 
 
 def test_apply_cleanup_defaults_enables_recovery_stack():
-    from mmml.interfaces.pycharmmInterface.mlpot.cleanup_mode import (
+    from karml.interfaces.pycharmmInterface.mlpot.cleanup_mode import (
         apply_cleanup_defaults,
         cleanup_enabled,
         cleanup_ladder_enabled,
@@ -60,7 +60,7 @@ def test_apply_cleanup_defaults_enables_recovery_stack():
 
 
 def test_apply_cleanup_defaults_noop_when_disabled():
-    from mmml.interfaces.pycharmmInterface.mlpot.cleanup_mode import apply_cleanup_defaults
+    from karml.interfaces.pycharmmInterface.mlpot.cleanup_mode import apply_cleanup_defaults
 
     args = _base_args(cleanup=False, dynamics_overlap_action="warn")
     apply_cleanup_defaults(args)
@@ -70,7 +70,7 @@ def test_apply_cleanup_defaults_noop_when_disabled():
 
 
 def test_build_pycharmm_command_forwards_cleanup():
-    from mmml.cli.run.md_system import build_pycharmm_command
+    from karml.cli.run.md_system import build_pycharmm_command
     from tests.unit.test_md_system_pycharmm_cmd import _pycharmm_args
 
     cmd = build_pycharmm_command(_pycharmm_args(cleanup=True))
@@ -79,10 +79,10 @@ def test_build_pycharmm_command_forwards_cleanup():
 
 
 def test_overlap_config_uses_cleanup_for_ladder_fallback():
-    from mmml.interfaces.pycharmmInterface.mlpot.cleanup_mode import (
+    from karml.interfaces.pycharmmInterface.mlpot.cleanup_mode import (
         cleanup_overlap_fallback_enabled,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+    from karml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
         resolve_dynamics_overlap_config,
     )
 

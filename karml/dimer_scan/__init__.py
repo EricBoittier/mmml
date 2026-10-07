@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from mmml.analysis.dimer_molecules import make_oriented_scan_geometries
+from karml.analysis.dimer_molecules import make_oriented_scan_geometries
 
 from .calculators import calculator_factory
 from .config import (

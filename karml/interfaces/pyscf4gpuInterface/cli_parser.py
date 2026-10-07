@@ -1,4 +1,4 @@
-"""Argparse for ``mmml pyscf-dft`` (no PySCF / gpu4pyscf).
+"""Argparse for ``karml pyscf-dft`` (no PySCF / gpu4pyscf).
 
 Help and docs generation import this module. The GPU DFT implementation stays
 in ``calcs.py`` and is loaded only when a calculation is requested.

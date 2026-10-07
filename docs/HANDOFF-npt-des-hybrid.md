@@ -9,9 +9,9 @@ a reset on any of these destroys work in flight — read it first:
 
 | file | last touched |
 |---|---|
-| `mmml/cli/run/md_evaluate_npz.py` | 18:14 |
-| `mmml/interfaces/pycharmmInterface/mmml_calculator.py` | 18:19 |
-| `mmml/interfaces/pycharmmInterface/mlpot_gpu.py` | 18:19 |
+| `karml/cli/run/md_evaluate_npz.py` | 18:14 |
+| `karml/interfaces/pycharmmInterface/karml_calculator.py` | 18:19 |
+| `karml/interfaces/pycharmmInterface/mlpot_gpu.py` | 18:19 |
 | `tests/unit/test_md_evaluate_npz.py` | 18:14 |
 | `tests/unit/test_mlpot_gpu.py` | 18:20 |
 | `setup/charmm/source/api/api_func.F90` | 16:03 |
@@ -23,7 +23,7 @@ a reset on any of these destroys work in flight — read it first:
 
 Two of these overlap the leads below. Check their state before redoing the work:
 
-- the `md_evaluate_npz` + `mmml_calculator` + `mlpot_gpu` diff threads
+- the `md_evaluate_npz` + `karml_calculator` + `mlpot_gpu` diff threads
   `mm_charge_mode` through `--evaluate-npz` and removes the `NotImplementedError`
   that blocked ML-derived MM charges on the chunked apply path. That is Lead 2.
 - `scripts/test_checkpoint_pbc_translation.py` evaluates one checkpoint under a
@@ -148,7 +148,7 @@ neural term sufficient on its own.
 8. `--evaluate-npz` hardcoded `doML/doMM/doML_dimer=True` → all term
    combinations returned bit-identical energies.
 
-`MMML_NPT_VIRIAL_SELFCHECK=1` compares both NpT cotangents and the absolute
+`KARML_NPT_VIRIAL_SELFCHECK=1` compares both NpT cotangents and the absolute
 energy against central differences of the real system at initialisation. It
 caught defect 6's wrong first fix. Use it.
 
@@ -163,7 +163,7 @@ scripts/slurm/des_water_dimer_check.sbatch   model vs its own training data
 scripts/slurm/npt_bisect.sbatch          ensemble × prep × rebuild-interval matrix
 scripts/slurm/profile_ase_premin.sbatch  the cProfile behind the 16× fix
 scripts/validate_virial_vs_charmm.py     written, unit tested, NEVER RUN
-mmml/data/reference_state_points.py      which species have a reference at all
+karml/data/reference_state_points.py      which species have a reference at all
 ```
 
 `npt_bisect.sbatch` env overrides: `NLINT` `SKIN` `MINSTEPS` `ML_BATCH`
@@ -175,14 +175,14 @@ independently computed and was **validated**: DES/PBE0 water dimers span
 
 ## Environment — things that cost hours
 
-- **scicore**: run from `~/mmml_npt` (isolated clone). `~/mmml` has other users'
+- **scicore**: run from `~/karml_npt` (isolated clone). `~/karml` has other users'
   jobs; do not `git checkout` there. Source `scripts/scicore_env.sh` — never
   hand-roll `module load`: a Slurm shell is not a login shell, and with `module`
   defined but MODULEPATH empty it fails **silently**, then dies on
   `GLIBCXX_3.4.32` inside pycharmm.
 - Submissions need `--qos=a100-1day` or they are rejected.
 - `libcharmm.so` is a build artifact; a fresh clone has none. Fall back to
-  `$HOME/mmml/setup/charmm`.
+  `$HOME/karml/setup/charmm`.
 - **Background ssh wait-loops die with `Broken pipe` but report exit 0.** Never
   trust one; re-check with a fresh short connection.
 - `--evaluate-npz` alone evaluates ONE frame. Multi-frame geometries come from

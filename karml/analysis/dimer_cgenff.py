@@ -9,7 +9,7 @@ import numpy as np
 from ase import Atoms
 
 
-# Atom order matches ``mmml.analysis.dimer_molecules.MOLECULES`` exactly.
+# Atom order matches ``karml.analysis.dimer_molecules.MOLECULES`` exactly.
 CGENFF_ATOM_TYPES: dict[str, tuple[str, ...]] = {
     "DCM": ("CG321", "CLGA1", "CLGA1", "HGA2", "HGA2"),
     "ACE": ("OG2D3", "CG2O5", "CG331", "CG331") + ("HGA3",) * 6,

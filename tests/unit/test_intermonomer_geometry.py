@@ -9,7 +9,7 @@ import pytest
 
 
 def test_resolve_pre_mlpot_ignores_dynamics_overlap_default():
-    from mmml.utils.intermonomer_geometry import (
+    from karml.utils.intermonomer_geometry import (
         DEFAULT_PRE_MLPOT_OVERLAP_MIN_A,
         resolve_pre_mlpot_overlap_min_distance,
     )
@@ -23,7 +23,7 @@ def test_resolve_pre_mlpot_ignores_dynamics_overlap_default():
 
 
 def test_resolve_pre_mlpot_explicit_override():
-    from mmml.utils.intermonomer_geometry import resolve_pre_mlpot_overlap_min_distance
+    from karml.utils.intermonomer_geometry import resolve_pre_mlpot_overlap_min_distance
 
     args = argparse.Namespace(
         pre_mlpot_overlap_min_distance=0.8,
@@ -34,7 +34,7 @@ def test_resolve_pre_mlpot_explicit_override():
 
 
 def test_resolve_overlap_last_chance_uses_ml_safe_h_heavy_floor():
-    from mmml.utils.intermonomer_geometry import (
+    from karml.utils.intermonomer_geometry import (
         DEFAULT_PRE_MLPOT_H_HEAVY_MIN_A,
         resolve_overlap_last_chance_separation_A,
     )
@@ -63,7 +63,7 @@ def test_resolve_overlap_last_chance_uses_ml_safe_h_heavy_floor():
 
 
 def test_resolve_mc_min_uses_prep_floor_under_liquid_prep():
-    from mmml.utils.intermonomer_geometry import (
+    from karml.utils.intermonomer_geometry import (
         DEFAULT_PRE_MLPOT_OVERLAP_MIN_A,
         resolve_mc_min_intermonomer_distance_A,
     )
@@ -78,7 +78,7 @@ def test_resolve_mc_min_uses_prep_floor_under_liquid_prep():
 
 
 def test_resolve_mc_min_keeps_packmol_floor_without_liquid_prep():
-    from mmml.utils.intermonomer_geometry import resolve_mc_min_intermonomer_distance_A
+    from karml.utils.intermonomer_geometry import resolve_mc_min_intermonomer_distance_A
 
     args = argparse.Namespace(
         liquid_prep=False,
@@ -89,7 +89,7 @@ def test_resolve_mc_min_keeps_packmol_floor_without_liquid_prep():
 
 
 def test_unknown_element_pair_uses_global_floor_not_heavy_heavy():
-    from mmml.utils.intermonomer_geometry import (
+    from karml.utils.intermonomer_geometry import (
         DEFAULT_PRE_MLPOT_HEAVY_HEAVY_MIN_A,
         DEFAULT_PRE_MLPOT_OVERLAP_MIN_A,
         resolve_pre_mlpot_element_pair_min_distance,
@@ -108,7 +108,7 @@ def test_unknown_element_pair_uses_global_floor_not_heavy_heavy():
 
 
 def test_dcm_pair_floors_for_h_heavy_and_heavy_heavy():
-    from mmml.utils.intermonomer_geometry import (
+    from karml.utils.intermonomer_geometry import (
         DEFAULT_PRE_MLPOT_H_HEAVY_MIN_A,
         DEFAULT_PRE_MLPOT_HEAVY_HEAVY_MIN_A,
         resolve_pre_mlpot_element_pair_min_distance,
@@ -124,7 +124,7 @@ def test_dcm_pair_floors_for_h_heavy_and_heavy_heavy():
 
 
 def test_unknown_labels_do_not_abort_at_hh_distance():
-    from mmml.utils.intermonomer_geometry import find_worst_pre_mlpot_mic_violation
+    from karml.utils.intermonomer_geometry import find_worst_pre_mlpot_mic_violation
 
     pos = np.array(
         [
@@ -148,7 +148,7 @@ def test_unknown_labels_do_not_abort_at_hh_distance():
 
 
 def test_hh_contact_at_2577_passes_dcm_prep_gate():
-    from mmml.utils.intermonomer_geometry import assert_pre_mlpot_mic_geometry
+    from karml.utils.intermonomer_geometry import assert_pre_mlpot_mic_geometry
 
     pos = np.array(
         [
@@ -173,7 +173,7 @@ def test_hh_contact_at_2577_passes_dcm_prep_gate():
 
 
 def test_assert_pre_mlpot_mic_geometry_aborts_tight_dcm_contact():
-    from mmml.utils.intermonomer_geometry import assert_pre_mlpot_mic_geometry
+    from karml.utils.intermonomer_geometry import assert_pre_mlpot_mic_geometry
 
     pos = np.array(
         [
@@ -204,7 +204,7 @@ def test_assert_pre_mlpot_mic_geometry_aborts_tight_dcm_contact():
 
 
 def test_contact_summary_marks_tight_prep_contact_for_dcm_like_pair():
-    from mmml.utils.intermonomer_geometry import IntermonomerContactSummary
+    from karml.utils.intermonomer_geometry import IntermonomerContactSummary
 
     summary = IntermonomerContactSummary(
         distance_A=1.45,
@@ -224,7 +224,7 @@ def test_contact_summary_marks_tight_prep_contact_for_dcm_like_pair():
 
 
 def test_contact_summary_ok_when_above_prep_floor():
-    from mmml.utils.intermonomer_geometry import IntermonomerContactSummary
+    from karml.utils.intermonomer_geometry import IntermonomerContactSummary
 
     summary = IntermonomerContactSummary(
         distance_A=2.55,
@@ -242,7 +242,7 @@ def test_contact_summary_ok_when_above_prep_floor():
 
 
 def test_summarize_worst_intermonomer_contact_reports_pair():
-    from mmml.utils.intermonomer_geometry import summarize_worst_intermonomer_contact
+    from karml.utils.intermonomer_geometry import summarize_worst_intermonomer_contact
 
     pos = np.array(
         [

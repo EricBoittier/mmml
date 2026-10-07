@@ -7,7 +7,7 @@ from typing import Any, Mapping
 
 import jax.numpy as jnp
 
-from mmml.models.kernnn.model import KerNNConfig, KerNNStats, energy_and_forces, energy_from_params
+from karml.models.kernnn.model import KerNNConfig, KerNNStats, energy_and_forces, energy_from_params
 
 
 @dataclass

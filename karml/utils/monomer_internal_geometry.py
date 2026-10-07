@@ -33,7 +33,7 @@ import numpy as np
 DEFAULT_MAX_MONOMER_INTERNAL_DEVIATION_A = 0.35
 
 # Set to 0 (or a negative value) to disable the check; set to a float to override.
-MONOMER_INTERNAL_DEVIATION_ENV = "MMML_MAX_MONOMER_INTERNAL_DEVIATION_A"
+MONOMER_INTERNAL_DEVIATION_ENV = "KARML_MAX_MONOMER_INTERNAL_DEVIATION_A"
 
 # Covalent-radii sum scale used to detect bonds in the monomer template.
 DEFAULT_BOND_SCALE = 1.25

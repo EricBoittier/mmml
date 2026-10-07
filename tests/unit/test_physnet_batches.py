@@ -23,7 +23,7 @@ def _mock_data(n: int = 256, natoms: int = 10):
 
 @pytest.mark.parametrize("batch_size", [1, 8, 32])
 def test_prepare_batches_fast_matches_jit(batch_size: int):
-    from mmml.models.physnetjax.physnetjax.data.batches import (
+    from karml.models.physnetjax.physnetjax.data.batches import (
         _pair_indices,
         prepare_batches_fast,
         prepare_batches_jit,
@@ -58,7 +58,7 @@ def test_prepare_batches_fast_matches_jit(batch_size: int):
 
 
 def test_prepare_batches_fast_faster_than_jit():
-    from mmml.models.physnetjax.physnetjax.data.batches import (
+    from karml.models.physnetjax.physnetjax.data.batches import (
         _pair_indices,
         prepare_batches_fast,
         prepare_batches_jit,

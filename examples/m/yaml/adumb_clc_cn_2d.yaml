@@ -104,7 +104,7 @@ pycharmm_pre_dynamics_lingo: |
 
   ! Outer walls for both 2D RCs (Å). Python installs RESD on Cl–C *and* C–N.
   ! k=10000 detonated (NaN); k=500 allowed IASVEL=1 punch → UM1RXN. Use 2000.
-  ! Disable: MMML_ADUMB_RC_WALL_BACKEND=off
+  ! Disable: KARML_ADUMB_RC_WALL_BACKEND=off
   set adumrcmax = 12.0
   set adumrcwall = 2000.0
 

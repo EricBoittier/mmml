@@ -7,7 +7,7 @@ order and count. Writes a compressed NPZ with R, Z, N per frame (same layout as
 interpolate_xyzs_to_npz).
 
 Usage:
-    mmml interpolate-xyz start.xyz end.xyz -o path.npz --steps 500
+    karml interpolate-xyz start.xyz end.xyz -o path.npz --steps 500
 """
 
 from __future__ import annotations
@@ -72,7 +72,7 @@ def main() -> int:
             return 1
 
     try:
-        from mmml.interfaces.chemcoordInterface.interface import (
+        from karml.interfaces.chemcoordInterface.interface import (
             interpolate_xyzs_to_npz,
         )
     except ImportError as e:

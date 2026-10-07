@@ -9,24 +9,24 @@ fi
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
-source scripts/resolve_mmml_env.sh
-mmml_resolve_env "$ROOT"
+source scripts/resolve_karml_env.sh
+karml_resolve_env "$ROOT"
 
-PS="$($MMML_PYTHON -c "print(int('$STEPS') * 0.0001)")"
+PS="$($KARML_PYTHON -c "print(int('$STEPS') * 0.0001)")"
 OUT="$ROOT/artifacts/diagnostics/dcm10_nve_cptr_${STEPS}step"
 rm -rf "$OUT"
 mkdir -p "$OUT"
 
 export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0}"
 export JAX_ENABLE_X64=1
-export MMML_ML_DTYPE=float64
+export KARML_ML_DTYPE=float64
 export OMP_NUM_THREADS=1
-export MMML_NVE_C_API_HANDOFF=1
-export MMML_TRACE_DYNAMICS_COMMAND=1
+export KARML_NVE_C_API_HANDOFF=1
+export KARML_TRACE_DYNAMICS_COMMAND=1
 export CHARMM_LIB_DIR="$ROOT/setup/charmm/lib"
 export LD_LIBRARY_PATH="$CHARMM_LIB_DIR:${LD_LIBRARY_PATH:-}"
 
-"$MMML_PYTHON" -m mmml.cli md-system \
+"$KARML_PYTHON" -m karml.cli md-system \
   --backend pycharmm --setup pbc_nve --md-stages nve \
   --ps-nve "$PS" --ps "$PS" --dt-fs 0.1 \
   --output-dir "$OUT" --job-name "dcm10_cptr_nve_${STEPS}" \

@@ -7,7 +7,7 @@ Full guide: [docs/protein-force-fields.md](../../../docs/protein-force-fields.md
 ## Prerequisites
 
 - `CHARMM_HOME` with `toppar/top_all36_prot.rtf` and `par_all36m_prot.prm` (or `par_all36_prot.prm`)
-- `./scripts/mmml-charmm-mpirun.sh` on a CHARMM node for PyCHARMM steps
+- `./scripts/karml-charmm-mpirun.sh` on a CHARMM node for PyCHARMM steps
 - `JAX_PLATFORMS=cpu` for JAX smoke on machines without GPU headroom
 
 ## Layer 0 — unit (no CHARMM)
@@ -19,20 +19,20 @@ uv run pytest tests/unit/test_protein_charmm_build.py -q
 ## Layer 1 — CHARMM ALAD build
 
 ```bash
-./scripts/mmml-charmm-mpirun.sh python scripts/examples/charmm_build_protein_alad.py \
+./scripts/karml-charmm-mpirun.sh python scripts/examples/charmm_build_protein_alad.py \
   -o /tmp/alad_charmm
 ```
 
 Pass: finite energy, `alad.pdb` + `alad.psf` written, atom count ≈ 22.
 
-## Layer 2 — JAX bonded (MMML loader)
+## Layer 2 — JAX bonded (KARML loader)
 
 ```bash
 JAX_PLATFORMS=cpu uv run python scripts/examples/jaxmd_protein_alad_energy.py \
   --pdb /tmp/alad_charmm/alad.pdb \
   --psf /tmp/alad_charmm/alad.psf \
   --prm "$CHARMM_HOME/toppar/par_all36m_prot.prm" \
-  --loader mmml-bonded
+  --loader karml-bonded
 ```
 
 Compare bonded total to CHARMM `BLOCK` bonded-only energy on the same coordinates (manual or `test_cgenff_bonded_pycharmm` pattern).

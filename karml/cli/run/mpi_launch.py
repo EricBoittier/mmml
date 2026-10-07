@@ -1,4 +1,4 @@
-"""``mmml mpi-launch`` — compose MPI topology and JAX execution policy."""
+"""``karml mpi-launch`` — compose MPI topology and JAX execution policy."""
 
 from __future__ import annotations
 
@@ -25,7 +25,7 @@ class LaunchPlan:
         assignments = " ".join(
             f"{key}={shlex.quote(self.env[key])}"
             for key in sorted(self.env)
-            if key.startswith("MMML_")
+            if key.startswith("KARML_")
             or key in {"JAX_PLATFORMS", "OMP_NUM_THREADS", "XLA_FLAGS"}
         )
         command = shlex.join(self.argv)
@@ -33,7 +33,7 @@ class LaunchPlan:
 
 
 def _available_cpus(env: Mapping[str, str]) -> int:
-    for key in ("SLURM_CPUS_PER_TASK", "MMML_ALLOCATED_CPUS"):
+    for key in ("SLURM_CPUS_PER_TASK", "KARML_ALLOCATED_CPUS"):
         raw = env.get(key, "")
         if raw.isdigit() and int(raw) > 0:
             return int(raw)
@@ -101,34 +101,34 @@ def build_launch_plan(
     launch_env = dict(base_env)
     launch_env.update(
         {
-            "MMML_MPI_NP": str(mpi_ranks),
-            "MMML_JAX_MODE": jax_mode,
-            "MMML_JAX_CPU_THREADS": str(jax_cpu_threads),
-            "MMML_CHARMM_OMP_THREADS": str(charmm_omp_threads),
+            "KARML_MPI_NP": str(mpi_ranks),
+            "KARML_JAX_MODE": jax_mode,
+            "KARML_JAX_CPU_THREADS": str(jax_cpu_threads),
+            "KARML_CHARMM_OMP_THREADS": str(charmm_omp_threads),
             "OMP_NUM_THREADS": str(charmm_omp_threads),
             # Preserve the interpreter path selected by ``uv run``. Resolving
             # symlinks (notably /tmp -> /private/tmp on macOS) is unnecessary
             # and makes the launch plan differ from the active environment.
-            "MMML_PYTHON": str(Path(python or sys.executable).expanduser().absolute()),
+            "KARML_PYTHON": str(Path(python or sys.executable).expanduser().absolute()),
         }
     )
     if jax_mode == "cpu-threaded":
         launch_env["JAX_PLATFORMS"] = "cpu"
-        launch_env["MMML_NO_JAX_COMPILE_THREADS"] = "1"
+        launch_env["KARML_NO_JAX_COMPILE_THREADS"] = "1"
         launch_env["XLA_FLAGS"] = (
             f"--xla_cpu_multi_thread_eigen=true "
             f"intra_op_parallelism_threads={jax_cpu_threads}"
         )
     elif jax_mode == "rank0":
-        launch_env["MMML_MLPOT_RANK0_BRIDGE"] = "1"
-        launch_env["MMML_MPI_PIN_GPU_PER_RANK"] = "0"
+        launch_env["KARML_MLPOT_RANK0_BRIDGE"] = "1"
+        launch_env["KARML_MPI_PIN_GPU_PER_RANK"] = "0"
     elif jax_mode in {"gpu-per-rank", "spatial"}:
-        launch_env["MMML_MPI_PIN_GPU_PER_RANK"] = "1"
+        launch_env["KARML_MPI_PIN_GPU_PER_RANK"] = "1"
     if jax_mode == "spatial":
-        launch_env["MMML_MLPOT_SPATIAL_MPI"] = "1"
+        launch_env["KARML_MLPOT_SPATIAL_MPI"] = "1"
 
     repo_root = Path(__file__).resolve().parents[3]
-    wrapper_path = wrapper or repo_root / "scripts" / "mmml-charmm-mpirun.sh"
+    wrapper_path = wrapper or repo_root / "scripts" / "karml-charmm-mpirun.sh"
     return LaunchPlan(
         argv=(str(wrapper_path), *command),
         env=launch_env,
@@ -138,7 +138,7 @@ def build_launch_plan(
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="mmml mpi-launch",
+        prog="karml mpi-launch",
         description=(
             "Launch CHARMM/OpenMPI with an independent JAX device/thread policy. "
             "When invoked through 'uv run', the active uv interpreter is used on every rank."

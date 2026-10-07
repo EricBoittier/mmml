@@ -1,5 +1,5 @@
 # Fast smoke: CHARMM-only, coarse grid — for report / plot pipeline validation.
-# Usage: MMML_WORKFLOW_CONFIG=config.smoke.yaml bash scripts/snakemake_local.sh 4
+# Usage: KARML_WORKFLOW_CONFIG=config.smoke.yaml bash scripts/snakemake_local.sh 4
 
 reference_checkpoint: examples/ckpts_json/DESdimers_params.json
 output_root: artifacts/des_dimer_pair_scans_smoke

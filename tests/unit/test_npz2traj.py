@@ -1,4 +1,4 @@
-"""Tests for ``mmml npz2traj``."""
+"""Tests for ``karml npz2traj``."""
 
 from __future__ import annotations
 
@@ -12,11 +12,11 @@ ase = pytest.importorskip("ase")
 from ase.io import read
 from ase.io.trajectory import Trajectory
 
-from mmml.cli.__main__ import main as mmml_main
-from mmml.cli.misc import convert_npz_traj
-from mmml.cli.parser_utils import parser_available
-from mmml.cli.registry import command_by_name
-from mmml.data.units import DEBYE_TO_EANGSTROM, HARTREE_BOHR_TO_EV_ANGSTROM, HARTREE_TO_EV
+from karml.cli.__main__ import main as karml_main
+from karml.cli.misc import convert_npz_traj
+from karml.cli.parser_utils import parser_available
+from karml.cli.registry import command_by_name
+from karml.data.units import DEBYE_TO_EANGSTROM, HARTREE_BOHR_TO_EV_ANGSTROM, HARTREE_TO_EV
 
 
 def _write_sample_npz(path: Path, *, with_pad: bool = True) -> None:
@@ -53,18 +53,18 @@ def _write_sample_npz(path: Path, *, with_pad: bool = True) -> None:
 def test_npz2traj_cli_is_registered():
     spec = command_by_name("npz2traj")
     assert spec is not None
-    assert spec.module == "mmml.cli.misc.convert_npz_traj"
+    assert spec.module == "karml.cli.misc.convert_npz_traj"
     assert parser_available("npz2traj")
-    assert convert_npz_traj.build_parser().prog == "mmml npz2traj"
+    assert convert_npz_traj.build_parser().prog == "karml npz2traj"
 
 
 def test_npz2traj_help_is_reachable(monkeypatch, capsys):
-    monkeypatch.setattr("sys.argv", ["mmml", "npz2traj", "--help"])
+    monkeypatch.setattr("sys.argv", ["karml", "npz2traj", "--help"])
     with pytest.raises(SystemExit) as exc:
-        mmml_main()
+        karml_main()
     assert exc.value.code == 0
     out = capsys.readouterr().out
-    assert "Convert MMML NPZ" in out
+    assert "Convert KARML NPZ" in out
     assert "--ase-units" in out
 
 
@@ -125,7 +125,7 @@ def test_npz_to_extxyz_and_stride(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
         sys,
         "argv",
         [
-            "mmml npz2traj",
+            "karml npz2traj",
             str(npz),
             "-o",
             str(out),
@@ -193,7 +193,7 @@ def test_md_npz_to_dcd_with_resname_split(tmp_path: Path) -> None:
 
 
 def test_gui_ase_frame_reads_dipole_and_charges(tmp_path: Path) -> None:
-    from mmml.gui.api.parsers import MolecularFileParser
+    from karml.gui.api.parsers import MolecularFileParser
 
     npz = tmp_path / "data.npz"
     traj = tmp_path / "out.traj"

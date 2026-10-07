@@ -1,7 +1,7 @@
 # Building FFTW for CHARMM / `libcharmm.so`
 
 CHARMM’s CMake build enables **COLFFT** (collective FFT for PME) when it finds FFTW or MKL.
-**DOMDEC** (domain decomposition for MPI) requires COLFFT. The default MMML rebuild
+**DOMDEC** (domain decomposition for MPI) requires COLFFT. The default KARML rebuild
 (`scripts/rebuild_charmm_mlpot.sh`) therefore needs FFTW at configure time.
 
 If CMake reports:
@@ -14,7 +14,7 @@ FFTW or MKL required for COLFFT; switching COLFFT OFF
 
 COLFFT and DOMDEC are disabled and the rebuild may fail its DOMDEC check.
 
-## What MMML needs
+## What KARML needs
 
 | Library | CMake name | Purpose |
 |---------|------------|---------|
@@ -32,7 +32,7 @@ Environment variables (see also `rebuild_charmm_mlpot.sh --help`):
 |----------|---------|
 | `FFTW_ROOT` | Prefix with double-precision `libfftw3` |
 | `FFTWF_ROOT` | Prefix with single-precision `libfftw3f` (defaults to `FFTW_ROOT`) |
-| `MMML_FFTW_ROOT` | User PIC prefix; when set, overrides `FFTW_ROOT` / `FFTWF_ROOT` |
+| `KARML_FFTW_ROOT` | User PIC prefix; when set, overrides `FFTW_ROOT` / `FFTWF_ROOT` |
 
 Verify after rebuild:
 
@@ -76,16 +76,16 @@ Default install prefix: `~/.local/fftw-3.3.10-pic`.
 Custom prefix:
 
 ```bash
-MMML_FFTW_ROOT=$HOME/fftw-pic bash scripts/build_fftw_pic.sh
+KARML_FFTW_ROOT=$HOME/fftw-pic bash scripts/build_fftw_pic.sh
 ```
 
 Then export and rebuild CHARMM:
 
 ```bash
-export MMML_FFTW_ROOT=${HOME}/.local/fftw-3.3.10-pic
-export FFTW_ROOT=$MMML_FFTW_ROOT
-export FFTWF_ROOT=$MMML_FFTW_ROOT
-export LD_LIBRARY_PATH=$MMML_FFTW_ROOT/lib:${LD_LIBRARY_PATH:-}
+export KARML_FFTW_ROOT=${HOME}/.local/fftw-3.3.10-pic
+export FFTW_ROOT=$KARML_FFTW_ROOT
+export FFTWF_ROOT=$KARML_FFTW_ROOT
+export LD_LIBRARY_PATH=$KARML_FFTW_ROOT/lib:${LD_LIBRARY_PATH:-}
 
 ./scripts/rebuild_charmm_mlpot.sh --clean
 ```
@@ -104,7 +104,7 @@ OPENMPI_ROOT=/opt/gcc-12.2.0/openmpi-4.1.4/build \
 ```bash
 VERSION=3.3.10
 PREFIX=$HOME/.local/fftw-${VERSION}-pic
-BUILD=$HOME/.cache/mmml-fftw-build
+BUILD=$HOME/.cache/karml-fftw-build
 mkdir -p "$BUILD" && cd "$BUILD"
 curl -fSL "https://www.fftw.org/fftw-${VERSION}.tar.gz" -o "fftw-${VERSION}.tar.gz"
 tar -xzf "fftw-${VERSION}.tar.gz"
@@ -152,12 +152,12 @@ If you only need MLpot at `mpirun -np 1` and can skip DOMDEC:
 ./scripts/rebuild_charmm_mlpot.sh --no-domdec --clean
 ```
 
-For a **serial** `libcharmm` (no OpenMPI link; plain `pytest` / no `mmml-charmm-mpirun.sh`):
+For a **serial** `libcharmm` (no OpenMPI link; plain `pytest` / no `karml-charmm-mpirun.sh`):
 
 ```bash
 ./scripts/rebuild_charmm_mlpot.sh --no-mpi --clean
-# installs setup/charmm/libcharmm.so; cmake cache in ~/.cache/mmml-charmm-build/<platform>-nompi
-export MMML_NO_CHARMM_MPI=1 MMML_NO_MPI_RERUN=1
+# installs setup/charmm/libcharmm.so; cmake cache in ~/.cache/karml-charmm-build/<platform>-nompi
+export KARML_NO_CHARMM_MPI=1 KARML_NO_MPI_RERUN=1
 uv run pytest tests/functionality/charmm/test_jax_mm_spoof_bonded_pycharmm.py -v
 ```
 
@@ -178,6 +178,6 @@ DOMDEC tier-3 (`np>1` with domain decomposition) still requires FFTW/MKL.
 Recover a working prefix from a previous successful build:
 
 ```bash
-grep '^FFTW_INCLUDE_DIR:PATH=' ~/.cache/mmml-charmm-build/linux-x86_64/CMakeCache.txt
+grep '^FFTW_INCLUDE_DIR:PATH=' ~/.cache/karml-charmm-build/linux-x86_64/CMakeCache.txt
 # export FFTW_ROOT=$(dirname <that include path>)
 ```

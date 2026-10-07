@@ -14,7 +14,7 @@ from _common import (
     print_header,
     print_pass,
 )
-from mmml.interfaces.pycharmmInterface.long_range_backend import CHARMM_COULOMB_KCAL
+from karml.interfaces.pycharmmInterface.long_range_backend import CHARMM_COULOMB_KCAL
 
 
 def main() -> int:

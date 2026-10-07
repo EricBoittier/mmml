@@ -14,7 +14,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from mmml.interfaces.pycharmmInterface.mlpot.scaled_cgenff_prm import (
+from karml.interfaces.pycharmmInterface.mlpot.scaled_cgenff_prm import (
     scale_nonbonded_block,
     write_scaled_cgenff_prm,
 )
@@ -119,7 +119,7 @@ def test_roundtrip_through_production_parser_matches_master_times_scale(tmp_path
     per-type values and combines them, so they must already equal what the JAX
     path would have produced as ``master * scale``.
     """
-    from mmml.data.cgenff_dataset import (
+    from karml.data.cgenff_dataset import (
         DEF_PRM_PATH, DEF_RTF_PATH, DEF_EXTRA_TOPPAR, load_reference,
     )
 

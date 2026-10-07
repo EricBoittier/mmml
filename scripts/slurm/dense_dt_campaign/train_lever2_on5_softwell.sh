@@ -6,8 +6,8 @@ set -euo pipefail
 
 if [[ -n "${SLURM_SUBMIT_DIR:-}" && -d "${SLURM_SUBMIT_DIR}" ]]; then
   ROOT="$(cd "${SLURM_SUBMIT_DIR}" && pwd)"
-elif [[ -n "${MMML_ROOT:-}" && -d "${MMML_ROOT}" ]]; then
-  ROOT="$(cd "${MMML_ROOT}" && pwd)"
+elif [[ -n "${KARML_ROOT:-}" && -d "${KARML_ROOT}" ]]; then
+  ROOT="$(cd "${KARML_ROOT}" && pwd)"
 else
   ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 fi
@@ -36,9 +36,9 @@ export UV_NO_SYNC="${UV_NO_SYNC:-1}"
 export PYTHONUNBUFFERED=1
 export LJ_DEVICE=gpu
 export JAX_PLATFORMS=cuda
-export MMML_MLPOT_DEVICE=gpu
-export MMML_JAX_WARMUP_DEVICE=gpu
-export MMML_MM_NL_DEVICE=gpu
+export KARML_MLPOT_DEVICE=gpu
+export KARML_JAX_WARMUP_DEVICE=gpu
+export KARML_MM_NL_DEVICE=gpu
 export XLA_PYTHON_CLIENT_PREALLOCATE="${XLA_PYTHON_CLIENT_PREALLOCATE:-false}"
 export XLA_PYTHON_CLIENT_MEM_FRACTION="${XLA_PYTHON_CLIENT_MEM_FRACTION:-0.85}"
 
@@ -88,7 +88,7 @@ if not ok:
     sys.exit(4)
 PY
 
-uv run mmml physnet-train \
+uv run karml physnet-train \
   --config "$CONFIG" \
   --data "$DATA" \
   --valid-data "" \

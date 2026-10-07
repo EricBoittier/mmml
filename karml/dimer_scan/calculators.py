@@ -9,7 +9,7 @@ from ase import units
 
 from ase.calculators.calculator import Calculator
 
-from mmml.analysis.dimer_scans import make_dftb3_d4_calculator, make_xtb_calculator
+from karml.analysis.dimer_scans import make_dftb3_d4_calculator, make_xtb_calculator
 
 from .config import DimerScanConfig
 
@@ -52,7 +52,7 @@ class PySCFDimerCalculator(Calculator):
             from pyscf import dft, gto, scf
         except ModuleNotFoundError as exc:
             raise ModuleNotFoundError(
-                "PySCF dimer scans require the mmml quantum dependencies"
+                "PySCF dimer scans require the karml quantum dependencies"
             ) from exc
         atom_spec = [
             (symbol, tuple(position))
@@ -98,7 +98,7 @@ def calculator_factory(config: DimerScanConfig) -> Callable[[], Calculator]:
             raise ValueError("the spookynet calculator requires --checkpoint")
 
         def create_spookynet() -> Calculator:
-            from mmml.models.spookynet_calc import SpookyNetCalculator
+            from karml.models.spookynet_calc import SpookyNetCalculator
 
             return SpookyNetCalculator(
                 config.checkpoint,
@@ -112,7 +112,7 @@ def calculator_factory(config: DimerScanConfig) -> Callable[[], Calculator]:
             raise ValueError("the mbd calculator requires --checkpoint")
 
         def create_mbd() -> Calculator:
-            from mmml.models.mbd import QCMLMBDCalculator
+            from karml.models.mbd import QCMLMBDCalculator
 
             return QCMLMBDCalculator(
                 config.checkpoint,
@@ -126,7 +126,7 @@ def calculator_factory(config: DimerScanConfig) -> Callable[[], Calculator]:
             raise ValueError("the multipoles calculator requires --checkpoint")
 
         def create_multipoles() -> Calculator:
-            from mmml.models.multipoles import LearnedMolecularMultipoleElectrostatics
+            from karml.models.multipoles import LearnedMolecularMultipoleElectrostatics
 
             return LearnedMolecularMultipoleElectrostatics(
                 config.checkpoint,
@@ -142,7 +142,7 @@ def calculator_factory(config: DimerScanConfig) -> Callable[[], Calculator]:
             raise ValueError("the efield calculator requires --electric-field EX EY EZ")
 
         def create_efield() -> Calculator:
-            from mmml.models.efield.ase_calc_EF import EFieldCalculator
+            from karml.models.efield.ase_calc_EF import EFieldCalculator
 
             return EFieldCalculator(
                 config.checkpoint,
@@ -157,7 +157,7 @@ def calculator_factory(config: DimerScanConfig) -> Callable[[], Calculator]:
             raise ValueError("the kernnn calculator requires --checkpoint")
 
         def create_kernnn() -> Calculator:
-            from mmml.models.kernnn import KerNNCalculator
+            from karml.models.kernnn import KerNNCalculator
 
             return KerNNCalculator(config.checkpoint)
 
@@ -170,7 +170,7 @@ def calculator_factory(config: DimerScanConfig) -> Callable[[], Calculator]:
             raise FileNotFoundError(f"checkpoint does not exist: {checkpoint}")
 
         def create_metatomic() -> Calculator:
-            from mmml.interfaces.calculators.metatomic import load_metatomic_calculator
+            from karml.interfaces.calculators.metatomic import load_metatomic_calculator
 
             return load_metatomic_calculator(checkpoint)
 
@@ -201,7 +201,7 @@ def calculator_factory(config: DimerScanConfig) -> Callable[[], Calculator]:
             raise FileNotFoundError(f"checkpoint does not exist: {checkpoint}")
 
         def create() -> Calculator:
-            from mmml.interfaces.calculators.simple_inference import (
+            from karml.interfaces.calculators.simple_inference import (
                 create_calculator_from_checkpoint,
             )
 
@@ -213,5 +213,5 @@ def calculator_factory(config: DimerScanConfig) -> Callable[[], Calculator]:
 
         return create
     raise ValueError(
-        f"unsupported calculator {config.calculator!r}; see mmml dimer-scan --help"
+        f"unsupported calculator {config.calculator!r}; see karml dimer-scan --help"
     )

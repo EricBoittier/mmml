@@ -30,7 +30,7 @@ from ase.io import read as ase_read
 from scipy.spatial.transform import Rotation
 from scipy.stats import wasserstein_distance
 
-from mmml.interfaces.chemcoordInterface.interface import patch_chemcoord_for_pandas3
+from karml.interfaces.chemcoordInterface.interface import patch_chemcoord_for_pandas3
 
 patch_chemcoord_for_pandas3()
 

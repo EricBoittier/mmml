@@ -13,11 +13,11 @@ import numpy as np
 import ase
 import ase.io
 from ase import Atoms
-from mmml.interfaces.pycharmmInterface.import_pycharmm import pycharmm_quiet
-from mmml.interfaces.pycharmmInterface.import_pycharmm import reset_block
-from mmml.interfaces.pycharmmInterface.import_pycharmm import safe_energy_show
-from mmml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_RTF, CHARMM_HOME, CHARMM_LIB_DIR
-from mmml.interfaces.pycharmmInterface.utils import get_Z_from_psf, set_up_directories
+from karml.interfaces.pycharmmInterface.import_pycharmm import pycharmm_quiet
+from karml.interfaces.pycharmmInterface.import_pycharmm import reset_block
+from karml.interfaces.pycharmmInterface.import_pycharmm import safe_energy_show
+from karml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_RTF, CHARMM_HOME, CHARMM_LIB_DIR
+from karml.interfaces.pycharmmInterface.utils import get_Z_from_psf, set_up_directories
 
 os.environ["CHARMM_HOME"] = CHARMM_HOME
 os.environ["CHARMM_LIB_DIR"] = CHARMM_LIB_DIR
@@ -40,7 +40,7 @@ import pycharmm.lingo
 
 
 try:
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import apply_charmm_verbosity
+    from karml.interfaces.pycharmmInterface.mlpot.setup import apply_charmm_verbosity
 
     apply_charmm_verbosity(prnlev=5, warnlev=5, bomlev=-2)
 except Exception:
@@ -97,8 +97,8 @@ def generate_residue(resid) -> None:
     print("*" * 5, "Generating residue", "*" * 5)
     s = """DELETE ATOM SELE ALL END"""
     pycharmm.lingo.charmm_script(s)
-    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
-    from mmml.interfaces.pycharmmInterface.nbonds_config import (
+    from karml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
+    from karml.interfaces.pycharmmInterface.nbonds_config import (
         CGENFF_PRM_BOMLEV,
         ic_prm_fill,
         read_cgenff_prm,
@@ -244,8 +244,8 @@ def generate_coordinates(
 
 
 def mini(nbxmod=5, skip_energy_show: bool = False):
-    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
-    from mmml.interfaces.pycharmmInterface.nbonds_config import (
+    from karml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
+    from karml.interfaces.pycharmmInterface.nbonds_config import (
         apply_nbonds_kwargs,
         vacuum_nbond_kwargs,
     )

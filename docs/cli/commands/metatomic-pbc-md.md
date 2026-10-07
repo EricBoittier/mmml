@@ -1,4 +1,4 @@
-# `mmml metatomic-pbc-md`
+# `karml metatomic-pbc-md`
 
 CHARMM-free metatomic ASE MD in a cubic liquid box (NVT/NVE).
 
@@ -10,7 +10,7 @@ conservation path.
 
 ```bash
 export PET_MAD_CKPT=/path/to/pet-mad-xs-v1.5.0.pt
-mmml metatomic-pbc-md --ensemble nve --minimize-steps 60 --n-steps 400
+karml metatomic-pbc-md --ensemble nve --minimize-steps 60 --n-steps 400
 ```
 
 Worked example: [PET-MAD ethanol PBC](../../examples/pet-mad-etoh-pbc.md).
@@ -18,13 +18,13 @@ Worked example: [PET-MAD ethanol PBC](../../examples/pet-mad-etoh-pbc.md).
 ## Usage
 
 ```bash
-mmml metatomic-pbc-md --help
+karml metatomic-pbc-md --help
 ```
 
 ## Options
 
 ```text
-usage: mmml metatomic-pbc-md [-h] [--checkpoint CHECKPOINT] [--residue RESIDUE]
+usage: karml metatomic-pbc-md [-h] [--checkpoint CHECKPOINT] [--residue RESIDUE]
                              [--monomer-xyz MONOMER_XYZ] [--box-size BOX_SIZE]
                              [--initial-structure INITIAL_STRUCTURE]
                              [--target-density-g-cm3 TARGET_DENSITY_G_CM3]
@@ -98,7 +98,7 @@ Other options:
 
 ## Related docs
 
-- [Metatomic in MMML](../../metatomic.md)
+- [Metatomic in KARML](../../metatomic.md)
 - [PET-MAD ethanol PBC example](../../examples/pet-mad-etoh-pbc.md)
 - [Liquid box workflow](../../liquid-box-workflow.md)
 

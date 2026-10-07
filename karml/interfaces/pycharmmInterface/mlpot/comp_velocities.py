@@ -23,7 +23,7 @@ _FORCE_COPY_PAIRS = (("xcomp", "dx"), ("ycomp", "dy"), ("zcomp", "dz"))
 
 
 def _import_pycharmm():
-    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+    import karml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
     import pycharmm
 
     return pycharmm
@@ -132,7 +132,7 @@ def run_charmm_script(script: str, *, quiet: bool = False) -> None:
     """
     line = script.upper()
     if quiet:
-        from mmml.interfaces.pycharmmInterface.charmm_levels import (
+        from karml.interfaces.pycharmmInterface.charmm_levels import (
             run_charmm_script_quiet,
         )
 
@@ -187,7 +187,7 @@ def refresh_bussi_comp_velocity_handoff(
     Also used as a COMP backup when ``dynamics_run_kw`` is unavailable (script path).
     Primary Bussi continuation injects ``init_velocities`` at ``dynopt`` entry.
     """
-    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+    from karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
         sync_charmm_velocities_akma,
     )
 
@@ -209,7 +209,7 @@ def comparison_velocities_akma() -> np.ndarray | None:
 
 def sync_comparison_velocities_from_main() -> bool:
     """Copy readable main-set velocities into COMP; return False when unavailable."""
-    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+    from karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
         charmm_velocities_akma_for_thermostat,
         velocities_are_cold,
     )
@@ -269,7 +269,7 @@ def comparison_comp_looks_like_spatial_coords(vel: np.ndarray) -> bool:
 
 def sync_comparison_velocities_from_comparison() -> bool:
     """True when COMP already holds warm AKMA velocities (post-dyna / handoff)."""
-    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+    from karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
         velocities_are_cold,
         velocities_are_pathological,
     )
@@ -291,10 +291,10 @@ def sync_comparison_velocities_from_restart(path: Path | str | None) -> bool:
     """Load ``!VELOCITIES`` from a restart file into COMP when present."""
     if path is None:
         return False
-    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+    from karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
         velocities_are_cold,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         read_restart_velocities,
     )
 
@@ -509,7 +509,7 @@ def apply_comp_velocity_policy(
     quiet: bool | None = None,
 ) -> None:
     """Heat: optional COMP prep + gentler ``iasors=0`` scaling; later stages: clear COMP."""
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
         resolve_heat_comp_damp,
         resolve_heat_comp_damp_kwargs,
     )
@@ -521,7 +521,7 @@ def apply_comp_velocity_policy(
             damp_kw = resolve_heat_comp_damp_kwargs(args)
             n = prepare_comp_for_heat(**damp_kw)
             if not silent:
-                from mmml.utils.rich_report import emit_tagged
+                from karml.utils.rich_report import emit_tagged
 
                 target = "H" if damp_kw.get("hydrogen_only", True) else "all"
                 emit_tagged(
@@ -533,7 +533,7 @@ def apply_comp_velocity_policy(
         else:
             clear_comp_for_production(quiet=silent)
             if not silent:
-                from mmml.utils.rich_report import emit_tagged
+                from karml.utils.rich_report import emit_tagged
 
                 emit_tagged(
                     "HEAT COMP",
@@ -544,7 +544,7 @@ def apply_comp_velocity_policy(
     elif stage in _COMP_CLEARED_STAGES:
         clear_comp_for_production(quiet=silent)
         if not silent:
-            from mmml.utils.rich_report import emit_tagged
+            from karml.utils.rich_report import emit_tagged
 
             emit_tagged(
                 stage.upper(),

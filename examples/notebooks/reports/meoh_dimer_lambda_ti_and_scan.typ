@@ -1,5 +1,5 @@
 // Methanol dimer: lambda TI + 2D cutoff scan — figure summary
-// Compile:  typst compile --root /path/to/mmml /path/to/mmml/reports/meoh_dimer_lambda_ti_and_scan.typ
+// Compile:  typst compile --root /path/to/karml /path/to/karml/reports/meoh_dimer_lambda_ti_and_scan.typ
 
 #set document(title: [Methanol dimer: \u{03bb} TI and 2D cutoff scan])
 #set page(margin: 2cm, numbering: "1")
@@ -14,7 +14,7 @@
 #align(center)[
   #text(size: 17pt, weight: "bold")[Methanol dimer analysis report]
   #v(0.5em)
-  #text(size: 12pt, style: "italic")[MMML \u{03bb}-dynamics TI trajectories and 2D cutoff scans]
+  #text(size: 12pt, style: "italic")[KARML \u{03bb}-dynamics TI trajectories and 2D cutoff scans]
   #v(0.75em)
   #text(size: 10pt, fill: gray.darken(20%))[
     Source: `artifacts/meoh_dimer_lambda_ti/` and `artifacts/meoh_dimer_2d_cutoff_scan/` \
@@ -28,7 +28,7 @@
 
 = Lambda dynamics and thermodynamic integration
 
-The trajectory workflow (`scripts/meoh_dimer_lambda_ti.py`) runs NVE sampling at fixed \u{03bb} windows on the methanol dimer with the MMML hybrid calculator. Per-window samples estimate $chevron.l partial U \/ partial lambda chevron.r$ (via the inter-monomer energy difference between \u{03bb}-on and \u{03bb}-off calculators at the same geometry). Thermodynamic integration (TI) integrates these means over \u{03bb}. Multistate Bennett acceptance ratio (MBAR) recomputes full hybrid energies on stored snapshots for a coupled free-energy estimate and uncertainty.
+The trajectory workflow (`scripts/meoh_dimer_lambda_ti.py`) runs NVE sampling at fixed \u{03bb} windows on the methanol dimer with the KARML hybrid calculator. Per-window samples estimate $chevron.l partial U \/ partial lambda chevron.r$ (via the inter-monomer energy difference between \u{03bb}-on and \u{03bb}-off calculators at the same geometry). Thermodynamic integration (TI) integrates these means over \u{03bb}. Multistate Bennett acceptance ratio (MBAR) recomputes full hybrid energies on stored snapshots for a coupled free-energy estimate and uncertainty.
 
 == Geometry (from run summary)
 
@@ -71,7 +71,7 @@ The trajectory workflow (`scripts/meoh_dimer_lambda_ti.py`) runs NVE sampling at
 
 = Two-dimensional cutoff scan (distance $times$ \u{03bb})
 
-The scan script (`scripts/scan_meoh_dimer_2d_cutoffs.py`) grids COM distance and alchemical \u{03bb}, reporting MMML energy decomposition and force forms $-partial E \/ partial d$. Heatmaps use robust percentile color limits; vertical slices mark the complementary handoff interval between ML taper and MM switch.
+The scan script (`scripts/scan_meoh_dimer_2d_cutoffs.py`) grids COM distance and alchemical \u{03bb}, reporting KARML energy decomposition and force forms $-partial E \/ partial d$. Heatmaps use robust percentile color limits; vertical slices mark the complementary handoff interval between ML taper and MM switch.
 
 == Scan parameters (from `scan_2d_summary.json`)
 

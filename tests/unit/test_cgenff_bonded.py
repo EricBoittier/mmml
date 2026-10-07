@@ -8,12 +8,12 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from mmml.interfaces.pycharmmInterface.cgenff_bonded import (
+from karml.interfaces.pycharmmInterface.cgenff_bonded import (
     KCAL_MOL_TO_EV,
     bonded_energy_and_forces,
     bonded_energy_components,
 )
-from mmml.interfaces.pycharmmInterface.cgenff_topology import (
+from karml.interfaces.pycharmmInterface.cgenff_topology import (
     extract_residue_rtf,
     filter_bonded_topology_excluding_ml_interior,
     load_cgenff_bonded_from_charmm_files,
@@ -22,8 +22,8 @@ from mmml.interfaces.pycharmmInterface.cgenff_topology import (
     mm_atom_mask_complement,
     filter_bonded_topology_for_mm,
 )
-from mmml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_RTF
-from mmml.interfaces.pycharmmInterface.mixed_ml_mm import (
+from karml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_RTF
+from karml.interfaces.pycharmmInterface.mixed_ml_mm import (
     MixedMlMmConfig,
     build_mixed_ml_mm_energy_fn,
     prepare_mm_bonded_system,
@@ -209,7 +209,7 @@ def test_mixed_ml_mm_splits_energy() -> None:
 
 def test_mixed_two_molecule_concat_placeholder() -> None:
     """Two TIP3 copies: ML on first, MM bonded on second."""
-    from mmml.interfaces.pycharmmInterface.cgenff_topology import concat_cgenff_systems
+    from karml.interfaces.pycharmmInterface.cgenff_topology import concat_cgenff_systems
 
     one = load_cgenff_bonded_from_charmm_files(TIP3_PDB, residue_name="TIP3")
     two = concat_cgenff_systems([one, one])
@@ -273,7 +273,7 @@ def test_improper_energy_matches_charmm_n0_formula_aco() -> None:
 
 
 def test_parse_charmm_prm_urey_bradley() -> None:
-    from mmml.interfaces.pycharmmInterface.cgenff_topology import (
+    from karml.interfaces.pycharmmInterface.cgenff_topology import (
         parse_charmm_prm_urey_bradley,
     )
 
@@ -290,7 +290,7 @@ def test_urey_bradley_energy_and_forces() -> None:
     from jax_md.mm_forcefields.base import BondedParameters
     from jax_md.mm_forcefields.oplsaa.topology import create_topology
 
-    from mmml.interfaces.pycharmmInterface.cgenff_bonded import (
+    from karml.interfaces.pycharmmInterface.cgenff_bonded import (
         bonded_energy_components,
         free_space_displacement,
         urey_bradley_energy,
@@ -345,7 +345,7 @@ def test_urey_bradley_energy_and_forces() -> None:
 
 
 def test_urey_arrays_for_topology_angles() -> None:
-    from mmml.interfaces.pycharmmInterface.cgenff_topology import (
+    from karml.interfaces.pycharmmInterface.cgenff_topology import (
         urey_arrays_for_topology_angles,
     )
 
@@ -358,10 +358,10 @@ def test_urey_arrays_for_topology_angles() -> None:
 
 
 def test_load_protein_urey_from_psf(tmp_path: Path) -> None:
-    from mmml.interfaces.pycharmmInterface.cgenff_bonded import (
+    from karml.interfaces.pycharmmInterface.cgenff_bonded import (
         bonded_energy_and_forces_from_system,
     )
-    from mmml.interfaces.pycharmmInterface.cgenff_topology import load_cgenff_bonded_from_psf
+    from karml.interfaces.pycharmmInterface.cgenff_topology import load_cgenff_bonded_from_psf
 
     prm = Path("tests/unit/fixtures/urey_sample.prm")
     psf = tmp_path / "prot_ub.psf"

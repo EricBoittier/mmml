@@ -6,21 +6,21 @@ Visualizes training curves, convergence, and parameter statistics from saved che
 
 Usage:
     # Plot single training run
-    python -m mmml.cli.plot_training checkpoints/my_model/history.json
+    python -m karml.cli.plot_training checkpoints/my_model/history.json
 
     # Compare two training runs
-    python -m mmml.cli.plot_training \
+    python -m karml.cli.plot_training \
         model1/history.json \
         model2/history.json \
         --compare
 
     # Include parameter analysis
-    python -m mmml.cli.plot_training history.json \
+    python -m karml.cli.plot_training history.json \
         --params best_params.pkl \
         --analyze-params
 
     # Customization
-    python -m mmml.cli.plot_training history.json \
+    python -m karml.cli.plot_training history.json \
         --output-dir plots --dpi 300 --format pdf \
         --smoothing 0.9
 """
@@ -440,17 +440,17 @@ def main():
         epilog="""
 Examples:
   # Plot single training
-  python -m mmml.cli.plot_training checkpoints/my_model/history.json
+  python -m karml.cli.plot_training checkpoints/my_model/history.json
   
   # Compare two runs
-  python -m mmml.cli.plot_training hist1.json hist2.json --compare
+  python -m karml.cli.plot_training hist1.json hist2.json --compare
   
   # With parameter analysis
-  python -m mmml.cli.plot_training history.json \\
+  python -m karml.cli.plot_training history.json \\
       --params best_params.pkl --analyze-params
   
   # High-resolution
-  python -m mmml.cli.plot_training history.json --dpi 300 --format pdf
+  python -m karml.cli.plot_training history.json --dpi 300 --format pdf
         """
     )
     

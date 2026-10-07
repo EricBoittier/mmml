@@ -5,8 +5,8 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from mmml.interfaces.pycharmmInterface.nl_backend import build_mm_pairs_with_backend
-from mmml.interfaces.pycharmmInterface.nl_reference import (
+from karml.interfaces.pycharmmInterface.nl_backend import build_mm_pairs_with_backend
+from karml.interfaces.pycharmmInterface.nl_reference import (
     compare_pair_sets,
     extract_valid_pairs,
     filter_vesin_half_list_vectorized,

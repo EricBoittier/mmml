@@ -9,9 +9,9 @@ import pytest
 
 
 def test_suggest_supercell_reps_dcm_unit_cell():
-    from mmml.interfaces.crystal_charmm import suggest_supercell_reps
-    from mmml.interfaces.crystal_reference import metrics_from_cif
-    from mmml.paths import default_dcm_crystal_cif
+    from karml.interfaces.crystal_charmm import suggest_supercell_reps
+    from karml.interfaces.crystal_reference import metrics_from_cif
+    from karml.paths import default_dcm_crystal_cif
 
     lengths = metrics_from_cif(default_dcm_crystal_cif()).lengths_a
     reps = suggest_supercell_reps(lengths, min_box_side_a=28.0)
@@ -21,9 +21,9 @@ def test_suggest_supercell_reps_dcm_unit_cell():
 
 
 def test_build_literature_dcm_unit_cell_matches_cif():
-    from mmml.interfaces.crystal_charmm import build_literature_charmm_supercell
-    from mmml.interfaces.crystal_reference import metrics_from_cif
-    from mmml.paths import default_dcm_crystal_cif
+    from karml.interfaces.crystal_charmm import build_literature_charmm_supercell
+    from karml.interfaces.crystal_reference import metrics_from_cif
+    from karml.paths import default_dcm_crystal_cif
 
     lit = metrics_from_cif(default_dcm_crystal_cif(), space_group=60)
     result = build_literature_charmm_supercell(
@@ -41,7 +41,7 @@ def test_build_literature_dcm_unit_cell_matches_cif():
 
 
 def test_literature_preset_uses_bundled_template_when_no_explicit_monomer():
-    from mmml.interfaces import crystal_charmm
+    from karml.interfaces import crystal_charmm
 
     expected = crystal_charmm.default_make_res_monomer_pdb("DCM").resolve()
     with mock.patch.object(
@@ -58,7 +58,7 @@ def test_literature_preset_uses_bundled_template_when_no_explicit_monomer():
 
 
 def test_build_literature_dcm_supercell_density_and_count():
-    from mmml.interfaces.crystal_charmm import build_literature_charmm_supercell
+    from karml.interfaces.crystal_charmm import build_literature_charmm_supercell
 
     result = build_literature_charmm_supercell(
         "dcm",
@@ -75,7 +75,7 @@ def test_build_literature_dcm_supercell_density_and_count():
 
 
 def test_build_literature_benzene_supercell_auto_reps():
-    from mmml.interfaces.crystal_charmm import build_literature_charmm_supercell
+    from karml.interfaces.crystal_charmm import build_literature_charmm_supercell
 
     result = build_literature_charmm_supercell(
         "benz",
@@ -93,8 +93,8 @@ def test_build_literature_benzene_supercell_auto_reps():
 
 def test_literature_benzene_pdb_keeps_benz_not_ben():
     """4-char CGenFF RESN must survive PDB export for CHARMM GENERATE."""
-    from mmml.interfaces.crystal_charmm import build_literature_charmm_supercell
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+    from karml.interfaces.crystal_charmm import build_literature_charmm_supercell
+    from karml.interfaces.pycharmmInterface.mlpot.setup import (
         _residue_sequence_from_pdb,
     )
 
@@ -118,7 +118,7 @@ def test_acetone_presets_cover_the_ordered_phases():
     disordered, so there is no single set of hydrogen positions to map onto
     CGenFF ACO.
     """
-    from mmml.interfaces.crystal_charmm import LITERATURE_CRYSTAL_PRESETS
+    from karml.interfaces.crystal_charmm import LITERATURE_CRYSTAL_PRESETS
 
     acetone = {k: v for k, v in LITERATURE_CRYSTAL_PRESETS.items() if k.startswith("aco")}
     assert set(acetone) == {"aco", "aco5k", "aco110k", "acocmcm"}
@@ -131,9 +131,9 @@ def test_acetone_presets_cover_the_ordered_phases():
 
 def test_build_literature_acetone_unit_cell_matches_cif():
     """Mapping 16 molecules onto CHARMM atom names must not move any atom."""
-    from mmml.interfaces.crystal_charmm import build_literature_charmm_supercell
-    from mmml.interfaces.crystal_reference import metrics_from_cif
-    from mmml.paths import default_acetone_crystal_cif
+    from karml.interfaces.crystal_charmm import build_literature_charmm_supercell
+    from karml.interfaces.crystal_reference import metrics_from_cif
+    from karml.paths import default_acetone_crystal_cif
 
     lit = metrics_from_cif(default_acetone_crystal_cif("pbca_150k"), space_group=61)
     result = build_literature_charmm_supercell(
@@ -161,9 +161,9 @@ def test_acetone_lattice_energy_survives_the_charmm_name_mapping():
     """
     from ase.io import read
 
-    from mmml.analysis.acetone_crystal import read_acetone_phase
-    from mmml.analysis.lattice_energy import crystal_lattice_energy
-    from mmml.interfaces.crystal_charmm import build_literature_charmm_supercell
+    from karml.analysis.acetone_crystal import read_acetone_phase
+    from karml.analysis.lattice_energy import crystal_lattice_energy
+    from karml.interfaces.crystal_charmm import build_literature_charmm_supercell
 
     direct = read_acetone_phase("pbca_150k")
     mapped = read(
@@ -186,9 +186,9 @@ def test_acetone_lattice_energy_survives_the_charmm_name_mapping():
 
 
 def test_charmm_crystal_metrics_from_preset():
-    from mmml.interfaces.crystal_charmm import charmm_crystal_metrics_from_preset
-    from mmml.interfaces.crystal_reference import metrics_from_cif
-    from mmml.paths import default_dcm_crystal_cif
+    from karml.interfaces.crystal_charmm import charmm_crystal_metrics_from_preset
+    from karml.interfaces.crystal_reference import metrics_from_cif
+    from karml.paths import default_dcm_crystal_cif
 
     lit = metrics_from_cif(default_dcm_crystal_cif(), space_group=60)
     m = charmm_crystal_metrics_from_preset("dcm")
@@ -198,7 +198,7 @@ def test_charmm_crystal_metrics_from_preset():
 
 
 def test_build_crystal_literature_cli_parser():
-    from mmml.cli.misc.build_crystal import parse_args
+    from karml.cli.misc.build_crystal import parse_args
 
     args = parse_args(["--literature", "dcm", "-o", "/tmp/dcm_crystal.pdb"])
     assert args.literature == "dcm"
@@ -206,7 +206,7 @@ def test_build_crystal_literature_cli_parser():
 
 
 def test_build_crystal_box_size_and_write_charmm_parser():
-    from mmml.cli.misc.build_crystal import effective_min_box_side_a, parse_args
+    from karml.cli.misc.build_crystal import effective_min_box_side_a, parse_args
 
     args = parse_args(
         [
@@ -231,7 +231,7 @@ def test_build_crystal_box_size_and_write_charmm_parser():
 
 
 def test_effective_min_box_side_defaults_to_min_box_side():
-    from mmml.cli.misc.build_crystal import effective_min_box_side_a, parse_args
+    from karml.cli.misc.build_crystal import effective_min_box_side_a, parse_args
 
     args = parse_args(["--literature", "dcm", "-o", "/tmp/dcm.pdb"])
     assert args.box_size is None
@@ -239,8 +239,8 @@ def test_effective_min_box_side_defaults_to_min_box_side():
 
 
 def test_build_crystal_literature_uses_box_size_for_auto_reps():
-    from mmml.cli.misc import build_crystal as bc
-    from mmml.interfaces.crystal_charmm import CharmmLiteratureCrystalResult
+    from karml.cli.misc import build_crystal as bc
+    from karml.interfaces.crystal_charmm import CharmmLiteratureCrystalResult
 
     fake = CharmmLiteratureCrystalResult(
         atoms=object(),
@@ -274,8 +274,8 @@ def test_build_crystal_literature_uses_box_size_for_auto_reps():
 
 
 def test_build_crystal_write_charmm_calls_helper(tmp_path):
-    from mmml.cli.misc import build_crystal as bc
-    from mmml.interfaces.crystal_charmm import (
+    from karml.cli.misc import build_crystal as bc
+    from karml.interfaces.crystal_charmm import (
         CharmmLiteratureCrystalResult,
         CrystalCharmmTopologyPaths,
     )
@@ -328,7 +328,7 @@ def test_build_crystal_write_charmm_calls_helper(tmp_path):
 
 
 def test_charmm_side_rejects_box_smaller_than_edges():
-    from mmml.cli.misc.build_crystal import _charmm_side_length_a, parse_args
+    from karml.cli.misc.build_crystal import _charmm_side_length_a, parse_args
 
     args = parse_args(
         ["--literature", "benz", "--box-size", "20", "-o", "/tmp/b.extxyz"]
@@ -338,7 +338,7 @@ def test_charmm_side_rejects_box_smaller_than_edges():
 
 
 def test_build_crystal_literature_main(tmp_path):
-    from mmml.cli.misc.build_crystal import main
+    from karml.cli.misc.build_crystal import main
 
     out = tmp_path / "dcm_lit.pdb"
     rc = main(["--literature", "dcm", "--supercell", "1,1,1", "-o", str(out)])

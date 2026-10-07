@@ -4,12 +4,12 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-from mmml.interfaces.pycharmmInterface.mlpot.dynamics import minimize_overlap_rescue
-from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import OverlapRescueConfig
+from karml.interfaces.pycharmmInterface.mlpot.dynamics import minimize_overlap_rescue
+from karml.interfaces.pycharmmInterface.mlpot.overlap_guard import OverlapRescueConfig
 
 
 def test_apply_recovery_nbonds_skips_all_ml_pbc_upinb():
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext, apply_recovery_nbonds
+    from karml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext, apply_recovery_nbonds
 
     ctx = MagicMock(spec=MlpotContext)
     ctx.use_pbc = True
@@ -18,7 +18,7 @@ def test_apply_recovery_nbonds_skips_all_ml_pbc_upinb():
     pycharmm.coor.get_natom.return_value = 450
 
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup._import_pycharmm",
+        "karml.interfaces.pycharmmInterface.mlpot.setup._import_pycharmm",
         return_value=pycharmm,
     ):
         apply_recovery_nbonds(ctx)
@@ -28,7 +28,7 @@ def test_apply_recovery_nbonds_skips_all_ml_pbc_upinb():
 
 
 def test_minimize_overlap_rescue_uses_vdw_block_and_restores_nbonds():
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
+    from karml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
 
     ctx = MagicMock(spec=MlpotContext)
     ctx.use_pbc = True
@@ -37,24 +37,24 @@ def test_minimize_overlap_rescue_uses_vdw_block_and_restores_nbonds():
     minimize = MagicMock()
 
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._with_mlpot_detached",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._with_mlpot_detached",
         side_effect=lambda _ctx, fn: fn(),
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.apply_recovery_nbonds",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.apply_recovery_nbonds",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_rescue_lists",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_rescue_lists",
     ) as prep_lists, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.block_terms.apply_bonded_vdw_recovery_block",
+        "karml.interfaces.pycharmmInterface.mlpot.block_terms.apply_bonded_vdw_recovery_block",
     ) as vdw_block, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.restore_workflow_nbonds",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.restore_workflow_nbonds",
     ) as restore_nb, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._import_pycharmm_modules",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._import_pycharmm_modules",
         return_value=(pycharmm, MagicMock(), MagicMock(), minimize),
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.charmm_grms_after_ener_force",
+        "karml.interfaces.pycharmmInterface.mlpot.cli_common.charmm_grms_after_ener_force",
         return_value=2.0,
     ) as grms_fn, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         return_value=MagicMock(),
     ):
         grms = minimize_overlap_rescue(ctx, cfg)

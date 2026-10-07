@@ -4,7 +4,7 @@
 run_dimer_scan_campaign.py's scan_results.csv has per-term ENERGY
 decomposition but never saved per-atom CHARGES -- this script fills that
 gap: for each requested pair, reuses the exact same oriented scan geometries
-(mmml.analysis.dimer_molecules.make_oriented_scan_geometries) at the exact
+(karml.analysis.dimer_molecules.make_oriented_scan_geometries) at the exact
 distances already present in an existing scan_results.csv (for direct
 overlay with the energy plots), runs the model once per distance point (no
 monomer subtraction needed -- we want the raw per-atom charges the model
@@ -71,8 +71,8 @@ def main() -> int:
     import jax.numpy as jnp
 
     import evaluate_so3lr_spooky_extxyz as ev
-    from mmml.analysis.dimer_molecules import make_oriented_scan_geometries
-    from mmml.utils.model_checkpoint import infer_trainable_zbl_config
+    from karml.analysis.dimer_molecules import make_oriented_scan_geometries
+    from karml.utils.model_checkpoint import infer_trainable_zbl_config
 
     checkpoint_path = Path(args.checkpoint).resolve()
     params, config = ev.restore_checkpoint(checkpoint_path)

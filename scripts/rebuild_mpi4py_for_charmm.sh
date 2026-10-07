@@ -5,20 +5,20 @@
 # mpirun is /opt/gcc-.../openmpi-5.0.5/build/bin/mpirun.
 #
 # Usage (from repo root, with CHARMM venv active):
-#   export CHARMM_LIB_DIR=~/mmml/setup/charmm
+#   export CHARMM_LIB_DIR=~/karml/setup/charmm
 #   ./scripts/rebuild_mpi4py_for_charmm.sh
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-# shellcheck source=resolve_mmml_env.sh
-source "$ROOT/scripts/resolve_mmml_env.sh"
-mmml_resolve_env "$ROOT"
+# shellcheck source=resolve_karml_env.sh
+source "$ROOT/scripts/resolve_karml_env.sh"
+karml_resolve_env "$ROOT"
 
-PY="${MMML_PYTHON}"
+PY="${KARML_PYTHON}"
 while IFS= read -r line; do
   [[ -n "$line" ]] && eval "$line"
 done < <("$PY" - <<'PY'
-from mmml.interfaces.pycharmmInterface.charmm_mpi import (
+from karml.interfaces.pycharmmInterface.charmm_mpi import (
     charmm_mpirun_path,
     mpi4py_libmpi_path,
     charmm_libmpi_path,
@@ -33,7 +33,7 @@ mpirun = charmm_mpirun_path()
 if mpirun is None:
     raise SystemExit(
         "rebuild_mpi4py_for_charmm: no mpirun for libcharmm.so "
-        "(set CHARMM_LIB_DIR / MMML_MPIRUN)"
+        "(set CHARMM_LIB_DIR / KARML_MPIRUN)"
     )
 bindir = mpirun.parent
 ompi_lib = bindir.parent / "lib"
@@ -67,7 +67,7 @@ else
 fi
 
 echo "rebuild_mpi4py_for_charmm: verify with:" >&2
-echo "  mmml mpi-check" >&2
+echo "  karml mpi-check" >&2
 echo "  # after: eval mpi_shell_setup_lines from rebuild script output above" >&2
 echo "  python -c \"from mpi4py import MPI; print('mpi4py OK', MPI.Is_initialized())\"" >&2
 echo "  ldd \$($PY -c \"import importlib.util as u; print(u.find_spec('mpi4py.MPI').origin)\") | grep libmpi" >&2
@@ -78,5 +78,5 @@ from mpi4py import MPI
 print(f"rebuild_mpi4py_for_charmm: mpi4py.MPI import OK (initialized={MPI.Is_initialized()})")
 PY
   echo "rebuild_mpi4py_for_charmm: WARNING: mpi4py.MPI import failed (LD_LIBRARY_PATH may be unset in this shell)" >&2
-  echo "rebuild_mpi4py_for_charmm: run under ./scripts/mmml-charmm-mpirun.sh or export OpenMPI lib path" >&2
+  echo "rebuild_mpi4py_for_charmm: run under ./scripts/karml-charmm-mpirun.sh or export OpenMPI lib path" >&2
 fi

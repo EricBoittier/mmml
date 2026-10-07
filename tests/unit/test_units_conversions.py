@@ -1,4 +1,4 @@
-"""Conversion factors, alias parsing, and unit-inference paths in ``mmml.data.units``.
+"""Conversion factors, alias parsing, and unit-inference paths in ``karml.data.units``.
 
 ``test_units.py`` covers the happy paths of this module; the branches left over
 were the ones that matter most when something is wrong: rejecting an unknown
@@ -22,7 +22,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from mmml.data.units import (
+from karml.data.units import (
     ANGSTROM_TO_BOHR,
     BOHR_TO_ANGSTROM,
     DEBYE_TO_EANGSTROM,
@@ -147,7 +147,7 @@ def test_dipole_aliases(raw, expected):
 
 def _alias_cases():
     """Every alias in every table, paired with its normalizer."""
-    from mmml.data import units as units_module
+    from karml.data import units as units_module
 
     tables = (
         ("energy", units_module._ENERGY_ALIASES, normalize_energy_unit),
@@ -457,4 +457,4 @@ def test_pyscf_units_json_round_trips():
 def test_attach_units_embeds_a_readable_payload():
     out = attach_units_to_npz_payload({"E": np.array([1.0])})
     assert "E" in out
-    assert json.loads(str(out["_mmml_units"]))["Dxyz"] == "debye"
+    assert json.loads(str(out["_karml_units"]))["Dxyz"] == "debye"

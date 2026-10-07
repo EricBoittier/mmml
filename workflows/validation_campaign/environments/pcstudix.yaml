@@ -1,7 +1,7 @@
 name: pcstudix
 kind: slurm
 role: fast GPU smoke tests and focused diagnostics
-repo_root: ~/mmml
+repo_root: ~/karml
 partition: gpu
 account: null
 qos: null
@@ -13,9 +13,9 @@ runtime_min: 120
 gpus: 1
 gpu_constraint: null
 max_concurrent: 4
-launcher: scripts/mmml-charmm-mpirun.sh
+launcher: scripts/karml-charmm-mpirun.sh
 environment:
   JAX_ENABLE_X64: "1"
-  MMML_ML_DTYPE: float64
+  KARML_ML_DTYPE: float64
   OMP_NUM_THREADS: "1"
 

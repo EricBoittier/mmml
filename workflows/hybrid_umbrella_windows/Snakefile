@@ -1,8 +1,8 @@
 # Parallel hybrid umbrella windows — one GPU Slurm job per window.
 #
 #   cd workflows/hybrid_umbrella_windows
-#   MMML_WORKFLOW_CONFIG=config.smoke.yaml bash scripts/snakemake_local.sh 2 -n
-#   MMML_WORKFLOW_CONFIG=config.yaml bash scripts/snakemake_slurm.sh 8
+#   KARML_WORKFLOW_CONFIG=config.smoke.yaml bash scripts/snakemake_local.sh 2 -n
+#   KARML_WORKFLOW_CONFIG=config.yaml bash scripts/snakemake_slurm.sh 8
 
 import os
 import sys
@@ -23,7 +23,7 @@ from campaign_lib import (  # noqa: E402
     window_ids as cfg_window_ids,
 )
 
-_CFG_PATH = os.environ.get("MMML_WORKFLOW_CONFIG") or str(
+_CFG_PATH = os.environ.get("KARML_WORKFLOW_CONFIG") or str(
     Path(workflow.basedir) / "config.yaml"
 )
 CFG = load_config(_CFG_PATH) if Path(_CFG_PATH).is_file() else dict(config)

@@ -1,4 +1,4 @@
-"""Unit tests for mmml.data.units."""
+"""Unit tests for karml.data.units."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from mmml.data.units import (
+from karml.data.units import (
     CANONICAL_ENERGY_UNIT,
     HARTREE_TO_EV,
     UnitsManifestV2,
@@ -53,7 +53,7 @@ def test_energy_to_ev_scalar() -> None:
 
 
 def test_format_energy_dual_units() -> None:
-    from mmml.data.units import EV_TO_KCAL_MOL, KCAL_MOL_TO_EV
+    from karml.data.units import EV_TO_KCAL_MOL, KCAL_MOL_TO_EV
 
     ev = -930.27
     kcal = ev * EV_TO_KCAL_MOL
@@ -117,14 +117,14 @@ def test_load_units_manifest_from_directory(tmp_path: Path) -> None:
 def test_units_from_npz_embedded_metadata(tmp_path: Path) -> None:
     meta = json.dumps({"E": "hartree", "F": "hartree_bohr", "R": "angstrom"})
     path = tmp_path / "data.npz"
-    np.savez_compressed(path, E=np.array([-1.0]), _mmml_units=np.array(meta))
+    np.savez_compressed(path, E=np.array([-1.0]), _karml_units=np.array(meta))
     manifest = units_from_npz(path)
     assert manifest is not None
     assert manifest.energy_unit() == "hartree"
 
 
 def test_load_reference_energies_prefers_e_ev(tmp_path: Path) -> None:
-    from mmml.data.units import load_reference_energies_from_npz
+    from karml.data.units import load_reference_energies_from_npz
 
     path = tmp_path / "ref.npz"
     np.savez_compressed(
@@ -139,7 +139,7 @@ def test_load_reference_energies_prefers_e_ev(tmp_path: Path) -> None:
 
 
 def test_reference_energy_ev_at_frame_uses_e_ev(tmp_path: Path) -> None:
-    from mmml.data.units import reference_energy_ev_at_frame
+    from karml.data.units import reference_energy_ev_at_frame
 
     path = tmp_path / "ref.npz"
     np.savez_compressed(path, E=np.array(["eV"]), E_eV=np.array([-43.5, -44.0]))
@@ -151,7 +151,7 @@ def test_reference_energy_ev_at_frame_uses_e_ev(tmp_path: Path) -> None:
 
 
 def test_infer_reference_units_from_force_magnitudes(tmp_path: Path) -> None:
-    from mmml.data.units import infer_reference_energy_unit, infer_reference_force_unit
+    from karml.data.units import infer_reference_energy_unit, infer_reference_force_unit
 
     ev_path = tmp_path / "ev_ref.npz"
     np.savez_compressed(
@@ -180,7 +180,7 @@ def test_infer_reference_units_from_force_magnitudes(tmp_path: Path) -> None:
 
 def test_load_reference_energies_does_not_recursively_infer_units(tmp_path: Path) -> None:
     """Regression: load_reference_energies_from_npz must not recurse via infer."""
-    from mmml.data.units import load_reference_energies_from_npz
+    from karml.data.units import load_reference_energies_from_npz
 
     path = tmp_path / "ref.npz"
     np.savez_compressed(
@@ -216,7 +216,7 @@ def test_normalize_to_canonical_converts_hartree(tmp_path: Path) -> None:
 
 def test_calculator_unit_metadata_must_not_flat_merge() -> None:
     """Flat-merging CALCULATOR_UNITS overwrites ASE numeric energy with 'eV'."""
-    from mmml.data.units import calculator_results_units
+    from karml.data.units import calculator_results_units
 
     meta = calculator_results_units()
     numeric_energy = -43.5

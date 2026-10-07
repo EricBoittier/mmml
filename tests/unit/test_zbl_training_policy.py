@@ -5,13 +5,13 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from mmml.models.physnetjax.physnetjax.models.zbl import (
+from karml.models.physnetjax.physnetjax.models.zbl import (
     ZBLRepulsion,
     geometric_pair_distances,
 )
-from mmml.models.physnetjax.physnetjax.models.model import PhysNet
-from mmml.models.physnetjax.physnetjax.models.model_charge_spin import PhysNetChargeSpin
-from mmml.models.physnetjax.physnetjax.models.spooky_model import SpookyPhysNet
+from karml.models.physnetjax.physnetjax.models.model import PhysNet
+from karml.models.physnetjax.physnetjax.models.model_charge_spin import PhysNetChargeSpin
+from karml.models.physnetjax.physnetjax.models.spooky_model import SpookyPhysNet
 from scripts.train_so3lr_spooky_extxyz import build_parser as build_spooky_parser
 
 

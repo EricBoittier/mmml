@@ -23,7 +23,7 @@ import yaml
 
 REPO = Path(__file__).resolve().parents[1]
 DEFAULT_OUT = REPO / "artifacts" / "md_embedding" / "aaa_docs"
-LONG_CFG = REPO / "mmml" / "cli" / "run" / "md_embedding_aaa_train_long.example.yaml"
+LONG_CFG = REPO / "karml" / "cli" / "run" / "md_embedding_aaa_train_long.example.yaml"
 
 
 def _run(cmd: list[str]) -> None:
@@ -84,7 +84,7 @@ def _export_json(epoch_dir: Path, out_json: Path) -> None:
         [
             sys.executable,
             "-m",
-            "mmml.cli.__main__",
+            "karml.cli.__main__",
             "orbax-to-json",
             str(epoch_dir),
             "-o",
@@ -99,7 +99,7 @@ def _evaluate(ckpt_json: Path, valid_npz: Path, out_dir: Path) -> dict:
         [
             sys.executable,
             "-m",
-            "mmml.cli.__main__",
+            "karml.cli.__main__",
             "physnet-evaluate",
             "--checkpoint",
             str(ckpt_json),
@@ -147,7 +147,7 @@ def main(argv: list[str] | None = None) -> int:
             [
                 sys.executable,
                 "-m",
-                "mmml.cli.__main__",
+                "karml.cli.__main__",
                 "md-embedding",
                 "train",
                 "-o",
@@ -200,7 +200,7 @@ def main(argv: list[str] | None = None) -> int:
             [
                 sys.executable,
                 "-m",
-                "mmml.cli.__main__",
+                "karml.cli.__main__",
                 "physnet-train",
                 "--config",
                 str(round_cfg),

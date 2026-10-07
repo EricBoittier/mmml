@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Finite-difference force check for MMML PBC clusters.
+"""Finite-difference force check for KARML PBC clusters.
 
-Canonical implementation lives in :mod:`mmml.mode_check`. Prefer::
+Canonical implementation lives in :mod:`karml.mode_check`. Prefer::
 
-    mmml mode-check --pbc-fd --checkpoint … --output-dir …
+    karml mode-check --pbc-fd --checkpoint … --output-dir …
 
 This module remains as a thin script-compatible entry point for older
 suite launchers.
@@ -14,9 +14,9 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from mmml.mode_check.forces import force_fd_check
-from mmml.mode_check.pbc_fd import run_pbc_cluster_fd, write_fd_result
-from mmml.paths import default_meoh_template_pdb
+from karml.mode_check.forces import force_fd_check
+from karml.mode_check.pbc_fd import run_pbc_cluster_fd, write_fd_result
+from karml.paths import default_meoh_template_pdb
 
 __all__ = ["force_fd_check", "main"]
 
@@ -24,7 +24,7 @@ __all__ = ["force_fd_check", "main"]
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(
         description="PBC cluster analytic vs finite-difference force check "
-        "(prefer: mmml mode-check --pbc-fd)."
+        "(prefer: karml mode-check --pbc-fd)."
     )
     p.add_argument(
         "--checkpoint",
@@ -32,14 +32,14 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help=(
             "Portable .json or Orbax path (default: bundled manifest model with "
-            "lowest validation force MAE, or $MMML_CKPT)."
+            "lowest validation force MAE, or $KARML_CKPT)."
         ),
     )
     p.add_argument("--template-pdb", type=Path, default=default_meoh_template_pdb())
     p.add_argument(
         "--output",
         type=Path,
-        default=Path("artifacts/md_10mer_mmml_pbc_suite/fd_force_check.json"),
+        default=Path("artifacts/md_10mer_karml_pbc_suite/fd_force_check.json"),
     )
     p.add_argument("--n-molecules", type=int, default=10)
     p.add_argument("--spacing", type=float, default=5.0)
@@ -89,7 +89,7 @@ def main(argv: list[str] | None = None) -> int:
         jax_md_skin_distance=args.jax_md_skin_distance,
     )
     write_fd_result(result, args.output)
-    from mmml.utils.rich_report import print_colored_json
+    from karml.utils.rich_report import print_colored_json
 
     print_colored_json(result)
     print(f"Wrote {args.output}")

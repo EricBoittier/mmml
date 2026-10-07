@@ -25,7 +25,7 @@ def fake_pycharmm_modules(
         "pycharmm": fake_pycharmm,
         "pycharmm.coor": fake_coor,
         "pycharmm.energy": fake_energy,
-        "mmml.interfaces.pycharmmInterface.import_pycharmm": mock.MagicMock(),
+        "karml.interfaces.pycharmmInterface.import_pycharmm": mock.MagicMock(),
     }
     if extra:
         modules.update(extra)

@@ -5,7 +5,7 @@
 #   ./run_all.sh
 #   BOX_SIZE=32 PS_PROD=50 ./run_all.sh
 #
-# Preflight (`mmml doctor`) runs first: on a stale libcharmm the MLpot atom
+# Preflight (`karml doctor`) runs first: on a stale libcharmm the MLpot atom
 # limit falls back to max_Nml=100, which every cell in this matrix exceeds
 # (the smallest is DCM:103 → 515 atoms), and the run would abort at setup.
 
@@ -15,8 +15,8 @@ here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 banner "Preflight"
 if [[ "${SKIP_DOCTOR:-0}" != "1" ]]; then
-  mmml doctor || {
-    echo "mmml doctor reported problems — fix them or re-run with SKIP_DOCTOR=1" >&2
+  karml doctor || {
+    echo "karml doctor reported problems — fix them or re-run with SKIP_DOCTOR=1" >&2
     exit 1
   }
   cat <<'EOF'

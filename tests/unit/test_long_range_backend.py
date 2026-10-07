@@ -7,7 +7,7 @@ from unittest import mock
 import numpy as np
 import pytest
 
-from mmml.interfaces.pycharmmInterface.long_range_backend import (
+from karml.interfaces.pycharmmInterface.long_range_backend import (
     LongRangeCoulombResult,
     collect_lr_solver_mapping,
     create_lr_solver,
@@ -38,22 +38,22 @@ def test_resolve_lr_solver_rejects_unknown():
 
 
 def test_resolve_jax_pme_dispersion_env(monkeypatch):
-    monkeypatch.delenv("MMML_JAX_PME_DISPERSION", raising=False)
+    monkeypatch.delenv("KARML_JAX_PME_DISPERSION", raising=False)
     assert resolve_jax_pme_dispersion() is True
-    monkeypatch.setenv("MMML_JAX_PME_DISPERSION", "0")
+    monkeypatch.setenv("KARML_JAX_PME_DISPERSION", "0")
     assert resolve_jax_pme_dispersion() is False
     assert resolve_jax_pme_dispersion(True) is True
 
 
 def test_pick_lr_solver_auto_is_mic():
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.long_range_backend.have_scafacos",
+        "karml.interfaces.pycharmmInterface.long_range_backend.have_scafacos",
         return_value=True,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.long_range_backend.have_jax_pme",
+        "karml.interfaces.pycharmmInterface.long_range_backend.have_jax_pme",
         return_value=True,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.long_range_backend.have_nvalchemiops_pme",
+        "karml.interfaces.pycharmmInterface.long_range_backend.have_nvalchemiops_pme",
         return_value=True,
     ):
         assert pick_lr_solver("auto") == "mic"
@@ -61,7 +61,7 @@ def test_pick_lr_solver_auto_is_mic():
 
 def test_pick_lr_solver_default_unset_is_mic():
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.long_range_backend.have_jax_pme",
+        "karml.interfaces.pycharmmInterface.long_range_backend.have_jax_pme",
         return_value=True,
     ):
         assert pick_lr_solver(None) == "mic"
@@ -69,7 +69,7 @@ def test_pick_lr_solver_default_unset_is_mic():
 
 def test_pick_lr_solver_explicit_jax_pme_when_available():
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.long_range_backend.have_jax_pme",
+        "karml.interfaces.pycharmmInterface.long_range_backend.have_jax_pme",
         return_value=True,
     ):
         assert pick_lr_solver("jax_pme") == "jax_pme"
@@ -77,13 +77,13 @@ def test_pick_lr_solver_explicit_jax_pme_when_available():
 
 def test_pick_lr_solver_requested_scafacos_missing_falls_back():
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.long_range_backend.have_scafacos",
+        "karml.interfaces.pycharmmInterface.long_range_backend.have_scafacos",
         return_value=False,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.long_range_backend.have_jax_pme",
+        "karml.interfaces.pycharmmInterface.long_range_backend.have_jax_pme",
         return_value=False,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.long_range_backend.have_nvalchemiops_pme",
+        "karml.interfaces.pycharmmInterface.long_range_backend.have_nvalchemiops_pme",
         return_value=False,
     ):
         assert pick_lr_solver("scafacos") == "mic"
@@ -96,7 +96,7 @@ def test_create_lr_solver_mic():
 
 def test_create_lr_solver_jax_pme():
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.long_range_backend.pick_lr_solver",
+        "karml.interfaces.pycharmmInterface.long_range_backend.pick_lr_solver",
         return_value="jax_pme",
     ):
         solver = create_lr_solver("jax_pme")
@@ -109,10 +109,10 @@ def test_create_lr_solver_scafacos_delegates():
         forces_kcalmol_A=np.zeros((2, 3)),
     )
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.long_range_backend.pick_lr_solver",
+        "karml.interfaces.pycharmmInterface.long_range_backend.pick_lr_solver",
         return_value="scafacos",
     ), mock.patch(
-        "mmml.interfaces.scafacosInterface.scafacos_session.compute_scafacos_coulomb",
+        "karml.interfaces.scafacosInterface.scafacos_session.compute_scafacos_coulomb",
         return_value=mock.Mock(energy_kcalmol=1.0, forces_kcalmol_A=np.zeros((2, 3))),
     ) as compute:
         solver = create_lr_solver("scafacos")
@@ -127,10 +127,10 @@ def test_create_lr_solver_scafacos_delegates():
 
 def test_create_lr_solver_nvalchemiops_pme_delegates():
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.long_range_backend.pick_lr_solver",
+        "karml.interfaces.pycharmmInterface.long_range_backend.pick_lr_solver",
         return_value="nvalchemiops_pme",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.long_range_backend.compute_nvalchemiops_pme_coulomb",
+        "karml.interfaces.pycharmmInterface.long_range_backend.compute_nvalchemiops_pme_coulomb",
         return_value=LongRangeCoulombResult(
             energy_kcalmol=2.0,
             forces_kcalmol_A=np.zeros((2, 3)),
@@ -149,16 +149,16 @@ def test_create_lr_solver_nvalchemiops_pme_delegates():
 
 def test_describe_lr_solver_includes_flags():
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.long_range_backend.pick_lr_solver",
+        "karml.interfaces.pycharmmInterface.long_range_backend.pick_lr_solver",
         return_value="mic",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.long_range_backend.have_scafacos",
+        "karml.interfaces.pycharmmInterface.long_range_backend.have_scafacos",
         return_value=False,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.long_range_backend.have_jax_pme",
+        "karml.interfaces.pycharmmInterface.long_range_backend.have_jax_pme",
         return_value=True,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.long_range_backend.have_nvalchemiops_pme",
+        "karml.interfaces.pycharmmInterface.long_range_backend.have_nvalchemiops_pme",
         return_value=False,
     ):
         text = describe_lr_solver()
@@ -170,19 +170,19 @@ def test_describe_lr_solver_includes_flags():
 
 def test_collect_lr_solver_mapping_jax_pme():
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.long_range_backend.pick_lr_solver",
+        "karml.interfaces.pycharmmInterface.long_range_backend.pick_lr_solver",
         return_value="jax_pme",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.long_range_backend.resolve_lr_solver",
+        "karml.interfaces.pycharmmInterface.long_range_backend.resolve_lr_solver",
         return_value="jax_pme",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.long_range_backend.have_scafacos",
+        "karml.interfaces.pycharmmInterface.long_range_backend.have_scafacos",
         return_value=False,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.long_range_backend.have_jax_pme",
+        "karml.interfaces.pycharmmInterface.long_range_backend.have_jax_pme",
         return_value=True,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.long_range_backend.have_nvalchemiops_pme",
+        "karml.interfaces.pycharmmInterface.long_range_backend.have_nvalchemiops_pme",
         return_value=False,
     ):
         mapping = collect_lr_solver_mapping(
@@ -203,19 +203,19 @@ def test_collect_lr_solver_mapping_jax_pme():
 
 def test_collect_lr_solver_mapping_auto_fallback():
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.long_range_backend.pick_lr_solver",
+        "karml.interfaces.pycharmmInterface.long_range_backend.pick_lr_solver",
         return_value="mic",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.long_range_backend.resolve_lr_solver",
+        "karml.interfaces.pycharmmInterface.long_range_backend.resolve_lr_solver",
         return_value="auto",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.long_range_backend.have_scafacos",
+        "karml.interfaces.pycharmmInterface.long_range_backend.have_scafacos",
         return_value=False,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.long_range_backend.have_jax_pme",
+        "karml.interfaces.pycharmmInterface.long_range_backend.have_jax_pme",
         return_value=False,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.long_range_backend.have_nvalchemiops_pme",
+        "karml.interfaces.pycharmmInterface.long_range_backend.have_nvalchemiops_pme",
         return_value=False,
     ):
         mapping = collect_lr_solver_mapping(lr_solver="auto")
@@ -227,13 +227,13 @@ def test_collect_lr_solver_mapping_auto_fallback():
 
 def test_collect_lr_solver_mapping_auto_is_mic_in_jax_mic():
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.long_range_backend.have_scafacos",
+        "karml.interfaces.pycharmmInterface.long_range_backend.have_scafacos",
         return_value=True,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.long_range_backend.have_jax_pme",
+        "karml.interfaces.pycharmmInterface.long_range_backend.have_jax_pme",
         return_value=True,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.long_range_backend.have_nvalchemiops_pme",
+        "karml.interfaces.pycharmmInterface.long_range_backend.have_nvalchemiops_pme",
         return_value=False,
     ):
         mapping = collect_lr_solver_mapping(lr_solver="auto", do_mm=True)
@@ -246,16 +246,16 @@ def test_collect_lr_solver_mapping_auto_is_mic_in_jax_mic():
 
 def test_collect_lr_solver_mapping_scafacos_in_jax_mic_is_mic():
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.long_range_backend.pick_lr_solver",
+        "karml.interfaces.pycharmmInterface.long_range_backend.pick_lr_solver",
         return_value="scafacos",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.long_range_backend.resolve_lr_solver",
+        "karml.interfaces.pycharmmInterface.long_range_backend.resolve_lr_solver",
         return_value="auto",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.long_range_backend.have_scafacos",
+        "karml.interfaces.pycharmmInterface.long_range_backend.have_scafacos",
         return_value=True,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.long_range_backend.have_jax_pme",
+        "karml.interfaces.pycharmmInterface.long_range_backend.have_jax_pme",
         return_value=True,
     ):
         mapping = collect_lr_solver_mapping(lr_solver="auto", do_mm=True)
@@ -266,13 +266,13 @@ def test_collect_lr_solver_mapping_scafacos_in_jax_mic_is_mic():
 
 def test_collect_lr_solver_mapping_nvalchemiops_in_jax_mic_is_mic():
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.long_range_backend.pick_lr_solver",
+        "karml.interfaces.pycharmmInterface.long_range_backend.pick_lr_solver",
         return_value="nvalchemiops_pme",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.long_range_backend.resolve_lr_solver",
+        "karml.interfaces.pycharmmInterface.long_range_backend.resolve_lr_solver",
         return_value="nvalchemiops_pme",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.long_range_backend.have_nvalchemiops_pme",
+        "karml.interfaces.pycharmmInterface.long_range_backend.have_nvalchemiops_pme",
         return_value=True,
     ):
         mapping = collect_lr_solver_mapping(lr_solver="nvalchemiops_pme", do_mm=True)
@@ -283,10 +283,10 @@ def test_collect_lr_solver_mapping_nvalchemiops_in_jax_mic_is_mic():
 
 def test_collect_lr_solver_mapping_ewald_in_jax_mic_is_active():
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.long_range_backend.pick_lr_solver",
+        "karml.interfaces.pycharmmInterface.long_range_backend.pick_lr_solver",
         return_value="ewald",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.long_range_backend.resolve_lr_solver",
+        "karml.interfaces.pycharmmInterface.long_range_backend.resolve_lr_solver",
         return_value="ewald",
     ):
         mapping = collect_lr_solver_mapping(
@@ -303,10 +303,10 @@ def test_collect_lr_solver_mapping_ewald_in_jax_mic_is_active():
 
 def test_collect_lr_solver_mapping_ewald_omit_self_is_cross_monomer():
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.long_range_backend.pick_lr_solver",
+        "karml.interfaces.pycharmmInterface.long_range_backend.pick_lr_solver",
         return_value="ewald",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.long_range_backend.resolve_lr_solver",
+        "karml.interfaces.pycharmmInterface.long_range_backend.resolve_lr_solver",
         return_value="ewald",
     ):
         mapping = collect_lr_solver_mapping(
@@ -324,10 +324,10 @@ def test_collect_lr_solver_mapping_ewald_omit_self_is_cross_monomer():
 
 def test_collect_lr_solver_mapping_nvalchemiops_ml_only_is_inactive():
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.long_range_backend.pick_lr_solver",
+        "karml.interfaces.pycharmmInterface.long_range_backend.pick_lr_solver",
         return_value="nvalchemiops_pme",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.long_range_backend.resolve_lr_solver",
+        "karml.interfaces.pycharmmInterface.long_range_backend.resolve_lr_solver",
         return_value="nvalchemiops_pme",
     ):
         mapping = collect_lr_solver_mapping(lr_solver="nvalchemiops_pme", do_mm=False)
@@ -338,10 +338,10 @@ def test_collect_lr_solver_mapping_nvalchemiops_ml_only_is_inactive():
 
 def test_collect_lr_solver_mapping_periodic_external_jax_pme():
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.long_range_backend.pick_lr_solver",
+        "karml.interfaces.pycharmmInterface.long_range_backend.pick_lr_solver",
         return_value="jax_pme",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.long_range_backend.resolve_lr_solver",
+        "karml.interfaces.pycharmmInterface.long_range_backend.resolve_lr_solver",
         return_value="jax_pme",
     ):
         mapping = collect_lr_solver_mapping(
@@ -356,13 +356,13 @@ def test_collect_lr_solver_mapping_periodic_external_jax_pme():
 
 def test_collect_lr_solver_mapping_periodic_external_nvalchemiops_pme():
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.long_range_backend.pick_lr_solver",
+        "karml.interfaces.pycharmmInterface.long_range_backend.pick_lr_solver",
         return_value="nvalchemiops_pme",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.long_range_backend.resolve_lr_solver",
+        "karml.interfaces.pycharmmInterface.long_range_backend.resolve_lr_solver",
         return_value="nvalchemiops_pme",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.long_range_backend.have_nvalchemiops_pme",
+        "karml.interfaces.pycharmmInterface.long_range_backend.have_nvalchemiops_pme",
         return_value=True,
     ):
         mapping = collect_lr_solver_mapping(

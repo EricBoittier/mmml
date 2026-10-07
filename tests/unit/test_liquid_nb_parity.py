@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from mmml.interfaces.pycharmmInterface.liquid_nb_parity import (
+from karml.interfaces.pycharmmInterface.liquid_nb_parity import (
     CategoryNonbondedTotals,
     _aggregate_liquid_by_category,
     aggregate_tip3_oo_inter_pairs,

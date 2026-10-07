@@ -15,7 +15,7 @@ from pathlib import Path
 
 
 def sparse_effective_batch(n_monomers: int) -> int:
-    from mmml.interfaces.pycharmmInterface.mlpot.mlpot_sparse_dimer_policy import (
+    from karml.interfaces.pycharmmInterface.mlpot.mlpot_sparse_dimer_policy import (
         resolve_max_active_dimers,
     )
 
@@ -34,7 +34,7 @@ def print_tuning_table(n_monomers: int) -> None:
         chunks = (eff + bs - 1) // bs
         print(f"  batch_size={bs:4d} -> {chunks} chunk(s)")
     print(
-        "\nMulti-GPU: --ml-gpu-count N (or MMML_MLPOT_N_GPUS) with CUDA_VISIBLE_DEVICES "
+        "\nMulti-GPU: --ml-gpu-count N (or KARML_MLPOT_N_GPUS) with CUDA_VISIBLE_DEVICES "
         "listing N devices; keep batch_size so each GPU fits in VRAM."
     )
 
@@ -64,14 +64,14 @@ def main() -> int:
         print("\n(no --checkpoint; skipping timed ML eval)")
         return 0
 
-    from mmml.interfaces.pycharmmInterface.jax_device_policy import apply_mlpot_jax_platform_env
+    from karml.interfaces.pycharmmInterface.jax_device_policy import apply_mlpot_jax_platform_env
 
     apply_mlpot_jax_platform_env()
     import jax
     import jax.numpy as jnp
     import numpy as np
 
-    from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import build_decomposed_mlpot_model
+    from karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import build_decomposed_mlpot_model
 
     n = args.n_monomers
     n_atoms = n * 10
@@ -79,7 +79,7 @@ def main() -> int:
     per = [10] * n
     r = np.random.default_rng(0).standard_normal((n_atoms, 3)) * 2.0
 
-    from mmml.interfaces.pycharmmInterface.jax_device_policy import mlpot_jax_device_context
+    from karml.interfaces.pycharmmInterface.jax_device_policy import mlpot_jax_device_context
 
     pos = jnp.asarray(r)
     z_j = jnp.asarray(z)

@@ -11,7 +11,7 @@ a stage does not run, its checks are reported false with the real reason (exit
 signal, missing artifact) -- never defaulted to a plausible-looking number. A
 check that cannot be evaluated is a failed check, not a passing one.
 
-The build/certify stage is ``mmml liquid-box``, which packs the box with Packmol
+The build/certify stage is ``karml liquid-box``, which packs the box with Packmol
 and pretreats it under CHARMM MM.
 """
 
@@ -189,7 +189,7 @@ def run_system(
         *lib.charmm_mpi_prefix(),
         python,
         "-m",
-        "mmml.cli.__main__",
+        "karml.cli.__main__",
         "liquid-box",
         "--composition",
         f"{system}:{n_molecules}",
@@ -216,7 +216,7 @@ def run_system(
     }
     checks: list[dict[str, Any]] = []
 
-    # `mmml liquid-box` can print "liquid-box failed:" and still exit 0, so the
+    # `karml liquid-box` can print "liquid-box failed:" and still exit 0, so the
     # return code alone is not trusted -- the log is inspected too.
     failure_line = ""
     for line in log.splitlines():

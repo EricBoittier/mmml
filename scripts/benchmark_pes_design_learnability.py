@@ -15,7 +15,7 @@ from pathlib import Path
 
 import numpy as np
 
-from mmml.cli.misc.pes_design import bayesian_select, descriptors, physical_mask
+from karml.cli.misc.pes_design import bayesian_select, descriptors, physical_mask
 
 
 def _load(path: Path) -> dict:
@@ -144,7 +144,7 @@ def main(argv=None) -> int:
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
-    from mmml.utils.plotting.styles import apply_plot_style, legend_outside
+    from karml.utils.plotting.styles import apply_plot_style, legend_outside
     style = apply_plot_style("icml")
     designs = {
         "bayes_dopt": ("Bayes/D-opt", style.colors["train"], "o", "-"),

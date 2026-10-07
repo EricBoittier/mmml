@@ -152,7 +152,7 @@ Tiny GPU smokes used while wiring manuscript workflows (not paper numbers):
 | `pbc_methane_ewald` | `meth_8_t100_l24_des_jaxmd` (spoof tiny) | **PASS** init heat + jaxmd equi/prod (0.25 ps NVT, Ewald); launcher exit 0 | Seed 89921: mini → fmax≈0.96 eV/Å, USER≈−61 kcal/mol before heat |
 | `pbc_methane_ewald` | `meth_8_t100_l24_des_pycharmm` (spoof tiny) | **FAIL** pre-heat / HEAT | Root cause: DES≠methane under `jax_mm_spoof`; seed 89904 mini spike-aborts at fmax≈20.7 eV/Å, USER≈+2826; smoke had raised `max_fmax_before_dyn_ev_A=25` so heat started and CHARMM aborted (`ENERGY CHANGE TOLERANCE`) by step ~85. Removed the 25 eV/Å ceiling. |
 | `pbc_methane_ewald` | `config.smoke.embeddings.tiny.yaml` (real ML, no spoof) | **PASS** 6/6 cells; Slurm exit 0 | DES + So3LR13; mechanical (`mm_charge_mode=fixed`) + electrostatic (`q0`). DES+q0 skipped (no charge head). See table below. |
-| `dcm5_md_benchmark` | needs real DCM PhysNet `MMML_CKPT` | not smoked here | Only DES / spooky JSON in `examples/ckpts_json/` |
+| `dcm5_md_benchmark` | needs real DCM PhysNet `KARML_CKPT` | not smoked here | Only DES / spooky JSON in `examples/ckpts_json/` |
 
 Embedding smoke tags (`artifacts/pbc_methane_ewald_smoke_embeddings/`, jobs 205234–205240):
 

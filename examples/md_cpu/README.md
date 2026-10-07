@@ -7,7 +7,7 @@ ACO dimer, 20 atoms).
 ## Install
 
 ```bash
-cd /path/to/mmml
+cd /path/to/karml
 make install-md-cpu    # or: uv sync --extra md-cpu
 source examples/md_cpu/_env.sh
 ```
@@ -25,8 +25,8 @@ source examples/md_cpu/_env.sh
 |----------|---------|---------|
 | `JAX_PLATFORMS` | `cpu` | Force CPU JAX |
 | `JAX_ENABLE_X64` | `1` | Double precision (recommended for MD) |
-| `MMML_CKPT` | `examples/ckpts_json/DESdimers_params.json` | PhysNet DESdimers weights |
-| `MMML_MM_NL_BACKEND` | `auto` | MM pair builder: `auto`, `vesin`, `cell_list`, `jax_md` |
+| `KARML_CKPT` | `examples/ckpts_json/DESdimers_params.json` | PhysNet DESdimers weights |
+| `KARML_MM_NL_BACKEND` | `auto` | MM pair builder: `auto`, `vesin`, `cell_list`, `jax_md` |
 
 Artifacts land under `artifacts/md_cpu/`.
 
@@ -46,7 +46,7 @@ bash examples/md_cpu/run_all.sh
 | 3 | `03_ml_energy_jaxmd.py` | JAX-MD vs ASE (ML-only) | no |
 | 4 | `05_free_nve_ase_smoke.py` | ASE VelocityVerlet NVE smoke | no |
 | 5 | `06_free_nve_jaxmd_smoke.py` | JAX-MD NVE smoke | no |
-| 6 | `07_nl_backend_matrix.sh` | NL cutoffs + `MMML_MM_NL_BACKEND` | no |
+| 6 | `07_nl_backend_matrix.sh` | NL cutoffs + `KARML_MM_NL_BACKEND` | no |
 | 7 | `04_md_system_evaluate_ase.sh` | `md-system --evaluate-npz` | **yes** |
 | 8 | `05_md_system_free_nve_ase.sh` | `md-system` vacuum NVE | **yes** |
 | 9 | `06_md_system_free_nve_jaxmd.sh` | `md-system` vacuum NVE | **yes** |

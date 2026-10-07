@@ -1,5 +1,5 @@
 #!/bin/bash
-cd /mmhome/boittier/home/mmml
+cd /mmhome/boittier/home/karml
 source .venv/bin/activate
 python scripts/evaluate_so3lr_spooky_extxyz.py \
   --checkpoint artifacts/spooky_so3lr_muon3/epoch-0013 \

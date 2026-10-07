@@ -2,13 +2,13 @@
 
 Target architecture for multi-rank MLpot aligned with CHARMM DOMDEC and existing sparse-dimer logic.
 
-**Operations guide (Phases 0–2):** [`docs/pycharmm-mpi.md`](pycharmm-mpi.md) — `mmml mpi-check`, `mmml-charmm-mpirun.sh`, Tier 1/2 launch recipes.
+**Operations guide (Phases 0–2):** [`docs/pycharmm-mpi.md`](pycharmm-mpi.md) — `karml mpi-check`, `karml-charmm-mpirun.sh`, Tier 1/2 launch recipes.
 
 ## Current state
 
 - **Single rank (`np=1`)** — global sparse dimers; dual-GPU pmap via `--ml-gpu-count 2`.
 - **Spatial MPI (`np>1`, `--ml-spatial-mpi`)** — per-rank owned monomers + dimers, force/energy Allreduce (opt-in).
-- **CHARMM DOMDEC metadata is not consumed** by MLpot yet; `domdec off` is only an opt-in guard for streams that enabled DOMDEC. Tier 3 spike in [`tests/functionality/mlpot/SPATIAL_MPI_DOMDEC.md`](https://github.com/EricBoittier/mmml/blob/main/tests/functionality/mlpot/SPATIAL_MPI_DOMDEC.md).
+- **CHARMM DOMDEC metadata is not consumed** by MLpot yet; `domdec off` is only an opt-in guard for streams that enabled DOMDEC. Tier 3 spike in [`tests/functionality/mlpot/SPATIAL_MPI_DOMDEC.md`](https://github.com/EricBoittier/karml/blob/main/tests/functionality/mlpot/SPATIAL_MPI_DOMDEC.md).
 
 ## Target (Phase 2+)
 
@@ -24,7 +24,7 @@ Neither rank-0-global-every-step nor full MLpot replication on all ranks.
 
 ## Module layout
 
-Python package: [`mmml/interfaces/pycharmmInterface/mlpot/mpi_spatial/`](https://github.com/EricBoittier/mmml/tree/main/mmml/interfaces/pycharmmInterface/mlpot/mpi_spatial)
+Python package: [`karml/interfaces/pycharmmInterface/mlpot/mpi_spatial/`](https://github.com/EricBoittier/karml/tree/main/karml/interfaces/pycharmmInterface/mlpot/mpi_spatial)
 
 | Module | Role |
 |--------|------|
@@ -39,7 +39,7 @@ Python package: [`mmml/interfaces/pycharmmInterface/mlpot/mpi_spatial/`](https:/
 
 CHARMM DOMDEC exposes decomposition via Fortran (`domdec_common`, `q_domdec`, `q_recip_node`) but **PyCHARMM does not currently export per-rank atom ownership or ghost lists** to Python. Until that API exists, `mpi_spatial.domain` uses a deterministic Python grid from box size and `n_ranks`.
 
-Phase 2 therefore owns monomers by Python `SpatialDomainGrid` slabs and exchanges ML forces through MMML MPI helpers. Phase 3 should replace that grid with CHARMM-owned domain and ghost metadata only after PyCHARMM exposes the local/ghost atom API and the DOMDEC+MLpot coexistence spike passes.
+Phase 2 therefore owns monomers by Python `SpatialDomainGrid` slabs and exchanges ML forces through KARML MPI helpers. Phase 3 should replace that grid with CHARMM-owned domain and ghost metadata only after PyCHARMM exposes the local/ghost atom API and the DOMDEC+MLpot coexistence spike passes.
 
 See `domdec_info.py` for the full survey and open questions.
 

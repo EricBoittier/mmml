@@ -12,13 +12,13 @@ Features:
 
 Usage:
     # Basic exploration
-    python -m mmml.cli.explore_data data.npz
+    python -m karml.cli.explore_data data.npz
     
     # With plots
-    python -m mmml.cli.explore_data data.npz --plots --output-dir exploration
+    python -m karml.cli.explore_data data.npz --plots --output-dir exploration
     
     # Detailed analysis
-    python -m mmml.cli.explore_data data.npz --detailed --plots --output-dir analysis
+    python -m karml.cli.explore_data data.npz --detailed --plots --output-dir analysis
 """
 
 import argparse
@@ -266,13 +266,13 @@ def main():
         epilog="""
 Examples:
   # Basic exploration
-  python -m mmml.cli.explore_data data.npz
+  python -m karml.cli.explore_data data.npz
   
   # With plots
-  python -m mmml.cli.explore_data data.npz --plots --output-dir exploration
+  python -m karml.cli.explore_data data.npz --plots --output-dir exploration
   
   # Detailed analysis
-  python -m mmml.cli.explore_data data.npz --detailed --plots --output-dir analysis
+  python -m karml.cli.explore_data data.npz --detailed --plots --output-dir analysis
         """
     )
     

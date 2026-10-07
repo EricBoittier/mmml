@@ -1,5 +1,5 @@
 # Production matrix after smoke OK.
-#   MMML_WORKFLOW_CONFIG=config.prod.yaml nohup bash scripts/snakemake_slurm.sh 8 \
+#   KARML_WORKFLOW_CONFIG=config.prod.yaml nohup bash scripts/snakemake_slurm.sh 8 \
 #     > snakemake_prod.log 2>&1 &
 #
 # Axes:

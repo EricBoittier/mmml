@@ -10,8 +10,8 @@
 # below 2.5 A; this has median 3.32 A and 29.9%. If the coverage hypothesis is
 # right, the orientation scan's spurious fraction should collapse from 15-50%.
 
-data:       /mmhome/boittier/home/mmml_tutorial/acodcm/gfn2_nms_train.npz
-valid_data: /mmhome/boittier/home/mmml_tutorial/acodcm/gfn2_nms_valid.npz
+data:       /mmhome/boittier/home/karml_tutorial/acodcm/gfn2_nms_train.npz
+valid_data: /mmhome/boittier/home/karml_tutorial/acodcm/gfn2_nms_valid.npz
 ckpt_dir:   ./ckpts/gfn2_nms
 tag:        gfn2nms
 

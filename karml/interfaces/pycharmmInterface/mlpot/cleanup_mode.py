@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 from typing import Any
 
-from mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
+from karml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
     _bump_int_attr,
     apply_density_prep_resilient_defaults,
     density_prep_ladder_enabled,

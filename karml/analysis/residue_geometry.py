@@ -2,7 +2,7 @@
 
 Lookup order
 ------------
-1. Campaign dimers in ``mmml.analysis.dimer_molecules.MOLECULES`` (plus ACE↔ACO).
+1. Campaign dimers in ``karml.analysis.dimer_molecules.MOLECULES`` (plus ACE↔ACO).
 2. Working-directory ``pdb/<resi>.pdb`` (from a prior ``make-res``).
 3. Bundled package templates (TIP3, OCOH, ACO, MEOH, DCM, BENZ, METH).
 4. Optional ``make-res`` generation via PyCHARMM (when ``generate=True``).
@@ -15,10 +15,10 @@ from pathlib import Path
 import ase.io
 from ase import Atoms
 
-from mmml.interfaces.pycharmmInterface.cgenff_residues import (
+from karml.interfaces.pycharmmInterface.cgenff_residues import (
     normalize_cgenff_residue_name,
 )
-from mmml.paths import (
+from karml.paths import (
     bundled_file,
     default_aco_template_pdb,
     default_meoh_template_pdb,
@@ -122,7 +122,7 @@ def load_residue_monomer_atoms(
     name = normalize_cgenff_residue_name(residue)
 
     # Lazy import avoids circular import with dimer_molecules.
-    from mmml.analysis.dimer_molecules import MOLECULES
+    from karml.analysis.dimer_molecules import MOLECULES
 
     if name in MOLECULES:
         return MOLECULES[name].copy()
@@ -146,7 +146,7 @@ def load_residue_monomer_atoms(
 
     raise FileNotFoundError(
         f"No monomer geometry for residue {name!r}. Run "
-        f"'mmml make-res --res {name} --skip-energy-show' or pass a bundled/"
+        f"'karml make-res --res {name} --skip-energy-show' or pass a bundled/"
         "working-directory PDB."
     )
 
@@ -185,7 +185,7 @@ def _atom_names_from_symbols(symbols: list[str]) -> list[str]:
 def _write_monomer_pdb(path: Path, atoms: Atoms, resname: str) -> None:
     """Write *atoms* as a single-residue PDB with *resname* (never ASE ``MOL``)."""
     # Lazy import: formatting helper lives next to Packmol writers.
-    from mmml.interfaces.pycharmmInterface.packmol_placement import (
+    from karml.interfaces.pycharmmInterface.packmol_placement import (
         format_cgenff_pdb_atom_line,
     )
 
@@ -194,7 +194,7 @@ def _write_monomer_pdb(path: Path, atoms: Atoms, resname: str) -> None:
     symbols = [str(s) for s in atoms.get_chemical_symbols()]
     names = _atom_names_from_symbols(symbols)
     lines = [
-        f"REMARK   mmml monomer for {resn} (campaign/template geometry)",
+        f"REMARK   karml monomer for {resn} (campaign/template geometry)",
     ]
     for i, (aname, elem, xyz) in enumerate(
         zip(names, symbols, atoms.get_positions(), strict=True),
@@ -257,7 +257,7 @@ def _generate_monomer_via_make_res(name: str) -> Atoms:
     """
     import argparse
 
-    from mmml.cli.make import make_res
+    from karml.cli.make import make_res
 
     initial = Path("pdb/initial.pdb")
     backup = initial.read_bytes() if initial.is_file() else None

@@ -29,12 +29,12 @@ from _common import (
     setup_charmm_composition_cluster,
     two_dimer_cluster,
 )
-from mmml.interfaces.pycharmmInterface.jax_md_neighbor_list import (
+from karml.interfaces.pycharmmInterface.jax_md_neighbor_list import (
     create_jax_md_neighbor_list,
     have_jax_md,
 )
-from mmml.interfaces.pycharmmInterface.nl_backend import build_mm_pairs_with_backend
-from mmml.interfaces.pycharmmInterface.nl_reference import (
+from karml.interfaces.pycharmmInterface.nl_backend import build_mm_pairs_with_backend
+from karml.interfaces.pycharmmInterface.nl_reference import (
     compare_pair_sets,
     extract_valid_pairs,
     filter_pairs_under_cutoff,
@@ -150,7 +150,7 @@ def _pycharmm_pairs(
 ) -> set[tuple[int, int]]:
     import pycharmm.nbonds as nbonds
 
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import capture_neighbour_list
+    from karml.interfaces.pycharmmInterface.import_pycharmm import capture_neighbour_list
 
     nbonds.update_bnbnd()
     nl_info = capture_neighbour_list()
@@ -181,7 +181,7 @@ def _setup_composition_geometry(
         box_side=box_side,
         spacing=spacing,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+    from karml.interfaces.pycharmmInterface.mlpot.pbc_env import (
         apply_pbc_nbonds,
         prepare_charmm_pbc,
     )
@@ -245,7 +245,7 @@ def _collect_backend(
                     None,
                     "requires --composition (PyCHARMM PSF + PBC nbonds)",
                 )
-            from mmml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_PRM
+            from karml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_PRM
 
             if CGENFF_PRM is None:
                 return name, None, "PyCHARMM/CGENFF not available"

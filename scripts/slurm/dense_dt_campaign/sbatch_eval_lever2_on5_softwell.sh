@@ -22,7 +22,7 @@ export UV_NO_SYNC="${UV_NO_SYNC:-1}"
 export PYTHONUNBUFFERED=1
 export LJ_DEVICE=gpu
 export JAX_PLATFORMS=cuda
-export MMML_MLPOT_DEVICE=gpu
+export KARML_MLPOT_DEVICE=gpu
 export XLA_PYTHON_CLIENT_PREALLOCATE=false
 
 mkdir -p artifacts/lj_scales/dense_dt_campaign/logs

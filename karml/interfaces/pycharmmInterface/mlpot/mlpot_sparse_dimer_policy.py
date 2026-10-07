@@ -7,8 +7,8 @@ from typing import Optional, Sequence
 
 import numpy as np
 
-from mmml.interfaces.pycharmmInterface.calculator_utils import dimer_permutations
-from mmml.interfaces.pycharmmInterface.cutoffs import DEFAULT_MM_SWITCH_ON
+from karml.interfaces.pycharmmInterface.calculator_utils import dimer_permutations
+from karml.interfaces.pycharmmInterface.cutoffs import DEFAULT_MM_SWITCH_ON
 
 
 def max_dimer_pairs(n_monomers: int) -> int:
@@ -56,7 +56,7 @@ class SparseDimerCapOverflow(RuntimeError):
     ``jnp.nonzero(..., size=cap)`` keeps the first ``cap`` pairs in enumeration
     order and drops the rest. Dropped pairs still interact, so the forces are
     wrong. Fail closed rather than returning a truncated USER term. Raise
-    ``--ml-max-active-dimers`` / ``MMML_MLPOT_MAX_ACTIVE_DIMERS`` and restart;
+    ``--ml-max-active-dimers`` / ``KARML_MLPOT_MAX_ACTIVE_DIMERS`` and restart;
     growing the cap in-step would rebuild the jitted batch shape.
     """
 
@@ -70,7 +70,7 @@ class SparseDimerCapOverflow(RuntimeError):
             f"sparse active-dimer cap saturated: {self.n_active} in-range "
             f"dimer pairs > cap={self.cap} ({self.dropped} interacting dimers "
             f"would be dropped). Forces would change. Raise "
-            f"--ml-max-active-dimers / MMML_MLPOT_MAX_ACTIVE_DIMERS above "
+            f"--ml-max-active-dimers / KARML_MLPOT_MAX_ACTIVE_DIMERS above "
             f"{self.n_active} and restart this run."
         )
 
@@ -136,7 +136,7 @@ def resolve_max_active_dimers(
     if explicit is not None:
         cap = int(explicit)
     else:
-        env = (os.environ.get("MMML_MLPOT_MAX_ACTIVE_DIMERS") or "").strip()
+        env = (os.environ.get("KARML_MLPOT_MAX_ACTIVE_DIMERS") or "").strip()
         if env:
             cap = int(env)
         else:
@@ -373,7 +373,7 @@ def validate_sparse_dimer_cap(
     if stats["cap_saturated"]:
         verdict = (
             f"FAIL: {n_near} near dimers exceed cap {cap} — ML may drop "
-            f"{n_near - cap} pairs (raise MMML_MLPOT_MAX_ACTIVE_DIMERS or --ml-max-active-dimers)."
+            f"{n_near - cap} pairs (raise KARML_MLPOT_MAX_ACTIVE_DIMERS or --ml-max-active-dimers)."
         )
         ok = False
     elif stats["cap_margin"] < 50:

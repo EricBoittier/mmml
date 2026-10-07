@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run one PBC solvent burst campaign via mmml md-system --run-all."""
+"""Run one PBC solvent burst campaign via karml md-system --run-all."""
 
 from __future__ import annotations
 
@@ -33,10 +33,10 @@ def _repo_root() -> Path:
     return workflow_root().parents[1]
 
 
-def _resolve_mmml_cmd(md_argv: list[str]) -> list[str]:
+def _resolve_karml_cmd(md_argv: list[str]) -> list[str]:
     """Invoke md-system with the workflow's Python (editable repo checkout)."""
-    py = os.environ.get("MMML_PYTHON", sys.executable)
-    return [py, "-m", "mmml.cli.__main__", "md-system", *md_argv]
+    py = os.environ.get("KARML_PYTHON", sys.executable)
+    return [py, "-m", "karml.cli.__main__", "md-system", *md_argv]
 
 
 def main() -> int:
@@ -78,12 +78,12 @@ def main() -> int:
 
     md_argv = build_md_system_campaign_argv(cfg, cell, out_dir=paths["out_dir"])
     os.chdir(_repo_root())
-    cmd = _resolve_mmml_cmd(md_argv)
+    cmd = _resolve_karml_cmd(md_argv)
 
     tag = cell_run_tag(cell, cfg)
-    import mmml.interfaces.pycharmmInterface.mlpot.staged_workflow as _sw
+    import karml.interfaces.pycharmmInterface.mlpot.staged_workflow as _sw
 
-    print(f"mmml package: {_sw.__file__}", flush=True)
+    print(f"karml package: {_sw.__file__}", flush=True)
     campaign = yaml.safe_load(paths["campaign_yaml"].read_text(encoding="utf-8"))
     init_job = campaign["runs"]["pycharmm_init"]
     print(

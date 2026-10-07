@@ -10,10 +10,10 @@
 #SBATCH --error=artifacts/spooky_q0_longer/slurm-%j.err
 set -euo pipefail
 
-ROOT="${MMML_REPO:-$HOME/mmml}"
+ROOT="${KARML_REPO:-$HOME/karml}"
 cd "$ROOT"
-source "$ROOT/scripts/resolve_mmml_env.sh"
-mmml_resolve_env "$ROOT"
+source "$ROOT/scripts/resolve_karml_env.sh"
+karml_resolve_env "$ROOT"
 export JAX_ENABLE_X64=1
 export XLA_PYTHON_CLIENT_PREALLOCATE=false
 
@@ -26,7 +26,7 @@ for required in "$CACHE/_METADATA" "$INIT/_CHECKPOINT_METADATA"; do
   [[ -s "$required" ]] || { echo "missing required input: $required" >&2; exit 66; }
 done
 
-"$MMML_PYTHON" scripts/train_so3lr_spooky_extxyz.py \
+"$KARML_PYTHON" scripts/train_so3lr_spooky_extxyz.py \
   --mode train --cache-path "$CACHE" \
   --workdir "$OUT" --init-checkpoint "$INIT" \
   --epochs 50 --num-devices 2 \

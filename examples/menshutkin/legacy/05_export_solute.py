@@ -4,7 +4,7 @@
 ``examples/m/07_export_solute_pdb.py`` writes a whitespace-delimited layout so
 that the five-character residue name ``CH3CL`` fits. CHARMM tolerates it, but
 the coordinate columns end up shifted by one, so strict readers reject the file
--- ``mmml make-box`` fails in ``ase.io.read`` with "Invalid or missing
+-- ``karml make-box`` fails in ``ase.io.read`` with "Invalid or missing
 coordinate(s)". Here the chloromethane residue is named ``MECL`` (four
 characters, see ``top_mecl.rtf``) and every field sits in its standard PDB
 column, so ASE, Packmol and CHARMM all read the same file.

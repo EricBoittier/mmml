@@ -7,17 +7,17 @@ import pickle
 from pathlib import Path
 from typing import Any, Mapping
 
-from mmml.interfaces.calculators.checkpoint_loading import (
+from karml.interfaces.calculators.checkpoint_loading import (
     detect_checkpoint_format,
     load_checkpoint_bundle,
 )
-from mmml.interfaces.energy_forces.adapters import AseCalculatorProvider
-from mmml.interfaces.energy_forces.protocol import (
+from karml.interfaces.energy_forces.adapters import AseCalculatorProvider
+from karml.interfaces.energy_forces.protocol import (
     EnergyForcesProvider,
     ProviderCapabilities,
     ProviderKind,
 )
-from mmml.interfaces.qc_backends.ml_backend import MLBackend, build_ml_backend
+from karml.interfaces.qc_backends.ml_backend import MLBackend, build_ml_backend
 
 
 def detect_model_kind(checkpoint: Path | str, *, config: dict[str, Any] | None = None) -> ProviderKind:
@@ -41,7 +41,7 @@ def detect_model_kind(checkpoint: Path | str, *, config: dict[str, Any] | None =
     if model_type == "efield" or "efield" in str(path).lower():
         return ProviderKind.EFIELD_PHYSNET
 
-    from mmml.interfaces.calculators.metatomic import is_metatomic_checkpoint
+    from karml.interfaces.calculators.metatomic import is_metatomic_checkpoint
 
     if is_metatomic_checkpoint(path):
         return ProviderKind.METATOMIC
@@ -192,7 +192,7 @@ def build_ml_provider(options: dict[str, Any]) -> EnergyForcesProvider:
         raise ValueError("ML provider requires 'checkpoint' in options.")
     kind = detect_model_kind(checkpoint)
     if kind == ProviderKind.METATOMIC:
-        from mmml.interfaces.calculators.metatomic import load_metatomic_calculator
+        from karml.interfaces.calculators.metatomic import load_metatomic_calculator
 
         calc = load_metatomic_calculator(
             checkpoint,
@@ -213,7 +213,7 @@ def build_ml_ase_provider(
     use_dcmnet_dipole: bool = False,
 ) -> AseCalculatorProvider:
     """Load any supported ML checkpoint as an ASE-based provider."""
-    from mmml.interfaces.calculators.checkpoint_loading import create_calculator_from_checkpoint
+    from karml.interfaces.calculators.checkpoint_loading import create_calculator_from_checkpoint
 
     calc = create_calculator_from_checkpoint(
         checkpoint,

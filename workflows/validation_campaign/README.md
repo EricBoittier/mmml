@@ -1,4 +1,4 @@
-# MMML validation campaign
+# KARML validation campaign
 
 This workflow is the campaign index for proving that supported MM, ML, and
 hybrid MM/ML simulations work across liquids, gas-phase peptides, and solvated

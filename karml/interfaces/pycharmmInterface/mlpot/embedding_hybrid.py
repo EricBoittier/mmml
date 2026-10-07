@@ -11,7 +11,7 @@ from typing import Any
 
 import numpy as np
 
-from mmml.interfaces.pycharmmInterface.mlpot.embedding_workflow import (
+from karml.interfaces.pycharmmInterface.mlpot.embedding_workflow import (
     DEFAULT_ML_SEG_ID,
     TRAINING_N_ATOMS_AAA,
     build_embedding_box,
@@ -55,7 +55,7 @@ class EmbeddingHybridSession:
 
 
 def _repo_root() -> Path:
-    # .../mmml/interfaces/pycharmmInterface/mlpot/embedding_hybrid.py -> repo root
+    # .../karml/interfaces/pycharmmInterface/mlpot/embedding_hybrid.py -> repo root
     return Path(__file__).resolve().parents[4]
 
 
@@ -66,8 +66,8 @@ def export_embedding_checkpoint(
     params_key: str = "ema_params",
 ) -> Path:
     """Export Orbax ``epoch-*`` checkpoint to portable JSON (EMA by default)."""
-    from mmml.cli.base import resolve_checkpoint_paths
-    from mmml.utils.model_checkpoint import orbax_to_json
+    from karml.cli.base import resolve_checkpoint_paths
+    from karml.utils.model_checkpoint import orbax_to_json
 
     _, resolved = resolve_checkpoint_paths(Path(epoch_dir))
     out = Path(output_json)
@@ -102,7 +102,7 @@ def validate_embedding_monomer_potential(
     cmd = [
         sys.executable,
         "-m",
-        "mmml.cli.__main__",
+        "karml.cli.__main__",
         "physnet-evaluate",
         "--checkpoint",
         str(Path(checkpoint_json).resolve()),
@@ -152,26 +152,26 @@ def prepare_trialanine_hybrid_session(
     seed: int = 11,
 ) -> EmbeddingHybridSession:
     """Load TRIA+TIP3 box, register partial MLpot, return ASE hybrid calculator."""
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import ensure_pycharmm_loaded
+    from karml.interfaces.pycharmmInterface.import_pycharmm import ensure_pycharmm_loaded
 
     ensure_pycharmm_loaded()
     import pycharmm.coor as coor
 
-    from mmml.interfaces.pycharmmInterface.cgenff_bonded_reference import read_psf_card_file
-    from mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize import (
+    from karml.interfaces.pycharmmInterface.cgenff_bonded_reference import read_psf_card_file
+    from karml.interfaces.pycharmmInterface.mlpot.calculator_minimize import (
         _hybrid_mlpot_ase_calculator_class,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         apply_crd_file_to_charmm,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+    from karml.interfaces.pycharmmInterface.mlpot.pbc_env import (
         apply_pbc_nbonds,
         prepare_charmm_pbc,
     )
-    from mmml.interfaces.pycharmmInterface.trialanine_water_box import (
+    from karml.interfaces.pycharmmInterface.trialanine_water_box import (
         prepare_charmm_for_trialanine_box_psf,
     )
-    from mmml.utils.charmm_ase import atoms_from_psf_box
+    from karml.utils.charmm_ase import atoms_from_psf_box
 
     out = Path(output_dir)
     box_json = out / "box.json"
@@ -203,7 +203,7 @@ def prepare_trialanine_hybrid_session(
     apply_pbc_nbonds(nbxmod=5, cubic_box_side_A=side)
 
 
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import select_by_seg_id
+    from karml.interfaces.pycharmmInterface.mlpot.setup import select_by_seg_id
 
     n_pept = len(tuple(select_by_seg_id(ml_seg_id).get_atom_indexes()))
     if n_pept != TRAINING_N_ATOMS_AAA:

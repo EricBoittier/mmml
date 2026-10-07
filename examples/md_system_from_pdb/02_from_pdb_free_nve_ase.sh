@@ -10,7 +10,7 @@ CFG="${ROOT}/examples/md_system_from_pdb/yaml/02_from_pdb_free_nve_ase.yaml"
 OUT="${ARTIFACTS_DIR}/02_free_nve_ase"
 
 echo "=== config $(basename "${CFG}") ==="
-uv run mmml md-system \
+uv run karml md-system \
   --config "${CFG}" \
   --from-pdb "${PDB_MONOMER}" \
   --checkpoint "${CKPT_JSON}" \

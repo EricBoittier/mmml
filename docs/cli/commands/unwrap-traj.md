@@ -1,4 +1,4 @@
-# `mmml unwrap-traj`
+# `karml unwrap-traj`
 
 Unwrap periodic trajectories.
 
@@ -6,13 +6,13 @@ Unwrap periodic trajectories.
 ## Usage
 
 ```bash
-mmml unwrap-traj --help
+karml unwrap-traj --help
 ```
 
 ## Options
 
 ```text
-usage: mmml unwrap-traj [-h] -o OUTPUT [--format {auto,traj,xyz,extxyz,dcd}]
+usage: karml unwrap-traj [-h] -o OUTPUT [--format {auto,traj,xyz,extxyz,dcd}]
                         [--fast] [--index INDEX] [--cell CELL]
                         [--group-size GROUP_SIZE] [--n-groups N_GROUPS]
                         [--no-molecules] [--reference REFERENCE]
@@ -61,9 +61,9 @@ Other options:
   --cell-key CELL_KEY   HDF5 cell dataset key (default:
                         cell/cells/lattice/lattices/box/boxes)
 
-Unwrap periodic trajectories and write ASE/XYZ outputs. Examples: mmml unwrap-
-traj in.traj -o unwrapped.traj mmml unwrap-traj in.traj -o unwrapped.xyz
---format xyz --fast mmml unwrap-traj coords.h5 -o unwrapped.extxyz --reference
+Unwrap periodic trajectories and write ASE/XYZ outputs. Examples: karml unwrap-
+traj in.traj -o unwrapped.traj karml unwrap-traj in.traj -o unwrapped.xyz
+--format xyz --fast karml unwrap-traj coords.h5 -o unwrapped.extxyz --reference
 wrapped.traj --fast
 ```
 

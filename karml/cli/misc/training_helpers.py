@@ -16,9 +16,9 @@ from typing import Dict, Any, Optional, Union
 import jax
 import numpy as np
 
-from mmml.models.physnetjax.physnetjax.models.model import EF
-from mmml.models.physnetjax.physnetjax.training.training import train_model
-from mmml.models.physnetjax.physnetjax.data.data import prepare_datasets
+from karml.models.physnetjax.physnetjax.models.model import EF
+from karml.models.physnetjax.physnetjax.training.training import train_model
+from karml.models.physnetjax.physnetjax.data.data import prepare_datasets
 
 
 def to_jsonable(obj: Any):
@@ -108,7 +108,7 @@ class TrainingConfig:
 
 def load_model_from_json(model_file: Union[str, Path]) -> EF:
     """Load a model from a JSON file."""
-    from mmml.utils.model_checkpoint import build_physnet_from_config
+    from karml.utils.model_checkpoint import build_physnet_from_config
 
     with open(model_file, 'r') as f:
         model_attrs = json.load(f)

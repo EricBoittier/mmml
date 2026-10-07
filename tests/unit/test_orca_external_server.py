@@ -1,4 +1,4 @@
-"""Unit tests for the persistent MMML ORCA server/client."""
+"""Unit tests for the persistent KARML ORCA server/client."""
 
 from __future__ import annotations
 
@@ -8,10 +8,10 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from mmml.interfaces.orca_external.client import send_to_server
-from mmml.interfaces.orca_external.runner import clear_calculator_cache
-from mmml.interfaces.orca_external.server import MmmlOrcaServer
-from mmml.interfaces.orca_external.settings import MmmlOrcaSettings
+from karml.interfaces.orca_external.client import send_to_server
+from karml.interfaces.orca_external.runner import clear_calculator_cache
+from karml.interfaces.orca_external.server import KarmlOrcaServer
+from karml.interfaces.orca_external.settings import KarmlOrcaSettings
 
 
 @pytest.fixture
@@ -68,7 +68,7 @@ def _install_mock_calculator(monkeypatch) -> None:
             return self.results["forces"]
 
     monkeypatch.setattr(
-        "mmml.interfaces.orca_external.runner.get_calculator",
+        "karml.interfaces.orca_external.runner.get_calculator",
         lambda settings: _MockCalc(),
     )
 
@@ -80,8 +80,8 @@ def test_server_handle_writes_engrad(
     _install_mock_calculator(monkeypatch)
     extinp_path = _write_orca_job(tmp_path)
 
-    settings = MmmlOrcaSettings(checkpoint=_dummy_checkpoint(tmp_path))
-    server = MmmlOrcaServer(default_settings=settings, **orca_server_kwargs)
+    settings = KarmlOrcaSettings(checkpoint=_dummy_checkpoint(tmp_path))
+    server = KarmlOrcaServer(default_settings=settings, **orca_server_kwargs)
     try:
         result = server.handle(
             [extinp_path.name],
@@ -104,8 +104,8 @@ def test_server_inherits_default_checkpoint(
     _install_mock_calculator(monkeypatch)
     extinp_path = _write_orca_job(tmp_path, basename="inherit_EXT")
 
-    settings = MmmlOrcaSettings(checkpoint=_dummy_checkpoint(tmp_path), cutoff=8.5)
-    server = MmmlOrcaServer(default_settings=settings, **orca_server_kwargs)
+    settings = KarmlOrcaSettings(checkpoint=_dummy_checkpoint(tmp_path), cutoff=8.5)
+    server = KarmlOrcaServer(default_settings=settings, **orca_server_kwargs)
     try:
         server.handle([extinp_path.name], directory=str(tmp_path))
         assert (tmp_path / "inherit_EXT.engrad").is_file()
@@ -121,8 +121,8 @@ def test_client_forwards_to_server(
     _install_mock_calculator(monkeypatch)
     extinp_path = _write_orca_job(tmp_path, basename="client_EXT")
 
-    settings = MmmlOrcaSettings(checkpoint=_dummy_checkpoint(tmp_path))
-    server = MmmlOrcaServer(default_settings=settings, **orca_server_kwargs)
+    settings = KarmlOrcaSettings(checkpoint=_dummy_checkpoint(tmp_path))
+    server = KarmlOrcaServer(default_settings=settings, **orca_server_kwargs)
 
     def _fake_urlopen(request, timeout=None):
         payload = json.loads(request.data.decode("utf-8"))
@@ -140,7 +140,7 @@ def test_client_forwards_to_server(
 
         return _Resp()
 
-    monkeypatch.setattr("mmml.interfaces.orca_external.client.urllib.request.urlopen", _fake_urlopen)
+    monkeypatch.setattr("karml.interfaces.orca_external.client.urllib.request.urlopen", _fake_urlopen)
 
     try:
         send_to_server(

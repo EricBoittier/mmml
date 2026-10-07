@@ -1,4 +1,4 @@
-"""Tests for mmml md-system pycharmm argv building and log summary."""
+"""Tests for karml md-system pycharmm argv building and log summary."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from unittest import mock
 
 import pytest
 
-from mmml.cli.run.md_system import (
+from karml.cli.run.md_system import (
     _apply_charmm_omp_threads_env,
     _pycharmm_run_summary,
     build_pycharmm_command,
@@ -138,7 +138,7 @@ def _pycharmm_args(**overrides) -> argparse.Namespace:
 
 def test_pycharmm_extra_args_strip_skip_jit_warmup():
     """Campaign YAML often puts --skip-jit-warmup in extra_args; PyCHARMM rejects it."""
-    from mmml.cli.run.md_system import _suite_extra_argv
+    from karml.cli.run.md_system import _suite_extra_argv
 
     args = _pycharmm_args(
         extra_args=["--skip-jit-warmup", "--quiet", "--no-auto-warmup-mlpot-jax"]
@@ -150,7 +150,7 @@ def test_pycharmm_extra_args_strip_skip_jit_warmup():
 
 
 def test_build_pycharmm_command_forwards_pre_dynamics_lingo(tmp_path: Path):
-    from mmml.cli.run.md_pbc_suite import pycharmm_mlpot
+    from karml.cli.run.md_pbc_suite import pycharmm_mlpot
 
     out = tmp_path / "run"
     cmd = build_pycharmm_command(
@@ -220,7 +220,7 @@ def test_build_pycharmm_command_omits_empty_pre_dynamics_lingo(tmp_path: Path):
 
 
 def test_build_command_rejects_pre_dynamics_lingo_for_non_pycharmm():
-    from mmml.cli.run.md_system import build_command
+    from karml.cli.run.md_system import build_command
 
     args = _pycharmm_args(
         backend="jaxmd",
@@ -232,7 +232,7 @@ def test_build_command_rejects_pre_dynamics_lingo_for_non_pycharmm():
 
 
 def test_build_pycharmm_command_forwards_pre_mlpot_pair_floors():
-    from mmml.cli.run.md_pbc_suite import pycharmm_mlpot
+    from karml.cli.run.md_pbc_suite import pycharmm_mlpot
 
     cmd = build_pycharmm_command(
         _pycharmm_args(
@@ -275,7 +275,7 @@ def test_build_pycharmm_command_keeps_explicit_charmm_restart():
 
 
 def test_build_pycharmm_command_forwards_zero_mini_box_equil_and_lattice():
-    from mmml.cli.run.md_pbc_suite import pycharmm_mlpot
+    from karml.cli.run.md_pbc_suite import pycharmm_mlpot
 
     cmd = build_pycharmm_command(
         _pycharmm_args(
@@ -297,7 +297,7 @@ def test_build_pycharmm_command_forwards_zero_mini_box_equil_and_lattice():
 
 
 def test_build_pycharmm_command_forwards_dyn_freq_cadence():
-    from mmml.cli.run.md_pbc_suite import pycharmm_mlpot
+    from karml.cli.run.md_pbc_suite import pycharmm_mlpot
 
     cmd = build_pycharmm_command(_pycharmm_args(dyn_freq_cadence=50))
     assert "--dyn-freq-cadence" in cmd
@@ -308,7 +308,7 @@ def test_build_pycharmm_command_forwards_dyn_freq_cadence():
 
 
 def test_build_pycharmm_command_forwards_dcd_cadence():
-    from mmml.cli.run.md_pbc_suite import pycharmm_mlpot
+    from karml.cli.run.md_pbc_suite import pycharmm_mlpot
 
     cmd = build_pycharmm_command(_pycharmm_args(dcd_nsavc=4, dcd_max_frames=0, dcd_interval_ps=0.002))
     assert cmd[cmd.index("--dcd-max-frames") + 1] == "0"
@@ -325,7 +325,7 @@ def test_build_pycharmm_command_omits_unset_dcd_cadence():
 
 
 def test_build_pycharmm_command_forwards_electrostatics_damping_sigma():
-    from mmml.cli.run.md_pbc_suite import pycharmm_mlpot
+    from karml.cli.run.md_pbc_suite import pycharmm_mlpot
 
     cmd = build_pycharmm_command(_pycharmm_args(electrostatics_damping_sigma=0.0))
     assert "--electrostatics-damping-sigma" in cmd
@@ -356,7 +356,7 @@ def test_parse_defaults_forward_500_step_overlap_interval():
 
 
 def test_build_pycharmm_command_forwards_mbd_override_and_omits_unified_only_flags():
-    from mmml.cli.run.md_pbc_suite import pycharmm_mlpot
+    from karml.cli.run.md_pbc_suite import pycharmm_mlpot
 
     cmd = build_pycharmm_command(
         _pycharmm_args(
@@ -407,7 +407,7 @@ def test_build_pycharmm_command_omits_include_mm_when_default_true():
 
 
 def test_build_pycharmm_command_no_include_mm_parses_in_pycharmm_backend():
-    from mmml.cli.run.md_pbc_suite import pycharmm_mlpot
+    from karml.cli.run.md_pbc_suite import pycharmm_mlpot
 
     cmd = build_pycharmm_command(_pycharmm_args(include_mm=False))
     assert "--no-include-mm" in cmd
@@ -416,7 +416,7 @@ def test_build_pycharmm_command_no_include_mm_parses_in_pycharmm_backend():
 
 
 def test_build_pycharmm_command_forwards_do_ml_flags():
-    from mmml.cli.run.md_pbc_suite import pycharmm_mlpot
+    from karml.cli.run.md_pbc_suite import pycharmm_mlpot
 
     cmd = build_pycharmm_command(
         _pycharmm_args(do_ml=False, do_ml_dimer=False, skip_ml_dimers=False)
@@ -429,8 +429,8 @@ def test_build_pycharmm_command_forwards_do_ml_flags():
 
 
 def test_build_pycharmm_command_skip_ml_dimers_parses():
-    from mmml.cli.run.md_config import normalize_hybrid_assembly_flags
-    from mmml.cli.run.md_pbc_suite import pycharmm_mlpot
+    from karml.cli.run.md_config import normalize_hybrid_assembly_flags
+    from karml.cli.run.md_pbc_suite import pycharmm_mlpot
 
     cmd = build_pycharmm_command(_pycharmm_args(skip_ml_dimers=True, do_ml_dimer=True))
     assert "--skip-ml-dimers" in cmd
@@ -440,7 +440,7 @@ def test_build_pycharmm_command_skip_ml_dimers_parses():
 
 
 def test_build_pycharmm_command_fire_min_flags_parse_in_pycharmm_backend():
-    from mmml.cli.run.md_pbc_suite import pycharmm_mlpot
+    from karml.cli.run.md_pbc_suite import pycharmm_mlpot
 
     cmd = build_pycharmm_command(
         _pycharmm_args(
@@ -650,38 +650,38 @@ def test_parse_md_system_config_accepts_charmm_omp_threads(tmp_path):
 
 
 def test_apply_charmm_omp_threads_env_sets_bootstrap_env(monkeypatch):
-    monkeypatch.delenv("MMML_CHARMM_OMP_THREADS", raising=False)
+    monkeypatch.delenv("KARML_CHARMM_OMP_THREADS", raising=False)
     monkeypatch.delenv("OMP_NUM_THREADS", raising=False)
     monkeypatch.delenv("MKL_NUM_THREADS", raising=False)
     monkeypatch.delenv("OPENBLAS_NUM_THREADS", raising=False)
     monkeypatch.delenv("NUMEXPR_NUM_THREADS", raising=False)
-    monkeypatch.delenv("MMML_JAX_COMPILE_THREADS", raising=False)
-    monkeypatch.setenv("MMML_NO_JAX_COMPILE_THREADS", "1")
+    monkeypatch.delenv("KARML_JAX_COMPILE_THREADS", raising=False)
+    monkeypatch.setenv("KARML_NO_JAX_COMPILE_THREADS", "1")
 
     applied = _apply_charmm_omp_threads_env(_pycharmm_args(charmm_omp_threads=8))
 
     assert applied == "8"
-    assert os.environ["MMML_CHARMM_OMP_THREADS"] == "8"
+    assert os.environ["KARML_CHARMM_OMP_THREADS"] == "8"
     assert os.environ["OMP_NUM_THREADS"] == "8"
     assert os.environ["MKL_NUM_THREADS"] == "8"
     assert os.environ["OPENBLAS_NUM_THREADS"] == "8"
     assert os.environ["NUMEXPR_NUM_THREADS"] == "8"
-    assert os.environ["MMML_JAX_COMPILE_THREADS"] == "8"
-    assert os.environ["MMML_NO_JAX_COMPILE_THREADS"] == "0"
+    assert os.environ["KARML_JAX_COMPILE_THREADS"] == "8"
+    assert os.environ["KARML_NO_JAX_COMPILE_THREADS"] == "0"
 
 
 def test_apply_charmm_omp_threads_env_preserves_explicit_library_threads(monkeypatch):
     monkeypatch.setenv("MKL_NUM_THREADS", "2")
     monkeypatch.setenv("OPENBLAS_NUM_THREADS", "3")
     monkeypatch.setenv("NUMEXPR_NUM_THREADS", "4")
-    monkeypatch.setenv("MMML_JAX_COMPILE_THREADS", "5")
+    monkeypatch.setenv("KARML_JAX_COMPILE_THREADS", "5")
 
     _apply_charmm_omp_threads_env(_pycharmm_args(charmm_omp_threads=8))
 
     assert os.environ["MKL_NUM_THREADS"] == "2"
     assert os.environ["OPENBLAS_NUM_THREADS"] == "3"
     assert os.environ["NUMEXPR_NUM_THREADS"] == "4"
-    assert os.environ["MMML_JAX_COMPILE_THREADS"] == "5"
+    assert os.environ["KARML_JAX_COMPILE_THREADS"] == "5"
 
 
 def test_apply_charmm_omp_threads_env_rejects_nonpositive():
@@ -713,7 +713,7 @@ def test_build_pycharmm_command_grid_builder_omits_packmol():
 
 
 def test_build_pycharmm_command_explicit_packmol_argv_parses_in_pycharmm_backend():
-    from mmml.cli.run.md_pbc_suite import pycharmm_mlpot
+    from karml.cli.run.md_pbc_suite import pycharmm_mlpot
 
     cmd = build_pycharmm_command(
         _pycharmm_args(packmol=True, packmol_sphere=None, packmol_placement="cube")
@@ -726,7 +726,7 @@ def test_build_pycharmm_command_explicit_packmol_argv_parses_in_pycharmm_backend
 
 
 def test_build_pycharmm_command_forwards_pyxtal_flags():
-    from mmml.cli.run.md_pbc_suite import pycharmm_mlpot
+    from karml.cli.run.md_pbc_suite import pycharmm_mlpot
 
     cmd = build_pycharmm_command(
         _pycharmm_args(
@@ -754,7 +754,7 @@ def test_build_pycharmm_command_forwards_packmol_cache_and_run_state_flags():
         _pycharmm_args(
             rebuild_packmol=True,
             save_run_state=True,
-            packmol_cache_dir=Path("/tmp/mmml_packmol"),
+            packmol_cache_dir=Path("/tmp/karml_packmol"),
             run_state_dir=Path("/tmp/run_state"),
             overlap_run_state_every_chunks=4,
             reuse_packmol_cache=False,
@@ -764,7 +764,7 @@ def test_build_pycharmm_command_forwards_packmol_cache_and_run_state_flags():
     assert "--rebuild-packmol" in cmd
     assert "--save-run-state" in cmd
     idx = cmd.index("--packmol-cache-dir")
-    assert cmd[idx + 1] == "/tmp/mmml_packmol"
+    assert cmd[idx + 1] == "/tmp/karml_packmol"
     idx = cmd.index("--run-state-dir")
     assert cmd[idx + 1] == "/tmp/run_state"
     idx = cmd.index("--overlap-run-state-every-chunks")
@@ -772,7 +772,7 @@ def test_build_pycharmm_command_forwards_packmol_cache_and_run_state_flags():
 
 
 def test_build_pycharmm_command_forwards_mc_density_flags():
-    from mmml.cli.run.md_pbc_suite import pycharmm_mlpot
+    from karml.cli.run.md_pbc_suite import pycharmm_mlpot
 
     cmd = build_pycharmm_command(
         _pycharmm_args(
@@ -816,7 +816,7 @@ def test_build_pycharmm_command_forwards_density_prep_off():
 
 
 def test_build_pycharmm_command_forwards_no_monomer_physnet_mini():
-    from mmml.cli.run.md_pbc_suite import pycharmm_mlpot
+    from karml.cli.run.md_pbc_suite import pycharmm_mlpot
 
     cmd = build_pycharmm_command(
         _pycharmm_args(
@@ -991,7 +991,7 @@ def test_save_job_run_manifest_writes_registry_and_output_copy(tmp_path):
 
 
 def test_main_skips_parent_manifest_after_campaign_mpi_rerun(monkeypatch, tmp_path):
-    from mmml.cli.run import md_system
+    from karml.cli.run import md_system
 
     cfg = tmp_path / "campaign.yaml"
     cfg.write_text(
@@ -1012,15 +1012,15 @@ def test_main_skips_parent_manifest_after_campaign_mpi_rerun(monkeypatch, tmp_pa
     monkeypatch.setattr(
         sys,
         "argv",
-        ["mmml", "--config", str(cfg), "--run-all"],
+        ["karml", "--config", str(cfg), "--run-all"],
     )
 
     def _fake_run_campaign(args):
         args._mpi_rerun_proxy_return = True
         return 2
 
-    with mock.patch("mmml.cli.run.md_campaign.run_campaign", side_effect=_fake_run_campaign), mock.patch(
-        "mmml.cli.run.md_system._maybe_save_job_run_manifest"
+    with mock.patch("karml.cli.run.md_campaign.run_campaign", side_effect=_fake_run_campaign), mock.patch(
+        "karml.cli.run.md_system._maybe_save_job_run_manifest"
     ) as save_manifest:
         assert md_system.main() == 2
 

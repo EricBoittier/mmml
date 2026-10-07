@@ -1,4 +1,4 @@
-# `mmml sample-diverse-xyz`
+# `karml sample-diverse-xyz`
 
 Pick diverse structures (SOAP) → NPZ.
 
@@ -6,13 +6,13 @@ Pick diverse structures (SOAP) → NPZ.
 ## Usage
 
 ```bash
-mmml sample-diverse-xyz --help
+karml sample-diverse-xyz --help
 ```
 
 ## Options
 
 ```text
-usage: mmml sample-diverse-xyz [-h] -n N [-o OUTPUT] [--seed SEED]
+usage: karml sample-diverse-xyz [-h] -n N [-o OUTPUT] [--seed SEED]
                                [--species SPECIES] [--r-cut R_CUT]
                                [--n-max N_MAX] [--l-max L_MAX] [--sigma SIGMA]
                                [-v]

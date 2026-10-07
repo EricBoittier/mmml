@@ -3,9 +3,9 @@
 CLI for make_box: pack molecules into a periodic box (vacuum or solvated).
 
 Usage:
-    mmml make-box --res CYBZ --n 50 --box-size 25.0
-    mmml make-box --res CYBZ --n 50 --box-size 25.0 --solvent TIP3
-    mmml make-box --res CYBZ --n 200 --box-size 30.0 --solvent MEOH --density 792
+    karml make-box --res CYBZ --n 50 --box-size 25.0
+    karml make-box --res CYBZ --n 50 --box-size 25.0 --solvent TIP3
+    karml make-box --res CYBZ --n 200 --box-size 30.0 --solvent MEOH --density 792
 
 --solvent accepts any CGenFF RESI name (TIP3, MEOH, ACO, …); aliases water/octanol
 map to TIP3/OCOH. --density is kg/m³ (built-in for TIP3/OCOH).
@@ -21,7 +21,7 @@ def main() -> int:
     """Run make-box CLI."""
     t0 = time.perf_counter()
     try:
-        from mmml.cli.make.make_box import parse_args, main_loop
+        from karml.cli.make.make_box import parse_args, main_loop
     except ModuleNotFoundError as e:
         if "pycharmm" in str(e).lower() or "charmm" in str(e).lower():
             print("Error: make-box requires PyCHARMM/CHARMM.", file=sys.stderr)

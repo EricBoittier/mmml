@@ -36,7 +36,7 @@ independently in scientific provenance.
 
 ## Canonical 1D dimer scan calculators
 
-These calculator names are accepted by `mmml dimer-scan`.
+These calculator names are accepted by `karml dimer-scan`.
 
 The artifact contract is tested independently of calculator choice:
 successful runs preserve a versioned manifest, extxyz trajectory, and ASE
@@ -44,9 +44,9 @@ trajectory containing energy and forces. `[evidence: dimer_artifact_contract]`
 
 | `--calculator` | Implementation | Checkpoint | Properties used | Charge inputs | Where supported |
 |---|---|---|---|---|---|
-| `physnet` | `mmml.interfaces.calculators.checkpoint_loading.create_calculator_from_checkpoint` | Required: portable JSON, joint pickle, or Orbax/directory formats understood by the centralized loader | Energy and forces; interaction energy/forces are dimer minus isolated monomers | Optional total `--charge` and `--spin` are supported by the joint `SimpleInferenceCalculator` path; standalone PhysNet checkpoints currently reject explicit values | Canonical Python `run_dimer_scan` and `mmml dimer-scan` |
-| `metatomic` | `mmml.interfaces.calculators.metatomic.load_metatomic_calculator` | Required: TorchScript AtomisticModel (`.pt` / `.pth` or an export directory with `model.pt`) | Energy and forces through ASE (eV, eV/Å) | None on the canonical scan path; molecular charge/spin must be baked into the exported model | Canonical dimer scan and ic-scan; optional extra `metatomic`. CHARMM fragment ML/MM is a separate MLpot adapter (`docs/metatomic.md`) |
-| `xtb` | `mmml.analysis.dimer_scans.make_xtb_calculator` | None; uses `xtb-python`, falling back to `tblite` | Energy and forces through ASE | `--method` selects the xTB method (default GFN2-xTB); the current dimer CLI does not expose backend-specific UHF options | Canonical Python `run_dimer_scan` and `mmml dimer-scan` |
+| `physnet` | `karml.interfaces.calculators.checkpoint_loading.create_calculator_from_checkpoint` | Required: portable JSON, joint pickle, or Orbax/directory formats understood by the centralized loader | Energy and forces; interaction energy/forces are dimer minus isolated monomers | Optional total `--charge` and `--spin` are supported by the joint `SimpleInferenceCalculator` path; standalone PhysNet checkpoints currently reject explicit values | Canonical Python `run_dimer_scan` and `karml dimer-scan` |
+| `metatomic` | `karml.interfaces.calculators.metatomic.load_metatomic_calculator` | Required: TorchScript AtomisticModel (`.pt` / `.pth` or an export directory with `model.pt`) | Energy and forces through ASE (eV, eV/Å) | None on the canonical scan path; molecular charge/spin must be baked into the exported model | Canonical dimer scan and ic-scan; optional extra `metatomic`. CHARMM fragment ML/MM is a separate MLpot adapter (`docs/metatomic.md`) |
+| `xtb` | `karml.analysis.dimer_scans.make_xtb_calculator` | None; uses `xtb-python`, falling back to `tblite` | Energy and forces through ASE | `--method` selects the xTB method (default GFN2-xTB); the current dimer CLI does not expose backend-specific UHF options | Canonical Python `run_dimer_scan` and `karml dimer-scan` |
 | `spookynet` | `SpookyNetCalculator` | Required | Energy and forces | `--charge`; `--spin` is multiplicity | Canonical dimer scan |
 | `mbd` | `QCMLMBDCalculator` | Required | Learned MBD energy and forces | `--charge`; `--spin` is multiplicity | Canonical dimer scan |
 | `multipoles` | `LearnedMolecularMultipoleElectrostatics` | Required | Energy and complete central-finite-difference forces | Fragment charges/multiplicities currently default to neutral singlets | Canonical dimer scan; finite-difference step is recorded |
@@ -66,30 +66,30 @@ as checkpoint-only ASE calculators would hide scientifically material inputs.
 The existing `scan_mlpot_dimer_2d_pycharmm.py --scan-1d` path supports both,
 and should be migrated by representing those inputs in `DimerScanConfig`.
 
-## Calculator implementations elsewhere in MMML
+## Calculator implementations elsewhere in KARML
 
 | Calculator family | ASE properties | Primary implementation | Supported surfaces | Important limitations |
 |---|---|---|---|---|
-| PhysNet / joint PhysNet+DCMNet inference | Energy, forces; adapter may also expose dipole, charges, multipoles | `mmml.interfaces.calculators.simple_inference` and `checkpoint_loading` | Python ASE use; evaluation commands; hybrid MLpot model loading; canonical dimer scan | Checkpoint atom-padding capacity and architecture must match the system. |
-| SpookyNet / SpookyPhysNet | Energy, forces | `mmml.models.spookynet_calc.SpookyNetCalculator` | Python ASE use; Spooky evaluation/training scripts; hybrid MLpot when checkpoint architecture resolves as Spooky | Standalone adapter does not provide the dynamic CGenFF arrays used by every hybrid architecture. Optional frozen MBD is loaded when recorded/configured. |
+| PhysNet / joint PhysNet+DCMNet inference | Energy, forces; adapter may also expose dipole, charges, multipoles | `karml.interfaces.calculators.simple_inference` and `checkpoint_loading` | Python ASE use; evaluation commands; hybrid MLpot model loading; canonical dimer scan | Checkpoint atom-padding capacity and architecture must match the system. |
+| SpookyNet / SpookyPhysNet | Energy, forces | `karml.models.spookynet_calc.SpookyNetCalculator` | Python ASE use; Spooky evaluation/training scripts; hybrid MLpot when checkpoint architecture resolves as Spooky | Standalone adapter does not provide the dynamic CGenFF arrays used by every hybrid architecture. Optional frozen MBD is loaded when recorded/configured. |
 | SpookyNet + frozen MBD correction | Energy, forces | `SpookyNetCalculator` with `mbd_checkpoint` and `mbd_weight` | Python ASE evaluation; checkpoint-matched evaluation paths; PyCHARMM hybrid setup also accepts an MBD correction | Recorded cluster-local checkpoint paths may need explicit remapping. Weight must match training. |
-| Learned QCML MBD surrogate | Energy, forces | `mmml.models.mbd.QCMLMBDCalculator` | Python ASE use; standalone evaluation; optional correction in hybrid paths | Requires MBD checkpoint; molecular charge and multiplicity are explicit inputs. |
-| Learned molecular multipole electrostatics | Energy and finite-difference forces | `mmml.models.multipoles.LearnedMolecularMultipoleElectrostatics` | Canonical dimer scan; Python ASE use; multipole analysis; JAX-MD unified force-field build can freeze learned fragment multipoles | Forces differentiate predicted moments, origins, and interaction energy by central differences; accurate but substantially slower than an eventual JAX autodiff kernel. |
-| E-field PhysNet | Energy, forces, dipole, polarizability | `mmml.models.efield.ase_calc_EF.EFieldCalculator` | Canonical dimer scan, `efield-evaluate`, `efield-md`, and Python use | Requires the external-field model/input contract; not wired to every hybrid MLpot assembly. |
-| DCMNet property calculator | Charges, dipole, multipoles | `mmml.models.dcmnet.dcmnet_ase.DCMNetCalculator` | Python/property evaluation and joint-model workflows | Property-only: no standalone energy/forces. The joint PhysNet+DCMNet loader supplies E/F through PhysNet. |
-| PySCF CPU ASE calculator | Energy, forces, dipole | `mmml.interfaces.pyscf4gpuInterface.cpu.PYSCF` | Python ASE use and QC scripts | Requires a configured PySCF mean-field/post-HF object; method-dependent runtime and gradients. |
-| GPU4PySCF ASE calculator | Public declaration currently energy-only; calculation code has method-specific gradient paths | `mmml.interfaces.pyscf4gpuInterface.aseInterface.PYSCF` | GPU PySCF CLI/campaign paths and Python use | Do not assume generic ASE force support from `implemented_properties`; use the dedicated PySCF evaluation commands for supported E/F workflows. |
+| Learned QCML MBD surrogate | Energy, forces | `karml.models.mbd.QCMLMBDCalculator` | Python ASE use; standalone evaluation; optional correction in hybrid paths | Requires MBD checkpoint; molecular charge and multiplicity are explicit inputs. |
+| Learned molecular multipole electrostatics | Energy and finite-difference forces | `karml.models.multipoles.LearnedMolecularMultipoleElectrostatics` | Canonical dimer scan; Python ASE use; multipole analysis; JAX-MD unified force-field build can freeze learned fragment multipoles | Forces differentiate predicted moments, origins, and interaction energy by central differences; accurate but substantially slower than an eventual JAX autodiff kernel. |
+| E-field PhysNet | Energy, forces, dipole, polarizability | `karml.models.efield.ase_calc_EF.EFieldCalculator` | Canonical dimer scan, `efield-evaluate`, `efield-md`, and Python use | Requires the external-field model/input contract; not wired to every hybrid MLpot assembly. |
+| DCMNet property calculator | Charges, dipole, multipoles | `karml.models.dcmnet.dcmnet_ase.DCMNetCalculator` | Python/property evaluation and joint-model workflows | Property-only: no standalone energy/forces. The joint PhysNet+DCMNet loader supplies E/F through PhysNet. |
+| PySCF CPU ASE calculator | Energy, forces, dipole | `karml.interfaces.pyscf4gpuInterface.cpu.PYSCF` | Python ASE use and QC scripts | Requires a configured PySCF mean-field/post-HF object; method-dependent runtime and gradients. |
+| GPU4PySCF ASE calculator | Public declaration currently energy-only; calculation code has method-specific gradient paths | `karml.interfaces.pyscf4gpuInterface.aseInterface.PYSCF` | GPU PySCF CLI/campaign paths and Python use | Do not assume generic ASE force support from `implemented_properties`; use the dedicated PySCF evaluation commands for supported E/F workflows. |
 | xTB / tblite | Energy and forces through upstream ASE adapter | `make_xtb_calculator` | Canonical dimer scan, cross-check workflow, Python use | Optional dependency/runtime; method defaults to GFN2-xTB. |
-| DFTB3-D4 | Energy/forces through ASE DFTB+ adapter | `mmml.analysis.dimer_scans.make_dftb3_d4_calculator` | Canonical dimer scan, reference campaigns, and Python use | Requires external DFTB+ executable, complete 3ob-3-1 Slater–Koster files, and explicit scratch directory. |
+| DFTB3-D4 | Energy/forces through ASE DFTB+ adapter | `karml.analysis.dimer_scans.make_dftb3_d4_calculator` | Canonical dimer scan, reference campaigns, and Python use | Requires external DFTB+ executable, complete 3ob-3-1 Slater–Koster files, and explicit scratch directory. |
 | Molecular/monomer-sum PhysNet composition | Energy, forces | `MolecularPhysNetCalculator`, `MonomerSumCalculator` | Python ASE composition workflows | Intramolecular sum only; intermolecular terms require another calculator/assembly layer. |
 | JAX intermolecular CGenFF nonbonded | Energy, forces | `JAXIntermolecularCalculator` | Python ASE hybrid composition and internal hybrid paths | Needs prepared nonbond parameters, cell, molecule IDs, and explicit units. |
-| Full hybrid ML/MM MLpot | Energy, forces, decomposition/diagnostics | `mmml.interfaces.pycharmmInterface.mmml_calculator.setup_calculator` and `DecomposedMlpotCalculator` | `mmml md-system` with ASE, JAX-MD, or PyCHARMM routes; lambda TI; specialized dimer/PBC campaigns | Compatibility depends on energy assembly, MM charge mode, nonbond mode, LR solver, PBC, checkpoint charge head, and system size. See matrices below. |
+| Full hybrid ML/MM MLpot | Energy, forces, decomposition/diagnostics | `karml.interfaces.pycharmmInterface.karml_calculator.setup_calculator` and `DecomposedMlpotCalculator` | `karml md-system` with ASE, JAX-MD, or PyCHARMM routes; lambda TI; specialized dimer/PBC campaigns | Compatibility depends on energy assembly, MM charge mode, nonbond mode, LR solver, PBC, checkpoint charge head, and system size. See matrices below. |
 | Metatomic AtomisticModel | Energy, forces (eV / eV/Å) | `load_metatomic_calculator` and `AseFragmentHybridCalculator` | Canonical dimer/ic-scan; `energy_forces` provider `metatomic`; PyCHARMM MLpot USER (`MetatomicMlpotCalculator`) | Optional extra (`uv sync --extra metatomic`). CHARMM ML/MM uses fragment evaluations, not a jitted torch spherical_fn. |
 | JAX CGenFF “ML spoof” | Energy, forces | hybrid setup with `--jax-mm-spoof` / `ml_potential_mode="jax_mm_clone"` | `md-system` infrastructure and parity testing | Validation/infrastructure mode, not a learned potential or scientific replacement for PhysNet. |
 | JAX CGenFF spoof dimer scan | Energy, forces, hybrid decomposition | `scan_mlpot_dimer_2d_pycharmm.py --scan-1d --jax-mm-spoof` and MLpot setup | Specialized 1D/2D PyCHARMM scan campaigns | Requires PSF/CGenFF construction and handoff/MM settings; not yet represented by canonical `DimerScanConfig`. |
 | Pure CHARMM/CGenFF | CHARMM energy/forces | PyCHARMM runtime and MLpot setup with ML disabled or separate pure-MM routes | `md-system --backend pycharmm`, liquid-box preparation, validation workflows | Requires compiled CHARMM/PyCHARMM and topology/parameter assets. |
 
-Legacy `mmml.interfaces.aseInterface.dimers` is excluded from supported
+Legacy `karml.interfaces.aseInterface.dimers` is excluded from supported
 calculator surfaces: it mutates environment/device state and contains
 machine-specific execution at import time.
 
@@ -119,9 +119,9 @@ dimer-only) and does not need a trained checkpoint for the kernel-level smoke.
 
 | Surface | System | What it proves | Location |
 |---|---|---|---|
-| Analytic / no CHARMM | 2 monomers × 2 atoms (+1 pad), 30 Å box | `hybrid_forward(..., lr_solver="ewald")` for `fixed` and `latent`; `e_mm` matches `compute_native_ewald_coulomb` | [`examples/hybrid_mm_charges/monomer_ml_mm_ewald_example.py`](https://github.com/EricBoittier/mmml/blob/main/examples/hybrid_mm_charges/monomer_ml_mm_ewald_example.py) |
+| Analytic / no CHARMM | 2 monomers × 2 atoms (+1 pad), 30 Å box | `hybrid_forward(..., lr_solver="ewald")` for `fixed` and `latent`; `e_mm` matches `compute_native_ewald_coulomb` | [`examples/hybrid_mm_charges/monomer_ml_mm_ewald_example.py`](https://github.com/EricBoittier/karml/blob/main/examples/hybrid_mm_charges/monomer_ml_mm_ewald_example.py) |
 | Unit regression | Same geometry, mocked charge head | Finite distinct `e_mm`; `ml_scale → 0` past the handoff | `tests/unit/test_hybrid_energy.py::test_ewald_monomer_ml_plus_mm_fixed_and_latent` |
-| PyCHARMM MD (optional bonded) | `DCM:2` PBC smoke | Same assembly under `md-system` with CHARMM bonded left on | [`md_fixed_ewald_dimer.yaml`](https://github.com/EricBoittier/mmml/blob/main/examples/hybrid_mm_charges/md_fixed_ewald_dimer.yaml), [`md_latent_ewald_dimer.yaml`](https://github.com/EricBoittier/mmml/blob/main/examples/hybrid_mm_charges/md_latent_ewald_dimer.yaml) |
+| PyCHARMM MD (optional bonded) | `DCM:2` PBC smoke | Same assembly under `md-system` with CHARMM bonded left on | [`md_fixed_ewald_dimer.yaml`](https://github.com/EricBoittier/karml/blob/main/examples/hybrid_mm_charges/md_fixed_ewald_dimer.yaml), [`md_latent_ewald_dimer.yaml`](https://github.com/EricBoittier/karml/blob/main/examples/hybrid_mm_charges/md_latent_ewald_dimer.yaml) |
 
 ```bash
 # No checkpoint / no CHARMM — preferred first check
@@ -186,7 +186,7 @@ method change that belongs in the manifest.
 |---|---|:---:|:---:|---|
 | `auto` | Legacy alias resolving to `mic` | yes | Not a meaningful external choice | Record the resolved active solver, not only `auto` |
 | `mic` | Truncated/switched minimum-image Coulomb | yes, default | No supported full-box external MIC mode | No external PME library |
-| `ewald` | MMML pure-JAX full-box Ewald operator, train-matched | yes | yes | Requires PBC; no external PME package or CUDA requirement. Optional `--ewald-omit-self` selects the MIC/non-Ewald-trained compatibility operator (cross-monomer Ewald only: omit intramolecular Coulomb and the Gaussian self term). Default full-box Ewald retains both for Ewald-trained models. Distinct from `jax_pme --jax-pme-method ewald`. Dimer LR campaign tags: `pbc_hybrid_ewald` / `pbc_hybrid_ewald_omit_self`. Small-system **Monomer ML + MM** check for `fixed`/`latent`: [below](#monomer-ml-mm-with-native-ewald-fixed-vs-latent). |
+| `ewald` | KARML pure-JAX full-box Ewald operator, train-matched | yes | yes | Requires PBC; no external PME package or CUDA requirement. Optional `--ewald-omit-self` selects the MIC/non-Ewald-trained compatibility operator (cross-monomer Ewald only: omit intramolecular Coulomb and the Gaussian self term). Default full-box Ewald retains both for Ewald-trained models. Distinct from `jax_pme --jax-pme-method ewald`. Dimer LR campaign tags: `pbc_hybrid_ewald` / `pbc_hybrid_ewald_omit_self`. Small-system **Monomer ML + MM** check for `fixed`/`latent`: [below](#monomer-ml-mm-with-native-ewald-fixed-vs-latent). |
 | `jax_pme` | jax-pme Ewald, PME, or P3M; optional reciprocal r⁻⁶ dispersion in `jax_mic` | yes | yes | Optional `--jax-pme-method ewald|pme|p3m`; package availability checked at runtime |
 | `nvalchemiops_pme` | nvalchemiops full-box PME | Not wired; resolves/notes MIC behavior in `jax_mic` | yes | Optional GPU-oriented dependency; use `periodic_external` |
 | `scafacos` | ScaFaCoS full-box Coulomb | Not wired; resolves/notes MIC behavior in `jax_mic` | yes | Requires `libfcs`; method defaults to Ewald |
@@ -198,7 +198,7 @@ a method change, not an invisible implementation detail.
 
 ## MD execution drivers
 
-| `mmml md-system --backend` | Role | Calculator support |
+| `karml md-system --backend` | Role | Calculator support |
 |---|---|---|
 | `ase` | ASE optimizers/integrators around the hybrid ASE calculator | Hybrid PhysNet/Spooky model paths and lambda TI modes supported by the selected setup |
 | `jaxmd` | JAX-MD integrators and unified JAX execution | Hybrid calculator lowering; NVE/NHC-NVT and supported PBC setups; optional unified `zbl-mbd-multipoles` force field |

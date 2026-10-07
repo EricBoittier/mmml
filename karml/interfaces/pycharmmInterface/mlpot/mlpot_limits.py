@@ -12,14 +12,14 @@ _CONSERVATIVE_LIMITS = (100, 100_000)
 
 
 def _repo_root() -> Path:
-    """Locate the MMML repo root, including a checkout the tool was launched from."""
-    from mmml.interfaces.pycharmmInterface.charmm_paths import mmml_repo_root
+    """Locate the KARML repo root, including a checkout the tool was launched from."""
+    from karml.interfaces.pycharmmInterface.charmm_paths import karml_repo_root
 
-    return mmml_repo_root()
+    return karml_repo_root()
 
 
 def _charmm_home() -> Path | None:
-    from mmml.interfaces.pycharmmInterface.charmm_paths import resolve_charmm_paths
+    from karml.interfaces.pycharmmInterface.charmm_paths import resolve_charmm_paths
 
     home, _ = resolve_charmm_paths(repo_root=_repo_root())
     if home:
@@ -28,7 +28,7 @@ def _charmm_home() -> Path | None:
 
 
 def _charmm_lib_dir() -> Path | None:
-    from mmml.interfaces.pycharmmInterface.charmm_paths import resolve_charmm_paths
+    from karml.interfaces.pycharmmInterface.charmm_paths import resolve_charmm_paths
 
     _, lib_dir = resolve_charmm_paths(repo_root=_repo_root())
     if lib_dir:
@@ -78,7 +78,7 @@ def _libcharmm_candidates() -> list[Path]:
     Delegates to ``charmm_paths.find_charmm_lib_in_dir`` so the platform suffix
     (``.so`` on Linux, ``.dylib`` on macOS) is handled in exactly one place.
     """
-    from mmml.interfaces.pycharmmInterface.charmm_paths import (
+    from karml.interfaces.pycharmmInterface.charmm_paths import (
         charmm_build_cache_dirs,
         find_charmm_lib_in_dir,
     )
@@ -91,7 +91,7 @@ def _libcharmm_candidates() -> list[Path]:
     if home is not None:
         search_dirs.append(home)
     search_dirs.append(_repo_root() / "setup" / "charmm")
-    # Out-of-tree builds (``$HOME/.cache/mmml-charmm-build/...``) are usually
+    # Out-of-tree builds (``$HOME/.cache/karml-charmm-build/...``) are usually
     # newer than the in-tree copy; without them the freshness check below sees
     # only a stale setup/charmm library and falls back to conservative limits.
     search_dirs.extend(charmm_build_cache_dirs())
@@ -156,13 +156,13 @@ class MlpotLimitsStatus:
 
 def mlpot_limits_status() -> MlpotLimitsStatus:
     """Explain which limits are in effect and why."""
-    env_ml = (os.environ.get("MMML_CHARMM_MLPOT_MAX_ML") or "").strip()
-    env_pr = (os.environ.get("MMML_CHARMM_MLPOT_MAX_PAIRS") or "").strip()
+    env_ml = (os.environ.get("KARML_CHARMM_MLPOT_MAX_ML") or "").strip()
+    env_pr = (os.environ.get("KARML_CHARMM_MLPOT_MAX_PAIRS") or "").strip()
     if env_ml and env_pr:
         return MlpotLimitsStatus(
             int(env_ml),
             int(env_pr),
-            source="MMML_CHARMM_MLPOT_MAX_ML/PAIRS environment",
+            source="KARML_CHARMM_MLPOT_MAX_ML/PAIRS environment",
         )
 
     parsed = charmm_mlpot_limits_from_source()

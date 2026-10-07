@@ -15,19 +15,19 @@ import jax.numpy as jnp
 import numpy as np
 from jax import Array
 
-from mmml.interfaces.pycharmmInterface.cgenff_bonded import bonded_energy_and_forces
-from mmml.interfaces.pycharmmInterface.cgenff_topology import (
+from karml.interfaces.pycharmmInterface.cgenff_bonded import bonded_energy_and_forces
+from karml.interfaces.pycharmmInterface.cgenff_topology import (
     CgenffBondedSystem,
     load_cgenff_bonded_from_psf,
 )
-from mmml.interfaces.pycharmmInterface.long_range_backend import (
+from karml.interfaces.pycharmmInterface.long_range_backend import (
     box_length_from_cell,
     compute_jax_pme_coulomb,
     pick_lr_solver,
     resolve_jax_pme_dispersion,
     resolve_jax_pme_method,
 )
-from mmml.interfaces.pycharmmInterface.pbc_utils_jax import cell_inverse, mic_displacement
+from karml.interfaces.pycharmmInterface.pbc_utils_jax import cell_inverse, mic_displacement
 
 COULOMB_KCAL = 332.063711
 
@@ -472,7 +472,7 @@ def excluded_pairs_from_psf_nnb(
     CHARMM PSF EXT files store a flat ``INB`` partner list plus per-atom ``IBLO``
     pointers (see ``psfres.F90``).  When ``iblo_indices`` is supplied, use the
     Fortran layout via :func:`fully_excluded_pairs`.  Otherwise fall back to the
-    legacy packed ``count + partners`` encoding (rare in MMML PSF fixtures).
+    legacy packed ``count + partners`` encoding (rare in KARML PSF fixtures).
     """
     iblo = np.asarray(iblo_indices, dtype=np.int32) if iblo_indices is not None else None
     inb = np.asarray(nnb_indices, dtype=np.int32)
@@ -506,7 +506,7 @@ def _excluded_pairs_from_psf_file(
     natom: int,
 ) -> frozenset[tuple[int, int]]:
     """Load exclusions from a PSF on disk (``INB``/``IBLO`` or bond fallback)."""
-    from mmml.interfaces.pycharmmInterface.cgenff_topology import parse_psf_ext
+    from karml.interfaces.pycharmmInterface.cgenff_topology import parse_psf_ext
 
     psf_data = parse_psf_ext(psf_path)
     if psf_data.nnb_indices.size > 0 and psf_data.iblo_indices.size > 0:
@@ -549,7 +549,7 @@ def resolve_nonbonded_excluded_pairs(
             nbonds.update_bnbnd()
         except Exception:
             pass
-        from mmml.interfaces.pycharmmInterface.mlpot.topology_recovery import (
+        from karml.interfaces.pycharmmInterface.mlpot.topology_recovery import (
             coerce_iblo_inb,
         )
 
@@ -566,7 +566,7 @@ def resolve_nonbonded_excluded_pairs(
 
 def excluded_pairs_from_psf_bonds(bonds: np.ndarray) -> frozenset[tuple[int, int]]:
     """Build CHARMM-style 1–2 and 1–3 exclusion pairs from PSF bonds (0-based)."""
-    from mmml.utils.geometry_checks import build_bond_exclusion_pairs
+    from karml.utils.geometry_checks import build_bond_exclusion_pairs
 
     bonds = np.asarray(bonds, dtype=np.int32)
     if bonds.size == 0:
@@ -643,7 +643,7 @@ def load_nonbonded_system_from_charmm(
     *prm_paths: Path | str,
 ) -> NonbondedSystemData:
     """Load charges, LJ tables, and exclusions from the active PyCHARMM PSF."""
-    from mmml.interfaces.pycharmmInterface.cgenff_topology import parse_psf_ext
+    from karml.interfaces.pycharmmInterface.cgenff_topology import parse_psf_ext
 
     psf_data = parse_psf_ext(psf_path)
     natom = psf_data.n_atoms
@@ -797,7 +797,7 @@ def _build_pair_indices(
 
     if vesin_safe:
         try:
-            from mmml.interfaces.pycharmmInterface.nl_reference import (
+            from karml.interfaces.pycharmmInterface.nl_reference import (
                 have_vesin,
                 vesin_raw_half_list,
             )
@@ -957,7 +957,7 @@ def nonbonded_energy_and_forces(
         elec_energy = jnp.asarray(pme.energy_kcalmol, dtype=pos.dtype)
         forces = forces + jnp.asarray(pme.forces_kcalmol_A, dtype=pos.dtype)
         if use_jax_pme_dispersion:
-            from mmml.interfaces.pycharmmInterface.long_range_backend import (
+            from karml.interfaces.pycharmmInterface.long_range_backend import (
                 compute_jax_pme_lj_dispersion,
                 per_atom_jax_pme_c6_sqrt,
             )

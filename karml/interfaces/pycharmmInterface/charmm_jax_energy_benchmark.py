@@ -134,7 +134,7 @@ def _assert_within_tolerance(
     tol = (tolerances or DEFAULT_TOLERANCES)[layer]
     try:
         if layer == "bonded":
-            from mmml.interfaces.pycharmmInterface.cgenff_bonded_reference import (
+            from karml.interfaces.pycharmmInterface.cgenff_bonded_reference import (
                 compare_bonded_to_charmm,
             )
 
@@ -147,7 +147,7 @@ def _assert_within_tolerance(
                 force_atol=tol["force_atol"],
             )
         elif layer == "nonbonded":
-            from mmml.interfaces.pycharmmInterface.cgenff_bonded_reference import (
+            from karml.interfaces.pycharmmInterface.cgenff_bonded_reference import (
                 compare_nonbonded_to_charmm,
             )
 
@@ -160,10 +160,10 @@ def _assert_within_tolerance(
                 force_atol=tol["force_atol"],
             )
         else:
-            from mmml.interfaces.pycharmmInterface.cgenff_bonded_reference import (
+            from karml.interfaces.pycharmmInterface.cgenff_bonded_reference import (
                 compare_mm_system_to_charmm,
             )
-            from mmml.interfaces.pycharmmInterface.mm_system_energy import (
+            from karml.interfaces.pycharmmInterface.mm_system_energy import (
                 MmSystemEnergyResult,
             )
 
@@ -194,15 +194,15 @@ def benchmark_bonded_layer(
     extra_prm_files: Sequence[Path | str] = (),
 ) -> LayerBenchmark:
     """Bonded-only CHARMM BLOCK vs JAX ``bonded_energy_and_forces``."""
-    from mmml.interfaces.pycharmmInterface.cgenff_bonded import bonded_energy_and_forces
-    from mmml.interfaces.pycharmmInterface.cgenff_bonded_reference import (
+    from karml.interfaces.pycharmmInterface.cgenff_bonded import bonded_energy_and_forces
+    from karml.interfaces.pycharmmInterface.cgenff_bonded_reference import (
         charmm_bonded_energy_components_kcalmol,
         charmm_bonded_forces_kcalmol_A,
         run_charmm_bonded_ener_force,
         set_charmm_positions,
         setup_bonded_only_charmm,
     )
-    from mmml.interfaces.pycharmmInterface.mm_system_energy import load_bonded_system_from_psf
+    from karml.interfaces.pycharmmInterface.mm_system_energy import load_bonded_system_from_psf
 
     pos = np.asarray(positions, dtype=np.float64)
     set_charmm_positions(pos)
@@ -280,14 +280,14 @@ def benchmark_nonbonded_layer(
     nbond_settings: Any,
 ) -> LayerBenchmark:
     """Nonbonded-only CHARMM BLOCK vs JAX ``nonbonded_energy_and_forces``."""
-    from mmml.interfaces.pycharmmInterface.cgenff_bonded_reference import (
+    from karml.interfaces.pycharmmInterface.cgenff_bonded_reference import (
         charmm_bonded_forces_kcalmol_A,
         charmm_nonbonded_energy_components_kcalmol,
         run_charmm_nonbonded_ener_force,
         set_charmm_positions,
         setup_nonbonded_only_charmm,
     )
-    from mmml.interfaces.pycharmmInterface.mm_system_energy import (
+    from karml.interfaces.pycharmmInterface.mm_system_energy import (
         load_nonbonded_system_from_charmm,
         nonbonded_energy_and_forces,
     )
@@ -333,14 +333,14 @@ def benchmark_total_mm_layer(
     """Full MM (bonded + MIC switched nonbonded) vs PyCHARMM ``ENER FORCE``."""
     import pycharmm.energy as energy
 
-    from mmml.interfaces.pycharmmInterface.cgenff_bonded_reference import (
+    from karml.interfaces.pycharmmInterface.cgenff_bonded_reference import (
         charmm_bonded_energy_components_kcalmol,
         charmm_bonded_forces_kcalmol_A,
         charmm_nonbonded_energy_components_kcalmol,
         run_charmm_bonded_ener_force,
         set_charmm_positions,
     )
-    from mmml.interfaces.pycharmmInterface.mm_system_energy import (
+    from karml.interfaces.pycharmmInterface.mm_system_energy import (
         load_bonded_system_from_psf,
         load_nonbonded_system_from_charmm,
         mm_system_energy_and_forces,
@@ -418,12 +418,12 @@ def load_tip3_monomer_from_charmm(
     import pycharmm.settings as settings
     import pycharmm.write as write
 
-    from mmml.interfaces.pycharmmInterface.cgenff_bonded_reference import (
+    from karml.interfaces.pycharmmInterface.cgenff_bonded_reference import (
         charmm_positions_xyz_array,
         read_pdb_file,
     )
-    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import (
+    from karml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
+    from karml.interfaces.pycharmmInterface.import_pycharmm import (
         CGENFF_PRM,
         CGENFF_RTF,
         crystal_free_charmm_for_param_append,
@@ -477,16 +477,16 @@ def build_tip3_water_box(
     import pycharmm.settings as settings
     import pycharmm.write as write
 
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import (
+    from karml.interfaces.pycharmmInterface.import_pycharmm import (
         crystal_free_charmm_for_param_append,
         pycharmm,
         reset_block,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+    from karml.interfaces.pycharmmInterface.mlpot.pbc_env import (
         apply_pbc_nbonds,
         prepare_charmm_pbc,
     )
-    from mmml.interfaces.pycharmmInterface.trialanine_water_box import (
+    from karml.interfaces.pycharmmInterface.trialanine_water_box import (
         _grid_oxygen_sites,
         _load_cgenff_with_trialanine,
         _tip3_template,
@@ -539,7 +539,7 @@ def build_tip3_water_box(
 
 
 def _nbond_settings_from_cutoffs(cuts: Any) -> Any:
-    from mmml.interfaces.pycharmmInterface.mm_system_energy import CharmmNbondSettings
+    from karml.interfaces.pycharmmInterface.mm_system_energy import CharmmNbondSettings
 
     return CharmmNbondSettings(
         cutnb=float(cuts.cutnb),
@@ -554,7 +554,7 @@ def run_tip3_monomer_benchmark(
     prm_path: Path | str | None = None,
     workdir: Path | None = None,
 ) -> SystemBenchmark:
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_PRM
+    from karml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_PRM
 
     psf_path, positions = load_tip3_monomer_from_charmm(workdir=workdir)
     pos = perturb_positions(positions, seed=seed, scale=0.02)
@@ -577,7 +577,7 @@ def run_tip3_water_box_benchmark(
     workdir: Path | None = None,
     prm_path: Path | str | None = None,
 ) -> SystemBenchmark:
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_PRM
+    from karml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_PRM
 
     psf_path, positions, cell, cuts = build_tip3_water_box(
         n_waters=n_waters,
@@ -653,7 +653,7 @@ def render_markdown_report(cases: tuple[SystemBenchmark, ...]) -> str:
     lines = [
         "# CHARMM vs JAX-MM energy benchmark",
         "",
-        "PyCHARMM reference vs MMML JAX loaders (`cgenff_bonded`, `mm_system_energy`).",
+        "PyCHARMM reference vs KARML JAX loaders (`cgenff_bonded`, `mm_system_energy`).",
         "Energies in kcal/mol; force RMS in kcal/mol/Å.",
         "",
     ]

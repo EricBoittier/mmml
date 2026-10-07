@@ -10,7 +10,7 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from mmml.models.mm_lj_scales import (
+from karml.models.mm_lj_scales import (
     MM_LJ_EPSILON_SCALE_KEY,
     MM_LJ_SIGMA_SCALE_KEY,
     apply_mm_lj_scales,
@@ -28,7 +28,7 @@ from mmml.models.mm_lj_scales import (
 
 def test_cgenff_type_names_match_load_reference_master_tables():
     """Scale vectors must line up with lattice/MD master LJ tables (incl. ions)."""
-    from mmml.data.cgenff_dataset import load_reference
+    from karml.data.cgenff_dataset import load_reference
 
     ref = load_reference()
     names = cgenff_type_names_from_prm()
@@ -83,7 +83,7 @@ def test_custom_bounds_and_support_mask_are_projected():
 
 
 def test_optimizer_only_lj_config_is_not_forwarded_to_hamiltonian():
-    from mmml.models.hybrid_energy import HybridMMConfig
+    from karml.models.hybrid_energy import HybridMMConfig
 
     cfg = HybridMMConfig(
         master_sigmas=(1.0, 2.0), master_epsilons=(0.1, 0.2),
@@ -138,9 +138,9 @@ def test_metadata_without_scales():
 
 
 def test_hybrid_forward_unit_scales_match_baseline():
-    from mmml.models.cgenff_mm import cgenff_mm_energy
-    from mmml.models.hybrid_energy import hybrid_forward
-    from mmml.data.units import KCAL_MOL_TO_EV
+    from karml.models.cgenff_mm import cgenff_mm_energy
+    from karml.models.hybrid_energy import hybrid_forward
+    from karml.data.units import KCAL_MOL_TO_EV
 
     SIG = jnp.array([3.6527, 2.3876])
     EPS = jnp.array([0.0780, 0.0240])
@@ -236,7 +236,7 @@ def test_hybrid_forward_unit_scales_match_baseline():
 
 
 def test_lj_scale_gradients_nonzero():
-    from mmml.models.hybrid_energy import hybrid_forward
+    from karml.models.hybrid_energy import hybrid_forward
 
     SIG = jnp.array([3.6527, 2.3876])
     EPS = jnp.array([0.0780, 0.0240])
@@ -303,8 +303,8 @@ def test_lj_scale_gradients_nonzero():
 
 def test_epsilon_only_scale_changes_energy_sigma_only_changes_shape():
     """ε scale multiplies well depth; σ scale shifts the LJ length scale."""
-    from mmml.models.cgenff_mm import cgenff_mm_energy
-    from mmml.models.mm_lj_scales import apply_mm_lj_scales
+    from karml.models.cgenff_mm import cgenff_mm_energy
+    from karml.models.mm_lj_scales import apply_mm_lj_scales
 
     SIG = jnp.array([3.6527, 2.3876])
     EPS = jnp.array([0.0780, 0.0240])
@@ -338,8 +338,8 @@ def test_epsilon_only_scale_changes_energy_sigma_only_changes_shape():
 
 def test_params_leaf_path_through_hybrid_forward():
     """Scales attached on the Optax pytree are picked up when learn flag is on."""
-    from mmml.models.hybrid_energy import hybrid_forward
-    from mmml.models.mm_lj_scales import attach_mm_lj_scales
+    from karml.models.hybrid_energy import hybrid_forward
+    from karml.models.mm_lj_scales import attach_mm_lj_scales
 
     SIG = jnp.array([3.6527, 2.3876])
     EPS = jnp.array([0.0780, 0.0240])
@@ -451,7 +451,7 @@ def test_scales_to_atc_length_mismatch():
 
 
 def test_hybrid_mm_config_learn_flag_coerce():
-    from mmml.models.hybrid_energy import HybridMMConfig
+    from karml.models.hybrid_energy import HybridMMConfig
 
     cfg = HybridMMConfig.coerce(
         {
@@ -468,8 +468,8 @@ def test_hybrid_mm_config_learn_flag_coerce():
 
 
 def test_hybrid_mm_metadata_includes_lj_flag():
-    from mmml.models.hybrid_energy import HybridMMConfig
-    from mmml.models.mm_charge_mode import hybrid_mm_metadata_dict
+    from karml.models.hybrid_energy import HybridMMConfig
+    from karml.models.mm_charge_mode import hybrid_mm_metadata_dict
 
     cfg = HybridMMConfig(
         master_sigmas=(3.6, 2.4),
@@ -486,7 +486,7 @@ def test_hybrid_mm_metadata_includes_lj_flag():
 
 
 def test_cli_learn_mm_lj_scales_flag(tmp_path):
-    from mmml.cli.make.make_training import _build_hybrid_mm_config, parse_args
+    from karml.cli.make.make_training import _build_hybrid_mm_config, parse_args
 
     payload = {
         "R": np.zeros((2, 4, 3)),
@@ -577,8 +577,8 @@ def test_md_yaml_stage_times_are_not_silently_the_defaults():
 
     import yaml
 
-    from mmml.cli.run.md_config import merge_campaign_job_config
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+    from karml.cli.run.md_config import merge_campaign_job_config
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
         resolve_md_stages,
         resolve_stage_ps,
     )

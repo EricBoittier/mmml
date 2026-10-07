@@ -3,9 +3,9 @@
 Command-line interface for converting Molpro XML files to NPZ format.
 
 Usage:
-    mmml xml2npz input.xml -o output.npz
-    mmml xml2npz inputs/*.xml -o dataset.npz
-    mmml xml2npz inputs/ -o dataset.npz --recursive
+    karml xml2npz input.xml -o output.npz
+    karml xml2npz inputs/*.xml -o dataset.npz
+    karml xml2npz inputs/ -o dataset.npz --recursive
 """
 
 import sys
@@ -17,7 +17,7 @@ import json
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from mmml.data import (
+from karml.data import (
     batch_convert_xml,
     validate_npz
 )

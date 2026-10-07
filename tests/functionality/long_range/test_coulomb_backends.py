@@ -25,7 +25,7 @@ from tests.functionality.long_range._common import (
     scafacos_coulomb_energy_forces,
     scafacos_integration_enabled,
 )
-from mmml.interfaces.pycharmmInterface.long_range_backend import (
+from karml.interfaces.pycharmmInterface.long_range_backend import (
     CHARMM_COULOMB_KCAL,
     have_jax_pme,
     pick_lr_solver,
@@ -40,15 +40,15 @@ class TestBackendSelection:
             assert have_jax_pme() is True
 
     def test_pick_lr_solver_mic_when_no_externals(self, monkeypatch):
-        monkeypatch.delenv("MMML_LR_SOLVER", raising=False)
+        monkeypatch.delenv("KARML_LR_SOLVER", raising=False)
         monkeypatch.setenv("SCAFACOS_LIB", "/nonexistent/libfcs.so")
         with pytest.MonkeyPatch.context() as mp:
             mp.setattr(
-                "mmml.interfaces.pycharmmInterface.long_range_backend.have_scafacos",
+                "karml.interfaces.pycharmmInterface.long_range_backend.have_scafacos",
                 lambda: False,
             )
             mp.setattr(
-                "mmml.interfaces.pycharmmInterface.long_range_backend.have_jax_pme",
+                "karml.interfaces.pycharmmInterface.long_range_backend.have_jax_pme",
                 lambda: False,
             )
             assert pick_lr_solver("auto") == "mic"
@@ -113,7 +113,7 @@ def test_mic_vs_jax_pme_large_box_dimer():
 
 @pytest.mark.skipif(
     not scafacos_integration_enabled(),
-    reason="Set MMML_SCAFACOS_TESTS=1 and SCAFACOS_LIB for ScaFaCoS integration",
+    reason="Set KARML_SCAFACOS_TESTS=1 and SCAFACOS_LIB for ScaFaCoS integration",
 )
 @pytest.mark.parametrize("method", ["ewald", "p3m"])
 def test_scafacos_vs_jax_pme_cscl(method: str):

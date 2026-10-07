@@ -9,11 +9,11 @@ from unittest import mock
 
 import pytest
 
-from mmml.interfaces.pycharmmInterface.mlpot import cgenff_prm_swap
+from karml.interfaces.pycharmmInterface.mlpot import cgenff_prm_swap
 
 _block_terms_path = (
     Path(__file__).resolve().parents[2]
-    / "mmml/interfaces/pycharmmInterface/mlpot/block_terms.py"
+    / "karml/interfaces/pycharmmInterface/mlpot/block_terms.py"
 )
 _spec = importlib.util.spec_from_file_location("block_terms", _block_terms_path)
 block_terms = importlib.util.module_from_spec(_spec)
@@ -38,12 +38,12 @@ def _registration_pycharmm(n_total: int, charges: list[float]) -> mock.Mock:
 def _run_registration(sel, pycharmm, counts=None):
     counts = counts if counts is not None else [None, None]
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap.apply_zeroed_cgenff_params"
+        "karml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap.apply_zeroed_cgenff_params"
     ) as zero_prm_fn, mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap.assert_psf_bonds_present",
+        "karml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap.assert_psf_bonds_present",
         return_value=400,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.ml_type_copies.apply_ml_type_copies",
+        "karml.interfaces.pycharmmInterface.mlpot.ml_type_copies.apply_ml_type_copies",
         return_value={"types": 3, "bonds": 2, "angles": 1},
     ), mock.patch.object(block_terms, "_import_pycharmm", return_value=pycharmm), mock.patch.object(
         block_terms, "_psf_torsion_counts", side_effect=counts
@@ -88,7 +88,7 @@ def test_zero_mlpot_psf_mm_terms_deletes_ml_torsions_after_zeroed_append():
 def test_zero_mlpot_psf_mm_terms_hybrid_deletes_ml_torsions_without_warning():
     sel = mock.Mock()
     sel.get_atom_indexes.return_value = [0, 1, 2]
-    sel.store.return_value = "mmml_ml"
+    sel.store.return_value = "karml_ml"
     pycharmm = _registration_pycharmm(6, [0.1] * 6)
     counts = [
         {"dihedrals": 24, "impropers": 0, "cmaps": 0},
@@ -98,7 +98,7 @@ def test_zero_mlpot_psf_mm_terms_hybrid_deletes_ml_torsions_without_warning():
         warnings.simplefilter("error")
         tag, zero_prm_fn = _run_registration(sel, pycharmm, counts)
 
-    assert tag == "mmml_ml"
+    assert tag == "karml_ml"
     pycharmm.psf.delete_dihedrals.assert_called_once_with(sel, sel)
     # SKIPE and the type-keyed zeroed APPEND would hit the MM molecules too.
     pycharmm.lingo.charmm_script.assert_not_called()

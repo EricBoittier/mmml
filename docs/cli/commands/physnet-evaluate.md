@@ -1,4 +1,4 @@
-# `mmml physnet-evaluate`
+# `karml physnet-evaluate`
 
 Evaluate PhysNet checkpoint.
 
@@ -6,13 +6,13 @@ Evaluate PhysNet checkpoint.
 ## Usage
 
 ```bash
-mmml physnet-evaluate --help
+karml physnet-evaluate --help
 ```
 
 ## Options
 
 ```text
-usage: mmml physnet-evaluate [-h] --checkpoint CHECKPOINT --data DATA
+usage: karml physnet-evaluate [-h] --checkpoint CHECKPOINT --data DATA
                              [-o OUTPUT_DIR] [--natoms NATOMS]
                              [--batch-size BATCH_SIZE] [--seed SEED]
                              [--num-samples NUM_SAMPLES]
@@ -25,7 +25,7 @@ Evaluate PhysNetJAX checkpoint on NPZ (energies, forces, dipoles).
 Input & configuration:
   --checkpoint CHECKPOINT
                         PhysNet checkpoint root (directory containing epoch-*
-                        orbax runs), same as mmml physnet-md --checkpoint
+                        orbax runs), same as karml physnet-md --checkpoint
   --data DATA           NPZ with R, Z, N, E, F (and optionally D / Dxyz / dipole
                         if model predicts dipoles)
 
@@ -61,9 +61,9 @@ Other options:
 
 Evaluate a trained PhysNet (PhysNetJAX) checkpoint on an NPZ dataset. Runs real
 model inference (orbax checkpoint + EF forward), reports energy / force / dipole
-errors in kcal/mol (and eV where noted), optional parity plots. Usage: mmml
+errors in kcal/mol (and eV where noted), optional parity plots. Usage: karml
 physnet-evaluate --checkpoint out/ckpts/run --data splits/test.npz -o eval_out/
-mmml physnet-evaluate --checkpoint out/ckpts/run --data splits/test.npz \
+karml physnet-evaluate --checkpoint out/ckpts/run --data splits/test.npz \
 --natoms 64 --batch-size 32 --plots --num-samples 500
 ```
 

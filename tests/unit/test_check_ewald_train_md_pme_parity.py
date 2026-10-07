@@ -8,8 +8,8 @@ from unittest import mock
 import numpy as np
 import pytest
 
-from mmml.data.units import KCAL_MOL_TO_EV
-from mmml.interfaces.pycharmmInterface.long_range_backend import (
+from karml.data.units import KCAL_MOL_TO_EV
+from karml.interfaces.pycharmmInterface.long_range_backend import (
     LongRangeInteractionResult,
 )
 
@@ -54,10 +54,10 @@ def test_compare_ewald_kernel_reports_zero_diff_when_paths_agree():
     e_kcal = 12.5
 
     with mock.patch(
-        "mmml.models.ewald_hybrid_coulomb.hybrid_ewald_coulomb_energy",
+        "karml.models.ewald_hybrid_coulomb.hybrid_ewald_coulomb_energy",
         return_value=e_kcal,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.long_range_backend.compute_native_ewald_coulomb",
+        "karml.interfaces.pycharmmInterface.long_range_backend.compute_native_ewald_coulomb",
         return_value=LongRangeInteractionResult(
             energy_kcalmol=e_kcal,
             forces_kcalmol_A=np.zeros((2, 3)),
@@ -77,14 +77,14 @@ def test_compare_hybrid_emm_coulomb_only_with_stub_model():
     n = 4
 
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.long_range_backend.compute_native_ewald_coulomb",
+        "karml.interfaces.pycharmmInterface.long_range_backend.compute_native_ewald_coulomb",
         return_value=LongRangeInteractionResult(
             energy_kcalmol=e_kcal,
             forces_kcalmol_A=np.zeros((n, 3)),
         ),
     ), mock.patch(
         # hybrid_forward binds the symbol at import time
-        "mmml.models.hybrid_energy.hybrid_ewald_coulomb_energy",
+        "karml.models.hybrid_energy.hybrid_ewald_coulomb_energy",
         return_value=e_kcal,
     ):
         out = mod.compare_hybrid_emm_eV(

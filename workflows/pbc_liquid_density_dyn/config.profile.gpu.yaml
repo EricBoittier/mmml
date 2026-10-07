@@ -6,13 +6,13 @@
 # Larger boxes (L=36,40) paused — OOM / stuck warmup on current nodes.
 #
 # Launch:
-#   MMML_WORKFLOW_CONFIG=config.profile.gpu.yaml \
+#   KARML_WORKFLOW_CONFIG=config.profile.gpu.yaml \
 #     bash scripts/preflight.sh
-#   MMML_WORKFLOW_CONFIG=config.profile.gpu.yaml \
+#   KARML_WORKFLOW_CONFIG=config.profile.gpu.yaml \
 #     nohup bash scripts/snakemake_slurm.sh 2 > snakemake_profile.log 2>&1 &
 #
 # Collect:
-#   MMML_WORKFLOW_CONFIG=config.profile.gpu.yaml \
+#   KARML_WORKFLOW_CONFIG=config.profile.gpu.yaml \
 #     python scripts/collect_mlpot_profile.py
 
 solvents: [DCM]
@@ -20,7 +20,7 @@ bulk_density_fractions: [0.9]
 bulk_density_n_min: 10
 temperatures: [300.0]
 box_sizes: [28.0, 32.0]
-checkpoint: ${MMML_CKPT}
+checkpoint: ${KARML_CKPT}
 output_root: artifacts/pbc_liquid_density_profile
 seed_base: 6262
 
@@ -93,8 +93,8 @@ ml_batch_size: 2048
 warmup_mlpot_jax: true
 warmup_do_mm: false
 
-mpirun_wrapper: ../../scripts/mmml-charmm-mpirun.sh
-MMML_MPI_NP: 1
+mpirun_wrapper: ../../scripts/karml-charmm-mpirun.sh
+KARML_MPI_NP: 1
 
 slurm_partition: gpu
 slurm_nodes: 1

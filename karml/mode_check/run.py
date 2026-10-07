@@ -28,7 +28,7 @@ def run_mode_check(
     """Run selected local-mode / force diagnostics on ``atoms`` (calc attached).
 
     This path is calculator-agnostic: any ASE calculator that provides energy and
-    forces works. Hybrid PSF attachment lives in :mod:`mmml.mode_check.hybrid`.
+    forces works. Hybrid PSF attachment lives in :mod:`karml.mode_check.hybrid`.
     """
     if atoms.calc is None:
         raise ValueError("atoms.calc must be set before run_mode_check")

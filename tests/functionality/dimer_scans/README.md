@@ -24,9 +24,9 @@ Vertical lines at **6.5 / 8 / 13 Å** mark default cutoff regions (see [hybrid-p
 ## Prerequisites
 
 ```bash
-export MMML_CKPT=/path/to/checkpoint   # DCM or ACO PhysNet
+export KARML_CKPT=/path/to/checkpoint   # DCM or ACO PhysNet
 uv sync --extra gpu                    # or CPU JAX for smoke tests
-# OpenMPI + libcharmm — use scripts/mmml-charmm-mpirun.sh
+# OpenMPI + libcharmm — use scripts/karml-charmm-mpirun.sh
 ```
 
 ## Full solver sweep (DCM + ACO)
@@ -47,7 +47,7 @@ chmod +x scripts/run_dcm_aco_dimer_lr_scans.sh
 | `pbc_jax_pme_p3m` | `jax_mic` | `jax_pme` | P3M |
 | `pbc_jax_pme_ewald_no_disp` | `jax_mic` | `jax_pme` | Coulomb-only LR |
 | `pbc_periodic_external_jax_pme_pme` | `periodic_external` | `jax_pme` | Full-box Coulomb + CHARMM LJ |
-| `pbc_periodic_external_nvalchemiops` | `periodic_external` | `nvalchemiops_pme` | If `mmml[nvalchemiops-pme]` installed |
+| `pbc_periodic_external_nvalchemiops` | `periodic_external` | `nvalchemiops_pme` | If `karml[nvalchemiops-pme]` installed |
 | `pbc_periodic_external_scafacos_ewald` | `periodic_external` | `scafacos` | If `SCAFACOS_LIB` set |
 
 `lr_solver=ewald` is **not** the same as `jax_pme --jax-pme-method ewald`. The hybrid-native tags above are the parity lane for liquid `md-system --lr-solver ewald`.
@@ -67,8 +67,8 @@ BOX_SIZE=40 SCAN_MIN=4.0 SCAN_MAX=15.0 SCAN_STEPS=16 \
 Hybrid-native Ewald (train↔MD parity; omit self for MIC-trained ckpts):
 
 ```bash
-export MMML_CKPT=/path/to/dcm_ckpt
-./scripts/mmml-charmm-mpirun.sh python scripts/scan_mlpot_dimer_2d_pycharmm.py \
+export KARML_CKPT=/path/to/dcm_ckpt
+./scripts/karml-charmm-mpirun.sh python scripts/scan_mlpot_dimer_2d_pycharmm.py \
   DCM:2 --scan-1d --scan-tag pbc_hybrid_ewald_omit_self \
   --box-size 36 --mlpot-pbc --lr-solver ewald --ewald-omit-self \
   --scan-2d-min 3.5 --scan-2d-max 14.0 --scan-2d-steps 12 \
@@ -78,8 +78,8 @@ export MMML_CKPT=/path/to/dcm_ckpt
 jax-pme Ewald method (separate backend):
 
 ```bash
-export MMML_CKPT=/path/to/dcm_ckpt
-./scripts/mmml-charmm-mpirun.sh python scripts/scan_mlpot_dimer_2d_pycharmm.py \
+export KARML_CKPT=/path/to/dcm_ckpt
+./scripts/karml-charmm-mpirun.sh python scripts/scan_mlpot_dimer_2d_pycharmm.py \
   DCM:2 \
   --scan-1d \
   --scan-tag pbc_jax_pme_ewald \
@@ -94,7 +94,7 @@ export MMML_CKPT=/path/to/dcm_ckpt
 ACO example (same flags, different residue):
 
 ```bash
-./scripts/mmml-charmm-mpirun.sh python scripts/scan_mlpot_dimer_2d_pycharmm.py \
+./scripts/karml-charmm-mpirun.sh python scripts/scan_mlpot_dimer_2d_pycharmm.py \
   ACO:2 --scan-1d --scan-tag vacuum_mic --free-space --lr-solver mic \
   --output-dir artifacts/dimer_lr_scans
 ```

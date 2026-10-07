@@ -1,63 +1,63 @@
-# MMML CLI
+# KARML CLI
 
-The `mmml` command is the unified entry point for structure building, mixed MM/ML
+The `karml` command is the unified entry point for structure building, mixed MM/ML
 molecular dynamics, QM data pipelines, and training workflows.
 
 Install the optional CLI extra for shell tab completion:
 
 ```bash
 uv sync --extra cli
-# or: pip install 'mmml[cli]'
+# or: pip install 'karml[cli]'
 ```
 
 ## Help layers
 
-MMML splits help across a few commands so `mmml -h` stays short while deeper
+KARML splits help across a few commands so `karml -h` stays short while deeper
 detail stays one command away.
 
 | Command | Purpose |
 |---------|---------|
-| `mmml -h` | Compact top-level summary (common subcommands + pointers) |
-| `mmml commands` | All subcommands grouped by task area |
-| `mmml commands --audit` | Deprecated/legacy commands and tab-completion coverage |
-| `mmml examples` | Copy-paste example invocations |
-| `mmml <command> --help` | Full flags for one subcommand |
-| `mmml configure` | Interactive YAML / Snakemake wizard |
-| `mmml env` | Resolved checkpoints, CHARMM paths, export hints |
-| `mmml completion <shell>` | Print bash/zsh/fish completion script |
+| `karml -h` | Compact top-level summary (common subcommands + pointers) |
+| `karml commands` | All subcommands grouped by task area |
+| `karml commands --audit` | Deprecated/legacy commands and tab-completion coverage |
+| `karml examples` | Copy-paste example invocations |
+| `karml <command> --help` | Full flags for one subcommand |
+| `karml configure` | Interactive YAML / Snakemake wizard |
+| `karml env` | Resolved checkpoints, CHARMM paths, export hints |
+| `karml completion <shell>` | Print bash/zsh/fish completion script |
 
 ```bash
-mmml -h
-mmml commands
-mmml examples
-mmml md-system --help
-mmml env --json
+karml -h
+karml commands
+karml examples
+karml md-system --help
+karml env --json
 ```
 
 ## Output conventions
 
 CLI output is designed to stay readable in terminals and copyable in logs:
 
-- `mmml <command> --help` uses shared argparse grouping for commands dispatched
-  through `mmml`. Flat option lists are grouped by input/configuration,
+- `karml <command> --help` uses shared argparse grouping for commands dispatched
+  through `karml`. Flat option lists are grouped by input/configuration,
   scientific model, execution, output/artifacts, and diagnostics/safety.
 - Rich color is supplemental. Redirected output remains plain text, while
-  `MMML_NO_RICH=1` disables Rich formatting and `MMML_RICH=1` forces it for
+  `KARML_NO_RICH=1` disables Rich formatting and `KARML_RICH=1` forces it for
   terminal demos.
 - JSON-shaped diagnostics use valid JSON even when color is enabled, so output
-  from commands such as `mmml env --json` can still be copied into a parser.
+  from commands such as `karml env --json` can still be copied into a parser.
 - Long-running and setup commands should honor quiet modes where provided; the
-  shared reporting helpers also respect `MMML_QUIET=1`.
+  shared reporting helpers also respect `KARML_QUIET=1`.
 
 ## Tab completion
 
-With `argcomplete` installed (`mmml[cli]`), completion covers subcommand names
+With `argcomplete` installed (`karml[cli]`), completion covers subcommand names
 and flags (when `build_parser()` exists for that command).
 
 ```bash
-eval "$(register-python-argcomplete mmml)"
+eval "$(register-python-argcomplete karml)"
 # or:
-eval "$(mmml completion bash)"
+eval "$(karml completion bash)"
 ```
 
 See [Tab completion](completion.md) for per-shell setup and fallbacks when
@@ -65,7 +65,7 @@ See [Tab completion](completion.md) for per-shell setup and fallbacks when
 
 ## Command index
 
-These docs are organized the same way `mmml commands` is. Each task group is a
+These docs are organized the same way `karml commands` is. Each task group is a
 section in the sidebar that opens with an orientation page, then its conceptual
 guides, then a **Commands** subsection with one generated reference page per
 subcommand (options pulled from that command's `argparse` help).
@@ -96,12 +96,12 @@ section of their own rather than being filed under training.
 Structure builders (`make-res`, `make-box`, `build-crystal`) include ASE
 structure figures — see [Structure building](structure-building.md).
 
-Run `mmml commands --audit` locally to see which commands are **deprecated** or
+Run `karml commands --audit` locally to see which commands are **deprecated** or
 **legacy** and what to use instead.
 
 ## Configure safety model
 
-`mmml configure` is the interactive entry point for YAML and workflow scaffolds.
+`karml configure` is the interactive entry point for YAML and workflow scaffolds.
 For the interactive workflows (`md-single`, `md-campaign`, `physnet-train`,
 `snakemake-md`, and `interaction-policy`) the wizard:
 
@@ -121,29 +121,29 @@ command to run.
 ### Condensed-phase MD (MLpot)
 
 ```bash
-mmml env                                    # checkpoints + CHARMM paths
-mmml configure                              # or hand-edit YAML
-mmml health-check --require-gpu --live
-mmml warmup-mlpot-jax --checkpoint "$MMML_CKPT" --n-monomers 20
-MMML_MPI_NP=1 ./scripts/mmml-charmm-mpirun.sh md-system --config run.yaml
+karml env                                    # checkpoints + CHARMM paths
+karml configure                              # or hand-edit YAML
+karml health-check --require-gpu --live
+karml warmup-mlpot-jax --checkpoint "$KARML_CKPT" --n-monomers 20
+KARML_MPI_NP=1 ./scripts/karml-charmm-mpirun.sh md-system --config run.yaml
 ```
 
 ### Train PhysNet from NPZ
 
 ```bash
-mmml fix-and-split --efd data.npz --output-dir splits/
-mmml physnet-train --config train.yaml
-mmml physnet-evaluate --checkpoint ckpts/run --test splits/test.npz
+karml fix-and-split --efd data.npz --output-dir splits/
+karml physnet-train --config train.yaml
+karml physnet-evaluate --checkpoint ckpts/run --test splits/test.npz
 ```
 
 ### Diffusion Monte Carlo (PhysNetJax)
 
 ```bash
-mmml dmc \
+karml dmc \
   --natm 20 --nwalker 64 --stepsize 5e-4 --nstep 200 --eqstep 50 \
   --alpha 1200.0 --max-batch 64 --seed 0 \
-  --checkpoint "$MMML_CKPT" \
-  --input mmml/generate/dmc/examples/acetone_dmc.extxyz \
+  --checkpoint "$KARML_CKPT" \
+  --input karml/generate/dmc/examples/acetone_dmc.extxyz \
   --output-dir runs/dmc_acetone_smoke
 ```
 
@@ -152,7 +152,7 @@ See the [DMC guide](../dmc.md) for a longer production example and output files.
 ## Regenerating CLI reference pages
 
 Per-command pages under `docs/cli/commands/` are generated from
-`mmml/cli/registry.py`:
+`karml/cli/registry.py`:
 
 ```bash
 uv run python scripts/generate_cli_docs.py

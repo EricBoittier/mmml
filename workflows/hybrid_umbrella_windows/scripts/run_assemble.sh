@@ -33,7 +33,7 @@ MOVE_WITH="$(
   uv run python - <<'PY'
 from pathlib import Path
 import os
-from mmml.utils.domdec_psf_order import read_psf_atoms_and_bonds
+from karml.utils.domdec_psf_order import read_psf_atoms_and_bonds
 
 psf = Path(os.environ["PSF"])
 atoms, _ = read_psf_atoms_and_bonds(psf)
@@ -43,7 +43,7 @@ PY
 
 echo "=== assemble hybrid umbrella: ${OUT} ==="
 # --no-resume-failed: pack whatever finished; do not re-run NaN windows here.
-uv run mmml umbrella-sample \
+uv run karml umbrella-sample \
   --config "${YAML}" \
   --from-pdb "${PDB}" \
   --from-psf "${PSF}" \

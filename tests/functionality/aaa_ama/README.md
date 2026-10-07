@@ -23,7 +23,7 @@ PSF atom order with `Z` before comparing energies to NPZ labels.
 
 ```bash
 export CHARMM_HOME=... CHARMM_LIB_DIR=... LD_LIBRARY_PATH=...
-./scripts/mmml-charmm-mpirun.sh python tests/functionality/aaa_ama/report_charmm_bonded.py
+./scripts/karml-charmm-mpirun.sh python tests/functionality/aaa_ama/report_charmm_bonded.py
 ```
 
 Pass: script prints bonded components (`BOND`, `ANGL`, `DIHE`, `IMPR`, `CMAP`, `total`).
@@ -35,7 +35,7 @@ Production pattern from upstream `dyna.sol.py`:
 - `PEPT` segment → PhysNet / MLpot (`ml_selection=select_by_seg_id('PEPT')`)
 - `WAT` / TIP3 → pure CHARMM MM
 
-In MMML use `register_mlpot_partial_mm` (see workflow doc). ML–MM pair
+In KARML use `register_mlpot_partial_mm` (see workflow doc). ML–MM pair
 electrostatics are **not** implemented yet — segment-only registration only.
 
 ## Related
@@ -43,5 +43,5 @@ electrostatics are **not** implemented yet — segment-only registration only.
 | Topic | Path |
 |-------|------|
 | Full workflow doc | `docs/examples/aaa-ama-workflow.md` |
-| Partial ML API | `mmml/interfaces/pycharmmInterface/mlpot/partial_mm.py` |
+| Partial ML API | `karml/interfaces/pycharmmInterface/mlpot/partial_mm.py` |
 | Tri-alanine CGENFF box (42 atoms) | `docs/trialanine-water-box.md` |

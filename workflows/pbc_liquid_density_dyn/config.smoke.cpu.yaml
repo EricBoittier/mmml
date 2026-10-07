@@ -7,7 +7,7 @@ solvents: [DCM]
 cluster_sizes: [10]
 temperatures: [300.0]
 box_sizes: [28.0]
-checkpoint: ${MMML_CKPT}
+checkpoint: ${KARML_CKPT}
 output_root: artifacts/pbc_liquid_density_dyn_smoke
 seed_base: 4242
 
@@ -74,5 +74,5 @@ warmup_mlpot_jax: true
 warmup_do_mm: false
 use_mpirun_wrapper: true
 
-mpirun_wrapper: ../../scripts/mmml-charmm-mpirun.sh
-MMML_MPI_NP: 1
+mpirun_wrapper: ../../scripts/karml-charmm-mpirun.sh
+KARML_MPI_NP: 1

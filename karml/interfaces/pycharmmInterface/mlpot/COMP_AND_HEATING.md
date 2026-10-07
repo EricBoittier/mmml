@@ -61,14 +61,14 @@ GAUSSIAN OPTION ... VELOCITIES ASSIGNED AT TEMPERATURE
 - **Comparison coordinates** are a separate set (`coor set comp`, `coor show comp`).
 - **`IASVEL = 0` + `START`**: CHARMM assigns **initial velocities from COMP** (AKMA units).
   Log banner: `The comparison coordinate values will be used for the initial velocities`.
-  **Do not use this path in mmml**: `sync_charmm_positions` writes **coordinates** into COMP,
+  **Do not use this path in karml**: `sync_charmm_positions` writes **coordinates** into COMP,
   so `iasvel=0` + `start=True` produces absurd kinetic energy (e.g. T≫target at step 0).
 - **`IASVEL = 1` + `START`**: Gaussian Maxwell–Boltzmann assignment (default cold start).
 - **`START` omitted** (`start=False` in PyCHARMM): the `start` keyword is **not** sent to
   CHARMM. START may **linger** from a prior `dyna` in the same session (e.g. the
   `nstep=0` Boltzmann assign). With lingering START + `iasvel=0`, CHARMM still reads
   comparison **coordinates** as velocities.
-- **mmml mitigation**: do not copy main coords into COMP (`sync_charmm_positions`);
+- **karml mitigation**: do not copy main coords into COMP (`sync_charmm_positions`);
   zero comparison coordinates before dynamics; use `iasvel=1` on post-assign `dyna`
   so lingering START falls back to Boltzmann, not COMP.
 - **`IASORS = 0`**: at each `ihtfrq` / `ieqfrq`, **scale** existing velocities toward the target temperature.
@@ -76,7 +76,7 @@ GAUSSIAN OPTION ... VELOCITIES ASSIGNED AT TEMPERATURE
 
 COMP is only consumed by dynamics when you use the **comparison-velocity** assignment path (`iasvel=0` with velocities stored in COMP), not when you only copy forces into `xcomp`/`ycomp`/`zcomp`.
 
-### mmml `comp_velocities.py` (actual behavior)
+### karml `comp_velocities.py` (actual behavior)
 
 `apply_selective_force_damp_recipe`:
 
@@ -167,7 +167,7 @@ rescales velocities between micro-chunks.
 **Do not** set `iasvel=1` on Bussi continuation chunks: PyCHARMM may omit `start=False`,
 CHARMM keeps lingering START, and each sub-chunk re-draws Boltzmann (COM drift, box stress).
 
-Before every `iasvel=0` `dyna`, mmml calls
+Before every `iasvel=0` `dyna`, karml calls
 `mirror_comparison_velocities_for_dynamics()` (main → warm COMP → restart `!VELOCITIES`).
 After every Bussi `dyna`, `capture_charmm_velocities_for_bussi()` stores AKMA velocities
 in the synced cache and COMP for the next rescale / sub-chunk.
@@ -175,8 +175,8 @@ in the synced cache and COMP for the next rescale / sub-chunk.
 ### Restart I/O and CHARMM staging paths
 
 Overlap heat alternates scratch restarts (`heat.a.res` / `heat.b.res`) and may stage
-writes under `/tmp/mmml-charmm-io/<hash>/` when the real path has capitals (Fortran
-`OPEN` limits). CHARMM ``WRIDYN`` writes ``!VX, VY, VZ`` (not ``!VELOCITIES``). mmml reads both.
+writes under `/tmp/karml-charmm-io/<hash>/` when the real path has capitals (Fortran
+`OPEN` limits). CHARMM ``WRIDYN`` writes ``!VX, VY, VZ`` (not ``!VELOCITIES``). karml reads both.
 Post-``dyna`` capture runs after I/O alias ``finalize()`` so staging restarts are
 on disk before ASE Bussi rescale.
 copied back to the user path only when the I/O handle closes (`CharmmIoAlias.finalize()`).
@@ -185,11 +185,11 @@ copied back to the user path only when the I/O handle closes (`CharmmIoAlias.fin
 sees a missing or stale file → `ASE Bussi rescale: no readable velocities` → MB fallback
 → `apply_bussi_velocity_rescale: CHARMM velocities unavailable`.
 
-mmml now resolves restart reads via `resolve_restart_velocities_read_paths()`:
+karml now resolves restart reads via `resolve_restart_velocities_read_paths()`:
 
 1. User path (e.g. `.../heat.res`)
 2. Overlap slots (`heat.a.res`, `heat.b.res`)
-3. Staging alias (`/tmp/mmml-charmm-io/<hash>/heat.res`)
+3. Staging alias (`/tmp/karml-charmm-io/<hash>/heat.res`)
 
 Post-`dyna` capture uses `_post_dyna_restart_write_path()` so Bussi reads the staging
 file while it still holds fresh velocities. A synced in-memory cache
@@ -198,7 +198,7 @@ file while it still holds fresh velocities. A synced in-memory cache
 ### Log grep (Bussi)
 
 ```bash
-grep -E 'Bussi rescale|readable velocities|IASVEL|IASORS|heat\.a\.res|heat\.b\.res|mmml-charmm-io' your.log
+grep -E 'Bussi rescale|readable velocities|IASVEL|IASORS|heat\.a\.res|heat\.b\.res|karml-charmm-io' your.log
 ```
 
 Red flags:
@@ -222,7 +222,7 @@ ASE Bussi rescale: no readable velocities          # OK if followed by MB / in-m
 apply_bussi_velocity_rescale: CHARMM velocities unavailable   # should not appear
 ```
 
-After overlap rescue or CGENFF ``reregister_mlpot``, mmml rehydrates velocities
+After overlap rescue or CGENFF ``reregister_mlpot``, karml rehydrates velocities
 (restart ladder → in-memory Maxwell–Boltzmann) before ``iasvel=0`` sub-chunks.
 ``run_dynamics`` passes them via ``init_velocities`` on the C API path (never
 hard-fails with empty CHARMM memory after CGENFF).

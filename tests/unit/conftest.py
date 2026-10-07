@@ -1,6 +1,6 @@
 """Unit-test fixtures (no libcharmm.so required).
 
-Serial pytest sets ``MMML_WARMUP_MLPOT_JAX_ONLY=1`` in ``tests/conftest.py`` so
+Serial pytest sets ``KARML_WARMUP_MLPOT_JAX_ONLY=1`` in ``tests/conftest.py`` so
 collecting tests that import ``hybrid_mlpot`` does not ``dlopen`` MPI-linked
 ``libcharmm`` (which can block indefinitely outside ``mpirun``).
 """
@@ -48,7 +48,7 @@ def _noop_charmm_quiet_output():
 def mock_charmm_quiet_output_for_unit_tests(monkeypatch):
     """Avoid lazy PyCHARMM import inside charmm_quiet_output on CI without libcharmm."""
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.charmm_levels.charmm_quiet_output",
+        "karml.interfaces.pycharmmInterface.charmm_levels.charmm_quiet_output",
         _noop_charmm_quiet_output,
     )
 
@@ -56,7 +56,7 @@ def mock_charmm_quiet_output_for_unit_tests(monkeypatch):
 @pytest.fixture(autouse=True)
 def _reset_mlpot_callback_failstop():
     """A leftover fatal flag must not abort later unit tests in this worker."""
-    from mmml.interfaces.pycharmmInterface.mlpot.callback_failstop import (
+    from karml.interfaces.pycharmmInterface.mlpot.callback_failstop import (
         reset_mlpot_callback_failstop,
     )
 
@@ -81,7 +81,7 @@ def _clear_stub_charmm_lib_env(monkeypatch):
 @pytest.fixture(autouse=True)
 def _isolate_charmm_skipe_registry(monkeypatch):
     """Tests that call the energy policy with a fake CHARMM must not leak SKIPE state."""
-    from mmml.interfaces.pycharmmInterface.mlpot import charmm_energy_policy as cep
+    from karml.interfaces.pycharmmInterface.mlpot import charmm_energy_policy as cep
 
     monkeypatch.setattr(cep, "_SKIPPED_CHARMM_TERMS", set())
     yield

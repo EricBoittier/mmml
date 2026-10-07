@@ -11,10 +11,10 @@
 #   ``par_ch3cl.prm``. With MLpot, CHARMM bonded terms stay on (see ENER INTERN);
 #   this YAML ``delete bond/angle`` removes C–Cl before heat so PhysNet owns the
 #   reactive degrees of freedom. Keep N–H / C–H bonds.
-#   Optional A/B: ``MMML_ADUMB_RC_WALL_BACKEND=off`` to disable distance walls.
+#   Optional A/B: ``KARML_ADUMB_RC_WALL_BACKEND=off`` to disable distance walls.
 #   Single-residue topology is optional bookkeeping — not required for reactivity.
 #
-# Requires CHARMM with ADUMB + ADUMBRXNCOR + mmml UM1RXN patch (eadumb.F90).
+# Requires CHARMM with ADUMB + ADUMBRXNCOR + karml UM1RXN patch (eadumb.F90).
 #
 #   bash scripts/rebuild_charmm_mlpot.sh --clean
 #   export CHARMM_LIB_DIR=$PWD/setup/charmm/lib
@@ -115,7 +115,7 @@ pycharmm_pre_dynamics_lingo: |
   ! component bonds use adumrcmax (difference max is not a bond length).
   ! k=2000: soft wall must hold at 500 K with C–Cl deleted (ADUMB explores
   ! dissociation); k=500 was overrun by ~86 ps → mid-chunk abort.
-  ! Disable: MMML_ADUMB_RC_WALL_BACKEND=off
+  ! Disable: KARML_ADUMB_RC_WALL_BACKEND=off
   set adumrcmax = 8.0
   set adumrcwall = 2000.0
 

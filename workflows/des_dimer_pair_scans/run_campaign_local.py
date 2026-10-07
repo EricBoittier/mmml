@@ -33,15 +33,15 @@ def _pair_scan_cmd(pair_tag: str, cfg_path: Path, repo_root: Path) -> list[str]:
     args = ["--config", str(cfg_path), "--pair", pair_tag]
     wrapper = Path(
         os.environ.get(
-            "MMML_MPIRUN_WRAPPER",
-            str(repo_root / "scripts" / "mmml-charmm-mpirun.sh"),
+            "KARML_MPIRUN_WRAPPER",
+            str(repo_root / "scripts" / "karml-charmm-mpirun.sh"),
         )
     )
     # Opt-in only: serial (macOS --no-mpi) CHARMM must keep bare python.
-    # run_campaign_gpu.sh exports MMML_USE_CHARMM_MPIRUN=1 on scicore.
+    # run_campaign_gpu.sh exports KARML_USE_CHARMM_MPIRUN=1 on scicore.
     if (
-        _truthy("MMML_USE_CHARMM_MPIRUN")
-        and not _truthy("MMML_DES_SCAN_NO_MPIRUN")
+        _truthy("KARML_USE_CHARMM_MPIRUN")
+        and not _truthy("KARML_DES_SCAN_NO_MPIRUN")
         and wrapper.is_file()
         and os.access(wrapper, os.X_OK)
     ):
@@ -137,9 +137,9 @@ def main():
 
     print(f"Loaded config from {cfg_path}")
     print(f"Found {len(pairs)} pairs to scan.")
-    if _truthy("MMML_USE_CHARMM_MPIRUN"):
+    if _truthy("KARML_USE_CHARMM_MPIRUN"):
         print(
-            f"CHARMM launcher: {os.environ.get('MMML_MPIRUN_WRAPPER', 'mmml-charmm-mpirun.sh')}"
+            f"CHARMM launcher: {os.environ.get('KARML_MPIRUN_WRAPPER', 'karml-charmm-mpirun.sh')}"
         )
 
     # Create results folder

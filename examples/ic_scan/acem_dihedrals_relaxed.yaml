@@ -7,7 +7,7 @@
 #
 # Do not pass --prepare-only: constrained-relax needs the calculator.
 #
-#   mmml ic-scan --config examples/ic_scan/acem_dihedrals_relaxed.yaml \
+#   karml ic-scan --config examples/ic_scan/acem_dihedrals_relaxed.yaml \
 #     --output artifacts/ic_scan/acem_xtb_relaxed --overwrite
 
 structure: acem.xyz

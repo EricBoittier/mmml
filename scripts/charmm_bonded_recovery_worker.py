@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Fresh CHARMM session for isolated bonded recovery (sidecar worker).
 
-User-run under ``mmml-charmm-mpirun.sh`` from
-:func:`mmml.interfaces.pycharmmInterface.mlpot.charmm_recovery_sidecar.run_charmm_recovery_sidecar`.
+User-run under ``karml-charmm-mpirun.sh`` from
+:func:`karml.interfaces.pycharmmInterface.mlpot.charmm_recovery_sidecar.run_charmm_recovery_sidecar`.
 """
 
 from __future__ import annotations
@@ -26,15 +26,15 @@ def _parse_args() -> argparse.Namespace:
 
 
 def _run_recovery(manifest_path: Path) -> dict[str, float]:
-    from mmml.interfaces.pycharmmInterface.mlpot.charmm_recovery_sidecar import (
+    from karml.interfaces.pycharmmInterface.mlpot.charmm_recovery_sidecar import (
         SidecarRecoveryManifest,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_grms
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import _import_pycharmm_modules
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_grms
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import _import_pycharmm_modules
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         apply_crd_file_to_charmm,
     )
-    from mmml.interfaces.pycharmmInterface.nbonds_config import read_cgenff_toppar
+    from karml.interfaces.pycharmmInterface.nbonds_config import read_cgenff_toppar
 
     manifest = SidecarRecoveryManifest.load(manifest_path)
     psf = Path(manifest.psf).expanduser().resolve()
@@ -44,8 +44,8 @@ def _run_recovery(manifest_path: Path) -> dict[str, float]:
     if not input_crd.is_file():
         raise FileNotFoundError(f"sidecar input CRD not found: {input_crd}")
 
-    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
-    from mmml.interfaces.pycharmmInterface.cgenff_bonded_reference import read_psf_card_file
+    import karml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+    from karml.interfaces.pycharmmInterface.cgenff_bonded_reference import read_psf_card_file
 
     read_cgenff_toppar()
     read_psf_card_file(psf)
@@ -54,18 +54,18 @@ def _run_recovery(manifest_path: Path) -> dict[str, float]:
     if manifest.use_pbc:
         if manifest.box_side_A is None or float(manifest.box_side_A) <= 0.0:
             raise ValueError("sidecar PBC recovery requires positive box_side_A")
-        from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import setup_charmm_environment
+        from karml.interfaces.pycharmmInterface.mlpot.pbc_env import setup_charmm_environment
 
         setup_charmm_environment(
             use_pbc=True,
             cubic_box_side_A=float(manifest.box_side_A),
         )
     else:
-        from mmml.interfaces.pycharmmInterface.mlpot.setup import setup_default_nbonds
+        from karml.interfaces.pycharmmInterface.mlpot.setup import setup_default_nbonds
 
         setup_default_nbonds()
 
-    from mmml.interfaces.pycharmmInterface.mlpot.block_terms import (
+    from karml.interfaces.pycharmmInterface.mlpot.block_terms import (
         apply_bonded_mm_only_block,
         apply_bonded_vdw_recovery_block,
     )
@@ -77,7 +77,7 @@ def _run_recovery(manifest_path: Path) -> dict[str, float]:
 
     pycharmm, cons_fix, *_ = _import_pycharmm_modules()
     minimize = _import_pycharmm_modules()[3]
-    from mmml.interfaces.pycharmmInterface.charmm_levels import (
+    from karml.interfaces.pycharmmInterface.charmm_levels import (
         charmm_quiet_output,
         run_charmm_script_quiet,
     )

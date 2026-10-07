@@ -10,8 +10,8 @@ set -euo pipefail
 
 if [[ -n "${SLURM_SUBMIT_DIR:-}" && -d "${SLURM_SUBMIT_DIR}" ]]; then
   ROOT="$(cd "${SLURM_SUBMIT_DIR}" && pwd)"
-elif [[ -n "${MMML_ROOT:-}" && -d "${MMML_ROOT}" ]]; then
-  ROOT="$(cd "${MMML_ROOT}" && pwd)"
+elif [[ -n "${KARML_ROOT:-}" && -d "${KARML_ROOT}" ]]; then
+  ROOT="$(cd "${KARML_ROOT}" && pwd)"
 else
   ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 fi
@@ -38,9 +38,9 @@ export PYTHONUNBUFFERED=1
 # examples/lj_scales/_env.sh). Submit with a clean env, not --export=ALL.
 export LJ_DEVICE=gpu
 export JAX_PLATFORMS=cuda
-export MMML_MLPOT_DEVICE=gpu
-export MMML_JAX_WARMUP_DEVICE=gpu
-export MMML_MM_NL_DEVICE=gpu
+export KARML_MLPOT_DEVICE=gpu
+export KARML_JAX_WARMUP_DEVICE=gpu
+export KARML_MM_NL_DEVICE=gpu
 export XLA_PYTHON_CLIENT_PREALLOCATE="${XLA_PYTHON_CLIENT_PREALLOCATE:-false}"
 export XLA_PYTHON_CLIENT_MEM_FRACTION="${XLA_PYTHON_CLIENT_MEM_FRACTION:-0.85}"
 
@@ -85,7 +85,7 @@ echo "  tag      : $TAG"
 echo "  epochs   : $EPOCHS  n_train=$N_TRAIN n_valid=$N_VALID batch=$BATCH seed=$SEED"
 echo "  handoff  : mm_switch_on=5.0 ml_switch_width=1.5 mm_switch_width=5.0"
 echo "  CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-}"
-echo "  JAX_PLATFORMS=$JAX_PLATFORMS MMML_MLPOT_DEVICE=$MMML_MLPOT_DEVICE"
+echo "  JAX_PLATFORMS=$JAX_PLATFORMS KARML_MLPOT_DEVICE=$KARML_MLPOT_DEVICE"
 date -Is
 nvidia-smi --query-gpu=index,name,memory.total,memory.free --format=csv || true
 
@@ -103,7 +103,7 @@ if not ok:
     sys.exit(4)
 PY
 
-uv run mmml physnet-train \
+uv run karml physnet-train \
   --config "$CONFIG" \
   --data "$DATA" \
   --valid-data "" \

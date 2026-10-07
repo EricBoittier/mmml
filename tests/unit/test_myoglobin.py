@@ -7,16 +7,16 @@ import pytest
 import yaml
 from argparse import Namespace
 
-from mmml.interfaces.calculators.link_atoms import link_atom_position
-from mmml.interfaces.pycharmmInterface.heme_electronic import (
+from karml.interfaces.calculators.link_atoms import link_atom_position
+from karml.interfaces.pycharmmInterface.heme_electronic import (
     expand_counterions,
     resolve_metatomic_electronic_state,
 )
-from mmml.interfaces.pycharmmInterface.heme_library import (
+from karml.interfaces.pycharmmInterface.heme_library import (
     residues_from_cluster_args,
     topology_family,
 )
-from mmml.interfaces.pycharmmInterface.myoglobin import (
+from karml.interfaces.pycharmmInterface.myoglobin import (
     HIS93_ML_CHARGE,
     HIS93_RESID,
     HIS93_SEGID,
@@ -74,7 +74,7 @@ def test_mbco_crd_keeps_the_crystal_protonation_and_drops_sulfate() -> None:
 
 
 def test_mbco_stays_one_monomer_and_ml_z_matches_the_selection() -> None:
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+    from karml.interfaces.pycharmmInterface.mlpot.setup import (
         ml_z_aligned_to_selection,
         reconcile_n_monomers_with_psf,
     )
@@ -182,9 +182,9 @@ def test_mbco_electronic_state_is_the_liganded_singlet() -> None:
 
 
 def test_charmm_water_cube_is_4985_tip3_at_charge_plus_one() -> None:
-    from mmml.interfaces.pycharmmInterface.charmm_paths import mmml_repo_root
+    from karml.interfaces.pycharmmInterface.charmm_paths import karml_repo_root
 
-    path = mmml_repo_root() / "setup/charmm/test/cbenchtest/mbco/mbco4985w.crd"
+    path = karml_repo_root() / "setup/charmm/test/cbenchtest/mbco/mbco4985w.crd"
     structure = load_mbco(path)
     assert len(structure.atoms) == 17491
     kinds = {segment.segid: segment.kind for segment in structure.segments}
@@ -211,7 +211,7 @@ def test_charmm_water_cube_is_4985_tip3_at_charge_plus_one() -> None:
     assert float(np.linalg.norm(span)) == pytest.approx(98.41, abs=0.05)
 
     example = yaml.safe_load(
-        (mmml_repo_root() / "examples/pet_omol_heme/yaml/mbco_nve.yaml").read_text()
+        (karml_repo_root() / "examples/pet_omol_heme/yaml/mbco_nve.yaml").read_text()
     )
     assert example["mbco_crd"].endswith("mbco4985w.crd")
     assert float(example["box_size"]) == pytest.approx(55.49456)
@@ -224,10 +224,10 @@ def test_periodic_water_cube_replaces_one_distant_tip3_with_chloride() -> None:
     assert all(len(chunk) <= 4000 for chunk in chunks)
     assert len(chunks) > 1
     assert sequence_string_chunks(("VAL", "LEU")) == ["VAL LEU"]
-    from mmml.interfaces.pycharmmInterface.charmm_paths import mmml_repo_root
+    from karml.interfaces.pycharmmInterface.charmm_paths import karml_repo_root
 
     neutral = neutralize_mbco(
-        load_mbco(mmml_repo_root() / "setup/charmm/test/cbenchtest/mbco/mbco4985w.crd")
+        load_mbco(karml_repo_root() / "setup/charmm/test/cbenchtest/mbco/mbco4985w.crd")
     )
     assert neutral.formal_charge() == 0
     assert len(neutral.atoms) == 17489

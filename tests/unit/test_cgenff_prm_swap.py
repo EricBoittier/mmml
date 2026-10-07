@@ -7,27 +7,27 @@ from unittest import mock
 
 import pytest
 
-from mmml.interfaces.pycharmmInterface.mlpot import cgenff_prm_swap
+from karml.interfaces.pycharmmInterface.mlpot import cgenff_prm_swap
 
 
 def test_zeroed_cgenff_prm_paths():
     full = cgenff_prm_swap.cgenff_prm_path()
     assert full.name == "par_all36_cgenff.prm"
-    assert "mmml/data/charmm" in str(full).replace("\\", "/")
+    assert "karml/data/charmm" in str(full).replace("\\", "/")
     assert cgenff_prm_swap.zeroed_cgenff_prm_path().name == "zeroed_par_all36_cgenff.prm"
     assert (
         cgenff_prm_swap.zeroed_cgenff_prm_path(bonded_only=True).name
         == "zeroed_bonded_par_all36_cgenff.prm"
     )
     repo = Path(__file__).resolve().parents[2]
-    assert (repo / "mmml/data/charmm/par_all36_cgenff.prm").is_file()
+    assert (repo / "karml/data/charmm/par_all36_cgenff.prm").is_file()
     assert full.is_file()
 
 
 def test_read_cgenff_prm_uses_flex_for_append_swap():
     import inspect
 
-    from mmml.interfaces.pycharmmInterface.nbonds_config import (
+    from karml.interfaces.pycharmmInterface.nbonds_config import (
         CGENFF_PRM_BOMLEV,
         read_cgenff_prm,
     )
@@ -91,7 +91,7 @@ def test_apply_zeroed_cgenff_params_bonded_only(tmp_path: Path, monkeypatch):
 def test_read_cgenff_prm_append_suspends_pbc_before_read():
     import inspect
 
-    from mmml.interfaces.pycharmmInterface.nbonds_config import (
+    from karml.interfaces.pycharmmInterface.nbonds_config import (
         read_cgenff_prm,
         suspend_pbc_before_cgenff_param_append,
     )
@@ -107,7 +107,7 @@ def test_read_cgenff_prm_append_suspends_pbc_before_read():
 def test_crystal_free_prefers_c_api():
     repo_root = Path(__file__).resolve().parents[2]
     source = (
-        repo_root / "mmml/interfaces/pycharmmInterface/import_pycharmm.py"
+        repo_root / "karml/interfaces/pycharmmInterface/import_pycharmm.py"
     ).read_text(encoding="utf-8")
     fn = source.split("def _run_crystal_free")[1].split("\ndef ")[0]
     assert "crystal_free_available" in fn
@@ -118,7 +118,7 @@ def test_crystal_free_prefers_c_api():
 def test_read_cgenff_prm_replace_skips_pbc_suspend():
     import inspect
 
-    from mmml.interfaces.pycharmmInterface.nbonds_config import read_cgenff_prm
+    from karml.interfaces.pycharmmInterface.nbonds_config import read_cgenff_prm
 
     src = inspect.getsource(read_cgenff_prm)
     assert src.index("if append:") < src.index("def _read()")

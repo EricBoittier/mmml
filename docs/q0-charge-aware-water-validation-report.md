@@ -31,7 +31,7 @@ Spooky trainer using the stable non-charge `step-00294400` model as teacher.
 
 ### Static evaluator forwarding
 
-`_attach_ase_mmml_calculator` now forwards:
+`_attach_ase_karml_calculator` now forwards:
 
 - `mm_charge_mode`;
 - `mm_charge_correction`;

@@ -1,19 +1,19 @@
 #!/usr/bin/env python3
-"""Dump and visualize CHARMM vs MMML inter-monomer neighbor lists.
+"""Dump and visualize CHARMM vs KARML inter-monomer neighbor lists.
 
-MMML pairs work from CRD/numpy alone (no PyCHARMM). CHARMM DMAT capture requires
+KARML pairs work from CRD/numpy alone (no PyCHARMM). CHARMM DMAT capture requires
 a live PyCHARMM session loaded from PSF+CRD (``--with-charmm``).
 
 Examples
 --------
-MMML only from a minimized CRD (DCM:52 @ L=38):
+KARML only from a minimized CRD (DCM:52 @ L=38):
 
   uv run python scripts/dump_neighbor_lists.py \\
     --crd artifacts/dcm_density_setup_compare/resilient_dcm_52_t50_l38_ht_bussi_sw_baseline/pycharmm_mini/mini_full_mlpot_*.crd \\
     --n-monomers 52 --atoms-per-monomer 5 --box-size 38 \\
     --output-dir nl_dump_baseline
 
-CHARMM + MMML side-by-side (PyCHARMM node):
+CHARMM + KARML side-by-side (PyCHARMM node):
 
   uv run python scripts/dump_neighbor_lists.py \\
     --artifact-dir artifacts/dcm_density_setup_compare/resilient_dcm_52_t50_l38_ht_bussi_sw_baseline/pycharmm_mini \\
@@ -39,12 +39,12 @@ _REPO = Path(__file__).resolve().parents[1]
 if str(_REPO) not in sys.path:
     sys.path.insert(0, str(_REPO))
 
-from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import read_crd_coordinates  # noqa: E402
-from mmml.utils.neighbor_list_snapshot import (  # noqa: E402
+from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import read_crd_coordinates  # noqa: E402
+from karml.utils.neighbor_list_snapshot import (  # noqa: E402
     capture_charmm_image_inter_monomer_pairs,
     capture_charmm_inter_monomer_pairs,
     capture_charmm_jnb_inter_monomer_pairs,
-    capture_mmml_inter_monomer_pairs,
+    capture_karml_inter_monomer_pairs,
     compare_snapshots_aligned,
     cubic_cell_matrix,
     find_artifact_geometry,
@@ -112,7 +112,7 @@ def main() -> int:
     parser.add_argument("--atoms-per-monomer", type=int, required=True)
     parser.add_argument("--box-size", type=float, required=True, help="Cubic box side (Å)")
     parser.add_argument("--charmm-cutoff", type=float, default=None, help="CHARMM cutnb override (Å)")
-    parser.add_argument("--mm-cutoff", type=float, default=None, help="MMML switched-MM cutoff override (Å)")
+    parser.add_argument("--mm-cutoff", type=float, default=None, help="KARML switched-MM cutoff override (Å)")
     parser.add_argument(
         "--mm-backend",
         choices=("auto", "vesin", "cell_list", "jax_md"),
@@ -193,7 +193,7 @@ def main() -> int:
             else float(args.mm_switch_on) + float(args.mm_switch_width)
         )
 
-    mmml_snap = capture_mmml_inter_monomer_pairs(
+    karml_snap = capture_karml_inter_monomer_pairs(
         positions=positions,
         cell=cell,
         cutoff_A=mm_cutoff,
@@ -218,16 +218,16 @@ def main() -> int:
         if args.aligned_compare:
             comparison = compare_snapshots_aligned(
                 charmm_snap,
-                mmml_snap,
+                karml_snap,
                 positions=positions,
                 cell=cell,
                 monomer_offsets=offsets,
                 mm_r_min=mm_r_min,
             )
         else:
-            from mmml.utils.neighbor_list_snapshot import compare_snapshots
+            from karml.utils.neighbor_list_snapshot import compare_snapshots
 
-            comparison = compare_snapshots(charmm_snap, mmml_snap)
+            comparison = compare_snapshots(charmm_snap, karml_snap)
 
     paths = save_neighbor_list_artifacts(
         args.output_dir,
@@ -235,7 +235,7 @@ def main() -> int:
         cell=cell,
         monomer_offsets=offsets,
         charmm=charmm_snap,
-        mmml=mmml_snap,
+        karml=karml_snap,
         extra_meta=meta,
         top_pairs=int(args.top_pairs),
     )
@@ -244,7 +244,7 @@ def main() -> int:
         cmp_path.write_text(json.dumps(comparison, indent=2), encoding="utf-8")
         paths["comparison_aligned"] = cmp_path
 
-    from mmml.utils.rich_report import print_colored_json
+    from karml.utils.rich_report import print_colored_json
 
     print_colored_json({"written": {k: str(v) for k, v in paths.items()}})
     if charmm_snap is not None and charmm_snap.pairs:
@@ -253,10 +253,10 @@ def main() -> int:
             f"CHARMM closest inter-monomer pair: {w.distance_A:.4f} Å "
             f"(mon {w.monomer_i}/{w.monomer_j}, atoms {w.i}/{w.j})"
         )
-    if mmml_snap.pairs:
-        w = mmml_snap.pairs[0]
+    if karml_snap.pairs:
+        w = karml_snap.pairs[0]
         print(
-            f"MMML closest inter-monomer pair: {w.distance_A:.4f} Å "
+            f"KARML closest inter-monomer pair: {w.distance_A:.4f} Å "
             f"(mon {w.monomer_i}/{w.monomer_j}, atoms {w.i}/{w.j})"
         )
     if paths.get("comparison") is not None or paths.get("comparison_aligned") is not None:
@@ -266,7 +266,7 @@ def main() -> int:
             "comparison:",
             f"shared={cmp['n_shared']}",
             f"only_charmm={cmp['n_only_left']}",
-            f"only_mmml={cmp['n_only_right']}",
+            f"only_karml={cmp['n_only_right']}",
         )
         tags = cmp.get("semantic_tags")
         if tags:

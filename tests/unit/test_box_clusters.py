@@ -8,7 +8,7 @@ from ase import Atoms
 from ase.calculators.calculator import Calculator, all_changes
 from ase.io import read
 
-from mmml.distill.box_clusters import (
+from karml.distill.box_clusters import (
     SOURCE_BOX_DIMER,
     SOURCE_BOX_MONOMER,
     SOURCE_REFERENCE,
@@ -16,7 +16,7 @@ from mmml.distill.box_clusters import (
     box_cluster_pool,
     whole_molecules,
 )
-from mmml.md.metatomic_pbc import append_training_frame
+from karml.md.metatomic_pbc import append_training_frame
 
 L = 10.0
 WATER = np.array([[0.0, 0.0, 0.0], [0.96, 0.0, 0.0], [-0.24, 0.93, 0.0]])
@@ -122,7 +122,7 @@ def _cfg() -> BoxClusterConfig:
 
 
 def _pairwise_teacher():
-    from mmml.distill.teacher_label import AseTeacher
+    from karml.distill.teacher_label import AseTeacher
 
     class _Pair(Calculator):
         implemented_properties = ["energy", "forces"]
@@ -163,7 +163,7 @@ def test_box_clusters_file_fallback_without_seed() -> None:
 
 
 def test_dimer_fragments_inherit_dimer_group() -> None:
-    from mmml.distill.teacher_label import ENERGY_MODE_MLMM, label_geometries
+    from karml.distill.teacher_label import ENERGY_MODE_MLMM, label_geometries
 
     frames = _seeded_frames(seeds=(0, 1), n_frames=1)
     geos = box_cluster_pool(frames, _cfg(), reference_monomer=Atoms("OH2", positions=WATER))
@@ -183,7 +183,7 @@ def test_dimer_fragments_inherit_dimer_group() -> None:
 
 
 def _labelled_box_samples(seeds=(0, 1, 2, 3, 4, 5)):
-    from mmml.distill.teacher_label import ENERGY_MODE_MLMM, label_geometries
+    from karml.distill.teacher_label import ENERGY_MODE_MLMM, label_geometries
 
     geos = box_cluster_pool(
         _seeded_frames(seeds=seeds), _cfg(), reference_monomer=Atoms("OH2", positions=WATER)
@@ -196,7 +196,7 @@ def _labelled_box_samples(seeds=(0, 1, 2, 3, 4, 5)):
 def test_seed_split_keeps_trajectories_and_triples_together(tmp_path) -> None:
     import json
 
-    from mmml.distill.npz_export import write_distill_npz
+    from karml.distill.npz_export import write_distill_npz
 
     samples = _labelled_box_samples()
     paths = write_distill_npz(samples, tmp_path, pad_atoms=6, valid_fraction=0.34, seed=3, split="seed")
@@ -223,7 +223,7 @@ def test_seed_split_keeps_trajectories_and_triples_together(tmp_path) -> None:
 
 
 def test_seed_split_needs_two_groups_and_sample_split_is_default(tmp_path) -> None:
-    from mmml.distill.npz_export import (
+    from karml.distill.npz_export import (
         samples_to_arrays,
         split_train_valid,
         split_train_valid_grouped,
@@ -249,7 +249,7 @@ def test_cli_box_pool_defaults_to_seed_split(tmp_path) -> None:
 
     from ase.io import write
 
-    from mmml.cli.misc.pet_physnet_distill import main as distill_main
+    from karml.cli.misc.pet_physnet_distill import main as distill_main
 
     paths = []
     for seed in range(4):

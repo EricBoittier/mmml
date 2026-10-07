@@ -1,4 +1,4 @@
-# `mmml configure`
+# `karml configure`
 
 Interactive config / Snakemake wizard.
 
@@ -7,21 +7,21 @@ Interactive wizard for `md-system` YAML, Snakemake scaffolds, and bundled
 `cpu_tests` presets.
 
 ```bash
-mmml configure
-mmml configure --list-presets
-mmml configure --non-interactive
+karml configure
+karml configure --list-presets
+karml configure --non-interactive
 ```
 
 ## Usage
 
 ```bash
-mmml configure --help
+karml configure --help
 ```
 
 ## Options
 
 ```text
-usage: mmml configure [-h] [--non-interactive] [--list-presets]
+usage: karml configure [-h] [--non-interactive] [--list-presets]
                       [--preset {cpu-spatial-mpi-mini,cpu-dense-liquid-prep,cpu-md-benchmark,cpu-heat-scaling-smoke,cpu-nve-cutoff-sweep,qm-physnet-pipeline}]
                       [-o OUTPUT_DIR]
                       [--workflow {md-single,md-campaign,physnet-train,snakemake-md,interaction-policy,preset-menu}]

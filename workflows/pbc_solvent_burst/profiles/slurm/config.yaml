@@ -5,7 +5,7 @@ jobs: 10
 latency-wait: 120
 retries: 1
 envvars:
-  - MMML_CKPT
+  - KARML_CKPT
 default-resources:
   - gpu=1
   - gpu_fast=0

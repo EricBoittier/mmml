@@ -15,15 +15,15 @@ Background: [SO3LR / DES dimers — chemical space & LJ coverage](des-so3lr-dime
 
 | Piece | Where | Status |
 |---|---|---|
-| Chemical-space + coverage scan | [`scripts/scan_des_chemical_space.py`](https://github.com/EricBoittier/mmml/blob/main/scripts/scan_des_chemical_space.py) | run on all 370,956 frames |
-| Figures / tables | [`scripts/gen_docs_des_chemspace_figures.py`](https://github.com/EricBoittier/mmml/blob/main/scripts/gen_docs_des_chemspace_figures.py) | generated |
-| Separation coverage (σ/ε gate) | [`scripts/analyze_des_geometry_coverage.py`](https://github.com/EricBoittier/mmml/blob/main/scripts/analyze_des_geometry_coverage.py) | run on all 370,956 frames — **passes** |
+| Chemical-space + coverage scan | [`scripts/scan_des_chemical_space.py`](https://github.com/EricBoittier/karml/blob/main/scripts/scan_des_chemical_space.py) | run on all 370,956 frames |
+| Figures / tables | [`scripts/gen_docs_des_chemspace_figures.py`](https://github.com/EricBoittier/karml/blob/main/scripts/gen_docs_des_chemspace_figures.py) | generated |
+| Separation coverage (σ/ε gate) | [`scripts/analyze_des_geometry_coverage.py`](https://github.com/EricBoittier/karml/blob/main/scripts/analyze_des_geometry_coverage.py) | run on all 370,956 frames — **passes** |
 | Warm start from a checkpoint | `physnet-train --physnet-checkpoint` | 1-epoch runs verified |
-| Checkpoint comparison | `mmml physnet-evaluate` | 7 candidates ranked on identical DES frames — `DESdimers` wins |
-| HDF5 → padded NPZ | [`scripts/des_h5_to_npz.py`](https://github.com/EricBoittier/mmml/blob/main/scripts/des_h5_to_npz.py) | **only run on 4,000 of 371k structures** |
-| CGenFF assignment | `mmml prepare-mm-dataset` | run on that slice; now also emits `cgenff_res_name` |
-| Residue-priority cut | [`scripts/filter_mm_dataset_by_residue.py`](https://github.com/EricBoittier/mmml/blob/main/scripts/filter_mm_dataset_by_residue.py) | run on that slice |
-| Ladder wiring | `LJ_DES=1`, [`examples/lj_scales/12_des_dataset.sh`](https://github.com/EricBoittier/mmml/blob/main/examples/lj_scales/12_des_dataset.sh) | env resolves; full step not run |
+| Checkpoint comparison | `karml physnet-evaluate` | 7 candidates ranked on identical DES frames — `DESdimers` wins |
+| HDF5 → padded NPZ | [`scripts/des_h5_to_npz.py`](https://github.com/EricBoittier/karml/blob/main/scripts/des_h5_to_npz.py) | **only run on 4,000 of 371k structures** |
+| CGenFF assignment | `karml prepare-mm-dataset` | run on that slice; now also emits `cgenff_res_name` |
+| Residue-priority cut | [`scripts/filter_mm_dataset_by_residue.py`](https://github.com/EricBoittier/karml/blob/main/scripts/filter_mm_dataset_by_residue.py) | run on that slice |
+| Ladder wiring | `LJ_DES=1`, [`examples/lj_scales/12_des_dataset.sh`](https://github.com/EricBoittier/karml/blob/main/examples/lj_scales/12_des_dataset.sh) | env resolves; full step not run |
 | Extra residues (ions + noble gases) | `DEF_EXTRA_TOPPAR` → 3 stream files | merged, regression-checked; 32.9% → **40.9%** coverage |
 
 ```bash
@@ -40,10 +40,10 @@ eV / eV·Å, already free-atom referenced. No unit conversion needed.
 ## 2. Warm start — what is actually possible today
 
 **Mechanically yes — but with a real caveat you must read.**
-`mmml physnet-train --physnet-checkpoint <path>` accepts a JSON or Orbax
+`karml physnet-train --physnet-checkpoint <path>` accepts a JSON or Orbax
 checkpoint and warm-starts from it. I ran 1-epoch hybrid-MM training on real
 DES frames from
-[`examples/ckpts_json/DESdimers_params.json`](https://github.com/EricBoittier/mmml/blob/main/examples/ckpts_json/DESdimers_params.json):
+[`examples/ckpts_json/DESdimers_params.json`](https://github.com/EricBoittier/karml/blob/main/examples/ckpts_json/DESdimers_params.json):
 it trained, the LJ scales were learnable, and it wrote `hybrid_mm.json`.
 
 What "it ran" does **not** tell you is whether all the pretrained weights were
@@ -90,14 +90,14 @@ pcstudix); do not inherit my guess.
 ### Is there a better checkpoint? Measured: no
 
 The repo also bundles six PhysNet checkpoints
-(`mmml/models/physnetjax/defaults/hf_json/`, `--physnet-transfer-model`), all
+(`karml/models/physnetjax/defaults/hf_json/`, `--physnet-transfer-model`), all
 with `natoms=34` — the DES dimer shape. Their manifest carries validation
 metrics, but from **different runs on different data**, so they are not
 comparable to each other and say nothing about DES. I evaluated all seven
 candidates on the *same* 400 DES frames, strided across the whole HDF5:
 
 ```bash
-mmml physnet-evaluate --checkpoint <ckpt.json> --data des_eval.npz \
+karml physnet-evaluate --checkpoint <ckpt.json> --data des_eval.npz \
   --natoms 34 --batch-size 8 --num-samples 400 --subtract-mean
 ```
 
@@ -296,7 +296,7 @@ Stage-1 learning under `lr_solver: mic` still sees **truncated Coulomb**, so
 Coulomb error can be absorbed into σ/ε. Mitigations: `mm_charge_mode: fixed`,
 identical cutoffs at train and MD, and validation on density/RDF. Learning
 under Ewald is supported (`lr_solver: ewald`, `mm_include_lj: true`,
-`learn_mm_lj_scales: true`) — see [issue #139](https://github.com/EricBoittier/mmml/issues/139).
+`learn_mm_lj_scales: true`) — see [issue #139](https://github.com/EricBoittier/karml/issues/139).
 
 Consequence: the resulting scales are for `jax_mic` / `include_mm` MD. They are
 **not** valid for `periodic_external` + Ewald — MLpot raises rather than
@@ -336,7 +336,7 @@ the exact tail order matters.
 
 ## 4. Bug fixed on the way, and test status
 
-**Fixed.** `_maybe_unpad_dataset` in `mmml/cli/make/make_training.py` trimmed
+**Fixed.** `_maybe_unpad_dataset` in `karml/cli/make/make_training.py` trimmed
 only `R`/`Z`/`F` when auto-removing padding, leaving `cgenff_type_idx`,
 `mol_id`, `cgenff_charge` and `F_cgenff_mm` at the original width. Any
 CGenFF-enriched NPZ padded wider than its own maximum — which is exactly what
@@ -349,7 +349,7 @@ TypeError: mul got incompatible shapes for broadcasting: (116,), (136,)
 
 naming neither the field nor the file. It now trims every per-sample array
 whose axis 1 is the atom axis; regression test in
-[`tests/unit/test_unpad_hybrid_mm_fields.py`](https://github.com/EricBoittier/mmml/blob/main/tests/unit/test_unpad_hybrid_mm_fields.py).
+[`tests/unit/test_unpad_hybrid_mm_fields.py`](https://github.com/EricBoittier/karml/blob/main/tests/unit/test_unpad_hybrid_mm_fields.py).
 The existing DCM/ACO paths never hit this because their NPZs are already tight.
 Workaround if you meet it elsewhere: pin `--num-atoms`.
 
@@ -574,7 +574,7 @@ isolation, not PBC physics, and is not yet root-caused.
 
 ### 5.5 ΔH_vap — tooling ready, not yet run
 
-[`scripts/analyze_enthalpy_vaporization.py`](https://github.com/EricBoittier/mmml/blob/main/scripts/analyze_enthalpy_vaporization.py)
+[`scripts/analyze_enthalpy_vaporization.py`](https://github.com/EricBoittier/karml/blob/main/scripts/analyze_enthalpy_vaporization.py)
 implements
 
 ```
@@ -603,7 +603,7 @@ with the trained scales.
 
 "Run every species and compare the density" is not a plan: of the 94 CGenFF
 residues in the DES set, most have no usable liquid-phase reference at 298 K /
-1 atm. `mmml/data/reference_state_points.py` classifies 55 of them (the other 39
+1 atm. `karml/data/reference_state_points.py` classifies 55 of them (the other 39
 carry <60 frames each):
 
 | Class | Species | Frames | What it means |
@@ -624,7 +624,7 @@ a rule: a "liquid box" at a temperature above the species' boiling point is a
 **No density in this table is populated from memory.** `StatePoint` raises if a
 density is recorded without `verified=True`, so the module refuses to carry a
 plausible-looking recalled number — the failure mode from
-[[unit-constant-bugs-in-mmml]], where a self-consistent wrong constant survives
+[[unit-constant-bugs-in-karml]], where a self-consistent wrong constant survives
 indefinitely. The 11 values currently present were fetched from the NIST
 Chemistry WebBook this session.
 

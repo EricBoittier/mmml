@@ -1,25 +1,25 @@
 === 2D ADUMB replicas seeded across (r_ClC, r_CN): 1.8,3.5 2.2,2.0 3.8,1.57 6.0,1.5 ===
-    config=/mmhome/boittier/home/mmml/examples/m/yaml/adumb_clc_cn_2d.yaml
-    base output=/mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/adumb_2d_windows  seed_preserve=1
+    config=/mmhome/boittier/home/karml/examples/m/yaml/adumb_clc_cn_2d.yaml
+    base output=/mmhome/boittier/home/karml/artifacts/nh3_ch3cl/adumb_2d_windows  seed_preserve=1
 (r_ClC, r_CN) target (1.80, 3.50) -> frame 2275: r(Cl-C)=1.80 Å r(C-N)=3.50 Å (xi=0.514)
-Wrote /mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl1.8_rcn3.5/solute_rcl1.8_rcn3.5.pdb
+Wrote /mmhome/boittier/home/karml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl1.8_rcn3.5/solute_rcl1.8_rcn3.5.pdb
   AMM1 atom records: 4  CH3CL atom records: 5
 PASS: solute PDB for make-box
---- point rcl1.8_rcn3.5 -> /mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl1.8_rcn3.5
-    uv run mmml md-system --config /mmhome/boittier/home/mmml/examples/m/yaml/adumb_clc_cn_2d.yaml --output-dir /mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl1.8_rcn3.5 --composition /mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl1.8_rcn3.5/solute_rcl1.8_rcn3.5.pdb --from-pdb /mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl1.8_rcn3.5/solute_rcl1.8_rcn3.5.pdb --no-packmol --charmm-sd-steps 0 --charmm-abnr-steps 0 --no-monomer-physnet-mini 
-mmml md-system: running pycharmm (setup=free_nvt | composition=/mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl1.8_rcn3.5/solute_rcl1.8_rcn3.5.pdb | stages=mini,heat)
-  --phase staged --ensemble nvt --setup free_nvt --spacing 1.0 --ps 1.0 --dt-fs 1.0 --temperature 500 --mini-nstep 40 --nprint 50 --dyn-nprint 500 --dyn-iprfrq 2000 --heat-ihtfrq 0 --heat-mode ramp --heat-thermostat bussi --no-heat-comp-damp --heat-comp-hydrogen-only --dcd-nsavc 10 --echeck 100.0 --ps-heat 200.0 --ps-equi 50.0 --npt-thermostat hoover --npt-pressure 1.0 --npt-pgamma 5.0 --n-heat-segments 1 --n-equi-segments 1 --n-prod-segments 1 --composition /mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl1.8_rcn3.5/solute_rcl1.8_rcn3.5.pdb --n-molecules 1 --pycharmm-pre-dynamics-lingo-file /mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl1.8_rcn3.5/pycharmm_pre_dynamics_lingo.inp --md-stages mini,heat --checkpoint examples/m/kl.json --mbd-weight 1.0 --output-dir /mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl1.8_rcn3.5 --continue-velocities --from-pdb /mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl1.8_rcn3.5/solute_rcl1.8_rcn3.5.pdb --dyn-freq-cadence 500 --no-bonded-mm-mini --dynamics-overlap-action rescue --dynamics-overlap-min-distance 0.2 --dynamics-intra-min-distance 0.2 --dynamics-overlap-check-interval 500 --dynamics-overlap-charmm-sd-steps 200 --dynamics-overlap-charmm-abnr-steps 400 --dynamics-overlap-separate-margin 0.2 --mm-switch-on 8.0 --mm-switch-width 5.0 --ml-switch-width 1.5 --mm-nonbond-mode jax_mic --mm-pair-source jax --periodic-charmm-vdw --mm-charge-mode fixed --min-com-restraint-k 1.0 --calculator-pre-minimize --pre-min-steps 50 --pre-min-fmax 0.1 --bfgs-maxstep 0.05 --fire-min-steps 200 --fire-min-maxstep 0.2 --pre-min-ase-order fire-first --bfgs-polish-max-fmax 1.0 --rescue-fire-fmax 0.05 --no-monomer-physnet-mini --charmm-sd-steps 0 --charmm-abnr-steps 0 --charmm-tolenr 0.001 --charmm-tolgrd 0.001 --charmm-mm-pretreat-heat-nstep 2000 --charmm-mm-pretreat-ps-equi 0.0 --charmm-mm-pretreat-ps-prod 0.0 --charmm-mm-pretreat-dt-fs 1.0 --skip-energy-show --max-grms-before-dyn 50.0 --seed 0 --no-mc-density-equalize --mini-box-equil-ps 0.0 --density-certify-relative-tolerance 0.05 --density-prep-mode off --density-prep-lattice-abnr-steps 0 --charmm-image-mlpot-min-distance 1.0 --no-reuse-packmol-cache
-mmml: MPI-linked CHARMM — re-launching under OpenMPI for md-system:
-  /opt/gcc-14.2.0/openmpi-5.0.5/build/bin/mpirun -np 1 --mca pmix ^ext3x --mca shmem mmap -x LD_LIBRARY_PATH -x CHARMM_LIB_DIR --mca orte_abort_print_stack 1 /mmhome/boittier/home/mmml/.venv/bin/python3 -m mmml.cli.__main__ md-system --config /mmhome/boittier/home/mmml/examples/m/yaml/adumb_clc_cn_2d.yaml --output-dir /mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl1.8_rcn3.5 --composition /mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl1.8_rcn3.5/solute_rcl1.8_rcn3.5.pdb --from-pdb /mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl1.8_rcn3.5/solute_rcl1.8_rcn3.5.pdb --no-packmol --charmm-sd-steps 0 --charmm-abnr-steps 0 --no-monomer-physnet-mini
-mmml md-system: running pycharmm (setup=free_nvt | composition=/mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl1.8_rcn3.5/solute_rcl1.8_rcn3.5.pdb | stages=mini,heat)
-  --phase staged --ensemble nvt --setup free_nvt --spacing 1.0 --ps 1.0 --dt-fs 1.0 --temperature 500 --mini-nstep 40 --nprint 50 --dyn-nprint 500 --dyn-iprfrq 2000 --heat-ihtfrq 0 --heat-mode ramp --heat-thermostat bussi --no-heat-comp-damp --heat-comp-hydrogen-only --dcd-nsavc 10 --echeck 100.0 --ps-heat 200.0 --ps-equi 50.0 --npt-thermostat hoover --npt-pressure 1.0 --npt-pgamma 5.0 --n-heat-segments 1 --n-equi-segments 1 --n-prod-segments 1 --composition /mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl1.8_rcn3.5/solute_rcl1.8_rcn3.5.pdb --n-molecules 1 --pycharmm-pre-dynamics-lingo-file /mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl1.8_rcn3.5/pycharmm_pre_dynamics_lingo.inp --md-stages mini,heat --checkpoint examples/m/kl.json --mbd-weight 1.0 --output-dir /mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl1.8_rcn3.5 --continue-velocities --from-pdb /mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl1.8_rcn3.5/solute_rcl1.8_rcn3.5.pdb --dyn-freq-cadence 500 --no-bonded-mm-mini --dynamics-overlap-action rescue --dynamics-overlap-min-distance 0.2 --dynamics-intra-min-distance 0.2 --dynamics-overlap-check-interval 500 --dynamics-overlap-charmm-sd-steps 200 --dynamics-overlap-charmm-abnr-steps 400 --dynamics-overlap-separate-margin 0.2 --mm-switch-on 8.0 --mm-switch-width 5.0 --ml-switch-width 1.5 --mm-nonbond-mode jax_mic --mm-pair-source jax --periodic-charmm-vdw --mm-charge-mode fixed --min-com-restraint-k 1.0 --calculator-pre-minimize --pre-min-steps 50 --pre-min-fmax 0.1 --bfgs-maxstep 0.05 --fire-min-steps 200 --fire-min-maxstep 0.2 --pre-min-ase-order fire-first --bfgs-polish-max-fmax 1.0 --rescue-fire-fmax 0.05 --no-monomer-physnet-mini --charmm-sd-steps 0 --charmm-abnr-steps 0 --charmm-tolenr 0.001 --charmm-tolgrd 0.001 --charmm-mm-pretreat-heat-nstep 2000 --charmm-mm-pretreat-ps-equi 0.0 --charmm-mm-pretreat-ps-prod 0.0 --charmm-mm-pretreat-dt-fs 1.0 --skip-energy-show --max-grms-before-dyn 50.0 --seed 0 --no-mc-density-equalize --mini-box-equil-ps 0.0 --density-certify-relative-tolerance 0.05 --density-prep-mode off --density-prep-lattice-abnr-steps 0 --charmm-image-mlpot-min-distance 1.0 --no-reuse-packmol-cache
+--- point rcl1.8_rcn3.5 -> /mmhome/boittier/home/karml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl1.8_rcn3.5
+    uv run karml md-system --config /mmhome/boittier/home/karml/examples/m/yaml/adumb_clc_cn_2d.yaml --output-dir /mmhome/boittier/home/karml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl1.8_rcn3.5 --composition /mmhome/boittier/home/karml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl1.8_rcn3.5/solute_rcl1.8_rcn3.5.pdb --from-pdb /mmhome/boittier/home/karml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl1.8_rcn3.5/solute_rcl1.8_rcn3.5.pdb --no-packmol --charmm-sd-steps 0 --charmm-abnr-steps 0 --no-monomer-physnet-mini 
+karml md-system: running pycharmm (setup=free_nvt | composition=/mmhome/boittier/home/karml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl1.8_rcn3.5/solute_rcl1.8_rcn3.5.pdb | stages=mini,heat)
+  --phase staged --ensemble nvt --setup free_nvt --spacing 1.0 --ps 1.0 --dt-fs 1.0 --temperature 500 --mini-nstep 40 --nprint 50 --dyn-nprint 500 --dyn-iprfrq 2000 --heat-ihtfrq 0 --heat-mode ramp --heat-thermostat bussi --no-heat-comp-damp --heat-comp-hydrogen-only --dcd-nsavc 10 --echeck 100.0 --ps-heat 200.0 --ps-equi 50.0 --npt-thermostat hoover --npt-pressure 1.0 --npt-pgamma 5.0 --n-heat-segments 1 --n-equi-segments 1 --n-prod-segments 1 --composition /mmhome/boittier/home/karml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl1.8_rcn3.5/solute_rcl1.8_rcn3.5.pdb --n-molecules 1 --pycharmm-pre-dynamics-lingo-file /mmhome/boittier/home/karml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl1.8_rcn3.5/pycharmm_pre_dynamics_lingo.inp --md-stages mini,heat --checkpoint examples/m/kl.json --mbd-weight 1.0 --output-dir /mmhome/boittier/home/karml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl1.8_rcn3.5 --continue-velocities --from-pdb /mmhome/boittier/home/karml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl1.8_rcn3.5/solute_rcl1.8_rcn3.5.pdb --dyn-freq-cadence 500 --no-bonded-mm-mini --dynamics-overlap-action rescue --dynamics-overlap-min-distance 0.2 --dynamics-intra-min-distance 0.2 --dynamics-overlap-check-interval 500 --dynamics-overlap-charmm-sd-steps 200 --dynamics-overlap-charmm-abnr-steps 400 --dynamics-overlap-separate-margin 0.2 --mm-switch-on 8.0 --mm-switch-width 5.0 --ml-switch-width 1.5 --mm-nonbond-mode jax_mic --mm-pair-source jax --periodic-charmm-vdw --mm-charge-mode fixed --min-com-restraint-k 1.0 --calculator-pre-minimize --pre-min-steps 50 --pre-min-fmax 0.1 --bfgs-maxstep 0.05 --fire-min-steps 200 --fire-min-maxstep 0.2 --pre-min-ase-order fire-first --bfgs-polish-max-fmax 1.0 --rescue-fire-fmax 0.05 --no-monomer-physnet-mini --charmm-sd-steps 0 --charmm-abnr-steps 0 --charmm-tolenr 0.001 --charmm-tolgrd 0.001 --charmm-mm-pretreat-heat-nstep 2000 --charmm-mm-pretreat-ps-equi 0.0 --charmm-mm-pretreat-ps-prod 0.0 --charmm-mm-pretreat-dt-fs 1.0 --skip-energy-show --max-grms-before-dyn 50.0 --seed 0 --no-mc-density-equalize --mini-box-equil-ps 0.0 --density-certify-relative-tolerance 0.05 --density-prep-mode off --density-prep-lattice-abnr-steps 0 --charmm-image-mlpot-min-distance 1.0 --no-reuse-packmol-cache
+karml: MPI-linked CHARMM — re-launching under OpenMPI for md-system:
+  /opt/gcc-14.2.0/openmpi-5.0.5/build/bin/mpirun -np 1 --mca pmix ^ext3x --mca shmem mmap -x LD_LIBRARY_PATH -x CHARMM_LIB_DIR --mca orte_abort_print_stack 1 /mmhome/boittier/home/karml/.venv/bin/python3 -m karml.cli.__main__ md-system --config /mmhome/boittier/home/karml/examples/m/yaml/adumb_clc_cn_2d.yaml --output-dir /mmhome/boittier/home/karml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl1.8_rcn3.5 --composition /mmhome/boittier/home/karml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl1.8_rcn3.5/solute_rcl1.8_rcn3.5.pdb --from-pdb /mmhome/boittier/home/karml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl1.8_rcn3.5/solute_rcl1.8_rcn3.5.pdb --no-packmol --charmm-sd-steps 0 --charmm-abnr-steps 0 --no-monomer-physnet-mini
+karml md-system: running pycharmm (setup=free_nvt | composition=/mmhome/boittier/home/karml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl1.8_rcn3.5/solute_rcl1.8_rcn3.5.pdb | stages=mini,heat)
+  --phase staged --ensemble nvt --setup free_nvt --spacing 1.0 --ps 1.0 --dt-fs 1.0 --temperature 500 --mini-nstep 40 --nprint 50 --dyn-nprint 500 --dyn-iprfrq 2000 --heat-ihtfrq 0 --heat-mode ramp --heat-thermostat bussi --no-heat-comp-damp --heat-comp-hydrogen-only --dcd-nsavc 10 --echeck 100.0 --ps-heat 200.0 --ps-equi 50.0 --npt-thermostat hoover --npt-pressure 1.0 --npt-pgamma 5.0 --n-heat-segments 1 --n-equi-segments 1 --n-prod-segments 1 --composition /mmhome/boittier/home/karml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl1.8_rcn3.5/solute_rcl1.8_rcn3.5.pdb --n-molecules 1 --pycharmm-pre-dynamics-lingo-file /mmhome/boittier/home/karml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl1.8_rcn3.5/pycharmm_pre_dynamics_lingo.inp --md-stages mini,heat --checkpoint examples/m/kl.json --mbd-weight 1.0 --output-dir /mmhome/boittier/home/karml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl1.8_rcn3.5 --continue-velocities --from-pdb /mmhome/boittier/home/karml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl1.8_rcn3.5/solute_rcl1.8_rcn3.5.pdb --dyn-freq-cadence 500 --no-bonded-mm-mini --dynamics-overlap-action rescue --dynamics-overlap-min-distance 0.2 --dynamics-intra-min-distance 0.2 --dynamics-overlap-check-interval 500 --dynamics-overlap-charmm-sd-steps 200 --dynamics-overlap-charmm-abnr-steps 400 --dynamics-overlap-separate-margin 0.2 --mm-switch-on 8.0 --mm-switch-width 5.0 --ml-switch-width 1.5 --mm-nonbond-mode jax_mic --mm-pair-source jax --periodic-charmm-vdw --mm-charge-mode fixed --min-com-restraint-k 1.0 --calculator-pre-minimize --pre-min-steps 50 --pre-min-fmax 0.1 --bfgs-maxstep 0.05 --fire-min-steps 200 --fire-min-maxstep 0.2 --pre-min-ase-order fire-first --bfgs-polish-max-fmax 1.0 --rescue-fire-fmax 0.05 --no-monomer-physnet-mini --charmm-sd-steps 0 --charmm-abnr-steps 0 --charmm-tolenr 0.001 --charmm-tolgrd 0.001 --charmm-mm-pretreat-heat-nstep 2000 --charmm-mm-pretreat-ps-equi 0.0 --charmm-mm-pretreat-ps-prod 0.0 --charmm-mm-pretreat-dt-fs 1.0 --skip-energy-show --max-grms-before-dyn 50.0 --seed 0 --no-mc-density-equalize --mini-box-equil-ps 0.0 --density-certify-relative-tolerance 0.05 --density-prep-mode off --density-prep-lattice-abnr-steps 0 --charmm-image-mlpot-min-distance 1.0 --no-reuse-packmol-cache
  JAX CPU thread XLA_FLAGS already present; using existing flags: 
 --[33mxla_cpu_multi_thread_eigen[0m=[35mtrue[0m [33mintra_op_parallelism_threads[0m=[1;36m16[0m
-mmml: JAX compilation cache -> /mmhome/boittier/home/.cache/mmml/jax-compilation-cache
+karml: JAX compilation cache -> /mmhome/boittier/home/.cache/karml/jax-compilation-cache
 [1;36mPyCHARMM environment[0m
-[2;36mCGenFF[0m[2;36m [0m/mmhome/boittier/home/mmml/mmml/data/charmm  (top_all36_cgenff.rtf,      
+[2;36mCGenFF[0m[2;36m [0m/mmhome/boittier/home/karml/karml/data/charmm  (top_all36_cgenff.rtf,      
 [2;36m       [0mpar_all36_cgenff.prm)                                                    
-[2;36mCHARMM[0m[2;36m [0m/mmhome/boittier/home/mmml/setup/charmm                                  
+[2;36mCHARMM[0m[2;36m [0m/mmhome/boittier/home/karml/setup/charmm                                  
 Loading full-system PDB solute_rcl1.8_rcn3.5.pdb (sequence_string AMM1 CH3CL, 9 atoms)…
 Loading full-system PDB solute_rcl1.8_rcn3.5.pdb (2 residues, 9 atoms, vacuum (no box))
 Cluster monomer count: CLI n_monomers=2 -> PSF nres=2 (9 atoms, 4 atoms/monomer typical)
@@ -53,7 +53,7 @@ Dynamics intra-monomer guard: action=rescue, min_distance=0.20 Å, exclude_1_3=T
        20 ATOM PAIRS WERE FOUND FOR ATOM LIST
         0 GROUP PAIRS REQUIRED ATOM SEARCHES
 
- VOPEN> Attempting to open::/tmp/mmml-charmm-io-boittier/ccc30eac54892005/model.psf::
+ VOPEN> Attempting to open::/tmp/karml-charmm-io-boittier/ccc30eac54892005/model.psf::
  VCLOSE: Closing unit   90 with status "KEEP"
 minimize snapshot [00] packmol: Packmol sphere placement (pre-minimize) → 00_pack
 
@@ -81,17 +81,17 @@ minimize snapshot [01] MM: CHARMM CGENFF SD/ABNR before MLpot (MM only) → 01_m
 === Progress: vacuum MMFP flat-bottom (before MLpot registration) ===
 === Progress: MMFP done; continuing toward MLpot registration ===
 
-=== Progress: registering MLpot (9 atoms, ckpt=/mmhome/boittier/home/mmml/examples/m/kl.json) ===
+=== Progress: registering MLpot (9 atoms, ckpt=/mmhome/boittier/home/karml/examples/m/kl.json) ===
     (first JAX compile / USER registration can take minutes; watch GPU with nvidia-smi)
  JAX CPU thread XLA_FLAGS already present; using existing flags: 
 --[33mxla_cpu_multi_thread_eigen[0m=[35mtrue[0m [33mintra_op_parallelism_threads[0m=[1;36m16[0m
-mmml: JAX compilation cache -> /mmhome/boittier/home/.cache/mmml/jax-compilation-cache
-MLpot device policy: MMML_MLPOT_DEVICE=gpu JAX_PLATFORMS=cuda,cpu
+karml: JAX compilation cache -> /mmhome/boittier/home/.cache/karml/jax-compilation-cache
+MLpot device policy: KARML_MLPOT_DEVICE=gpu JAX_PLATFORMS=cuda,cpu
 Decomposed MLpot: 2 JAX GPUs visible but ml_gpu_count=1 (only GPU:0 runs PhysNet). Use --ml-gpu-count 2 and enough chunks (--ml-batch-size 128-256 for DCM:90).
 Decomposed MLpot: max_active_dimers=1 (free-space all-pairs safe; PhysNet batch ≤ 3 systems/step)
 Decomposed MLpot: lr_solver=mic, scafacos=yes, jax_pme=no, nvalchemiops_pme=no (jax-pme method=ewald, sr_cutoff=13.0 Å; r^-6 dispersion=env/default when lr_solver=jax_pme)
 Decomposed MLpot: mm_pair_source=jax (all-ML jax_mic; CHARMM callback lists are fully excluded)
-[1;32mOK     [0m  Loaded checkpoint  [35m/mmhome/boittier/home/mmml/examples/m/[0m[95mkl.json[0m
+[1;32mOK     [0m  Loaded checkpoint  [35m/mmhome/boittier/home/karml/examples/m/[0m[95mkl.json[0m
 [1;36mHybrid ML/MM setup[0m
 [1;2mSystem[0m
 [36mn_monomers       [0m[36m [0m2                                            
@@ -100,7 +100,7 @@ Decomposed MLpot: mm_pair_source=jax (all-ML jax_mic; CHARMM callback lists are 
 [36mmax_atoms        [0m[36m [0m9                                            
 [36mmm_charge_mode   [0m[36m [0mfixed                                        
 [36mml_compute_dtype [0m[36m [0m<class 'jax.numpy.float64'>                  
-[36mcheckpoint_dir   [0m[36m [0m/mmhome/boittier/home/mmml/examples/m/kl.json
+[36mcheckpoint_dir   [0m[36m [0m/mmhome/boittier/home/karml/examples/m/kl.json
 [1;2mHandoff & cutoffs[0m
 [36mml_switch_width_Å[0m[36m [0m1.5000
 [36mmm_switch_on_Å   [0m[36m [0m8.0000
@@ -164,23 +164,23 @@ Decomposed MLpot: mm_pair_source=jax (all-ML jax_mic; CHARMM callback lists are 
 [36minclude_electrostatics[0m[36m [0mTrue   
 [1;2mRuntime threads[0m
 [36mOMP_NUM_THREADS            [0m[36m [0m1                                                   
-[36mMMML_CHARMM_OMP_THREADS    [0m[36m [0munset                                               
+[36mKARML_CHARMM_OMP_THREADS    [0m[36m [0munset                                               
 [36mMKL_NUM_THREADS            [0m[36m [0m1                                                   
 [36mOPENBLAS_NUM_THREADS       [0m[36m [0m1                                                   
 [36mNUMEXPR_NUM_THREADS        [0m[36m [0m1                                                   
-[36mMMML_JAX_COMPILE_THREADS   [0m[36m [0munset                                               
-[36mMMML_NO_JAX_COMPILE_THREADS[0m[36m [0munset                                               
+[36mKARML_JAX_COMPILE_THREADS   [0m[36m [0munset                                               
+[36mKARML_NO_JAX_COMPILE_THREADS[0m[36m [0munset                                               
 [36mXLA_FLAGS                  [0m[36m [0m--xla_cpu_multi_thread_eigen=true                   
 [36m                            [0mintra_op_parallelism_threads=16                     
 [36mJAX_PLATFORMS              [0m[36m [0mcuda,cpu                                            
-[36mMMML_MLPOT_DEVICE          [0m[36m [0mgpu                                                 
+[36mKARML_MLPOT_DEVICE          [0m[36m [0mgpu                                                 
 [1;2mML/MM flags[0m
 [36mdoML            [0m[36m [0mTrue 
 [36mdoMM            [0m[36m [0mTrue 
 [36mdoML_dimer      [0m[36m [0mTrue 
 [36mdefer_xla_warmup[0m[36m [0mFalse
 [1;2mCheckpoint[0m
-[36mCheckpoint[0m[36m [0m/mmhome/boittier/home/mmml/examples/m/kl.json
+[36mCheckpoint[0m[36m [0m/mmhome/boittier/home/karml/examples/m/kl.json
 [36mname      [0m[36m [0mkl.json                                      
 [36mepoch     [0m[36m [0m—                                            
 [36mbest_loss [0m[36m [0m—                                            
@@ -188,7 +188,7 @@ Decomposed MLpot: mm_pair_source=jax (all-ML jax_mic; CHARMM callback lists are 
 [1;32mCalculator Summary[0m
 [1mParameter                 [0m[1m [0m[1mValue                                                [0m
 [96mModel type                [0m[96m [0m[37mHybrid ML/MM (PhysNet spherical cutoff)              [0m
-[96mCheckpoint                [0m[96m [0m[37m/mmhome/boittier/home/mmml/examples/m/kl.json        [0m
+[96mCheckpoint                [0m[96m [0m[37m/mmhome/boittier/home/karml/examples/m/kl.json        [0m
 [96mEnsemble                  [0m[96m [0m[37mNVE                                                  [0m
 [96mMonomers                  [0m[96m [0m[37m2                                                    [0m
 [96mAtoms                     [0m[96m [0m[37m9                                                    [0m
@@ -290,7 +290,7 @@ ENER INTERN>        0.03044      0.68309      0.00000      0.00000      0.00000
 ENER EXTERN>       -0.02624      0.00000      0.00000      0.00000      0.00000
  ----------       ---------    ---------    ---------    ---------    ---------
 CHARMM energy policy vdw: non-zero before reload (VDW=-0.0262386)
-CHARMM energy policy: reloading overlay /mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl1.8_rcn3.5/charmm_energy_policy/zeroed_vdw.prm (bonded=False, nonbond=True, zero_charges=False)
+CHARMM energy policy: reloading overlay /mmhome/boittier/home/karml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl1.8_rcn3.5/charmm_energy_policy/zeroed_vdw.prm (bonded=False, nonbond=True, zero_charges=False)
  api_nbonds%nbonds_cutoffs_orderly> CUTNB,CTOFNB,CTONNB=      18.0      12.0      13.0
 
  NONBOND OPTION FLAGS: 
@@ -402,7 +402,7 @@ Before MLpot SD minimize: initial hybrid GRMS 27.30 kcal/mol/Å (limit 500.0)
 
 MLpot SD minimize: 40 steps/pass, 9 atoms
 GRMS thresholds: intervention=90.9, max_before_dyn=227.3 kcal/mol/Å, max_fmax_before_dyn=46.1 kcal/mol/Å (2.00 eV/Å) (charmm_p90=36.37, charmm_max=38.61)
- VOPEN> Attempting to open::/tmp/mmml-charmm-io-boittier/c4d2d2cde20c006a/02_mini.dcd::
+ VOPEN> Attempting to open::/tmp/karml-charmm-io-boittier/c4d2d2cde20c006a/02_mini.dcd::
 MLpot: rebound CHARMM callback to current pyCModel calculator
 
  NONBOND OPTION FLAGS: 
@@ -738,12 +738,12 @@ CHARMM UPDATE after mini (sync NB/MLpot lists before dyna)
 [36mCHARMM GRMS[0m[36m [0m1.1009 kcal/mol/Å (0.0477 eV/Å)
 [36mUSER energy[0m[36m [0m—                              
 [36mDiag       [0m[36m [0mhybrid/CHARMM GRMS consistent  
- VOPEN> Attempting to open::/tmp/mmml-charmm-io-boittier/2b10c60dffe4f195/02_mini.pdb::
+ VOPEN> Attempting to open::/tmp/karml-charmm-io-boittier/2b10c60dffe4f195/02_mini.pdb::
  VCLOSE: Closing unit   90 with status "KEEP"
- VOPEN> Attempting to open::/tmp/mmml-charmm-io-boittier/095ecd760884ef19/02_mini.psf::
+ VOPEN> Attempting to open::/tmp/karml-charmm-io-boittier/095ecd760884ef19/02_mini.psf::
  VCLOSE: Closing unit   90 with status "KEEP"
  VCLOSE: Closing unit   51 with status "KEEP"
-minimize snapshot [02] MMML: MLpot PhysNet steepest descent (USER / MMML) → 02_mini
+minimize snapshot [02] KARML: MLpot PhysNet steepest descent (USER / KARML) → 02_mini
 [1;36mPost MLpot mini[0m
 [1;2mState[0m
 [36mHybrid GRMS[0m[36m [0m1.5830 kcal/mol/Å (0.0686 eV/Å)
@@ -857,24 +857,24 @@ umbrella init nsim 400 update 500 equi 250 thresh 10 temp 500 wuni 44 ucun 50
   
 FAIL: point rcl1.8_rcn3.5 exited 137
 (r_ClC, r_CN) target (2.20, 2.00) -> frame 14499: r(Cl-C)=2.43 Å r(C-N)=1.91 Å (xi=1.270)
-Wrote /mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl2.2_rcn2.0/solute_rcl2.2_rcn2.0.pdb
+Wrote /mmhome/boittier/home/karml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl2.2_rcn2.0/solute_rcl2.2_rcn2.0.pdb
   AMM1 atom records: 4  CH3CL atom records: 5
 PASS: solute PDB for make-box
---- point rcl2.2_rcn2.0 -> /mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl2.2_rcn2.0
-    uv run mmml md-system --config /mmhome/boittier/home/mmml/examples/m/yaml/adumb_clc_cn_2d.yaml --output-dir /mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl2.2_rcn2.0 --composition /mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl2.2_rcn2.0/solute_rcl2.2_rcn2.0.pdb --from-pdb /mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl2.2_rcn2.0/solute_rcl2.2_rcn2.0.pdb --no-packmol --charmm-sd-steps 0 --charmm-abnr-steps 0 --no-monomer-physnet-mini 
-mmml md-system: running pycharmm (setup=free_nvt | composition=/mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl2.2_rcn2.0/solute_rcl2.2_rcn2.0.pdb | stages=mini,heat)
-  --phase staged --ensemble nvt --setup free_nvt --spacing 1.0 --ps 1.0 --dt-fs 1.0 --temperature 500 --mini-nstep 40 --nprint 50 --dyn-nprint 500 --dyn-iprfrq 2000 --heat-ihtfrq 0 --heat-mode ramp --heat-thermostat bussi --no-heat-comp-damp --heat-comp-hydrogen-only --dcd-nsavc 10 --echeck 100.0 --ps-heat 200.0 --ps-equi 50.0 --npt-thermostat hoover --npt-pressure 1.0 --npt-pgamma 5.0 --n-heat-segments 1 --n-equi-segments 1 --n-prod-segments 1 --composition /mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl2.2_rcn2.0/solute_rcl2.2_rcn2.0.pdb --n-molecules 1 --pycharmm-pre-dynamics-lingo-file /mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl2.2_rcn2.0/pycharmm_pre_dynamics_lingo.inp --md-stages mini,heat --checkpoint examples/m/kl.json --mbd-weight 1.0 --output-dir /mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl2.2_rcn2.0 --continue-velocities --from-pdb /mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl2.2_rcn2.0/solute_rcl2.2_rcn2.0.pdb --dyn-freq-cadence 500 --no-bonded-mm-mini --dynamics-overlap-action rescue --dynamics-overlap-min-distance 0.2 --dynamics-intra-min-distance 0.2 --dynamics-overlap-check-interval 500 --dynamics-overlap-charmm-sd-steps 200 --dynamics-overlap-charmm-abnr-steps 400 --dynamics-overlap-separate-margin 0.2 --mm-switch-on 8.0 --mm-switch-width 5.0 --ml-switch-width 1.5 --mm-nonbond-mode jax_mic --mm-pair-source jax --periodic-charmm-vdw --mm-charge-mode fixed --min-com-restraint-k 1.0 --calculator-pre-minimize --pre-min-steps 50 --pre-min-fmax 0.1 --bfgs-maxstep 0.05 --fire-min-steps 200 --fire-min-maxstep 0.2 --pre-min-ase-order fire-first --bfgs-polish-max-fmax 1.0 --rescue-fire-fmax 0.05 --no-monomer-physnet-mini --charmm-sd-steps 0 --charmm-abnr-steps 0 --charmm-tolenr 0.001 --charmm-tolgrd 0.001 --charmm-mm-pretreat-heat-nstep 2000 --charmm-mm-pretreat-ps-equi 0.0 --charmm-mm-pretreat-ps-prod 0.0 --charmm-mm-pretreat-dt-fs 1.0 --skip-energy-show --max-grms-before-dyn 50.0 --seed 0 --no-mc-density-equalize --mini-box-equil-ps 0.0 --density-certify-relative-tolerance 0.05 --density-prep-mode off --density-prep-lattice-abnr-steps 0 --charmm-image-mlpot-min-distance 1.0 --no-reuse-packmol-cache
-mmml: MPI-linked CHARMM — re-launching under OpenMPI for md-system:
-  /opt/gcc-14.2.0/openmpi-5.0.5/build/bin/mpirun -np 1 --mca pmix ^ext3x --mca shmem mmap -x LD_LIBRARY_PATH -x CHARMM_LIB_DIR --mca orte_abort_print_stack 1 /mmhome/boittier/home/mmml/.venv/bin/python3 -m mmml.cli.__main__ md-system --config /mmhome/boittier/home/mmml/examples/m/yaml/adumb_clc_cn_2d.yaml --output-dir /mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl2.2_rcn2.0 --composition /mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl2.2_rcn2.0/solute_rcl2.2_rcn2.0.pdb --from-pdb /mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl2.2_rcn2.0/solute_rcl2.2_rcn2.0.pdb --no-packmol --charmm-sd-steps 0 --charmm-abnr-steps 0 --no-monomer-physnet-mini
-mmml md-system: running pycharmm (setup=free_nvt | composition=/mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl2.2_rcn2.0/solute_rcl2.2_rcn2.0.pdb | stages=mini,heat)
-  --phase staged --ensemble nvt --setup free_nvt --spacing 1.0 --ps 1.0 --dt-fs 1.0 --temperature 500 --mini-nstep 40 --nprint 50 --dyn-nprint 500 --dyn-iprfrq 2000 --heat-ihtfrq 0 --heat-mode ramp --heat-thermostat bussi --no-heat-comp-damp --heat-comp-hydrogen-only --dcd-nsavc 10 --echeck 100.0 --ps-heat 200.0 --ps-equi 50.0 --npt-thermostat hoover --npt-pressure 1.0 --npt-pgamma 5.0 --n-heat-segments 1 --n-equi-segments 1 --n-prod-segments 1 --composition /mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl2.2_rcn2.0/solute_rcl2.2_rcn2.0.pdb --n-molecules 1 --pycharmm-pre-dynamics-lingo-file /mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl2.2_rcn2.0/pycharmm_pre_dynamics_lingo.inp --md-stages mini,heat --checkpoint examples/m/kl.json --mbd-weight 1.0 --output-dir /mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl2.2_rcn2.0 --continue-velocities --from-pdb /mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl2.2_rcn2.0/solute_rcl2.2_rcn2.0.pdb --dyn-freq-cadence 500 --no-bonded-mm-mini --dynamics-overlap-action rescue --dynamics-overlap-min-distance 0.2 --dynamics-intra-min-distance 0.2 --dynamics-overlap-check-interval 500 --dynamics-overlap-charmm-sd-steps 200 --dynamics-overlap-charmm-abnr-steps 400 --dynamics-overlap-separate-margin 0.2 --mm-switch-on 8.0 --mm-switch-width 5.0 --ml-switch-width 1.5 --mm-nonbond-mode jax_mic --mm-pair-source jax --periodic-charmm-vdw --mm-charge-mode fixed --min-com-restraint-k 1.0 --calculator-pre-minimize --pre-min-steps 50 --pre-min-fmax 0.1 --bfgs-maxstep 0.05 --fire-min-steps 200 --fire-min-maxstep 0.2 --pre-min-ase-order fire-first --bfgs-polish-max-fmax 1.0 --rescue-fire-fmax 0.05 --no-monomer-physnet-mini --charmm-sd-steps 0 --charmm-abnr-steps 0 --charmm-tolenr 0.001 --charmm-tolgrd 0.001 --charmm-mm-pretreat-heat-nstep 2000 --charmm-mm-pretreat-ps-equi 0.0 --charmm-mm-pretreat-ps-prod 0.0 --charmm-mm-pretreat-dt-fs 1.0 --skip-energy-show --max-grms-before-dyn 50.0 --seed 0 --no-mc-density-equalize --mini-box-equil-ps 0.0 --density-certify-relative-tolerance 0.05 --density-prep-mode off --density-prep-lattice-abnr-steps 0 --charmm-image-mlpot-min-distance 1.0 --no-reuse-packmol-cache
+--- point rcl2.2_rcn2.0 -> /mmhome/boittier/home/karml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl2.2_rcn2.0
+    uv run karml md-system --config /mmhome/boittier/home/karml/examples/m/yaml/adumb_clc_cn_2d.yaml --output-dir /mmhome/boittier/home/karml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl2.2_rcn2.0 --composition /mmhome/boittier/home/karml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl2.2_rcn2.0/solute_rcl2.2_rcn2.0.pdb --from-pdb /mmhome/boittier/home/karml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl2.2_rcn2.0/solute_rcl2.2_rcn2.0.pdb --no-packmol --charmm-sd-steps 0 --charmm-abnr-steps 0 --no-monomer-physnet-mini 
+karml md-system: running pycharmm (setup=free_nvt | composition=/mmhome/boittier/home/karml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl2.2_rcn2.0/solute_rcl2.2_rcn2.0.pdb | stages=mini,heat)
+  --phase staged --ensemble nvt --setup free_nvt --spacing 1.0 --ps 1.0 --dt-fs 1.0 --temperature 500 --mini-nstep 40 --nprint 50 --dyn-nprint 500 --dyn-iprfrq 2000 --heat-ihtfrq 0 --heat-mode ramp --heat-thermostat bussi --no-heat-comp-damp --heat-comp-hydrogen-only --dcd-nsavc 10 --echeck 100.0 --ps-heat 200.0 --ps-equi 50.0 --npt-thermostat hoover --npt-pressure 1.0 --npt-pgamma 5.0 --n-heat-segments 1 --n-equi-segments 1 --n-prod-segments 1 --composition /mmhome/boittier/home/karml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl2.2_rcn2.0/solute_rcl2.2_rcn2.0.pdb --n-molecules 1 --pycharmm-pre-dynamics-lingo-file /mmhome/boittier/home/karml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl2.2_rcn2.0/pycharmm_pre_dynamics_lingo.inp --md-stages mini,heat --checkpoint examples/m/kl.json --mbd-weight 1.0 --output-dir /mmhome/boittier/home/karml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl2.2_rcn2.0 --continue-velocities --from-pdb /mmhome/boittier/home/karml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl2.2_rcn2.0/solute_rcl2.2_rcn2.0.pdb --dyn-freq-cadence 500 --no-bonded-mm-mini --dynamics-overlap-action rescue --dynamics-overlap-min-distance 0.2 --dynamics-intra-min-distance 0.2 --dynamics-overlap-check-interval 500 --dynamics-overlap-charmm-sd-steps 200 --dynamics-overlap-charmm-abnr-steps 400 --dynamics-overlap-separate-margin 0.2 --mm-switch-on 8.0 --mm-switch-width 5.0 --ml-switch-width 1.5 --mm-nonbond-mode jax_mic --mm-pair-source jax --periodic-charmm-vdw --mm-charge-mode fixed --min-com-restraint-k 1.0 --calculator-pre-minimize --pre-min-steps 50 --pre-min-fmax 0.1 --bfgs-maxstep 0.05 --fire-min-steps 200 --fire-min-maxstep 0.2 --pre-min-ase-order fire-first --bfgs-polish-max-fmax 1.0 --rescue-fire-fmax 0.05 --no-monomer-physnet-mini --charmm-sd-steps 0 --charmm-abnr-steps 0 --charmm-tolenr 0.001 --charmm-tolgrd 0.001 --charmm-mm-pretreat-heat-nstep 2000 --charmm-mm-pretreat-ps-equi 0.0 --charmm-mm-pretreat-ps-prod 0.0 --charmm-mm-pretreat-dt-fs 1.0 --skip-energy-show --max-grms-before-dyn 50.0 --seed 0 --no-mc-density-equalize --mini-box-equil-ps 0.0 --density-certify-relative-tolerance 0.05 --density-prep-mode off --density-prep-lattice-abnr-steps 0 --charmm-image-mlpot-min-distance 1.0 --no-reuse-packmol-cache
+karml: MPI-linked CHARMM — re-launching under OpenMPI for md-system:
+  /opt/gcc-14.2.0/openmpi-5.0.5/build/bin/mpirun -np 1 --mca pmix ^ext3x --mca shmem mmap -x LD_LIBRARY_PATH -x CHARMM_LIB_DIR --mca orte_abort_print_stack 1 /mmhome/boittier/home/karml/.venv/bin/python3 -m karml.cli.__main__ md-system --config /mmhome/boittier/home/karml/examples/m/yaml/adumb_clc_cn_2d.yaml --output-dir /mmhome/boittier/home/karml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl2.2_rcn2.0 --composition /mmhome/boittier/home/karml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl2.2_rcn2.0/solute_rcl2.2_rcn2.0.pdb --from-pdb /mmhome/boittier/home/karml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl2.2_rcn2.0/solute_rcl2.2_rcn2.0.pdb --no-packmol --charmm-sd-steps 0 --charmm-abnr-steps 0 --no-monomer-physnet-mini
+karml md-system: running pycharmm (setup=free_nvt | composition=/mmhome/boittier/home/karml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl2.2_rcn2.0/solute_rcl2.2_rcn2.0.pdb | stages=mini,heat)
+  --phase staged --ensemble nvt --setup free_nvt --spacing 1.0 --ps 1.0 --dt-fs 1.0 --temperature 500 --mini-nstep 40 --nprint 50 --dyn-nprint 500 --dyn-iprfrq 2000 --heat-ihtfrq 0 --heat-mode ramp --heat-thermostat bussi --no-heat-comp-damp --heat-comp-hydrogen-only --dcd-nsavc 10 --echeck 100.0 --ps-heat 200.0 --ps-equi 50.0 --npt-thermostat hoover --npt-pressure 1.0 --npt-pgamma 5.0 --n-heat-segments 1 --n-equi-segments 1 --n-prod-segments 1 --composition /mmhome/boittier/home/karml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl2.2_rcn2.0/solute_rcl2.2_rcn2.0.pdb --n-molecules 1 --pycharmm-pre-dynamics-lingo-file /mmhome/boittier/home/karml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl2.2_rcn2.0/pycharmm_pre_dynamics_lingo.inp --md-stages mini,heat --checkpoint examples/m/kl.json --mbd-weight 1.0 --output-dir /mmhome/boittier/home/karml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl2.2_rcn2.0 --continue-velocities --from-pdb /mmhome/boittier/home/karml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl2.2_rcn2.0/solute_rcl2.2_rcn2.0.pdb --dyn-freq-cadence 500 --no-bonded-mm-mini --dynamics-overlap-action rescue --dynamics-overlap-min-distance 0.2 --dynamics-intra-min-distance 0.2 --dynamics-overlap-check-interval 500 --dynamics-overlap-charmm-sd-steps 200 --dynamics-overlap-charmm-abnr-steps 400 --dynamics-overlap-separate-margin 0.2 --mm-switch-on 8.0 --mm-switch-width 5.0 --ml-switch-width 1.5 --mm-nonbond-mode jax_mic --mm-pair-source jax --periodic-charmm-vdw --mm-charge-mode fixed --min-com-restraint-k 1.0 --calculator-pre-minimize --pre-min-steps 50 --pre-min-fmax 0.1 --bfgs-maxstep 0.05 --fire-min-steps 200 --fire-min-maxstep 0.2 --pre-min-ase-order fire-first --bfgs-polish-max-fmax 1.0 --rescue-fire-fmax 0.05 --no-monomer-physnet-mini --charmm-sd-steps 0 --charmm-abnr-steps 0 --charmm-tolenr 0.001 --charmm-tolgrd 0.001 --charmm-mm-pretreat-heat-nstep 2000 --charmm-mm-pretreat-ps-equi 0.0 --charmm-mm-pretreat-ps-prod 0.0 --charmm-mm-pretreat-dt-fs 1.0 --skip-energy-show --max-grms-before-dyn 50.0 --seed 0 --no-mc-density-equalize --mini-box-equil-ps 0.0 --density-certify-relative-tolerance 0.05 --density-prep-mode off --density-prep-lattice-abnr-steps 0 --charmm-image-mlpot-min-distance 1.0 --no-reuse-packmol-cache
  JAX CPU thread XLA_FLAGS already present; using existing flags: 
 --[33mxla_cpu_multi_thread_eigen[0m=[35mtrue[0m [33mintra_op_parallelism_threads[0m=[1;36m16[0m
-mmml: JAX compilation cache -> /mmhome/boittier/home/.cache/mmml/jax-compilation-cache
+karml: JAX compilation cache -> /mmhome/boittier/home/.cache/karml/jax-compilation-cache
 [1;36mPyCHARMM environment[0m
-[2;36mCGenFF[0m[2;36m [0m/mmhome/boittier/home/mmml/mmml/data/charmm  (top_all36_cgenff.rtf,      
+[2;36mCGenFF[0m[2;36m [0m/mmhome/boittier/home/karml/karml/data/charmm  (top_all36_cgenff.rtf,      
 [2;36m       [0mpar_all36_cgenff.prm)                                                    
-[2;36mCHARMM[0m[2;36m [0m/mmhome/boittier/home/mmml/setup/charmm                                  
+[2;36mCHARMM[0m[2;36m [0m/mmhome/boittier/home/karml/setup/charmm                                  
 Loading full-system PDB solute_rcl2.2_rcn2.0.pdb (sequence_string AMM1 CH3CL, 9 atoms)…
 Loading full-system PDB solute_rcl2.2_rcn2.0.pdb (2 residues, 9 atoms, vacuum (no box))
 Cluster monomer count: CLI n_monomers=2 -> PSF nres=2 (9 atoms, 4 atoms/monomer typical)
@@ -908,7 +908,7 @@ Dynamics intra-monomer guard: action=rescue, min_distance=0.20 Å, exclude_1_3=T
        20 ATOM PAIRS WERE FOUND FOR ATOM LIST
         0 GROUP PAIRS REQUIRED ATOM SEARCHES
 
- VOPEN> Attempting to open::/tmp/mmml-charmm-io-boittier/d0ab8a254e464166/model.psf::
+ VOPEN> Attempting to open::/tmp/karml-charmm-io-boittier/d0ab8a254e464166/model.psf::
  VCLOSE: Closing unit   90 with status "KEEP"
 minimize snapshot [00] packmol: Packmol sphere placement (pre-minimize) → 00_pack
 
@@ -936,17 +936,17 @@ minimize snapshot [01] MM: CHARMM CGENFF SD/ABNR before MLpot (MM only) → 01_m
 === Progress: vacuum MMFP flat-bottom (before MLpot registration) ===
 === Progress: MMFP done; continuing toward MLpot registration ===
 
-=== Progress: registering MLpot (9 atoms, ckpt=/mmhome/boittier/home/mmml/examples/m/kl.json) ===
+=== Progress: registering MLpot (9 atoms, ckpt=/mmhome/boittier/home/karml/examples/m/kl.json) ===
     (first JAX compile / USER registration can take minutes; watch GPU with nvidia-smi)
  JAX CPU thread XLA_FLAGS already present; using existing flags: 
 --[33mxla_cpu_multi_thread_eigen[0m=[35mtrue[0m [33mintra_op_parallelism_threads[0m=[1;36m16[0m
-mmml: JAX compilation cache -> /mmhome/boittier/home/.cache/mmml/jax-compilation-cache
-MLpot device policy: MMML_MLPOT_DEVICE=gpu JAX_PLATFORMS=cuda,cpu
+karml: JAX compilation cache -> /mmhome/boittier/home/.cache/karml/jax-compilation-cache
+MLpot device policy: KARML_MLPOT_DEVICE=gpu JAX_PLATFORMS=cuda,cpu
 Decomposed MLpot: 2 JAX GPUs visible but ml_gpu_count=1 (only GPU:0 runs PhysNet). Use --ml-gpu-count 2 and enough chunks (--ml-batch-size 128-256 for DCM:90).
 Decomposed MLpot: max_active_dimers=1 (free-space all-pairs safe; PhysNet batch ≤ 3 systems/step)
 Decomposed MLpot: lr_solver=mic, scafacos=yes, jax_pme=no, nvalchemiops_pme=no (jax-pme method=ewald, sr_cutoff=13.0 Å; r^-6 dispersion=env/default when lr_solver=jax_pme)
 Decomposed MLpot: mm_pair_source=jax (all-ML jax_mic; CHARMM callback lists are fully excluded)
-[1;32mOK     [0m  Loaded checkpoint  [35m/mmhome/boittier/home/mmml/examples/m/[0m[95mkl.json[0m
+[1;32mOK     [0m  Loaded checkpoint  [35m/mmhome/boittier/home/karml/examples/m/[0m[95mkl.json[0m
 [1;36mHybrid ML/MM setup[0m
 [1;2mSystem[0m
 [36mn_monomers       [0m[36m [0m2                                            
@@ -955,7 +955,7 @@ Decomposed MLpot: mm_pair_source=jax (all-ML jax_mic; CHARMM callback lists are 
 [36mmax_atoms        [0m[36m [0m9                                            
 [36mmm_charge_mode   [0m[36m [0mfixed                                        
 [36mml_compute_dtype [0m[36m [0m<class 'jax.numpy.float64'>                  
-[36mcheckpoint_dir   [0m[36m [0m/mmhome/boittier/home/mmml/examples/m/kl.json
+[36mcheckpoint_dir   [0m[36m [0m/mmhome/boittier/home/karml/examples/m/kl.json
 [1;2mHandoff & cutoffs[0m
 [36mml_switch_width_Å[0m[36m [0m1.5000
 [36mmm_switch_on_Å   [0m[36m [0m8.0000
@@ -1019,23 +1019,23 @@ Decomposed MLpot: mm_pair_source=jax (all-ML jax_mic; CHARMM callback lists are 
 [36minclude_electrostatics[0m[36m [0mTrue   
 [1;2mRuntime threads[0m
 [36mOMP_NUM_THREADS            [0m[36m [0m1                                                   
-[36mMMML_CHARMM_OMP_THREADS    [0m[36m [0munset                                               
+[36mKARML_CHARMM_OMP_THREADS    [0m[36m [0munset                                               
 [36mMKL_NUM_THREADS            [0m[36m [0m1                                                   
 [36mOPENBLAS_NUM_THREADS       [0m[36m [0m1                                                   
 [36mNUMEXPR_NUM_THREADS        [0m[36m [0m1                                                   
-[36mMMML_JAX_COMPILE_THREADS   [0m[36m [0munset                                               
-[36mMMML_NO_JAX_COMPILE_THREADS[0m[36m [0munset                                               
+[36mKARML_JAX_COMPILE_THREADS   [0m[36m [0munset                                               
+[36mKARML_NO_JAX_COMPILE_THREADS[0m[36m [0munset                                               
 [36mXLA_FLAGS                  [0m[36m [0m--xla_cpu_multi_thread_eigen=true                   
 [36m                            [0mintra_op_parallelism_threads=16                     
 [36mJAX_PLATFORMS              [0m[36m [0mcuda,cpu                                            
-[36mMMML_MLPOT_DEVICE          [0m[36m [0mgpu                                                 
+[36mKARML_MLPOT_DEVICE          [0m[36m [0mgpu                                                 
 [1;2mML/MM flags[0m
 [36mdoML            [0m[36m [0mTrue 
 [36mdoMM            [0m[36m [0mTrue 
 [36mdoML_dimer      [0m[36m [0mTrue 
 [36mdefer_xla_warmup[0m[36m [0mFalse
 [1;2mCheckpoint[0m
-[36mCheckpoint[0m[36m [0m/mmhome/boittier/home/mmml/examples/m/kl.json
+[36mCheckpoint[0m[36m [0m/mmhome/boittier/home/karml/examples/m/kl.json
 [36mname      [0m[36m [0mkl.json                                      
 [36mepoch     [0m[36m [0m—                                            
 [36mbest_loss [0m[36m [0m—                                            
@@ -1043,7 +1043,7 @@ Decomposed MLpot: mm_pair_source=jax (all-ML jax_mic; CHARMM callback lists are 
 [1;32mCalculator Summary[0m
 [1mParameter                 [0m[1m [0m[1mValue                                                [0m
 [96mModel type                [0m[96m [0m[37mHybrid ML/MM (PhysNet spherical cutoff)              [0m
-[96mCheckpoint                [0m[96m [0m[37m/mmhome/boittier/home/mmml/examples/m/kl.json        [0m
+[96mCheckpoint                [0m[96m [0m[37m/mmhome/boittier/home/karml/examples/m/kl.json        [0m
 [96mEnsemble                  [0m[96m [0m[37mNVE                                                  [0m
 [96mMonomers                  [0m[96m [0m[37m2                                                    [0m
 [96mAtoms                     [0m[96m [0m[37m9                                                    [0m
@@ -1145,7 +1145,7 @@ ENER INTERN>       89.55431     25.32418      0.00000      0.00000      0.00000
 ENER EXTERN>      562.78930      0.00000      0.00000      0.00000      0.00000
  ----------       ---------    ---------    ---------    ---------    ---------
 CHARMM energy policy vdw: non-zero before reload (VDW=562.789)
-CHARMM energy policy: reloading overlay /mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl2.2_rcn2.0/charmm_energy_policy/zeroed_vdw.prm (bonded=False, nonbond=True, zero_charges=False)
+CHARMM energy policy: reloading overlay /mmhome/boittier/home/karml/artifacts/nh3_ch3cl/adumb_2d_windows/rcl2.2_rcn2.0/charmm_energy_policy/zeroed_vdw.prm (bonded=False, nonbond=True, zero_charges=False)
  api_nbonds%nbonds_cutoffs_orderly> CUTNB,CTOFNB,CTONNB=      18.0      12.0      13.0
 
  NONBOND OPTION FLAGS: 
@@ -1257,7 +1257,7 @@ Before MLpot SD minimize: initial hybrid GRMS 70.67 kcal/mol/Å (limit 500.0)
 
 MLpot SD minimize: 40 steps/pass, 9 atoms
 GRMS thresholds: intervention=317.5, max_before_dyn=793.7 kcal/mol/Å, max_fmax_before_dyn=46.1 kcal/mol/Å (2.00 eV/Å) (charmm_p90=126.99, charmm_max=129.47)
- VOPEN> Attempting to open::/tmp/mmml-charmm-io-boittier/85ddf7ad617f1207/02_mini.dcd::
+ VOPEN> Attempting to open::/tmp/karml-charmm-io-boittier/85ddf7ad617f1207/02_mini.dcd::
 MLpot: rebound CHARMM callback to current pyCModel calculator
 
  NONBOND OPTION FLAGS: 
@@ -1599,12 +1599,12 @@ CHARMM UPDATE after mini (sync NB/MLpot lists before dyna)
 [36mUSER energy[0m[36m [0m—                                                                   
 [36mDiag       [0m[36m [0mML geometry stress (CHARMM bonded/MM GRMS low; ELEC/VDW blocked on  
 [36m            [0mML atoms)                                                           
- VOPEN> Attempting to open::/tmp/mmml-charmm-io-boittier/948198e54ece48df/02_mini.pdb::
+ VOPEN> Attempting to open::/tmp/karml-charmm-io-boittier/948198e54ece48df/02_mini.pdb::
  VCLOSE: Closing unit   90 with status "KEEP"
- VOPEN> Attempting to open::/tmp/mmml-charmm-io-boittier/f53a3aea6cc4b66a/02_mini.psf::
+ VOPEN> Attempting to open::/tmp/karml-charmm-io-boittier/f53a3aea6cc4b66a/02_mini.psf::
  VCLOSE: Closing unit   90 with status "KEEP"
  VCLOSE: Closing unit   51 with status "KEEP"
-minimize snapshot [02] MMML: MLpot PhysNet steepest descent (USER / MMML) → 02_mini
+minimize snapshot [02] KARML: MLpot PhysNet steepest descent (USER / KARML) → 02_mini
 [1;36mPost MLpot mini[0m
 [1;2mState[0m
 [36mHybrid GRMS[0m[36m [0m5.8099 kcal/mol/Å (0.2519 eV/Å)                                     

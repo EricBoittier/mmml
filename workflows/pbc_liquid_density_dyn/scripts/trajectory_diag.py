@@ -8,8 +8,8 @@ from typing import Any
 
 import numpy as np
 
-from mmml.utils.dcd_reader import read_dcd_trajectory
-from mmml.utils.psf_reader import read_psf_atom_types
+from karml.utils.dcd_reader import read_dcd_trajectory
+from karml.utils.psf_reader import read_psf_atom_types
 
 
 def pair_label(type_a: str, type_b: str) -> str:

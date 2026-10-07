@@ -1,5 +1,5 @@
 """
-Tests for JAX-MD integration with the MMML hybrid calculator.
+Tests for JAX-MD integration with the KARML hybrid calculator.
 
 Verifies that the spherical_cutoff_calculator can be used as a JAX-MD energy
 function for minimization (FIRE) and optionally short MD runs.

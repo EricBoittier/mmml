@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run the mmml asv suite on a GPU: correctness first, then timings + HTML.
+"""Run the karml asv suite on a GPU: correctness first, then timings + HTML.
 
 Examples::
 

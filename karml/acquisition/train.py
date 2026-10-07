@@ -16,7 +16,7 @@ from typing import Any, Literal
 
 import numpy as np
 
-from mmml.acquisition.linear_student import LinearStudent, _energy_from_params, _forces_from_params
+from karml.acquisition.linear_student import LinearStudent, _energy_from_params, _forces_from_params
 import jax
 import jax.numpy as jnp
 

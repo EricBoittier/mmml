@@ -18,7 +18,7 @@ from typing import Sequence
 
 import numpy as np
 
-from mmml.interfaces.calculators.link_atoms import LinkAtom
+from karml.interfaces.calculators.link_atoms import LinkAtom
 
 HEME_FORMAL_CHARGE = -2
 # Four-coordinate Fe(II) porphyrin, no axial ligand in the residue.
@@ -80,8 +80,8 @@ def residue_formal_charge(name: str) -> int:
 
 def composition_pairs(args: object) -> list[tuple[str, int]]:
     """``[(RES, count), ...]`` from ``--composition`` or ``--residue`` × n."""
-    from mmml.interfaces.pycharmmInterface.heme_library import residues_from_cluster_args
-    from mmml.interfaces.pycharmmInterface.mlpot.composition_spec import (
+    from karml.interfaces.pycharmmInterface.heme_library import residues_from_cluster_args
+    from karml.interfaces.pycharmmInterface.mlpot.composition_spec import (
         parse_composition_entries,
     )
 
@@ -115,7 +115,7 @@ def expand_counterions(args: object) -> None:
     kind = getattr(args, "counterions", None)
     if kind is None or str(kind).strip().lower() in {"", "none"}:
         return
-    from mmml.interfaces.pycharmmInterface.myoglobin import is_myoglobin_args
+    from karml.interfaces.pycharmmInterface.myoglobin import is_myoglobin_args
 
     if is_myoglobin_args(args):
         raise ValueError(
@@ -190,7 +190,7 @@ def resolve_metatomic_electronic_state(args: object | None) -> MetatomicElectron
     """
     if args is None:
         return MetatomicElectronicState(None, None, None, None, "")
-    from mmml.interfaces.pycharmmInterface.ml_cut import ml_cut_spec_from_args
+    from karml.interfaces.pycharmmInterface.ml_cut import ml_cut_spec_from_args
 
     cut_spec = ml_cut_spec_from_args(args)
     if cut_spec is not None:
@@ -209,7 +209,7 @@ def resolve_metatomic_electronic_state(args: object | None) -> MetatomicElectron
             None,
             f"ml_cut {cut_spec.path.name}",
         )
-    from mmml.interfaces.pycharmmInterface.myoglobin import (
+    from karml.interfaces.pycharmmInterface.myoglobin import (
         is_myoglobin_args,
         myoglobin_electronic_state,
     )

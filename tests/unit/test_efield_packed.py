@@ -8,10 +8,10 @@ import numpy as np
 import optax
 import pytest
 
-from mmml.data.spice_alpha_ragged import offsets_from_counts, split_ragged
-from mmml.models.efield.model_functions import predicted_polarizability_bohr3
-from mmml.models.efield.packed import PackSpec, iter_packed_batches, make_steps, SubsetMetrics
-from mmml.models.efield.training import EFieldPhysNet, energy_and_forces, load_ef_npz, prepare_batches
+from karml.data.spice_alpha_ragged import offsets_from_counts, split_ragged
+from karml.models.efield.model_functions import predicted_polarizability_bohr3
+from karml.models.efield.packed import PackSpec, iter_packed_batches, make_steps, SubsetMetrics
+from karml.models.efield.training import EFieldPhysNet, energy_and_forces, load_ef_npz, prepare_batches
 
 from test_spice_alpha_efield_train import _init_params, _spice_efield_splits, _tiny_model
 

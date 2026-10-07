@@ -1,4 +1,4 @@
-"""``mmml liquid-box`` — MM-only periodic liquid box build and certification."""
+"""``karml liquid-box`` — MM-only periodic liquid box build and certification."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from pathlib import Path
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="mmml liquid-box",
+        prog="karml liquid-box",
         description=(
             "Build and certify a periodic liquid box under CHARMM MM only "
             "(Packmol → MC density → SD/ABNR → optional lattice/NPT → geometry gate). "
@@ -70,7 +70,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=0.25,
         help="Timestep for mini box equilibration (fs).",
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import add_dynamics_stability_args
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import add_dynamics_stability_args
 
     add_dynamics_stability_args(parser)
     parser.add_argument(
@@ -123,7 +123,7 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Reduce log output.",
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import add_box_sizing_args
+    from karml.interfaces.pycharmmInterface.mlpot.box_sizing import add_box_sizing_args
 
     add_box_sizing_args(parser)
     return parser
@@ -137,18 +137,18 @@ def main(argv: list[str] | None = None) -> int:
     args.save = True
     args.tag = None
 
-    from mmml.interfaces.pycharmmInterface.charmm_mpi import (
-        maybe_rerun_mmml_under_mpirun,
+    from karml.interfaces.pycharmmInterface.charmm_mpi import (
+        maybe_rerun_karml_under_mpirun,
         prepare_serial_charmm_mpi_env,
     )
 
     prepare_serial_charmm_mpi_env()
-    rerun_code = maybe_rerun_mmml_under_mpirun(parsed_argv, subcommand="liquid-box")
+    rerun_code = maybe_rerun_karml_under_mpirun(parsed_argv, subcommand="liquid-box")
     if rerun_code is not None:
         return int(rerun_code)
 
     try:
-        from mmml.interfaces.pycharmmInterface.mlpot.liquid_box_build import (
+        from karml.interfaces.pycharmmInterface.mlpot.liquid_box_build import (
             run_liquid_box_build,
         )
 

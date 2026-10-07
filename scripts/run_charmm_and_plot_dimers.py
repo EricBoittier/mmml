@@ -15,11 +15,11 @@ sys.path.insert(0, str(_REPO_ROOT))
 
 from ase.visualize.plot import plot_atoms
 
-from mmml.analysis.dimer_molecules import (
+from karml.analysis.dimer_molecules import (
     MOLECULES,
     make_oriented_scan_geometries,
 )
-from mmml.analysis.dimer_scans import build_rigid_dimer
+from karml.analysis.dimer_scans import build_rigid_dimer
 
 MAP_RESIDUES = {
     "DCM": "DCM",
@@ -94,10 +94,10 @@ def main():
         # Set bomlev -5 to prevent any coordinate warnings from crashing
         pycharmm.settings.set_bomb_level(-5)
 
-        from mmml.cli.run.md_pbc_suite.ase import _build_cluster_from_composition
-        from mmml.interfaces.pycharmmInterface.import_pycharmm import pycharmm_quiet
-        from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_energy_row
-        from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+        from karml.cli.run.md_pbc_suite.ase import _build_cluster_from_composition
+        from karml.interfaces.pycharmmInterface.import_pycharmm import pycharmm_quiet
+        from karml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_energy_row
+        from karml.interfaces.pycharmmInterface.mlpot.setup import (
             setup_default_nbonds,
             sync_charmm_positions,
         )

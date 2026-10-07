@@ -81,7 +81,7 @@ def _openmpi_env_without_launch() -> bool:
 
 
 def _charmm_lib_path() -> Path | None:
-    from mmml.interfaces.pycharmmInterface.charmm_paths import (
+    from karml.interfaces.pycharmmInterface.charmm_paths import (
         bootstrap_charmm_env,
         charmm_disabled,
     )
@@ -212,7 +212,7 @@ def _fallback_openmpi_library_dirs() -> tuple[str, ...]:
 
 @lru_cache(maxsize=1)
 def charmm_mpi_library_dirs() -> tuple[str, ...]:
-    if _truthy("MMML_NO_CHARMM_MPI"):
+    if _truthy("KARML_NO_CHARMM_MPI"):
         return ()
     lib = _charmm_lib_path()
     dirs: list[str] = []
@@ -225,7 +225,7 @@ def charmm_mpi_library_dirs() -> tuple[str, ...]:
             dirs.insert(0, path)
     extra = [
         p.strip()
-        for p in (os.environ.get("MMML_MPI_LD_PATH_EXTRA") or "").split(os.pathsep)
+        for p in (os.environ.get("KARML_MPI_LD_PATH_EXTRA") or "").split(os.pathsep)
         if p.strip()
     ]
     for path in extra:
@@ -244,9 +244,9 @@ def charmm_pmix_library_path() -> Path | None:
 
 @lru_cache(maxsize=1)
 def charmm_lib_links_mpi() -> bool:
-    if _truthy("MMML_CHARMM_MPI"):
+    if _truthy("KARML_CHARMM_MPI"):
         return True
-    if _truthy("MMML_NO_CHARMM_MPI"):
+    if _truthy("KARML_NO_CHARMM_MPI"):
         return False
     lib = _charmm_lib_path()
     if lib is None:
@@ -261,7 +261,7 @@ def selective_bonded_block_unsafe_under_mpi() -> bool:
     hang indefinitely. Full ``reset_block`` / ``apply_charmm_mm_block`` (COEFF 1.0 all
     terms) remain safe.
     """
-    if _truthy("MMML_ALLOW_SELECTIVE_BONDED_BLOCK"):
+    if _truthy("KARML_ALLOW_SELECTIVE_BONDED_BLOCK"):
         return False
     return bool(charmm_lib_links_mpi() and _under_mpirun())
 
@@ -316,7 +316,7 @@ def ensure_mpi4py_libmpi_env() -> str | None:
     symlink under ``sys.prefix/lib``. Setting ``MPI4PY_LIBMPI`` alone can leave
     the OpenMPI extension unable to resolve ``libmpi.so.40`` at load time.
     """
-    if _truthy("MMML_NO_MPI_LD_PATH"):
+    if _truthy("KARML_NO_MPI_LD_PATH"):
         return None
     os.environ.setdefault("MPI4PY_MPIABI", "openmpi")
     existing = (os.environ.get("MPI4PY_LIBMPI") or "").strip()
@@ -402,15 +402,15 @@ def _openmpi_root_mpirun() -> Path | None:
 def charmm_mpirun_path() -> Path | None:
     """``mpirun`` from the same OpenMPI install as ``libcharmm.so``.
 
-    Resolution order: ``MMML_MPIRUN``, then ``libmpi.so`` from ``ldd libcharmm.so``
+    Resolution order: ``KARML_MPIRUN``, then ``libmpi.so`` from ``ldd libcharmm.so``
     → ``../bin/mpirun``, then ``OPENMPI_ROOT/bin/mpirun`` as fallback.
 
     ``ldd`` is preferred over ``OPENMPI_ROOT`` so a distro ``OPENMPI_ROOT=/usr`` does
     not mask a custom OpenMPI prefix linked into ``libcharmm.so``.
-    When auto-discovery fails, set ``MMML_MPIRUN`` to the launcher that matches
+    When auto-discovery fails, set ``KARML_MPIRUN`` to the launcher that matches
     the ``libmpi`` line from ``ldd`` (do not assume a distro layout).
     """
-    override = (os.environ.get("MMML_MPIRUN") or "").strip()
+    override = (os.environ.get("KARML_MPIRUN") or "").strip()
     if override:
         candidate = Path(override).expanduser()
         if candidate.is_file():
@@ -486,7 +486,7 @@ def openmpi_mca_component_dir() -> Path | None:
     Static builds with no ``mca_*.so`` should leave this unset and rely on
     explicit ``--mca shmem mmap`` plus ``LD_PRELOAD`` of matched ``libopen-pal``.
     """
-    override = (os.environ.get("MMML_MPI_MCA_COMPONENT_DIR") or "").strip()
+    override = (os.environ.get("KARML_MPI_MCA_COMPONENT_DIR") or "").strip()
     if override:
         path = Path(override).expanduser()
         if path.is_dir() and _dir_has_mca_plugins(path):
@@ -504,7 +504,7 @@ def openmpi_mca_component_dir() -> Path | None:
 
 def openmpi_shmem_mca_component() -> str | None:
     """Shmem MCA component with a ``mca_shmem_<name>.so`` plugin in the prefix."""
-    override = (os.environ.get("MMML_MCA_SHMEM") or "").strip()
+    override = (os.environ.get("KARML_MCA_SHMEM") or "").strip()
     if override and not override.startswith("^"):
         return override
     prefix = openmpi_install_prefix()
@@ -527,22 +527,22 @@ def openmpi_shmem_mca_component() -> str | None:
 
 def openmpi_shmem_mca_for_launch() -> str | None:
     """Shmem MCA token for ``mpirun`` / env (DSO name or static-built fallback)."""
-    override = (os.environ.get("MMML_MCA_SHMEM") or "").strip()
+    override = (os.environ.get("KARML_MCA_SHMEM") or "").strip()
     if override:
         return override
     found = openmpi_shmem_mca_component()
     if found is not None:
         return found
-    if openmpi_install_prefix() is None or _truthy("MMML_NO_MPI_SHMEM_FALLBACK"):
+    if openmpi_install_prefix() is None or _truthy("KARML_NO_MPI_SHMEM_FALLBACK"):
         return None
     # In-tree / --disable-dlopen builds often have no mca_shmem_*.so; use built-in mmap.
-    fallback = (os.environ.get("MMML_MCA_SHMEM_STATIC_FALLBACK") or "mmap").strip()
+    fallback = (os.environ.get("KARML_MCA_SHMEM_STATIC_FALLBACK") or "mmap").strip()
     return fallback or None
 
 
 def _export_openmpi_opal_ld_preload() -> None:
     """``LD_PRELOAD`` matched ``libopen-pal`` for ``orted`` / rank children."""
-    if _truthy("MMML_NO_MPI_OPAL_PRELOAD") or _truthy("MMML_NO_MPI_LD_PATH"):
+    if _truthy("KARML_NO_MPI_OPAL_PRELOAD") or _truthy("KARML_NO_MPI_LD_PATH"):
         return
     opal = openmpi_opal_library_path()
     if opal is None:
@@ -563,7 +563,7 @@ def _export_openmpi_pmix_ld_preload() -> None:
     undefined ``pmix_framework_names`` symbol.  Keeping the matched PMIx DSO
     first makes both MPI initialization and JAX GPU compilation safe.
     """
-    if _truthy("MMML_NO_MPI_PMIX_PRELOAD") or _truthy("MMML_NO_MPI_LD_PATH"):
+    if _truthy("KARML_NO_MPI_PMIX_PRELOAD") or _truthy("KARML_NO_MPI_LD_PATH"):
         return
     pmix = charmm_pmix_library_path()
     if pmix is None or not pmix.is_file():
@@ -667,7 +667,7 @@ def openmpi_mpi_library_paths_for_preload() -> tuple[Path, ...]:
 
 def _export_openmpi_mpi_ld_preload() -> None:
     """``LD_PRELOAD`` all matched OpenMPI MPI shims (Fortran + C) for rank children."""
-    if _truthy("MMML_NO_MPI_LD_PATH") or _truthy("MMML_NO_MPI_MPI_PRELOAD"):
+    if _truthy("KARML_NO_MPI_LD_PATH") or _truthy("KARML_NO_MPI_MPI_PRELOAD"):
         return
     paths = openmpi_mpi_library_paths_for_preload()
     if not paths:
@@ -690,7 +690,7 @@ def mpi_openmpi_install_env_defaults() -> None:
     component (``mmap``/``sysv``/``posix``). Do not set ``OPAL_PREFIX`` for
     incomplete in-tree ``build/`` trees missing ``share/openmpi``.
     """
-    if _truthy("MMML_NO_MPI_MCA_PREFIX"):
+    if _truthy("KARML_NO_MPI_MCA_PREFIX"):
         return
     os.environ.setdefault("OMPI_MCA_pmix", "^ext3x")
     mca_dir = openmpi_mca_component_dir()
@@ -705,7 +705,7 @@ def mpi_openmpi_install_env_defaults() -> None:
     _export_openmpi_opal_ld_preload()
     # Must be last so PMIx is first in LD_PRELOAD, ahead of libopen-pal.
     _export_openmpi_pmix_ld_preload()
-    override = (os.environ.get("MMML_OPAL_PREFIX") or "").strip()
+    override = (os.environ.get("KARML_OPAL_PREFIX") or "").strip()
     if override:
         os.environ.setdefault("OPAL_PREFIX", override)
         return
@@ -721,7 +721,7 @@ def _scrub_deprecated_openmpi_mca_env() -> None:
 
 def mpi_diagnostic_env_defaults() -> None:
     """OpenMPI MCA defaults for clearer fatal-error output (idempotent)."""
-    if _truthy("MMML_NO_MPI_ABORT_STACK"):
+    if _truthy("KARML_NO_MPI_ABORT_STACK"):
         return
     os.environ.setdefault("OMPI_MCA_orte_abort_print_stack", "1")
     # Fewer aggregated PRRTE help blocks (often empty when PRRTE lacks Sphinx docs).
@@ -732,15 +732,15 @@ def mpi_mpirun_extra_args() -> list[str]:
     """Extra ``mpirun`` argv tokens for crash diagnostics and clean exit codes.
 
     OpenMPI/PRRTE can return the exit status of a *secondary* (spawned) job even
-    when the primary mmml process exits 0 — often accompanied by empty
+    when the primary karml process exits 0 — often accompanied by empty
     "PRRTE was built without Sphinx" help blocks. Default to reporting only the
     primary job's status so successful CHARMM/jaxmd campaigns are not marked
     failed by helper-process teardown.
     """
     args: list[str] = []
-    if not _truthy("MMML_NO_MPI_REPORT_CHILD_JOBS_SEPARATELY"):
+    if not _truthy("KARML_NO_MPI_REPORT_CHILD_JOBS_SEPARATELY"):
         args.append("--report-child-jobs-separately")
-    if not _truthy("MMML_NO_MPI_MCA_PREFIX"):
+    if not _truthy("KARML_NO_MPI_MCA_PREFIX"):
         args.extend(["--mca", "pmix", "^ext3x"])
         mca_dir = openmpi_mca_component_dir()
         if mca_dir is not None:
@@ -748,7 +748,7 @@ def mpi_mpirun_extra_args() -> list[str]:
         shmem = openmpi_shmem_mca_for_launch()
         if shmem is not None:
             args.extend(["--mca", "shmem", shmem])
-    if not _truthy("MMML_NO_MPI_LD_PATH"):
+    if not _truthy("KARML_NO_MPI_LD_PATH"):
         for var in (
             "LD_LIBRARY_PATH",
             "LD_PRELOAD",
@@ -758,10 +758,10 @@ def mpi_mpirun_extra_args() -> list[str]:
         ):
             if (os.environ.get(var) or "").strip():
                 args.extend(["-x", var])
-    if _truthy("MMML_NO_MPI_ABORT_STACK"):
+    if _truthy("KARML_NO_MPI_ABORT_STACK"):
         return args
     args.extend(["--mca", "orte_abort_print_stack", "1"])
-    if _truthy("MMML_MPI_VERBOSE"):
+    if _truthy("KARML_MPI_VERBOSE"):
         args.extend(
             [
                 "--mca",
@@ -842,19 +842,19 @@ def rebuild_mpi4py_shell_hint() -> str:
     )
 
 
-def explain_mpi_crash(exit_code: int, *, argv0: str = "mmml md-system") -> None:
+def explain_mpi_crash(exit_code: int, *, argv0: str = "karml md-system") -> None:
     """Print actionable hints after SIGSEGV/SIGABRT under ``mpirun``."""
     if exit_code not in (134, 139, -6, -11):
         return
     sig = "SIGABRT" if exit_code in (134, -6) else "SIGSEGV"
     lines = [
-        f"mmml: MPI job ended with {sig} (exit {exit_code}).",
+        f"karml: MPI job ended with {sig} (exit {exit_code}).",
         "  Ignore PRRTE 'built without Sphinx' help lines — they are launcher noise.",
         "  For source-level backtraces:",
         f"    1. ./scripts/rebuild_charmm_mlpot.sh --debug",
-        f"    2. MMML_MPI_GDB=1 ./scripts/mmml-charmm-mpirun.sh {argv0} ...",
+        f"    2. KARML_MPI_GDB=1 ./scripts/karml-charmm-mpirun.sh {argv0} ...",
         "    3. gdb -batch -ex run -ex 'thread apply all bt' -ex quit --args \\",
-        "         <python> -m mmml.cli.__main__ md-system ...",
+        "         <python> -m karml.cli.__main__ md-system ...",
     ]
     if exit_code in (139, -11):
         mismatch_ok, mismatch_msg = mpi4py_openmpi_mismatch()
@@ -862,11 +862,11 @@ def explain_mpi_crash(exit_code: int, *, argv0: str = "mmml md-system") -> None:
             lines.append(f"  mpi4py/OpenMPI mismatch: {mismatch_msg}")
         lines.append(
             "  MLpot ``upinb`` segfaults: use vendored pycharmm (skip_iblo_inb_update), "
-            "OMP_NUM_THREADS=1, and mmml-charmm-mpirun.sh."
+            "OMP_NUM_THREADS=1, and karml-charmm-mpirun.sh."
         )
         lines.append(
             "  MLpot SD MPI segfaults (``send_coord_to_recip`` / ``PMPI_Free_mem``, or "
-            "``ext_bond_update`` in ``gete``): sync mmml (JAX on CPU until after MLpot SD; "
+            "``ext_bond_update`` in ``gete``): sync karml (JAX on CPU until after MLpot SD; "
             "default: skip ``domdec off``); rebuild with "
             "./scripts/rebuild_charmm_mlpot.sh --no-domdec."
         )
@@ -881,14 +881,14 @@ def mpi_shell_setup_lines() -> list[str]:
         "unset OMPI_MCA_mpi_cuda_support",
         "export OMPI_MCA_opal_cuda_support=0",
     ]
-    if not _truthy("MMML_NO_MPI_ABORT_STACK"):
+    if not _truthy("KARML_NO_MPI_ABORT_STACK"):
         lines.extend(
             [
                 "export OMPI_MCA_orte_abort_print_stack=1",
                 "export OMPI_MCA_orte_base_help_aggregate=0",
             ]
         )
-    if not _truthy("MMML_NO_MPI_MCA_PREFIX"):
+    if not _truthy("KARML_NO_MPI_MCA_PREFIX"):
         lines.append("export OMPI_MCA_pmix='^ext3x'")
         mca_dir = openmpi_mca_component_dir()
         if mca_dir is not None:
@@ -897,7 +897,7 @@ def mpi_shell_setup_lines() -> list[str]:
         shmem = openmpi_shmem_mca_for_launch()
         if shmem is not None:
             lines.append(f"export OMPI_MCA_shmem={shmem}")
-        opal = (os.environ.get("MMML_OPAL_PREFIX") or "").strip()
+        opal = (os.environ.get("KARML_OPAL_PREFIX") or "").strip()
         if not opal:
             prefix = openmpi_install_prefix()
             if prefix is not None and (prefix / "share" / "openmpi").is_dir():
@@ -907,7 +907,7 @@ def mpi_shell_setup_lines() -> list[str]:
     ld = mpi_library_path_export()
     if ld:
         lines.append(ld)
-    if not _truthy("MMML_NO_MPI_LD_PATH"):
+    if not _truthy("KARML_NO_MPI_LD_PATH"):
         preload_var = "DYLD_INSERT_LIBRARIES" if _IS_DARWIN else "LD_PRELOAD"
         preload = (os.environ.get(preload_var) or "").strip()
         if preload:
@@ -917,12 +917,12 @@ def mpi_shell_setup_lines() -> list[str]:
         lines.append(path_line)
     mpirun = charmm_mpirun_path()
     if mpirun is not None:
-        lines.append(f"export MMML_MPIRUN={mpirun}")
+        lines.append(f"export KARML_MPIRUN={mpirun}")
     return lines
 
 
 def ensure_charmm_mpi_library_path() -> list[str]:
-    if _truthy("MMML_NO_MPI_LD_PATH"):
+    if _truthy("KARML_NO_MPI_LD_PATH"):
         return []
     dirs = charmm_mpi_library_dirs()
     if not dirs:
@@ -940,7 +940,7 @@ def ensure_charmm_mpi_library_path() -> list[str]:
 
 def _preload_pmix_global() -> None:
     global _pmix_preloaded
-    if _pmix_preloaded or _truthy("MMML_NO_MPI_LD_PATH"):
+    if _pmix_preloaded or _truthy("KARML_NO_MPI_LD_PATH"):
         return
     pmix = charmm_pmix_library_path()
     if pmix is None or not pmix.is_file():
@@ -950,7 +950,7 @@ def _preload_pmix_global() -> None:
         _pmix_preloaded = True
     except OSError as exc:
         print(
-            f"mmml: failed to preload {pmix} ({exc}). Try:\n  "
+            f"karml: failed to preload {pmix} ({exc}). Try:\n  "
             + mpi_library_path_export(),
             file=sys.stderr,
             flush=True,
@@ -960,7 +960,7 @@ def _preload_pmix_global() -> None:
 def _preload_openmpi_opal_global() -> None:
     """Preload matched ``libopen-pal`` so distro MCA DSOs resolve OPAL symbols."""
     global _opal_preloaded
-    if _opal_preloaded or _truthy("MMML_NO_MPI_LD_PATH") or _truthy("MMML_NO_MPI_OPAL_PRELOAD"):
+    if _opal_preloaded or _truthy("KARML_NO_MPI_LD_PATH") or _truthy("KARML_NO_MPI_OPAL_PRELOAD"):
         return
     opal = openmpi_opal_library_path()
     if opal is None:
@@ -975,7 +975,7 @@ def _preload_openmpi_opal_global() -> None:
 def _preload_openmpi_mpi_libraries_global() -> None:
     """``RTLD_GLOBAL`` preload so ``libcharmm.so`` resolves MPI without relying on late ``LD_LIBRARY_PATH``."""
     global _mpi_libs_preloaded
-    if _mpi_libs_preloaded or _truthy("MMML_NO_MPI_LD_PATH"):
+    if _mpi_libs_preloaded or _truthy("KARML_NO_MPI_LD_PATH"):
         return
     candidates = openmpi_mpi_library_paths_for_preload()
     loaded: set[Path] = set()
@@ -1007,7 +1007,7 @@ def prepare_charmm_mpi_runtime() -> None:
     _preload_openmpi_opal_global()
     _preload_pmix_global()
     try:
-        from mmml.utils.jax_gpu_warmup import maybe_sanitize_process_env_for_ptxas
+        from karml.utils.jax_gpu_warmup import maybe_sanitize_process_env_for_ptxas
 
         maybe_sanitize_process_env_for_ptxas(force=True)
     except ImportError:
@@ -1018,13 +1018,13 @@ def _pin_charmm_openmp_for_serial_mlpot() -> None:
     """Serial MLpot + MPI-linked ``libcharmm.so``: choose OpenMP thread caps.
 
     Default to one CHARMM/OpenMP thread for conservative MPI-linked MLpot runs.
-    When ``MMML_CHARMM_OMP_THREADS`` is explicit, use that same value as the
+    When ``KARML_CHARMM_OMP_THREADS`` is explicit, use that same value as the
     default CPU thread budget for BLAS/NumExpr too, unless those variables were
     already set by the caller.
     """
-    if _truthy("MMML_NO_CHARMM_OMP_PIN") or not charmm_lib_links_mpi():
+    if _truthy("KARML_NO_CHARMM_OMP_PIN") or not charmm_lib_links_mpi():
         return
-    explicit = (os.environ.get("MMML_CHARMM_OMP_THREADS") or "").strip()
+    explicit = (os.environ.get("KARML_CHARMM_OMP_THREADS") or "").strip()
     threads = explicit or "1"
     os.environ["OMP_NUM_THREADS"] = threads
     os.environ.setdefault("OMP_PROC_BIND", "true")
@@ -1033,12 +1033,12 @@ def _pin_charmm_openmp_for_serial_mlpot() -> None:
     os.environ.setdefault("OPENBLAS_NUM_THREADS", cpu_threads)
     os.environ.setdefault("NUMEXPR_NUM_THREADS", cpu_threads)
     if explicit:
-        os.environ.setdefault("MMML_JAX_COMPILE_THREADS", cpu_threads)
+        os.environ.setdefault("KARML_JAX_COMPILE_THREADS", cpu_threads)
         # ``mpi-launch --jax-mode cpu-threaded`` owns the XLA runtime pool and
         # deliberately disables the temporary GPU-oriented compile-thread
         # context. Do not undo that policy while pinning CHARMM's OpenMP pool.
-        if (os.environ.get("MMML_JAX_MODE") or "").strip() != "cpu-threaded":
-            os.environ["MMML_NO_JAX_COMPILE_THREADS"] = "0"
+        if (os.environ.get("KARML_JAX_MODE") or "").strip() != "cpu-threaded":
+            os.environ["KARML_NO_JAX_COMPILE_THREADS"] = "0"
 
 
 def configure_mpi4py_charmm_owned_init() -> None:
@@ -1046,13 +1046,13 @@ def configure_mpi4py_charmm_owned_init() -> None:
     global _mpi4py_charmm_configured
     if _mpi4py_charmm_configured:
         return
-    if _truthy("MMML_MPI_PY_INIT"):
+    if _truthy("KARML_MPI_PY_INIT"):
         return
     if not charmm_lib_links_mpi():
         return
     os.environ.setdefault("MPI4PY_RC_INITIALIZE", "false")
     os.environ.setdefault("MPI4PY_RC_FINALIZE", "false")
-    if _truthy("MMML_DEFER_MPI4PY_PACKAGE_IMPORT"):
+    if _truthy("KARML_DEFER_MPI4PY_PACKAGE_IMPORT"):
         _mpi4py_charmm_configured = True
         return
     try:
@@ -1083,7 +1083,7 @@ def ensure_charmm_mpi_initialized() -> None:
     configure_mpi4py_charmm_owned_init()
     if not charmm_lib_available():
         return
-    import mmml.interfaces.pycharmmInterface.import_pycharmm as import_pycharmm
+    import karml.interfaces.pycharmmInterface.import_pycharmm as import_pycharmm
 
     import_pycharmm.init_vacuum_charmm_state_mpi()
     _charmm_mpi_bootstrapped = True
@@ -1098,11 +1098,11 @@ def ensure_mpi4py_after_charmm_init(*, phase: str = "after PyCHARMM import") -> 
     That import must happen **after** CHARMM has initialized MPI, otherwise ASE
     (and any later mpi4py collectives) fail with ``cannot import name 'MPI'``.
 
-    When ``MMML_DEFER_MPI4PY_PACKAGE_IMPORT=1``, the mpi4py package was not
+    When ``KARML_DEFER_MPI4PY_PACKAGE_IMPORT=1``, the mpi4py package was not
     imported before PyCHARMM; this function performs the first load with MPI
     library paths from ``prepare_charmm_mpi_runtime()`` already applied.
     """
-    if _truthy("MMML_MPI_PY_INIT") or not charmm_lib_links_mpi():
+    if _truthy("KARML_MPI_PY_INIT") or not charmm_lib_links_mpi():
         return True
     if not _mpi4py_available():
         return True
@@ -1117,7 +1117,7 @@ def ensure_mpi4py_after_charmm_init(*, phase: str = "after PyCHARMM import") -> 
 
         if not MPI.Is_initialized():
             print(
-                f"mmml: mpi4py reports MPI not initialized {phase}. "
+                f"karml: mpi4py reports MPI not initialized {phase}. "
                 "PyCHARMM should have called MPI_Init from Fortran.",
                 file=sys.stderr,
                 flush=True,
@@ -1133,7 +1133,7 @@ def ensure_mpi4py_after_charmm_init(*, phase: str = "after PyCHARMM import") -> 
         if not mismatch_ok:
             hint = f"{hint}  ({mismatch_msg})"
         print(
-            f"mmml: mpi4py.MPI unavailable {phase}: {detail}. "
+            f"karml: mpi4py.MPI unavailable {phase}: {detail}. "
             f"Rebuild mpi4py against libcharmm OpenMPI: {hint}",
             file=sys.stderr,
             flush=True,
@@ -1160,7 +1160,7 @@ def mpi_charmm_script(
 
     Returns ``True`` when ``lingo.charmm_script`` reports success.
     """
-    from mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
+    from karml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
 
     rank, size = mpi_rank_size()
     if size <= 1:
@@ -1213,7 +1213,7 @@ def _invoke_charmm_script(
 
     import pycharmm.lingo as lingo
 
-    from mmml.interfaces.pycharmmInterface.charmm_levels import (
+    from karml.interfaces.pycharmmInterface.charmm_levels import (
         charmm_quiet_output,
         charmm_relaxed_bomlev,
     )
@@ -1242,32 +1242,32 @@ def configure_mpi_bootstrap_env() -> None:
     ``bomlev -2`` is applied and aborts on an empty system (BLOCK ILLEGAL COMMAND).
     Under ``mpirun``, import-time BLOCK can also hang on MPI-linked builds.
     """
-    from mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
+    from karml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
 
     _, size = mpi_rank_size()
-    os.environ.setdefault("MMML_SKIP_CHARMM_RESET_BLOCK", "1")
-    os.environ.setdefault("MMML_SKIP_VACUUM_CHARMM_INIT", "1")
+    os.environ.setdefault("KARML_SKIP_CHARMM_RESET_BLOCK", "1")
+    os.environ.setdefault("KARML_SKIP_VACUUM_CHARMM_INIT", "1")
     if size <= 1:
         return
-    os.environ.setdefault("MMML_DEFER_MPI4PY_PACKAGE_IMPORT", "1")
-    os.environ.setdefault("MMML_QUIET", "1")
+    os.environ.setdefault("KARML_DEFER_MPI4PY_PACKAGE_IMPORT", "1")
+    os.environ.setdefault("KARML_QUIET", "1")
 
 
 def sync_import_pycharmm_for_bootstrap(*, tag: str = "bootstrap") -> None:
     """Load ``import_pycharmm`` on all ranks without pre-import mpi4py barriers."""
     import sys
 
-    from mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
+    from karml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
 
     rank, size = mpi_rank_size()
-    if "mmml.interfaces.pycharmmInterface.import_pycharmm" in sys.modules:
+    if "karml.interfaces.pycharmmInterface.import_pycharmm" in sys.modules:
         if size > 1:
             ensure_mpi4py_after_charmm_init(phase=f"{tag} import_pycharmm already loaded")
         return
     if size <= 1:
-        import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+        import karml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
         return
-    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+    import karml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
     if not ensure_mpi4py_after_charmm_init(phase=f"{tag} synchronized import_pycharmm"):
         raise RuntimeError(f"rank {rank}/{size}: mpi4py.MPI unavailable after import_pycharmm")
 
@@ -1331,7 +1331,7 @@ def write_minimal_mass_rtf(psf_path: Path, prm_path: Path, out_path: Path) -> Pa
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     lines = [
-        "* MMML MPI bootstrap minimal MASS topology",
+        "* KARML MPI bootstrap minimal MASS topology",
         "*",
         *mass_lines,
         "END",
@@ -1342,7 +1342,7 @@ def write_minimal_mass_rtf(psf_path: Path, prm_path: Path, out_path: Path) -> Pa
 
 def ensure_shared_minimal_rtf(psf_path: Path, prm_path: Path) -> Path:
     """Write a MASS-only RTF beside *psf_path* (same path on every MPI rank)."""
-    from mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
+    from karml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
 
     out = psf_path.with_name(f"{psf_path.stem}.minimal_mass.rtf")
     rank, size = mpi_rank_size()
@@ -1362,12 +1362,12 @@ def _bootstrap_rank_local_staging_enabled(*, size: int) -> bool:
     """Whether each MPI rank copies topology files to a private UUID directory.
 
     Default **off**: DOMDEC MPI READ is cooperative (rank 0 disk + Fortran broadcast);
-    every rank must pass the **same** paths. Opt in with ``MMML_MPI_BOOTSTRAP_RANK_LOCAL=1``
+    every rank must pass the **same** paths. Opt in with ``KARML_MPI_BOOTSTRAP_RANK_LOCAL=1``
     only for bisect / embarrassingly parallel workloads.
     """
     if size <= 1:
         return False
-    flag = os.environ.get("MMML_MPI_BOOTSTRAP_RANK_LOCAL", "").strip().lower()
+    flag = os.environ.get("KARML_MPI_BOOTSTRAP_RANK_LOCAL", "").strip().lower()
     if flag in ("0", "false", "no"):
         return False
     if flag in ("1", "true", "yes"):
@@ -1381,9 +1381,9 @@ def stage_topology_files_for_rank(
     rank: int,
     log_fn: Callable[[str, str], None] | None = None,
 ) -> dict[str, Path]:
-    """Copy topology artifacts to ``$TMPDIR/mmml_mpi_bootstrap/rank<R>_<uuid>/``."""
+    """Copy topology artifacts to ``$TMPDIR/karml_mpi_bootstrap/rank<R>_<uuid>/``."""
     run_id = uuid.uuid4().hex
-    base = _tempdir() / "mmml_mpi_bootstrap" / f"rank{rank}_{run_id}"
+    base = _tempdir() / "karml_mpi_bootstrap" / f"rank{rank}_{run_id}"
     base.mkdir(parents=True, exist_ok=True)
     staged: dict[str, Path] = {"staging_dir": base.resolve()}
     for key, src in paths.items():
@@ -1412,7 +1412,7 @@ def prepare_rank_local_bootstrap_paths(
 ) -> dict[str, Path]:
     """Stage PSF/CRD/PRM (and optional RTF/res) under a per-rank UUID directory."""
     run_id = uuid.uuid4().hex
-    base = _tempdir() / "mmml_mpi_bootstrap" / f"rank{rank}_{run_id}"
+    base = _tempdir() / "karml_mpi_bootstrap" / f"rank{rank}_{run_id}"
     base.mkdir(parents=True, exist_ok=True)
 
     if rtf_path is not None and Path(rtf_path).is_file():
@@ -1488,7 +1488,7 @@ def _resolve_bootstrap_topology_paths(
 
 
 def _bootstrap_barrier_enabled() -> bool:
-    flag = os.environ.get("MMML_MPI_BOOTSTRAP_BARRIER", "").strip().lower()
+    flag = os.environ.get("KARML_MPI_BOOTSTRAP_BARRIER", "").strip().lower()
     return flag in ("1", "true", "yes")
 
 
@@ -1502,11 +1502,11 @@ def sync_bootstrap_ranks(
     ``mpi4py.MPI.Barrier`` between ``eval_charmm_script`` calls can desync CHARMM's
     Fortran MPI worker loop and leave ``n_atoms=0`` after READ.  Default bootstrap
     uses one multiline ``mpi_charmm_script`` call with no Python barriers instead.
-    Opt in with ``MMML_MPI_BOOTSTRAP_BARRIER=1``.
+    Opt in with ``KARML_MPI_BOOTSTRAP_BARRIER=1``.
     """
     if not _bootstrap_barrier_enabled():
         return
-    from mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
+    from karml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
 
     rank, size = mpi_rank_size()
     if size <= 1:
@@ -1530,7 +1530,7 @@ def align_mpi_ranks_after_import(
     label: str = "after import_pycharmm",
 ) -> None:
     """One Python barrier so all ranks finish staggered ``import_pycharmm`` before CHARMM I/O."""
-    from mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
+    from karml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
 
     rank, size = mpi_rank_size()
     if size <= 1:
@@ -1564,7 +1564,7 @@ def _bootstrap_coor_source(
 
 
 def _bootstrap_full_rtf() -> bool:
-    flag = os.environ.get("MMML_MPI_BOOTSTRAP_FULL_RTF", "").strip().lower()
+    flag = os.environ.get("KARML_MPI_BOOTSTRAP_FULL_RTF", "").strip().lower()
     return flag in ("1", "true", "yes")
 
 
@@ -1578,40 +1578,40 @@ def _resolve_bootstrap_rtf(
     if rtf_path is not None:
         return Path(rtf_path).expanduser().resolve()
     if size <= 1 or _bootstrap_full_rtf():
-        from mmml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_RTF
+        from karml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_RTF
 
         return Path(CGENFF_RTF).expanduser().resolve()
     return ensure_shared_minimal_rtf(psf, prm)
 
 
 def _bootstrap_force_psf_crd() -> bool:
-    flag = os.environ.get("MMML_MPI_BOOTSTRAP_FORCE_PSF_CRD", "").strip().lower()
+    flag = os.environ.get("KARML_MPI_BOOTSTRAP_FORCE_PSF_CRD", "").strip().lower()
     return flag in ("1", "true", "yes")
 
 
 def _bootstrap_rank0_drive() -> bool:
-    flag = os.environ.get("MMML_MPI_BOOTSTRAP_RANK0_DRIVE", "").strip().lower()
+    flag = os.environ.get("KARML_MPI_BOOTSTRAP_RANK0_DRIVE", "").strip().lower()
     return flag in ("1", "true", "yes")
 
 
 def _bootstrap_all_ranks_read() -> bool:
     """Bisect-only: every rank calls ``api_read`` (v4.5 hung on ``read_psf_card`` at np>1)."""
-    flag = os.environ.get("MMML_MPI_BOOTSTRAP_ALL_RANKS_READ", "").strip().lower()
+    flag = os.environ.get("KARML_MPI_BOOTSTRAP_ALL_RANKS_READ", "").strip().lower()
     return flag in ("1", "true", "yes")
 
 
 def _bootstrap_hybrid_topology_read() -> bool:
     """Bisect v4.7: direct ``api_read`` RTF/PRM + eval PSF only."""
-    flag = os.environ.get("MMML_MPI_BOOTSTRAP_HYBRID_READ", "").strip().lower()
+    flag = os.environ.get("KARML_MPI_BOOTSTRAP_HYBRID_READ", "").strip().lower()
     return flag in ("1", "true", "yes")
 
 
 def _bootstrap_eval_topology_read() -> bool:
     """Bisect v4.8: per-line ``eval`` READ (desyncs MPI between lines on some builds)."""
-    flag = os.environ.get("MMML_MPI_BOOTSTRAP_EVAL_LINES", "").strip().lower()
+    flag = os.environ.get("KARML_MPI_BOOTSTRAP_EVAL_LINES", "").strip().lower()
     if flag not in ("1", "true", "yes"):
         return False
-    from mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
+    from karml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
 
     _, size = mpi_rank_size()
     return size > 1 and not _bootstrap_all_ranks_read() and not _bootstrap_hybrid_topology_read()
@@ -1619,7 +1619,7 @@ def _bootstrap_eval_topology_read() -> bool:
 
 def _bootstrap_stream_topology_read() -> bool:
     """At ``np>1``, one ``eval_charmm_inp_file`` / multiline READ chain (native-style)."""
-    from mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
+    from karml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
 
     _, size = mpi_rank_size()
     if size <= 1:
@@ -1633,10 +1633,10 @@ def _bootstrap_stream_topology_read() -> bool:
 
 def _bootstrap_rank0_topology_read() -> bool:
     """Bisect-only (v4.6): rank 0 alone calls ``api_read`` — PSF hung waiting for workers."""
-    flag = os.environ.get("MMML_MPI_BOOTSTRAP_RANK0_TOPOLOGY_READ", "").strip().lower()
+    flag = os.environ.get("KARML_MPI_BOOTSTRAP_RANK0_TOPOLOGY_READ", "").strip().lower()
     if flag not in ("1", "true", "yes"):
         return False
-    from mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
+    from karml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
 
     _, size = mpi_rank_size()
     return size > 1
@@ -1704,7 +1704,7 @@ def _cooperative_direct_api_step(
     log_fn: Callable[[str, str], None] | None = None,
 ) -> None:
     """Run one ``api_read`` step on every rank (RTF/PRM only — no ``atmini``)."""
-    from mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
+    from karml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
 
     rank, size = mpi_rank_size()
     rank0_only = _bootstrap_rank0_topology_read()
@@ -1726,7 +1726,7 @@ _STREAM_BOOTSTRAP_INP = "bs_load.inp"
 def _write_cooperative_stream_inp(compact: dict[str, Path], dest: Path) -> None:
     """Write a short-basename READ chain for ``stream bs_load.inp`` (no ``mxcmsz`` limit)."""
     lines = [
-        "* MMML MPI cooperative bootstrap",
+        "* KARML MPI cooperative bootstrap",
         "bomlev -2",
         f"read rtf card name {compact['rtf'].name}",
         f"read param card name {compact['prm'].name} flex",
@@ -1789,7 +1789,7 @@ def _cooperative_stream_topology_read(
     log_fn: Callable[[str, str], None] | None = None,
 ) -> None:
     """Load RTF/PRM/PSF from shared ``bs_load.inp`` on all ranks (one Fortran session)."""
-    from mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
+    from karml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
 
     rank, size = mpi_rank_size()
     base = compact["psf"].parent.resolve()
@@ -1813,7 +1813,7 @@ def _cooperative_stream_topology_read(
             f"eval_charmm_inp_file={int(use_inp_api)}",
         )
 
-    quiet = (os.environ.get("MMML_QUIET") or "").strip().lower() in ("1", "true", "yes")
+    quiet = (os.environ.get("KARML_QUIET") or "").strip().lower() in ("1", "true", "yes")
     with _bootstrap_workdir(base):
         if use_inp_api:
             ok = _invoke_charmm_inp_file(inp_path)
@@ -1828,7 +1828,7 @@ def _cooperative_stream_topology_read(
         hint = (
             "rebuild libcharmm.so (eval_charmm_inp_file in api_eval.F90)"
             if not use_inp_api
-            else "Set MMML_QUIET=0 for CHARMM error text"
+            else "Set KARML_QUIET=0 for CHARMM error text"
         )
         raise RuntimeError(
             f"inp bootstrap failed on rank {rank}/{size}: {inp_path}. {hint}"
@@ -1843,7 +1843,7 @@ def _cooperative_stream_topology_read(
         )
         raise RuntimeError(
             f"inp bootstrap left psf_natom=0 on rank {rank}/{size}. "
-            f"Inp={inp_path}. Set MMML_QUIET=0 for CHARMM error text.{rebuild}"
+            f"Inp={inp_path}. Set KARML_QUIET=0 for CHARMM error text.{rebuild}"
         )
 
 
@@ -1855,7 +1855,7 @@ def _cooperative_eval_read_step(
     expect_psf_natom_min: int = 0,
 ) -> None:
     """One ``maincomx`` READ line on all ranks (short basename under bootstrap ``chdir``)."""
-    from mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
+    from karml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
 
     rank, size = mpi_rank_size()
     line = cmd if cmd.endswith("\n") else cmd + "\n"
@@ -1883,7 +1883,7 @@ def _cooperative_eval_read_step(
             raise RuntimeError(
                 f"eval read {label!r} left psf_natom={n_psf} on rank {rank}/{size} "
                 f"(expected >={expect_psf_natom_min}); cmd={stripped!r}. "
-                "Set MMML_QUIET=0 for CHARMM error text."
+                "Set KARML_QUIET=0 for CHARMM error text."
             )
 
 
@@ -2084,7 +2084,7 @@ def _load_coor_from_crd_api(crd_path: Path) -> None:
     import pandas as pd
     import pycharmm.coor as coor
 
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         read_crd_coordinates,
     )
 
@@ -2108,7 +2108,7 @@ def _load_coor_from_restart_api(
     import pandas as pd
     import pycharmm.coor as coor
 
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         read_restart_coordinates,
     )
 
@@ -2139,7 +2139,7 @@ def _apply_bootstrap_crystal(
     log_fn: Callable[[str, str], None] | None,
 ) -> None:
     """Optional PBC after load (still uses ``eval_charmm_script`` — may fail on some builds)."""
-    from mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
+    from karml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
 
     rank, size = mpi_rank_size()
     side = float(crystal_side_A)
@@ -2165,8 +2165,8 @@ def _run_cooperative_api_bootstrap(
     """Cooperative topology at ``np>1``: shared ``bs_load.inp`` READ + Python CRD coords."""
     from contextlib import nullcontext
 
-    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
-    from mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
+    from karml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
+    from karml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
 
     rank, size = mpi_rank_size()
     stream_topology = _bootstrap_stream_topology_read()
@@ -2274,9 +2274,9 @@ def _run_cooperative_api_bootstrap(
 
 def _bootstrap_relaxed_bomlev() -> bool:
     """Serial bootstrap uses strict bomlev so READ failures are visible."""
-    if (os.environ.get("MMML_QUIET") or "").strip().lower() in ("1", "true", "yes"):
+    if (os.environ.get("KARML_QUIET") or "").strip().lower() in ("1", "true", "yes"):
         return True
-    from mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
+    from karml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
 
     _, size = mpi_rank_size()
     return size > 1
@@ -2290,7 +2290,7 @@ def _run_cooperative_bootstrap_script(
     log_fn: Callable[[str, str], None] | None = None,
 ) -> int:
     """Run READ lines sequentially on all ranks (library mode has no ``stream`` eval)."""
-    from mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
+    from karml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
 
     rank, size = mpi_rank_size()
     body = [ln for ln in script.strip().splitlines() if ln.strip()]
@@ -2331,7 +2331,7 @@ def bootstrap_charmm_step(
     log_fn: Callable[[str, str], None] | None = None,
 ) -> int:
     """Run one CHARMM script on all ranks; return ``n_atoms`` after the step."""
-    from mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
+    from karml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
 
     rank, size = mpi_rank_size()
     if _bootstrap_barrier_enabled():
@@ -2362,9 +2362,9 @@ def bootstrap_topology_mpi(
     Supported ``mode`` values: ``psf-crd``, ``stream-inp``, ``restart``.
     At ``np>1``, ``psf-crd`` auto-switches to ``restart`` when a sidecar ``.res``
     exists (from ``--prepare-prebuilt-only``). Set
-    ``MMML_MPI_BOOTSTRAP_FORCE_PSF_CRD=1`` to bisect cooperative PSF/CRD READ.
+    ``KARML_MPI_BOOTSTRAP_FORCE_PSF_CRD=1`` to bisect cooperative PSF/CRD READ.
     """
-    from mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
+    from karml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
 
     allowed_modes = frozenset({"psf-crd", "stream-inp", "restart"})
     if mode not in allowed_modes:
@@ -2378,7 +2378,7 @@ def bootstrap_topology_mpi(
         raise FileNotFoundError(f"CRD not found: {crd}")
 
     if prm_path is None:
-        from mmml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_PRM
+        from karml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_PRM
 
         prm = Path(CGENFF_PRM).expanduser().resolve()
     else:
@@ -2483,7 +2483,7 @@ def disable_ase_mpi_parallel() -> None:
 
 def prepare_serial_charmm_mpi_env() -> None:
     """Env/LD setup only — do **not** call ``MPI_Init`` from mpi4py (CHARMM owns that)."""
-    from mmml.interfaces.pycharmmInterface.jax_compile_threads import (
+    from karml.interfaces.pycharmmInterface.jax_compile_threads import (
         sanitize_xla_flags_env,
     )
 
@@ -2504,9 +2504,9 @@ def prepare_serial_charmm_mpi_env() -> None:
     _pin_charmm_openmp_for_serial_mlpot()
     if _under_mpirun():
         # Import-time reset_block / crystal free hang MPI-linked CHARMM even at np=1.
-        os.environ.setdefault("MMML_SKIP_CHARMM_RESET_BLOCK", "1")
-        os.environ.setdefault("MMML_SKIP_VACUUM_CHARMM_INIT", "1")
-        from mmml.interfaces.pycharmmInterface.mlpot.spatial_mpi_policy import (
+        os.environ.setdefault("KARML_SKIP_CHARMM_RESET_BLOCK", "1")
+        os.environ.setdefault("KARML_SKIP_VACUUM_CHARMM_INIT", "1")
+        from karml.interfaces.pycharmmInterface.mlpot.spatial_mpi_policy import (
             pin_cuda_for_spatial_mpi,
         )
 
@@ -2589,14 +2589,14 @@ def _python_should_own_mpi_init() -> bool:
     """True when mpi4py may call ``MPI_Init`` (never for serial DOMDEC CHARMM by default)."""
     if _under_mpirun():
         return False
-    if charmm_lib_links_mpi() and not _truthy("MMML_MPI_PY_INIT"):
+    if charmm_lib_links_mpi() and not _truthy("KARML_MPI_PY_INIT"):
         return False
     return True
 
 
 def _warn_mpi4py_missing(*, removed: int) -> None:
     print(
-        "mmml: OpenMPI-linked CHARMM works best under mpirun. "
+        "karml: OpenMPI-linked CHARMM works best under mpirun. "
         + (f"Removed {removed} stale OpenMPI/PMI env var(s). " if removed else "")
         + "For large MLpot clusters use:\n  "
         + mpirun_launch_hint(),
@@ -2607,7 +2607,7 @@ def _warn_mpi4py_missing(*, removed: int) -> None:
 
 def _warn_invalid_comm(*, phase: str) -> None:
     print(
-        f"mmml: MPI communicator check failed {phase}. Launch with:\n  "
+        f"karml: MPI communicator check failed {phase}. Launch with:\n  "
         + mpi_library_path_export()
         + "\n  export OMPI_MCA_opal_cuda_support=0\n  "
         + mpirun_launch_hint(),
@@ -2620,7 +2620,7 @@ def ensure_mpi_for_charmm_domdec(*, phase: str = "before PyCHARMM import") -> bo
     """Prepare MPI env; optionally validate after CHARMM has initialized MPI."""
     prepare_serial_charmm_mpi_env()
 
-    if _truthy("MMML_NO_MPI_INIT") or not _needs_mpi_setup():
+    if _truthy("KARML_NO_MPI_INIT") or not _needs_mpi_setup():
         return True
 
     if _under_mpirun():
@@ -2652,11 +2652,11 @@ def ensure_mpi_for_charmm_domdec(*, phase: str = "before PyCHARMM import") -> bo
 
 def recover_mpi_for_charmm_after_jax(*, phase: str = "after JAX warmup") -> bool:
     """Best-effort MPI sync after JAX — never ``MPI_Finalize`` while CHARMM is loaded."""
-    from mmml.utils.jax_gpu_warmup import sync_jax_gpu_before_charmm
+    from karml.utils.jax_gpu_warmup import sync_jax_gpu_before_charmm
 
     sync_jax_gpu_before_charmm(phase=phase)
     _pin_charmm_openmp_for_serial_mlpot()
-    if _truthy("MMML_NO_MPI_INIT"):
+    if _truthy("KARML_NO_MPI_INIT"):
         return True
     # Serial libcharmm has no Fortran MPI world to sync; skip mpi4py ABI dlopen.
     if not charmm_lib_links_mpi():
@@ -2679,12 +2679,12 @@ def revalidate_mpi_after_cuda(*, phase: str = "after JAX GPU warmup") -> bool:
     return recover_mpi_for_charmm_after_jax(phase=phase)
 
 
-def mpirun_launch_hint(argv0: str = "mmml md-system") -> str:
+def mpirun_launch_hint(argv0: str = "karml md-system") -> str:
     lines = mpi_shell_setup_lines()
     mpirun = charmm_mpirun_path()
     runner = str(mpirun) if mpirun is not None else "mpirun"
     lines.append(f"{runner} -np 1 {argv0} ...")
-    lines.append("# or: ./scripts/mmml-charmm-mpirun.sh md-system ...")
+    lines.append("# or: ./scripts/karml-charmm-mpirun.sh md-system ...")
     return "\n".join(lines)
 
 
@@ -2695,7 +2695,7 @@ def assert_mpi_launcher_for_mlpot(*, context: str = "MLpot") -> None:
     in ``enbond`` during the first MLpot SD step when OpenMPI was not initialized
     by ``mpirun`` before CHARMM loaded.
     """
-    if _truthy("MMML_ALLOW_SERIAL_MPI_CHARMM"):
+    if _truthy("KARML_ALLOW_SERIAL_MPI_CHARMM"):
         return
     if not charmm_lib_links_mpi():
         return
@@ -2705,10 +2705,10 @@ def assert_mpi_launcher_for_mlpot(*, context: str = "MLpot") -> None:
         f"{context} requires OpenMPI launch for MPI-linked libcharmm.so. "
         "Serial python often segfaults in Fortran upinb (PBC registration) or "
         "enbond (MLpot SD). Re-run under:\n"
-        f"  {_repo_root_hint() / 'scripts/mmml-charmm-mpirun.sh'} md-system ...\n"
+        f"  {_repo_root_hint() / 'scripts/karml-charmm-mpirun.sh'} md-system ...\n"
         "or:\n  "
-        + mpirun_launch_hint("mmml md-system")
-        + "\nSet MMML_ALLOW_SERIAL_MPI_CHARMM=1 only for deliberate A/B debugging."
+        + mpirun_launch_hint("karml md-system")
+        + "\nSet KARML_ALLOW_SERIAL_MPI_CHARMM=1 only for deliberate A/B debugging."
     )
 
 
@@ -2725,48 +2725,48 @@ def defer_jax_warmup_until_after_mlpot_sd() -> bool:
     """Opt-in: defer JAX GPU warmup until after CHARMM MLpot SD.
 
     Default is **off** (GPU warmup runs right after MLpot registration).  Set
-    ``MMML_DEFER_JAX_WARMUP_UNTIL_AFTER_SD=1`` only when debugging legacy MPI/JAX
+    ``KARML_DEFER_JAX_WARMUP_UNTIL_AFTER_SD=1`` only when debugging legacy MPI/JAX
     pool issues on a specific cluster build.
     """
-    if _truthy("MMML_NO_DEFER_JAX_WARMUP"):
+    if _truthy("KARML_NO_DEFER_JAX_WARMUP"):
         return False
-    return _truthy("MMML_DEFER_JAX_WARMUP_UNTIL_AFTER_SD")
+    return _truthy("KARML_DEFER_JAX_WARMUP_UNTIL_AFTER_SD")
 
 
-def maybe_rerun_mmml_under_mpirun(
+def maybe_rerun_karml_under_mpirun(
     argv: list[str],
     *,
     subcommand: str = "md-system",
 ) -> int | None:
-    """Re-exec ``mmml <subcommand>`` under ``mpirun -np 1`` for MPI-linked CHARMM.
+    """Re-exec ``karml <subcommand>`` under ``mpirun -np 1`` for MPI-linked CHARMM.
 
-    Serial ``python -m mmml <subcommand>`` can intermittently segfault in Fortran
+    Serial ``python -m karml <subcommand>`` can intermittently segfault in Fortran
     ``upinb`` during MLpot registration.  Launching under the same OpenMPI as
     ``libcharmm.so`` initializes MPI before CHARMM/Python start.
     """
     import subprocess
     import sys
 
-    if _truthy("MMML_NO_MPI_RERUN") or _under_mpirun() or not _needs_mpi_setup():
+    if _truthy("KARML_NO_MPI_RERUN") or _under_mpirun() or not _needs_mpi_setup():
         return None
     if not charmm_lib_links_mpi():
         return None
     mpirun = charmm_mpirun_path()
     if mpirun is None:
         print(
-            f"mmml: MPI-linked CHARMM but no matching OpenMPI mpirun found. "
-            f"Set OPENMPI_ROOT or MMML_MPIRUN, or use:\n  "
-            + mpirun_launch_hint(f"mmml {subcommand}"),
+            f"karml: MPI-linked CHARMM but no matching OpenMPI mpirun found. "
+            f"Set OPENMPI_ROOT or KARML_MPIRUN, or use:\n  "
+            + mpirun_launch_hint(f"karml {subcommand}"),
             flush=True,
         )
         return None
     if str(mpirun).startswith("/usr/bin/"):
         print(
-            "mmml: warning: using distro OpenMPI launcher "
+            "karml: warning: using distro OpenMPI launcher "
             f"{mpirun}; if this fails with PMIx errors, set\n"
             "  export OPENMPI_ROOT=/opt/gcc-14.2.0/openmpi-5.0.5/build\n"
-            "  export MMML_MPIRUN=$OPENMPI_ROOT/bin/mpirun\n"
-            "or run via ./scripts/mmml-charmm-mpirun.sh",
+            "  export KARML_MPIRUN=$OPENMPI_ROOT/bin/mpirun\n"
+            "or run via ./scripts/karml-charmm-mpirun.sh",
             flush=True,
         )
     prepare_serial_charmm_mpi_env()
@@ -2780,7 +2780,7 @@ def maybe_rerun_mmml_under_mpirun(
         *mpi_mpirun_extra_args(),
         sys.executable,
         "-m",
-        "mmml.cli.__main__",
+        "karml.cli.__main__",
         *tail,
     ]
     env = os.environ.copy()
@@ -2789,19 +2789,19 @@ def maybe_rerun_mmml_under_mpirun(
     if bindir not in path_parts:
         env["PATH"] = os.pathsep.join([bindir, *path_parts])
     print(
-        f"mmml: MPI-linked CHARMM — re-launching under OpenMPI for {subcommand}:\n  "
+        f"karml: MPI-linked CHARMM — re-launching under OpenMPI for {subcommand}:\n  "
         + " ".join(cmd),
         flush=True,
     )
     proc = subprocess.run(cmd, env=env)
     rc = int(proc.returncode)
-    explain_mpi_crash(rc, argv0=f"mmml {subcommand}")
+    explain_mpi_crash(rc, argv0=f"karml {subcommand}")
     return rc
 
 
 def maybe_rerun_md_system_under_mpirun(argv: list[str]) -> int | None:
-    """Backward-compatible alias for :func:`maybe_rerun_mmml_under_mpirun`."""
-    return maybe_rerun_mmml_under_mpirun(argv, subcommand="md-system")
+    """Backward-compatible alias for :func:`maybe_rerun_karml_under_mpirun`."""
+    return maybe_rerun_karml_under_mpirun(argv, subcommand="md-system")
 
 
 _apply_cuda_mpi_env_defaults()

@@ -27,25 +27,25 @@ logging.getLogger("asyncio").setLevel(logging.ERROR)
 warnings.filterwarnings("ignore", category=RuntimeWarning, message=".*coroutine.*was never awaited")
 warnings.filterwarnings("ignore", category=RuntimeWarning, message=".*Task was destroyed.*")
 
-from mmml.models.physnetjax.physnetjax.data.data import print_shapes
-from mmml.models.physnetjax.physnetjax.directories import BASE_CKPT_DIR, print_paths
-from mmml.models.physnetjax.physnetjax.restart.restart import (
+from karml.models.physnetjax.physnetjax.data.data import print_shapes
+from karml.models.physnetjax.physnetjax.directories import BASE_CKPT_DIR, print_paths
+from karml.models.physnetjax.physnetjax.restart.restart import (
     restart_training,
     save_training_checkpoint,
 )
-from mmml.data.units import TRAINING_UNITS
-from mmml.models.physnetjax.physnetjax.training.distill import parse_distill_targets
-from mmml.models.physnetjax.physnetjax.training.evalstep import eval_step
-from mmml.models.physnetjax.physnetjax.training.optimizer import (
+from karml.data.units import TRAINING_UNITS
+from karml.models.physnetjax.physnetjax.training.distill import parse_distill_targets
+from karml.models.physnetjax.physnetjax.training.evalstep import eval_step
+from karml.models.physnetjax.physnetjax.training.optimizer import (
     base_optimizer,
     base_schedule_fn,
     base_transform,
     get_optimizer,
 )
-from mmml.models.physnetjax.physnetjax.training.trainstep import train_step
-from mmml.models.physnetjax.physnetjax.training.validation import validate_atomic_numbers
-from mmml.models.physnetjax.physnetjax.utils.ascii import computer 
-from mmml.models.physnetjax.physnetjax.utils.pretty_printer import (
+from karml.models.physnetjax.physnetjax.training.trainstep import train_step
+from karml.models.physnetjax.physnetjax.training.validation import validate_atomic_numbers
+from karml.models.physnetjax.physnetjax.utils.ascii import computer 
+from karml.models.physnetjax.physnetjax.utils.pretty_printer import (
     Printer,
     print_dict_as_table,
 )
@@ -235,7 +235,7 @@ def train_model(
         When set, train on the hybrid ML/MM total the MD calculator
         evaluates: ``E = (1 - s) * (E_A + E_B) + s * E_AB + E_MM``, where the
         taper ``s(r_com)`` applies to the dimer *interaction* only.  A
-        ``mmml.models.hybrid_energy.HybridMMConfig`` (master LJ tables +
+        ``karml.models.hybrid_energy.HybridMMConfig`` (master LJ tables +
         switching widths); a plain dict is coerced to one.  Requires the CGenFF
         per-atom fields in the batch (see ``HYBRID_MM_BATCH_KEYS``).
     soft_well_aux : SoftWellConfig | dict | None, optional
@@ -270,10 +270,10 @@ def train_model(
 
     # Freeze the hybrid settings here, outside the jit boundary: they are a
     # static argument (a dict is unhashable and its bools would trace).
-    from mmml.models.hybrid_energy import HybridMMConfig
+    from karml.models.hybrid_energy import HybridMMConfig
 
     hybrid_mm = HybridMMConfig.coerce(hybrid_mm)
-    from mmml.models.physnetjax.physnetjax.training.soft_well_aux import (
+    from karml.models.physnetjax.physnetjax.training.soft_well_aux import (
         SoftWellConfig,
         SoftWellGeometryPool,
         extract_monomer_from_hybrid_frame,
@@ -303,9 +303,9 @@ def train_model(
         import os
 
         profile_epoch_timing = PROFILE_EPOCH_TIMING or bool(
-            os.environ.get("MMML_PHYSNET_PROFILE_EPOCH_TIMING")
+            os.environ.get("KARML_PHYSNET_PROFILE_EPOCH_TIMING")
         )
-    from mmml.models.physnetjax.physnetjax.training.epoch_timing import (
+    from karml.models.physnetjax.physnetjax.training.epoch_timing import (
         EpochTiming,
         EpochTimingSummary,
     )
@@ -342,7 +342,7 @@ def train_model(
         print("Using default (fat) batching method")
         import sys
         sys.stdout.flush()  # Flush for SLURM logging
-        from mmml.models.physnetjax.physnetjax.data.batches import (
+        from karml.models.physnetjax.physnetjax.data.batches import (
             _pair_indices,
             _prepare_batches,
         )
@@ -450,8 +450,8 @@ def train_model(
         # Persist Mode A/C metadata next to the run so MD can warn on mismatch.
         import json
 
-        from mmml.models.mm_charge_mode import hybrid_mm_metadata_dict
-        from mmml.models.mm_lj_scales import (
+        from karml.models.mm_charge_mode import hybrid_mm_metadata_dict
+        from karml.models.mm_lj_scales import (
             cgenff_type_names_from_prm,
             mm_lj_scales_metadata,
         )
@@ -516,7 +516,7 @@ def train_model(
         src_idx=src_idx,
     )
     if hybrid_mm is not None and bool(getattr(hybrid_mm, "learn_mm_lj_scales", False)):
-        from mmml.models.mm_lj_scales import attach_mm_lj_scales
+        from karml.models.mm_lj_scales import attach_mm_lj_scales
 
         fresh_params = attach_mm_lj_scales(fresh_params, len(hybrid_mm.master_sigmas))
     # Use caller-supplied params (e.g. transplanted from a previous stage)
@@ -531,7 +531,7 @@ def train_model(
         and frozen_mm_lj_epsilon_scale is not None
         and not restart
     ):
-        from mmml.models.mm_lj_scales import attach_mm_lj_scales
+        from karml.models.mm_lj_scales import attach_mm_lj_scales
 
         params = attach_mm_lj_scales(
             params,
@@ -562,7 +562,7 @@ def train_model(
             src_idx=src_idx,
         )
         if hybrid_mm is not None and bool(getattr(hybrid_mm, "learn_mm_lj_scales", False)):
-            from mmml.models.mm_lj_scales import attach_mm_lj_scales
+            from karml.models.mm_lj_scales import attach_mm_lj_scales
 
             fresh_restart_params = attach_mm_lj_scales(
                 fresh_restart_params, len(hybrid_mm.master_sigmas)
@@ -581,7 +581,7 @@ def train_model(
                 flush=True,
             )
         if hybrid_mm is not None and not do_charges:
-            from mmml.models.mm_charge_mode import (
+            from karml.models.mm_charge_mode import (
                 mm_charge_mode_needs_q_ml,
                 resolve_hybrid_mm_charge_mode,
             )
@@ -623,7 +623,7 @@ def train_model(
         frozen_mm_lj_sigma_scale is not None
         and frozen_mm_lj_epsilon_scale is not None
     ):
-        from mmml.models.mm_lj_scales import attach_mm_lj_scales
+        from karml.models.mm_lj_scales import attach_mm_lj_scales
 
         # Restart path: scales may be missing from the orbax tree.
         params = attach_mm_lj_scales(
@@ -931,7 +931,7 @@ def train_model(
             if should_save:
                 ckpt_t0 = time.perf_counter()
                 model_attributes = model.return_attributes()
-                from mmml.models.mm_charge_mode import hybrid_mm_metadata_dict
+                from karml.models.mm_charge_mode import hybrid_mm_metadata_dict
 
                 ckpt = {
                     "model": state,
@@ -1028,7 +1028,7 @@ def train_model(
         console.print(timing_summary.format_means())
 
     if hybrid_mm is not None and bool(getattr(hybrid_mm, "learn_mm_lj_scales", False)):
-        from mmml.models.mm_lj_scales import (
+        from karml.models.mm_lj_scales import (
             MM_LJ_EPSILON_SCALE_KEY,
             MM_LJ_SIGMA_SCALE_KEY,
             cgenff_type_names_from_prm,

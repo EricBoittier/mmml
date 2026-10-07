@@ -20,7 +20,7 @@ Reproduce CI's unit + functionality jobs on a machine that *has* a CHARMM build:
 make test-ci
 ```
 
-That target sets `MMML_DISABLE_CHARMM=1`, which makes
+That target sets `KARML_DISABLE_CHARMM=1`, which makes
 `charmm_paths.resolve_charmm_paths()` report no CHARMM at all. Setting
 `CHARMM_LIB_DIR` to a nonexistent directory does **not** work: a lib-less
 explicit override is treated as stale and silently replaced by the discovered
@@ -76,7 +76,7 @@ grows so the gate keeps its teeth.
 
 ## Repository boundaries
 
-- `mmml/` is the supported distributable library and CLI. Production code must
+- `karml/` is the supported distributable library and CLI. Production code must
   not import from `scripts/`, `workflows/`, or `tests/`.
 - `setup/charmm/tool/pycharmm/pycharmm/` is the sole tracked PyCHARMM source.
   Do not recreate a root-level `pycharmm/` copy; changes belong in this tree.
@@ -94,7 +94,7 @@ boundary for a compiled CHARMM/PyCHARMM runtime.
 Use the shared CLI helpers instead of ad hoc Rich or `print()` formatting when
 adding or touching command output:
 
-- Import `get_reporter()` from `mmml.utils.rich_report` for compact reports.
+- Import `get_reporter()` from `karml.utils.rich_report` for compact reports.
   Choose `status()` for one event, `summary()` for key/value metadata, and
   `table()` for repeated records.
 - Use `print_colored_json()` for JSON-shaped diagnostics. It validates through
@@ -103,12 +103,12 @@ adding or touching command output:
 - Keep ordinary reports borderless and copy-friendly. Reserve Rich panels for
   interactive/live displays or exceptional diagnostics where the visual boundary
   carries information.
-- Respect the existing quiet/color controls: `quiet=True` and `MMML_QUIET=1`
-  suppress helper output, `MMML_NO_RICH=1` disables Rich, and `MMML_RICH=1`
+- Respect the existing quiet/color controls: `quiet=True` and `KARML_QUIET=1`
+  suppress helper output, `KARML_NO_RICH=1` disables Rich, and `KARML_RICH=1`
   forces terminal color.
 
 ```python
-from mmml.utils.rich_report import get_reporter, print_colored_json
+from karml.utils.rich_report import get_reporter, print_colored_json
 
 report = get_reporter()
 report.status("success", "Validated input", detail=str(config_path))
@@ -116,8 +116,8 @@ report.summary("Resolved run", {"backend": backend, "output_dir": output_dir})
 print_colored_json({"output_dir": str(output_dir), "errors": {}})
 ```
 
-Commands dispatched by the top-level `mmml` entry point also share the
-`mmml.cli.help_style` argparse hook. Flat parsers are grouped automatically by
+Commands dispatched by the top-level `karml` entry point also share the
+`karml.cli.help_style` argparse hook. Flat parsers are grouped automatically by
 input/configuration, scientific model, execution, output/artifacts, and
 diagnostics/safety. If a command genuinely needs different sections, define
 explicit `add_argument_group()` blocks in its parser instead of embedding ANSI
@@ -125,7 +125,7 @@ escapes or custom color schemes.
 
 ### Configure wizards
 
-All new or modified `mmml configure` workflows must validate and preview their
+All new or modified `karml configure` workflows must validate and preview their
 generated documents before writing files:
 
 1. build plain Python dictionaries for the documents;
@@ -145,10 +145,10 @@ policy instead of copying its species ownership rules.
 Documentation has its own GitHub Actions workflow (`.github/workflows/docs.yml`):
 
 - `MkDocs HTML` runs `mkdocs build --strict`.
-- `PDF Export` renders `site/mmml-docs.pdf`, including Mermaid diagrams, and uploads it as an artifact.
+- `PDF Export` renders `site/karml-docs.pdf`, including Mermaid diagrams, and uploads it as an artifact.
   CI installs `mmdc` from `@mermaid-js/mermaid-cli`; local PDF builds fall back to
-  readable Mermaid source unless `mmdc` is on `PATH` or `MMML_DOCS_PDF_ALLOW_NPX=1` is set.
-- Published site: [Read the Docs](https://mmml.readthedocs.io/en/latest/) builds MkDocs via
+  readable Mermaid source unless `mmdc` is on `PATH` or `KARML_DOCS_PDF_ALLOW_NPX=1` is set.
+- Published site: [Read the Docs](https://karml.readthedocs.io/en/latest/) builds MkDocs via
   `.readthedocs.yaml` (same `mkdocs.yml` as local `make docs-serve`).
 
 Build static docs:
@@ -157,7 +157,7 @@ Build static docs:
 make docs-build
 ```
 
-Per-command CLI pages are generated from `mmml/cli/registry.py` before each build:
+Per-command CLI pages are generated from `karml/cli/registry.py` before each build:
 
 ```bash
 make docs-refresh

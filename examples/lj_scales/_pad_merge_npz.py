@@ -88,7 +88,7 @@ def merge_npz_paths(
         chunks = [d[key] for d in padded if key in d]
         if not chunks:
             continue
-        if key in ("_mmml_units", "atom_ref_energies",
+        if key in ("_karml_units", "atom_ref_energies",
                    "cgenff_master_sigmas", "cgenff_master_epsilons"):
             # Keep from the first file that has them (LoT / master tables).
             merged[key] = chunks[0]

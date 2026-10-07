@@ -5,16 +5,16 @@ from __future__ import annotations
 from pathlib import Path
 from unittest import mock
 
-from mmml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
-from mmml.interfaces.pycharmmInterface.mlpot.staged_workflow import _io_for_stage
+from karml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
+from karml.interfaces.pycharmmInterface.mlpot.staged_workflow import _io_for_stage
 
 
 def test_gate_charmm_trajectory_io_rank0_keeps_path():
-    from mmml.interfaces.pycharmmInterface.mpi_rank_io import gate_charmm_trajectory_io
+    from karml.interfaces.pycharmmInterface.mpi_rank_io import gate_charmm_trajectory_io
 
     io = CharmmTrajectoryFiles(trajectory=Path("/tmp/heat.dcd"))
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mpi_rank_io.mpi_rank_size",
+        "karml.interfaces.pycharmmInterface.mpi_rank_io.mpi_rank_size",
         return_value=(0, 4),
     ):
         out = gate_charmm_trajectory_io(io)
@@ -22,11 +22,11 @@ def test_gate_charmm_trajectory_io_rank0_keeps_path():
 
 
 def test_gate_charmm_trajectory_io_nonzero_clears_path():
-    from mmml.interfaces.pycharmmInterface.mpi_rank_io import gate_charmm_trajectory_io
+    from karml.interfaces.pycharmmInterface.mpi_rank_io import gate_charmm_trajectory_io
 
     io = CharmmTrajectoryFiles(trajectory=Path("/tmp/heat.dcd"))
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mpi_rank_io.mpi_rank_size",
+        "karml.interfaces.pycharmmInterface.mpi_rank_io.mpi_rank_size",
         return_value=(2, 4),
     ):
         out = gate_charmm_trajectory_io(io)
@@ -45,7 +45,7 @@ def test_io_for_stage_gates_dcd_on_nonzero_rank(tmp_path):
         "prod_res": tmp_path / "prod.res",
     }
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mpi_rank_io.mpi_rank_size",
+        "karml.interfaces.pycharmmInterface.mpi_rank_io.mpi_rank_size",
         return_value=(1, 2),
     ):
         io = _io_for_stage("heat", paths)
@@ -54,14 +54,14 @@ def test_io_for_stage_gates_dcd_on_nonzero_rank(tmp_path):
 
 
 def test_reset_stage_trajectory_skips_nonzero_rank(tmp_path):
-    from mmml.interfaces.pycharmmInterface.mlpot.staged_workflow import (
+    from karml.interfaces.pycharmmInterface.mlpot.staged_workflow import (
         _reset_stage_trajectory,
     )
 
     dcd = tmp_path / "heat.dcd"
     dcd.write_text("fake")
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mpi_rank_io.mpi_rank_size",
+        "karml.interfaces.pycharmmInterface.mpi_rank_io.mpi_rank_size",
         return_value=(3, 4),
     ):
         _reset_stage_trajectory(dcd)
@@ -69,15 +69,15 @@ def test_reset_stage_trajectory_skips_nonzero_rank(tmp_path):
 
 
 def test_rank0_trajectory_path_helper():
-    from mmml.interfaces.pycharmmInterface.mpi_rank_io import rank0_trajectory_path
+    from karml.interfaces.pycharmmInterface.mpi_rank_io import rank0_trajectory_path
 
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mpi_rank_io.mpi_rank_size",
+        "karml.interfaces.pycharmmInterface.mpi_rank_io.mpi_rank_size",
         return_value=(0, 1),
     ):
         assert rank0_trajectory_path("/tmp/x.dcd") == Path("/tmp/x.dcd")
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mpi_rank_io.mpi_rank_size",
+        "karml.interfaces.pycharmmInterface.mpi_rank_io.mpi_rank_size",
         return_value=(2, 4),
     ):
         assert rank0_trajectory_path("/tmp/x.dcd") is None

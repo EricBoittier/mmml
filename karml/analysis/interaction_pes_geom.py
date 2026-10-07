@@ -13,8 +13,8 @@ from collections.abc import Sequence
 import numpy as np
 from ase import Atoms
 
-from mmml.analysis.dimer_molecules import rotation_matrix_align_to_z
-from mmml.analysis.dimer_scans import assign_mol_id, centered_atoms
+from karml.analysis.dimer_molecules import rotation_matrix_align_to_z
+from karml.analysis.dimer_scans import assign_mol_id, centered_atoms
 
 OH_BOND_MAX_A = 1.25
 CO_BOND_MAX_A = 1.45

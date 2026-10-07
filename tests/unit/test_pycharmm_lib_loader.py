@@ -14,7 +14,7 @@ from types import SimpleNamespace
 
 import pytest
 
-# MMML ships its cross-platform resolver in the vendored pycharmm ``lib.py``.
+# KARML ships its cross-platform resolver in the vendored pycharmm ``lib.py``.
 # The active ``import pycharmm`` may resolve to a different CHARMM build that
 # lacks these helpers, so exercise the vendored source directly and
 # deterministically instead of whatever happens to be installed.

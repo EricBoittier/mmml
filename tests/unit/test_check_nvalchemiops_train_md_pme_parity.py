@@ -8,8 +8,8 @@ from unittest import mock
 import numpy as np
 import pytest
 
-from mmml.data.units import KCAL_MOL_TO_EV
-from mmml.interfaces.pycharmmInterface.long_range_backend import (
+from karml.data.units import KCAL_MOL_TO_EV
+from karml.interfaces.pycharmmInterface.long_range_backend import (
     CHARMM_COULOMB_KCAL,
     LongRangeInteractionResult,
 )
@@ -38,16 +38,16 @@ def test_compare_pme_kernel_reports_zero_diff_when_paths_agree():
     e_kcal = 12.5
 
     with mock.patch(
-        "mmml.models.nvalchemiops_hybrid_coulomb.hybrid_nvalchemiops_pme_coulomb_energy",
+        "karml.models.nvalchemiops_hybrid_coulomb.hybrid_nvalchemiops_pme_coulomb_energy",
         return_value=e_kcal,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.long_range_backend.compute_nvalchemiops_pme_coulomb",
+        "karml.interfaces.pycharmmInterface.long_range_backend.compute_nvalchemiops_pme_coulomb",
         return_value=LongRangeInteractionResult(
             energy_kcalmol=e_kcal,
             forces_kcalmol_A=np.zeros((2, 3)),
         ),
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.long_range_backend.estimate_nvalchemiops_pme_real_space_cutoff",
+        "karml.interfaces.pycharmmInterface.long_range_backend.estimate_nvalchemiops_pme_real_space_cutoff",
         return_value=10.0,
     ):
         out = mod.compare_pme_kernel_kcalmol(
@@ -77,16 +77,16 @@ def test_compare_hybrid_emm_matches_md_coulomb_with_stub_model(tmp_path):
     e_kcal = -3.25
 
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.long_range_backend.compute_nvalchemiops_pme_coulomb",
+        "karml.interfaces.pycharmmInterface.long_range_backend.compute_nvalchemiops_pme_coulomb",
         return_value=LongRangeInteractionResult(
             energy_kcalmol=e_kcal,
             forces_kcalmol_A=np.zeros((n, 3)),
         ),
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.long_range_backend.estimate_nvalchemiops_pme_real_space_cutoff",
+        "karml.interfaces.pycharmmInterface.long_range_backend.estimate_nvalchemiops_pme_real_space_cutoff",
         return_value=9.0,
     ), mock.patch(
-        "mmml.models.nvalchemiops_hybrid_coulomb.nvalchemiops_pme_coulomb_energy_jax",
+        "karml.models.nvalchemiops_hybrid_coulomb.nvalchemiops_pme_coulomb_energy_jax",
         return_value=e_kcal,
     ):
         out = mod.compare_hybrid_emm_eV(

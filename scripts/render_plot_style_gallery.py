@@ -16,7 +16,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 
-from mmml.utils.plotting.styles import apply_plot_style, get_plot_style, legend_outside
+from karml.utils.plotting.styles import apply_plot_style, get_plot_style, legend_outside
 
 OUT_DIR = Path(__file__).resolve().parents[1] / "docs" / "plot-style-gallery-assets"
 

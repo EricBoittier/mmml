@@ -9,7 +9,7 @@ from typing import Literal
 
 import numpy as np
 
-from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import cubic_box_length_from_geometry
+from karml.interfaces.pycharmmInterface.mlpot.pbc_env import cubic_box_length_from_geometry
 
 AVOGADRO = 6.02214076e23
 
@@ -51,7 +51,7 @@ def parse_composition_dict(spec: str | None) -> dict[str, int] | None:
     """
     if spec is None or not str(spec).strip():
         return None
-    from mmml.interfaces.pycharmmInterface.mlpot.composition_spec import (
+    from karml.interfaces.pycharmmInterface.mlpot.composition_spec import (
         composition_mode,
         ensure_packmol_pdb_monomers,
         parse_composition_entries,
@@ -341,7 +341,7 @@ def resolve_density_box_side(
     n_mol = int(n_molecules) if n_molecules is not None else int(sum(comp.values()))
     rho = resolve_target_density_g_cm3(args, comp)
     mass_g = total_mass_g_for_composition(comp)
-    from mmml.interfaces.pycharmmInterface.mlpot.box_lattice_abnr import (
+    from karml.interfaces.pycharmmInterface.mlpot.box_lattice_abnr import (
         density_target_holds_box,
     )
 
@@ -377,7 +377,7 @@ def resolve_packmol_box_padding_A(args: argparse.Namespace) -> float:
         padding = float(DEFAULT_PACKMOL_BOX_PADDING_A)
 
     try:
-        from mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
+        from karml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
             liquid_prep_enabled,
         )
 
@@ -936,8 +936,8 @@ def add_box_sizing_args(parser: argparse.ArgumentParser) -> None:
             "(kcal/mol/Å; default 50). Use with --allow-high-grms to warn only."
         ),
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.cleanup_mode import add_cleanup_args
-    from mmml.interfaces.pycharmmInterface.mlpot.recovery_progress import (
+    from karml.interfaces.pycharmmInterface.mlpot.cleanup_mode import add_cleanup_args
+    from karml.interfaces.pycharmmInterface.mlpot.recovery_progress import (
         add_recovery_artifact_args,
     )
 

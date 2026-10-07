@@ -75,7 +75,7 @@ def restart_with_seed_count(
         if new is None:
             return p
         lines[i + 1] = new
-        out_dir = Path(tempfile.mkdtemp(prefix="mmml-res-seeds-"))
+        out_dir = Path(tempfile.mkdtemp(prefix="karml-res-seeds-"))
         out = out_dir / p.name
         out.write_text("".join(lines))
         if verbose:

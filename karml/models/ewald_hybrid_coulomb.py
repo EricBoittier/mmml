@@ -1,8 +1,8 @@
 """Hybrid training: full-box jit-native Ewald Coulomb (LJ off).
 
-Same contract as :mod:`mmml.models.nvalchemiops_hybrid_coulomb`'s
+Same contract as :mod:`karml.models.nvalchemiops_hybrid_coulomb`'s
 ``hybrid_nvalchemiops_pme_coulomb_energy`` -- a drop-in alternative that needs
-no external PME library (pure JAX, via :mod:`mmml.interfaces.pycharmmInterface.
+no external PME library (pure JAX, via :mod:`karml.interfaces.pycharmmInterface.
 ewald_native`), useful wherever ``nvalchemiops`` isn't installed (e.g. CPU-only
 clusters) or a dependency-free reference is preferred::
 
@@ -15,14 +15,14 @@ or MIC-trained monomer model; it removes both real- and reciprocal-space
 within-monomer contributions without a per-monomer Ewald loop.
 
 Forces come from ``jax.value_and_grad`` of this energy (see
-:func:`mmml.models.hybrid_energy.hybrid_forward`) -- unlike ``jax_pme``, this
+:func:`karml.models.hybrid_energy.hybrid_forward`) -- unlike ``jax_pme``, this
 has no host callback, so plain autodiff works.
 
 NpT: build ``alpha`` / ``n_int`` once on the host for a reference cubic side;
 evaluate with a traced ``cell`` (from ``box_override``) so reciprocal vectors
 and MIC distances track the live box without rebuilding the integer k-grid
 every CPT step. Rebuild the host grid when the cubic side crosses
-:data:`~mmml.interfaces.pycharmmInterface.ewald_native.EWALD_NPT_KGRID_REBUILD_TOLERANCE_A`.
+:data:`~karml.interfaces.pycharmmInterface.ewald_native.EWALD_NPT_KGRID_REBUILD_TOLERANCE_A`.
 """
 
 from __future__ import annotations
@@ -33,13 +33,13 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from mmml.interfaces.pycharmmInterface.ewald_native import (
+from karml.interfaces.pycharmmInterface.ewald_native import (
     build_kspace_integers,
     default_ewald_alpha,
     ewald_reciprocal_energy,
     ewald_self_energy,
 )
-from mmml.interfaces.pycharmmInterface.pbc_utils_jax import mic_displacement
+from karml.interfaces.pycharmmInterface.pbc_utils_jax import mic_displacement
 
 Array = jnp.ndarray
 COULOMB_KCAL = 332.063711

@@ -60,7 +60,7 @@ def test_run_cg_config_requires_checkpoint(cg_unified):
 
 
 def _fake_system(n_water_groups=1):
-    from mmml.md.system import FFParams, MolecularSystem
+    from karml.md.system import FFParams, MolecularSystem
 
     n_pep = 6
     n_water = n_water_groups * 3
@@ -186,9 +186,9 @@ def test_end_to_end_peptide_water_ml_no_double_counting(cg_unified):
 
     import jax.numpy as jnp
 
-    from mmml.md.assemble import build_hybrid_energy
-    from mmml.md.energy.registry import EnergyContext
-    from mmml.md.neighbors import make_intermolecular_neighbor_fn
+    from karml.md.assemble import build_hybrid_energy
+    from karml.md.energy.registry import EnergyContext
+    from karml.md.neighbors import make_intermolecular_neighbor_fn
 
     cfg = {
         "checkpoint": str(CKPT),
@@ -206,8 +206,8 @@ def test_end_to_end_peptide_water_ml_no_double_counting(cg_unified):
     model, params = cg_unified._load_model(CKPT)
     ctx = EnergyContext(model=model, params=params)
 
-    from mmml.md.assemble import build_system
-    from mmml.md.lowering import runconfig_from_cg_config
+    from karml.md.assemble import build_system
+    from karml.md.lowering import runconfig_from_cg_config
 
     run_config = runconfig_from_cg_config(cfg, phase="fire")
     system = build_system(run_config.system)

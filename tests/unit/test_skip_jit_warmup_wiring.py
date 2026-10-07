@@ -14,10 +14,10 @@ def test_setup_calculator_respects_defer_xla_gpu_warmup(skip: bool):
     if not ckpt.is_file():
         pytest.skip("DESdimers_params.json checkpoint missing")
 
-    from mmml.interfaces.pycharmmInterface.mmml_calculator import setup_calculator
+    from karml.interfaces.pycharmmInterface.karml_calculator import setup_calculator
 
     with patch(
-        "mmml.interfaces.pycharmmInterface.mmml_calculator.ensure_xla_gpu_warmed",
+        "karml.interfaces.pycharmmInterface.karml_calculator.ensure_xla_gpu_warmed",
         return_value=False,
     ) as mock_warm:
         setup_calculator(

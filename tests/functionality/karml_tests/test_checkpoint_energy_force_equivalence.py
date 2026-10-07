@@ -16,7 +16,7 @@ def _can_import(name: str) -> bool:
         return False
 
 
-ORBAX_EPOCH_1985 = (PROJECT_ROOT / "mmml/models/physnetjax/ckpts/DESdimers/epoch-1985").resolve()
+ORBAX_EPOCH_1985 = (PROJECT_ROOT / "karml/models/physnetjax/ckpts/DESdimers/epoch-1985").resolve()
 
 
 def _assert_tree_allclose(a, b, path: str = "root") -> None:
@@ -51,7 +51,7 @@ def test_epoch1985_orbax_to_json_roundtrip_matches_params(tmp_path: Path):
         import orbax.checkpoint as ocp
     except Exception as e:
         pytest.skip(f"orbax.checkpoint not loadable in this environment: {e}")
-    from mmml.utils.model_checkpoint import orbax_to_json, json_to_params
+    from karml.utils.model_checkpoint import orbax_to_json, json_to_params
 
     converted_json = tmp_path / "epoch1985_params.json"
     try:

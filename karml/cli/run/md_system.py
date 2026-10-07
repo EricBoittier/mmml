@@ -17,7 +17,7 @@ _DEFAULT_OUTPUT_DIR_STEMS = frozenset({"pycharmm_mlpot", "lambda_ti"})
 
 
 def _argv_requests_help(argv: list[str]) -> bool:
-    from mmml.cli.md_system_help import argv_requests_help
+    from karml.cli.md_system_help import argv_requests_help
 
     return argv_requests_help(argv)
 
@@ -35,17 +35,17 @@ def _add_nve_require_float64_arg(parser: argparse.ArgumentParser) -> None:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    # Import argparse helpers here (not at module import) so ``mmml md-system -h``
+    # Import argparse helpers here (not at module import) so ``karml md-system -h``
     # does not pull JAX / the large cli_common runtime module.
-    from mmml.cli.md_system_help import MdSystemArgumentParser
-    from mmml.interfaces.pycharmmInterface.cutoffs import (
+    from karml.cli.md_system_help import MdSystemArgumentParser
+    from karml.interfaces.pycharmmInterface.cutoffs import (
         DEFAULT_ML_SWITCH_WIDTH,
         DEFAULT_MM_SWITCH_ON,
         DEFAULT_MM_SWITCH_WIDTH,
         add_handoff_cutoff_grid_args,
     )
-    from mmml.interfaces.pycharmmInterface.ml_dtypes import add_ml_compute_dtype_args
-    from mmml.interfaces.pycharmmInterface.mlpot.pretreat_cli_args import (
+    from karml.interfaces.pycharmmInterface.ml_dtypes import add_ml_compute_dtype_args
+    from karml.interfaces.pycharmmInterface.mlpot.pretreat_cli_args import (
         add_charmm_mm_pretreat_physics_args,
     )
 
@@ -53,9 +53,9 @@ def build_parser() -> argparse.ArgumentParser:
         description=(
             "Run predefined MD setups (free-space NVE/NVT, periodic NVE/NVT, periodic NPT, "
             "lambda TI for arbitrary compositions) for arbitrary residue compositions. "
-            "Runs mmml.cli.run.md_pbc_suite (ASE, JAX-MD, or CHARMM MLpot) and "
-            "mmml.cli.run.lambda_dynamics (lambda_ti). "
-            "MBAR: mmml lambda-mbar --run-dir <output-dir>."
+            "Runs karml.cli.run.md_pbc_suite (ASE, JAX-MD, or CHARMM MLpot) and "
+            "karml.cli.run.lambda_dynamics (lambda_ti). "
+            "MBAR: karml lambda-mbar --run-dir <output-dir>."
         )
     )
     parser.add_argument(
@@ -75,8 +75,8 @@ def build_parser() -> argparse.ArgumentParser:
         ],
         default="pbc_nve",
         help=(
-            "Simulation setup preset. lambda_ti: alchemical TI with CHARMM+MMML minimization "
-            "per λ window (--lambda-md-mode, --backend ase|jaxmd); mmml lambda-mbar afterward. "
+            "Simulation setup preset. lambda_ti: alchemical TI with CHARMM+KARML minimization "
+            "per λ window (--lambda-md-mode, --backend ase|jaxmd); karml lambda-mbar afterward. "
             "pycharmm_minimize: CHARMM MLpot SD only (--backend pycharmm). "
             "pycharmm_full: mini → heat → NVE → equi → prod (--backend pycharmm). "
             "pbc_* with --backend pycharmm: same staged pipeline with CHARMM crystal/IMAGE. "
@@ -151,8 +151,8 @@ def build_parser() -> argparse.ArgumentParser:
         "--jaxmd-unified",
         action="store_true",
         help=(
-            "EXPERIMENTAL: run --backend jaxmd through the unified mmml.md pipeline "
-            "(mmml.cli.run.md_system_unified) instead of the legacy md_pbc_suite.jaxmd "
+            "EXPERIMENTAL: run --backend jaxmd through the unified karml.md pipeline "
+            "(karml.cli.run.md_system_unified) instead of the legacy md_pbc_suite.jaxmd "
             "inline loop. Only supports the packmol composition builder; see "
             "docs/md-cg-unification-design.md for scope and status."
         ),
@@ -334,12 +334,12 @@ def build_parser() -> argparse.ArgumentParser:
         "--packmol-cache-dir",
         type=Path,
         default=None,
-        help="pycharmm: Packmol cache root (default: output-dir/.packmol_cache or MMML_PACKMOL_CACHE).",
+        help="pycharmm: Packmol cache root (default: output-dir/.packmol_cache or KARML_PACKMOL_CACHE).",
     )
-    from mmml.interfaces.pyxtal_placement import add_pyxtal_cluster_args
+    from karml.interfaces.pyxtal_placement import add_pyxtal_cluster_args
 
     add_pyxtal_cluster_args(parser)
-    from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import add_box_sizing_args
+    from karml.interfaces.pycharmmInterface.mlpot.box_sizing import add_box_sizing_args
 
     add_box_sizing_args(parser)
     parser.add_argument(
@@ -852,7 +852,7 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="N",
         help=(
             "pycharmm: chunk PhysNet batches (auto: 256 on GPU / 64 on CPU for n>=40; "
-            "or MMML_MLPOT_ML_BATCH_SIZE). DCM:90 try 256-512 on one GPU."
+            "or KARML_MLPOT_ML_BATCH_SIZE). DCM:90 try 256-512 on one GPU."
         ),
     )
     parser.add_argument(
@@ -862,7 +862,7 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="N",
         help=(
             "Parallel PhysNet chunks on N local GPUs for pycharmm/ASE/jaxmd "
-            "(default 1; or MMML_MLPOT_N_GPUS). Set CUDA_VISIBLE_DEVICES to the "
+            "(default 1; or KARML_MLPOT_N_GPUS). Set CUDA_VISIBLE_DEVICES to the "
             "GPU ids to use. Requires --ml-batch-size so work splits into chunks."
         ),
     )
@@ -881,7 +881,7 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help=(
             "pycharmm: per-rank spatial ML decomposition when MPI size>1 (PBC only; "
-            "or MMML_MLPOT_SPATIAL_MPI=1). Use with MMML_MPI_NP>1 and --ml-gpu-count 1."
+            "or KARML_MLPOT_SPATIAL_MPI=1). Use with KARML_MPI_NP>1 and --ml-gpu-count 1."
         ),
     )
     parser.add_argument(
@@ -890,7 +890,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         metavar="N",
         help=(
-            "pycharmm: set MMML_CHARMM_OMP_THREADS before MPI-linked CHARMM bootstrap "
+            "pycharmm: set KARML_CHARMM_OMP_THREADS before MPI-linked CHARMM bootstrap "
             "(default 1; CPU performance experiment knob)."
         ),
     )
@@ -1178,7 +1178,7 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="pycharmm: continue when max-angl/max-internal pre-min limits exceeded",
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+    from karml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
         add_dynamics_overlap_args,
     )
 
@@ -1301,8 +1301,8 @@ def build_parser() -> argparse.ArgumentParser:
         default=[0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
         help="lambda_ti: shared λ values for coupled residues.",
     )
-    parser.add_argument("--pre-min-steps", type=int, default=50, help="lambda_ti: MMML BFGS steps per window.")
-    parser.add_argument("--pre-min-fmax", type=float, default=0.1, help="lambda_ti: MMML BFGS fmax (eV/Å).")
+    parser.add_argument("--pre-min-steps", type=int, default=50, help="lambda_ti: KARML BFGS steps per window.")
+    parser.add_argument("--pre-min-fmax", type=float, default=0.1, help="lambda_ti: KARML BFGS fmax (eV/Å).")
     parser.add_argument("--min-steps", type=int, default=None, help="lambda_ti: alias for --pre-min-steps.")
     parser.add_argument("--min-fmax", type=float, default=None, help="lambda_ti: alias for --pre-min-fmax.")
     parser.add_argument("--bfgs-maxstep", type=float, default=0.05)
@@ -1393,13 +1393,13 @@ def build_parser() -> argparse.ArgumentParser:
         "--charmm-pre-minimize",
         action=argparse.BooleanOptionalAction,
         default=True,
-        help="lambda_ti: CHARMM SD/ABNR before MMML BFGS (default on).",
+        help="lambda_ti: CHARMM SD/ABNR before KARML BFGS (default on).",
     )
     parser.add_argument(
         "--calculator-pre-minimize",
         action=argparse.BooleanOptionalAction,
         default=True,
-        help="lambda_ti: MMML-calculator BFGS after CHARMM (default on).",
+        help="lambda_ti: KARML-calculator BFGS after CHARMM (default on).",
     )
     parser.add_argument(
         "--calculator-safe-grms",
@@ -1515,7 +1515,7 @@ def build_parser() -> argparse.ArgumentParser:
         type=float,
         default=DEFAULT_ML_SWITCH_WIDTH,
         help=(
-            "COM-distance width (Å) of the ML→MM handoff for pycharmm/MMML; ML is "
+            "COM-distance width (Å) of the ML→MM handoff for pycharmm/KARML; ML is "
             "fully on below mm_switch_on - width and reaches zero at mm_switch_on "
             f"(default: {DEFAULT_ML_SWITCH_WIDTH:g}). Does not affect lambda_ti (see --ml-cutoff)."
         ),
@@ -1568,7 +1568,7 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "pycharmm decomposed MLpot MM pair provider: Fortran callback idxu/idxv "
             "or JAX neighbor rebuild. All-ML jax_mic hybrids (empty CHARMM lists) "
-            "default to jax; override with MMML_MM_PAIR_SOURCE."
+            "default to jax; override with KARML_MM_PAIR_SOURCE."
         ),
     )
     parser.add_argument(
@@ -1615,7 +1615,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help=(
             "pycharmm jax_mic + jax_pme: include reciprocal r^-6 LJ dispersion "
-            "(default: env MMML_JAX_PME_DISPERSION or on). Use "
+            "(default: env KARML_JAX_PME_DISPERSION or on). Use "
             "--no-jax-pme-dispersion for Coulomb-only long range."
         ),
     )
@@ -1792,7 +1792,7 @@ def build_parser() -> argparse.ArgumentParser:
         choices=("fragments", "whole_system"),
         help=(
             "How a metatomic model is evaluated in CHARMM MLpot. Default is "
-            "'fragments' (the MMML ML/MM scheme: isolated monomers plus "
+            "'fragments' (the KARML ML/MM scheme: isolated monomers plus "
             "switched dimer interaction). 'whole_system' is one evaluation on "
             "the ML selection (all-ML USER term)."
         ),
@@ -1892,7 +1892,7 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help=(
             "Skip JIT/XLA warmup. jaxmd/ase: generic XLA GPU compile and pre-MD hybrid "
-            "MMML eval; lambda_ti: skip first MMML energy eval per window; "
+            "KARML eval; lambda_ti: skip first KARML energy eval per window; "
             "pycharmm: skip serial auto warmup-mlpot-jax before CHARMM MLpot."
         ),
     )
@@ -1903,7 +1903,7 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "pycharmm: run serial warmup-mlpot-jax before MPI/CHARMM to populate "
             "JAX_COMPILATION_CACHE_DIR (default on). Also disabled by --skip-jit-warmup "
-            "or MMML_NO_AUTO_WARMUP_MLPOT_JAX=1."
+            "or KARML_NO_AUTO_WARMUP_MLPOT_JAX=1."
         ),
     )
     parser.add_argument(
@@ -2000,7 +2000,7 @@ def build_parser() -> argparse.ArgumentParser:
         action=argparse.BooleanOptionalAction,
         default=False,
         help=(
-            "When continuing from handoff, evaluate initial MMML |F| and optionally "
+            "When continuing from handoff, evaluate initial KARML |F| and optionally "
             "run pre-minimization if above --handoff-quality-fmax-eVA (default: off)."
         ),
     )
@@ -2078,7 +2078,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help=(
             "MM neighbor-list builder for jaxmd "
-            "(default: MMML_MM_NL_BACKEND or auto→vesin)."
+            "(default: KARML_MM_NL_BACKEND or auto→vesin)."
         ),
     )
     parser.add_argument(
@@ -2087,7 +2087,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help=(
             "MM Vesin pair-list rebuild device "
-            "(default: MMML_MM_NL_DEVICE or auto: GPU when CuPy + a JAX GPU are present, else cpu)."
+            "(default: KARML_MM_NL_DEVICE or auto: GPU when CuPy + a JAX GPU are present, else cpu)."
         ),
     )
     parser.add_argument(
@@ -2191,7 +2191,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help=(
             "Unit of E in --evaluate-reference-npz. Default: infer from NPZ "
-            "_mmml_units / units_manifest.json / force magnitudes (else hartree)."
+            "_karml_units / units_manifest.json / force magnitudes (else hartree)."
         ),
     )
     parser.add_argument(
@@ -2280,7 +2280,7 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help=(
             "Enable ASE/MLpot wall-time profiling (writes mlpot_profile.json; "
-            "sets MMML_MLPOT_PROFILE=1 and MMML_JAX_COMPILE_TIMERS=1)"
+            "sets KARML_MLPOT_PROFILE=1 and KARML_JAX_COMPILE_TIMERS=1)"
         ),
     )
     parser.add_argument(
@@ -2290,7 +2290,7 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="DIR",
         help=(
             "Optional TensorBoard JAX profiler trace directory for jaxmd/ASE "
-            "(also MMML_JAX_PROFILER_DIR). Prefer short --ps when tracing."
+            "(also KARML_JAX_PROFILER_DIR). Prefer short --ps when tracing."
         ),
     )
 
@@ -2303,7 +2303,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def parse_md_system_args(argv: list[str] | None = None) -> argparse.Namespace:
     """Parse CLI with optional ``--config`` YAML (CLI overrides file)."""
-    from mmml.cli.run.md_config import (
+    from karml.cli.run.md_config import (
         apply_mapping_to_namespace,
         collect_explicit_cli_dests,
         config_is_campaign,
@@ -2324,7 +2324,7 @@ def parse_md_system_args(argv: list[str] | None = None) -> argparse.Namespace:
         merged: dict[str, Any] = {}
         defaults_block = cfg.get("defaults")
         if isinstance(defaults_block, dict):
-            from mmml.cli.run.md_campaign import strip_campaign_metadata_keys
+            from karml.cli.run.md_campaign import strip_campaign_metadata_keys
 
             merged.update(strip_campaign_metadata_keys(defaults_block))
         # A CLI --checkpoint replaces the config value below, so resolving the
@@ -2335,7 +2335,7 @@ def parse_md_system_args(argv: list[str] | None = None) -> argparse.Namespace:
             and merged.get("checkpoint") is not None
             and "checkpoint" not in cli_explicit
         ):
-            from mmml.cli.run.md_config import resolve_campaign_checkpoint_value
+            from karml.cli.run.md_config import resolve_campaign_checkpoint_value
 
             merged["checkpoint"] = resolve_campaign_checkpoint_value(merged["checkpoint"])
         for key, value in cfg.items():
@@ -2353,7 +2353,7 @@ def parse_md_system_args(argv: list[str] | None = None) -> argparse.Namespace:
         defaults["config"] = pre_args.config
     parser.set_defaults(**defaults)
     args = parser.parse_args(remaining)
-    from mmml.cli.run.md_config import (
+    from karml.cli.run.md_config import (
         normalize_hybrid_assembly_flags,
         normalize_resume_flags,
     )
@@ -2363,7 +2363,7 @@ def parse_md_system_args(argv: list[str] | None = None) -> argparse.Namespace:
     normalize_hybrid_assembly_flags(args)
     # Resolve interaction_policy relative to the --config file (not CWD).
     if getattr(args, "interaction_policy", None) is not None:
-        from mmml.cli.run.md_config import resolve_config_relative_path
+        from karml.cli.run.md_config import resolve_config_relative_path
 
         resolved = resolve_config_relative_path(
             getattr(args, "config", None),
@@ -2371,7 +2371,7 @@ def parse_md_system_args(argv: list[str] | None = None) -> argparse.Namespace:
         )
         if resolved is not None:
             args.interaction_policy = resolved
-    from mmml.interfaces.pycharmmInterface.mlpot.spatial_mpi_policy import (
+    from karml.interfaces.pycharmmInterface.mlpot.spatial_mpi_policy import (
         sync_spatial_mpi_env_from_args,
     )
 
@@ -2431,7 +2431,7 @@ def _validate_and_record_interaction_policy(args: argparse.Namespace) -> None:
     policy_path = getattr(args, "interaction_policy", None)
     if policy_path is None:
         return
-    from mmml.md.interactions import (
+    from karml.md.interactions import (
         interaction_policy_content_hash,
         load_interaction_policy,
         policy_is_lowerable,
@@ -2455,7 +2455,7 @@ def _validate_and_record_interaction_policy(args: argparse.Namespace) -> None:
             "(ML solute monomers + MM intermolecular pairs; no near/far) until "
             "generalized lowering is implemented."
         )
-    from mmml.md.interactions import policy_is_mechanical_embedding
+    from karml.md.interactions import policy_is_mechanical_embedding
 
     kind = (
         "mechanical-embedding"
@@ -2464,7 +2464,7 @@ def _validate_and_record_interaction_policy(args: argparse.Namespace) -> None:
     )
     if not getattr(args, "quiet", False):
         print(
-            f"mmml md-system: interaction_policy={path} "
+            f"karml md-system: interaction_policy={path} "
             f"schema={policy.schema_version} sha256={digest[:12]}… "
             f"({kind}; ownership validated)",
             flush=True,
@@ -2484,8 +2484,8 @@ def build_run_manifest(
     if job_name is None:
         raise ValueError("resolve_job_name returned None")
     command_parts = list(sys.argv)
-    if command_parts and command_parts[0] == "mmml md-system":
-        command_parts = ["mmml", "md-system", *command_parts[1:]]
+    if command_parts and command_parts[0] == "karml md-system":
+        command_parts = ["karml", "md-system", *command_parts[1:]]
     manifest: dict[str, Any] = {
         "job_name": job_name,
         "started_at": started_at,
@@ -2553,7 +2553,7 @@ def _maybe_save_job_run_manifest(
         manifest,
         output_dir=args.output_dir,
     )
-    print(f"mmml md-system: wrote job manifest {path}", flush=True)
+    print(f"karml md-system: wrote job manifest {path}", flush=True)
     return manifest
 
 
@@ -2571,11 +2571,11 @@ def _append_boolean_optional_flag(cmd: list[str], flag: str, value: bool) -> Non
         cmd.append(f"--no-{flag.removeprefix('--')}")
 
 
-def _append_suite_mmml_handoff_args(
+def _append_suite_karml_handoff_args(
     cmd: list[str], args: argparse.Namespace, *, backend: str
 ) -> None:
-    """Forward MMML cutoffs and handoff/minimize flags to ASE/JAX-MD suite CLIs."""
-    from mmml.interfaces.pycharmmInterface.cutoffs import (
+    """Forward KARML cutoffs and handoff/minimize flags to ASE/JAX-MD suite CLIs."""
+    from karml.interfaces.pycharmmInterface.cutoffs import (
         DEFAULT_ML_SWITCH_WIDTH,
         DEFAULT_MM_SWITCH_ON,
         DEFAULT_MM_SWITCH_WIDTH,
@@ -2711,7 +2711,7 @@ def _append_suite_mmml_handoff_args(
 
 
 def _pycharmm_pre_dynamics_lingo_requested(args: argparse.Namespace) -> bool:
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
         normalize_pycharmm_pre_dynamics_lingo,
     )
 
@@ -2727,7 +2727,7 @@ def _append_pycharmm_pre_dynamics_lingo(
     cmd: list[str], args: argparse.Namespace
 ) -> None:
     """Write inline YAML/CLI lingo to output_dir and forward ``--*-lingo-file``."""
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
         normalize_pycharmm_pre_dynamics_lingo,
     )
 
@@ -2816,7 +2816,7 @@ def _pycharmm_run_summary(args: argparse.Namespace) -> str:
 
 
 def _validate_packmol_args(args: argparse.Namespace) -> None:
-    from mmml.interfaces.pycharmmInterface.packmol_placement import (
+    from karml.interfaces.pycharmmInterface.packmol_placement import (
         resolve_packmol_cube_side_from_args,
         resolve_packmol_placement_mode,
         resolve_packmol_sphere_radius,
@@ -2850,8 +2850,8 @@ def _validate_packmol_args(args: argparse.Namespace) -> None:
 
 
 def _validate_builder_args(args: argparse.Namespace) -> None:
-    from mmml.interfaces.pycharmmInterface.grid_placement import resolve_system_builder
-    from mmml.interfaces.pycharmmInterface.packmol_placement import (
+    from karml.interfaces.pycharmmInterface.grid_placement import resolve_system_builder
+    from karml.interfaces.pycharmmInterface.packmol_placement import (
         resolve_packmol_cube_side_from_args,
         resolve_packmol_placement_mode,
         resolve_packmol_sphere_radius,
@@ -2889,7 +2889,7 @@ def _validate_packmol_sphere_args(args: argparse.Namespace) -> None:
 
 
 def _validate_box_sizing_args(args: argparse.Namespace) -> None:
-    from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import (
+    from karml.interfaces.pycharmmInterface.mlpot.box_sizing import (
         parse_composition_dict,
         resolve_box_auto_mode,
         resolve_target_density_g_cm3,
@@ -2995,7 +2995,7 @@ def _append_box_sizing_args(cmd: list[str], args: argparse.Namespace) -> None:
     reg_grms = getattr(args, "mlpot_registration_max_grms", None)
     if reg_grms is not None:
         cmd.extend(["--mlpot-registration-max-grms", str(reg_grms)])
-    from mmml.interfaces.pycharmmInterface.mlpot.recovery_progress import (
+    from karml.interfaces.pycharmmInterface.mlpot.recovery_progress import (
         CLEANUP_SUBDIR,
         PREP_LADDER_SUBDIR,
     )
@@ -3011,7 +3011,7 @@ def _append_box_sizing_args(cmd: list[str], args: argparse.Namespace) -> None:
 
 
 def _validate_pyxtal_args(args: argparse.Namespace) -> None:
-    from mmml.interfaces.pyxtal_placement import validate_pyxtal_cluster_args
+    from karml.interfaces.pyxtal_placement import validate_pyxtal_cluster_args
 
     validate_pyxtal_cluster_args(
         composition=args.composition,
@@ -3022,7 +3022,7 @@ def _validate_pyxtal_args(args: argparse.Namespace) -> None:
 
 
 def _append_pyxtal_args(cmd: list[str], args: argparse.Namespace) -> None:
-    from mmml.interfaces.pyxtal_placement import resolve_pyxtal_use
+    from karml.interfaces.pyxtal_placement import resolve_pyxtal_use
 
     if not resolve_pyxtal_use(
         composition=args.composition,
@@ -3051,7 +3051,7 @@ def _append_pyxtal_args(cmd: list[str], args: argparse.Namespace) -> None:
 
 
 def _append_packmol_args(cmd: list[str], args: argparse.Namespace) -> None:
-    from mmml.interfaces.pycharmmInterface.packmol_placement import (
+    from karml.interfaces.pycharmmInterface.packmol_placement import (
         resolve_packmol_placement_mode,
         resolve_packmol_use,
     )
@@ -3087,7 +3087,7 @@ def _append_packmol_sphere_args(cmd: list[str], args: argparse.Namespace) -> Non
 
 
 def _run_lambda_ti_inline(args: argparse.Namespace) -> int:
-    from mmml.cli.run.lambda_dynamics import (
+    from karml.cli.run.lambda_dynamics import (
         config_from_namespace,
         print_lambda_summary,
         run_lambda_dynamics,
@@ -3107,12 +3107,12 @@ def _run_lambda_ti_inline(args: argparse.Namespace) -> int:
     args.langevin_friction = getattr(args, "langevin_friction", 0.02)
 
     cfg = config_from_namespace(args, repo_root=_repo_root())
-    print("mmml md-system: starting lambda_ti (in-process)", flush=True)
+    print("karml md-system: starting lambda_ti (in-process)", flush=True)
     summary = run_lambda_dynamics(cfg)
     print_lambda_summary(summary)
     print(f"Wrote {summary['_summary_path']}")
     print(f"Snapshots: {summary['snapshots_npz']}")
-    print(f"MBAR: mmml lambda-mbar --run-dir {cfg.output_dir}")
+    print(f"MBAR: karml lambda-mbar --run-dir {cfg.output_dir}")
     return 0
 
 
@@ -3184,26 +3184,26 @@ def _apply_charmm_omp_threads_env(args: argparse.Namespace) -> str | None:
     if threads < 1:
         raise ValueError("--charmm-omp-threads / charmm_omp_threads must be >= 1")
     value = str(threads)
-    os.environ["MMML_CHARMM_OMP_THREADS"] = value
+    os.environ["KARML_CHARMM_OMP_THREADS"] = value
     os.environ["OMP_NUM_THREADS"] = value
     os.environ.setdefault("MKL_NUM_THREADS", value)
     os.environ.setdefault("OPENBLAS_NUM_THREADS", value)
     os.environ.setdefault("NUMEXPR_NUM_THREADS", value)
-    os.environ.setdefault("MMML_JAX_COMPILE_THREADS", value)
+    os.environ.setdefault("KARML_JAX_COMPILE_THREADS", value)
     # The MPI wrapper historically disables compile threading by default. An
     # explicit CPU thread request should opt back in unless a caller later
-    # overrides MMML_JAX_COMPILE_THREADS.
-    os.environ["MMML_NO_JAX_COMPILE_THREADS"] = "0"
+    # overrides KARML_JAX_COMPILE_THREADS.
+    os.environ["KARML_NO_JAX_COMPILE_THREADS"] = "0"
     return value
 
 
 def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
-    from mmml.interfaces.pycharmmInterface.cutoffs import (
+    from karml.interfaces.pycharmmInterface.cutoffs import (
         DEFAULT_ML_SWITCH_WIDTH,
         DEFAULT_MM_SWITCH_ON,
         DEFAULT_MM_SWITCH_WIDTH,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.pretreat_cli_args import (
+    from karml.interfaces.pycharmmInterface.mlpot.pretreat_cli_args import (
         DEFAULT_CHARMM_MM_PRETREAT_DT_FS,
     )
 
@@ -3343,7 +3343,7 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
     _append_optional(cmd, "--ps-nve", getattr(args, "ps_nve", None))
     _append_optional(cmd, "--ps-prod", getattr(args, "ps_prod", None))
     _append_optional(cmd, "--restart-from", getattr(args, "restart_from", None))
-    # ``continue_from`` is an mmml handoff (often NPZ/HDF5), not necessarily a
+    # ``continue_from`` is an karml handoff (often NPZ/HDF5), not necessarily a
     # CHARMM dynamics restart.  ``run_backend`` loads it into the process-local
     # handoff state before calling the PyCHARMM backend.  Never relabel it as
     # ``--restart-from``: that bypasses handoff velocity synchronization and
@@ -3525,7 +3525,7 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
     )
     raw_ml_resnames = getattr(args, "ml_resnames", None)
     if raw_ml_resnames is not None:
-        from mmml.md.ml_region import parse_ml_resnames
+        from karml.md.ml_region import parse_ml_resnames
 
         parsed = parse_ml_resnames(raw_ml_resnames)
         if parsed:
@@ -3897,7 +3897,7 @@ def _charmm_dynamics_restart_kind(path: Path) -> str | None:
         return None
     if "!XOLD" not in text or "!VX" not in text:
         return None
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         _restart_section_values,
     )
 
@@ -3949,7 +3949,7 @@ def route_pycharmm_continue_from_dynamics_restart(args: argparse.Namespace) -> P
     args.restart_from = dst
     args.continue_from = None
     print(
-        f"mmml md-system: --continue-from {src.name} is a CHARMM dynamics restart; "
+        f"karml md-system: --continue-from {src.name} is a CHARMM dynamics restart; "
         f"resuming {stage} in place from {dst} (READYN: positions, velocities, box, "
         "barostat/thermostat and step counter)",
         flush=True,
@@ -4179,7 +4179,7 @@ def build_command(args: argparse.Namespace) -> tuple[str, list[str]]:
     cmd.extend(["--min-com-restraint-k", str(getattr(args, "min_com_restraint_k", 1.0))])
     if getattr(args, "skip_jit_warmup", False):
         cmd.append("--skip-jit-warmup")
-    _append_suite_mmml_handoff_args(cmd, args, backend=backend)
+    _append_suite_karml_handoff_args(cmd, args, backend=backend)
     if args.extra_args:
         cmd.extend(_suite_extra_argv(args, backend))
     return backend, cmd
@@ -4188,14 +4188,14 @@ def build_command(args: argparse.Namespace) -> tuple[str, list[str]]:
 def run_backend(backend: str, argv: list[str], args: argparse.Namespace) -> int:
     """Dispatch one backend in-process; honors handoff context vars."""
     global _last_job_stages
-    from mmml.cli.run.md_handoff import (
+    from karml.cli.run.md_handoff import (
         get_handoff_in,
         get_handoff_out,
         load_handoff,
         save_handoff,
         set_handoff_in,
     )
-    from mmml.cli.run.md_stage_summary import (
+    from karml.cli.run.md_stage_summary import (
         MdJobSummary,
         MdStageSummary,
         build_pycharmm_plan_rows,
@@ -4208,13 +4208,13 @@ def run_backend(backend: str, argv: list[str], args: argparse.Namespace) -> int:
 
     if backend == "pycharmm":
         print(
-            f"mmml md-system: running pycharmm ({_pycharmm_run_summary(args)})",
+            f"karml md-system: running pycharmm ({_pycharmm_run_summary(args)})",
             flush=True,
         )
         print(f"  {' '.join(argv)}", flush=True)
     else:
         print(
-            f"mmml md-system: running {backend} in-process:",
+            f"karml md-system: running {backend} in-process:",
             " ".join(argv),
             flush=True,
         )
@@ -4232,9 +4232,9 @@ def run_backend(backend: str, argv: list[str], args: argparse.Namespace) -> int:
         set_handoff_in(handoff_in)
 
     if backend == "ase":
-        from mmml.cli.run.md_pbc_suite import ase as backend_mod
+        from karml.cli.run.md_pbc_suite import ase as backend_mod
     elif backend == "pycharmm":
-        from mmml.interfaces.pycharmmInterface.charmm_mpi import (
+        from karml.interfaces.pycharmmInterface.charmm_mpi import (
             charmm_lib_links_mpi,
             maybe_rerun_md_system_under_mpirun,
             prepare_serial_charmm_mpi_env,
@@ -4246,7 +4246,7 @@ def run_backend(backend: str, argv: list[str], args: argparse.Namespace) -> int:
         prepare_serial_charmm_mpi_env()
         campaign_active = False
         if getattr(args, "config", None):
-            from mmml.cli.run.md_config import config_is_campaign, load_yaml_config
+            from karml.cli.run.md_config import config_is_campaign, load_yaml_config
 
             try:
                 campaign_active = config_is_campaign(load_yaml_config(args.config))
@@ -4259,32 +4259,32 @@ def run_backend(backend: str, argv: list[str], args: argparse.Namespace) -> int:
             rerun_code = maybe_rerun_md_system_under_mpirun(sys.argv[1:])
             if rerun_code is not None:
                 return rerun_code
-        from mmml.cli.run.warmup_mlpot_jax import maybe_auto_warmup_mlpot_jax_from_md_system
+        from karml.cli.run.warmup_mlpot_jax import maybe_auto_warmup_mlpot_jax_from_md_system
 
         warm_rc = maybe_auto_warmup_mlpot_jax_from_md_system(args)
         if warm_rc is not None and int(warm_rc) != 0:
             return int(warm_rc)
         if charmm_lib_links_mpi() and not _under_mpirun():
             print(
-                "mmml: OpenMPI-linked CHARMM — for large MLpot clusters prefer:\n  "
-                f"  {_repo_root() / 'scripts/mmml-charmm-mpirun.sh'} md-system ...\n"
+                "karml: OpenMPI-linked CHARMM — for large MLpot clusters prefer:\n  "
+                f"  {_repo_root() / 'scripts/karml-charmm-mpirun.sh'} md-system ...\n"
                 "  (or see mpirun hint below if SD hits domdec/MPI errors)\n  "
-                + mpirun_launch_hint("mmml md-system"),
+                + mpirun_launch_hint("karml md-system"),
                 flush=True,
             )
-        from mmml.interfaces.pycharmmInterface.jax_device_policy import (
+        from karml.interfaces.pycharmmInterface.jax_device_policy import (
             apply_mlpot_jax_compilation_cache_env,
         )
 
         apply_mlpot_jax_compilation_cache_env(quiet=True)
-        from mmml.interfaces.pycharmmInterface.jax_compile_threads import (
+        from karml.interfaces.pycharmmInterface.jax_compile_threads import (
             apply_jax_compile_xla_flags,
         )
 
         apply_jax_compile_xla_flags(quiet=True)
-        from mmml.cli.run.md_pbc_suite import pycharmm_mlpot as backend_mod
+        from karml.cli.run.md_pbc_suite import pycharmm_mlpot as backend_mod
     else:
-        from mmml.cli.run.md_pbc_suite import jaxmd as backend_mod
+        from karml.cli.run.md_pbc_suite import jaxmd as backend_mod
 
     exit_code = int(backend_mod.main(argv))
     handoff_out = get_handoff_out()
@@ -4298,7 +4298,7 @@ def run_backend(backend: str, argv: list[str], args: argparse.Namespace) -> int:
 
     job_name = resolve_job_name(args) or "run"
     if backend == "pycharmm":
-        from mmml.cli.run.md_stage_summary import (
+        from karml.cli.run.md_stage_summary import (
             finalize_pycharmm_plan_rows,
             pycharmm_trajectory_tag,
         )
@@ -4340,10 +4340,10 @@ def main() -> int:
         # Skip YAML/config merge and heavy post-parse imports used by a real run.
         build_parser().parse_args(argv)
         return 0
-    # Set JAX_PLATFORMS before prep / any transitive import jax (mmml_calculator,
+    # Set JAX_PLATFORMS before prep / any transitive import jax (karml_calculator,
     # hybrid_mlpot, orbax). Too late once backends are locked to CUDA-only.
     try:
-        from mmml.interfaces.pycharmmInterface.jax_device_policy import (
+        from karml.interfaces.pycharmmInterface.jax_device_policy import (
             apply_mlpot_jax_platform_env,
         )
 
@@ -4352,7 +4352,7 @@ def main() -> int:
         pass
     args = parse_md_system_args(argv)
     if getattr(args, "mlpot_profile", False):
-        from mmml.interfaces.pycharmmInterface.mlpot.ml_profile import (
+        from karml.interfaces.pycharmmInterface.mlpot.ml_profile import (
             enable_mlpot_profiling,
             write_profile_git_metadata,
         )
@@ -4375,14 +4375,14 @@ def main() -> int:
                 }
             },
         )
-        print(f"mmml md-system: wrote profiling git metadata {metadata_path}", flush=True)
+        print(f"karml md-system: wrote profiling git metadata {metadata_path}", flush=True)
     if getattr(args, "jax_profiler_dir", None) is not None:
-        os.environ["MMML_JAX_PROFILER_DIR"] = str(
+        os.environ["KARML_JAX_PROFILER_DIR"] = str(
             Path(args.jax_profiler_dir).expanduser().resolve()
         )
     if getattr(args, "mm_nl_device", None):
         # Read by nl_gpu in every backend (pycharmm MLpot rebuilds in-process).
-        os.environ["MMML_MM_NL_DEVICE"] = str(args.mm_nl_device)
+        os.environ["KARML_MM_NL_DEVICE"] = str(args.mm_nl_device)
     started_at = datetime.now(timezone.utc).isoformat()
     backend: str | None = None
     argv: list[str] | None = None
@@ -4397,12 +4397,12 @@ def main() -> int:
                 _validate_packmol_args(args)
                 _validate_and_record_interaction_policy(args)
         except (ValueError, FileNotFoundError, NotImplementedError) as exc:
-            print(f"mmml md-system: error: {exc}", file=sys.stderr)
+            print(f"karml md-system: error: {exc}", file=sys.stderr)
             exit_code = 2
             return exit_code
         if args.config and (getattr(args, "job_id", None) or getattr(args, "run_all", False)):
-            from mmml.cli.run.md_campaign import run_campaign
-            from mmml.cli.run.md_config import config_is_campaign, load_yaml_config
+            from karml.cli.run.md_campaign import run_campaign
+            from karml.cli.run.md_config import config_is_campaign, load_yaml_config
 
             campaign = load_yaml_config(args.config)
             if config_is_campaign(campaign):
@@ -4411,14 +4411,14 @@ def main() -> int:
                 return exit_code
             if getattr(args, "run_all", False):
                 print(
-                    "mmml md-system: error: --run-all requires runs/jobs in --config",
+                    "karml md-system: error: --run-all requires runs/jobs in --config",
                     file=sys.stderr,
                 )
                 exit_code = 2
                 return exit_code
             if getattr(args, "job_id", None) and not getattr(args, "quiet", False):
                 print(
-                    "mmml md-system: note: --job-id ignored (config has no runs/jobs table); "
+                    "karml md-system: note: --job-id ignored (config has no runs/jobs table); "
                     "using flat config + CLI flags",
                     flush=True,
                 )
@@ -4427,78 +4427,78 @@ def main() -> int:
             try:
                 exit_code = _run_lambda_ti_inline(args)
             except ValueError as exc:
-                print(f"mmml md-system: error: {exc}", file=sys.stderr)
+                print(f"karml md-system: error: {exc}", file=sys.stderr)
                 exit_code = 2
             return exit_code
         if getattr(args, "optimize_cutoffs", False):
             if not getattr(args, "reference_npz", None):
                 print(
-                    "mmml md-system: error: --optimize-cutoffs requires --reference-npz",
+                    "karml md-system: error: --optimize-cutoffs requires --reference-npz",
                     file=sys.stderr,
                 )
                 exit_code = 2
                 return exit_code
-            from mmml.cli.run.md_optimize_cutoffs import run_optimize_cutoffs
+            from karml.cli.run.md_optimize_cutoffs import run_optimize_cutoffs
 
             backend = "ase"
             try:
                 exit_code = int(run_optimize_cutoffs(args))
             except Exception as exc:
-                print(f"mmml md-system: optimize-cutoffs failed: {exc}", file=sys.stderr)
+                print(f"karml md-system: optimize-cutoffs failed: {exc}", file=sys.stderr)
                 exit_code = 1
             return exit_code
         if getattr(args, "dyna_probe", False):
             try:
                 _apply_backend_setup_defaults(args)
             except ValueError as exc:
-                print(f"mmml md-system: error: {exc}", file=sys.stderr)
+                print(f"karml md-system: error: {exc}", file=sys.stderr)
                 exit_code = 2
                 return exit_code
-            from mmml.cli.run.md_dyna_probe import run_dyna_probe
+            from karml.cli.run.md_dyna_probe import run_dyna_probe
 
             try:
                 exit_code = int(run_dyna_probe(args))
             except Exception as exc:
-                print(f"mmml md-system: dyna-probe failed: {exc}", file=sys.stderr)
+                print(f"karml md-system: dyna-probe failed: {exc}", file=sys.stderr)
                 exit_code = 1
             return exit_code
         if getattr(args, "evaluate_npz", None):
             try:
                 _apply_backend_setup_defaults(args)
             except ValueError as exc:
-                print(f"mmml md-system: error: {exc}", file=sys.stderr)
+                print(f"karml md-system: error: {exc}", file=sys.stderr)
                 exit_code = 2
                 return exit_code
-            from mmml.cli.run.md_evaluate_npz import _resolve_evaluate_backend, run_evaluate_npz
+            from karml.cli.run.md_evaluate_npz import _resolve_evaluate_backend, run_evaluate_npz
 
             backend = _resolve_evaluate_backend(args)
             try:
                 exit_code = int(run_evaluate_npz(args))
             except Exception as exc:
-                print(f"mmml md-system: evaluate-npz failed: {exc}", file=sys.stderr)
+                print(f"karml md-system: evaluate-npz failed: {exc}", file=sys.stderr)
                 exit_code = 1
             return exit_code
         try:
             _apply_backend_setup_defaults(args)
         except ValueError as exc:
-            print(f"mmml md-system: error: {exc}", file=sys.stderr)
+            print(f"karml md-system: error: {exc}", file=sys.stderr)
             exit_code = 2
             return exit_code
         if getattr(args, "jaxmd_unified", False):
-            from mmml.cli.run.md_system_unified import run_unified_jaxmd
+            from karml.cli.run.md_system_unified import run_unified_jaxmd
 
             backend = "jaxmd"
             try:
                 exit_code = int(run_unified_jaxmd(args))
             except Exception as exc:
-                print(f"mmml md-system: jaxmd-unified failed: {exc}", file=sys.stderr)
+                print(f"karml md-system: jaxmd-unified failed: {exc}", file=sys.stderr)
                 exit_code = 1
             return exit_code
         route_pycharmm_continue_from_dynamics_restart(args)
         try:
             backend, argv = build_command(args)
         except ValueError as exc:
-            print(f"mmml md-system: error: {exc}", file=sys.stderr)
+            print(f"karml md-system: error: {exc}", file=sys.stderr)
             exit_code = 2
             return exit_code
         exit_code = run_backend(backend, argv, args)
@@ -4514,7 +4514,7 @@ def main() -> int:
                 exit_code=exit_code,
             )
             if manifest is not None and args.output_dir is not None:
-                from mmml.cli.run.md_run_advice import maybe_emit_run_advice
+                from karml.cli.run.md_run_advice import maybe_emit_run_advice
 
                 maybe_emit_run_advice(
                     args,

@@ -29,7 +29,7 @@ import matplotlib.image as mpimg
 import matplotlib.pyplot as plt
 import numpy as np
 
-from mmml.utils.plotting.styles import apply_plot_style
+from karml.utils.plotting.styles import apply_plot_style
 
 # (render suffix, panel title, structure filename for the RMSD chain)
 STAGES = [

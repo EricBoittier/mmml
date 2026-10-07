@@ -70,7 +70,7 @@ settings:
 
   # NOTE on peptide_water_ml_cutoff_A: it does NOT reduce ml_pep_water's
   # per-step cost. Checked directly in
-  # mmml/interfaces/jaxmdInterface/hybrid_energy.py::make_peptide_water_ml_energy_fn
+  # karml/interfaces/jaxmdInterface/hybrid_energy.py::make_peptide_water_ml_energy_fn
   # -- every core-water dimer is still run through the ML model every step
   # (vmapped, no neighbor-list-style pruning like mm_nonbonded's padded pair
   # list); the cutoff only applies a post-hoc energy switching weight. So it

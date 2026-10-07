@@ -9,7 +9,7 @@ from unittest import mock
 
 _block_terms_path = (
     Path(__file__).resolve().parents[2]
-    / "mmml/interfaces/pycharmmInterface/mlpot/block_terms.py"
+    / "karml/interfaces/pycharmmInterface/mlpot/block_terms.py"
 )
 _spec = importlib.util.spec_from_file_location("block_terms", _block_terms_path)
 block_terms = importlib.util.module_from_spec(_spec)
@@ -24,7 +24,7 @@ def test_mlpot_block_all_atoms_zeros_elec_vdw_no_impr():
     scripts: list[str] = []
 
     with mock.patch.object(block_terms, "_import_pycharmm") as imp, mock.patch(
-        "mmml.interfaces.pycharmmInterface.charmm_levels.run_charmm_script_quiet",
+        "karml.interfaces.pycharmmInterface.charmm_levels.run_charmm_script_quiet",
         side_effect=scripts.append,
     ):
         imp.return_value.coor.get_natom.return_value = 10
@@ -43,16 +43,16 @@ def test_mlpot_internal_block_coeff_scaled():
 
 
 def test_mlpot_use_block_registration_defaults_false(monkeypatch):
-    monkeypatch.delenv("MMML_MLPOT_USE_BLOCK", raising=False)
+    monkeypatch.delenv("KARML_MLPOT_USE_BLOCK", raising=False)
     assert block_terms.mlpot_use_block_registration() is False
-    monkeypatch.setenv("MMML_MLPOT_USE_BLOCK", "1")
+    monkeypatch.setenv("KARML_MLPOT_USE_BLOCK", "1")
     assert block_terms.mlpot_use_block_registration() is True
 
 
 def test_apply_mlpot_registration_mm_off_uses_psf_by_default(monkeypatch):
     sel = mock.Mock()
     sel.get_atom_indexes.return_value = list(range(10))
-    monkeypatch.delenv("MMML_MLPOT_USE_BLOCK", raising=False)
+    monkeypatch.delenv("KARML_MLPOT_USE_BLOCK", raising=False)
     with mock.patch.object(
         block_terms, "zero_mlpot_psf_mm_terms", return_value="all"
     ) as zero_fn, mock.patch.object(block_terms, "apply_mlpot_energy_block") as block_fn:
@@ -64,7 +64,7 @@ def test_apply_mlpot_registration_mm_off_uses_psf_by_default(monkeypatch):
 
 def test_apply_mlpot_registration_mm_off_honors_use_block(monkeypatch):
     sel = mock.Mock()
-    monkeypatch.delenv("MMML_MLPOT_USE_BLOCK", raising=False)
+    monkeypatch.delenv("KARML_MLPOT_USE_BLOCK", raising=False)
     with mock.patch.object(
         block_terms, "zero_mlpot_psf_mm_terms"
     ) as zero_fn, mock.patch.object(
@@ -85,9 +85,9 @@ def test_zero_mlpot_psf_mm_terms_zeros_params_and_charges():
     fake_coor.get_natom.return_value = 3
 
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap.apply_zeroed_cgenff_params"
+        "karml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap.apply_zeroed_cgenff_params"
     ) as zero_prm_fn, mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap.assert_psf_bonds_present",
+        "karml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap.assert_psf_bonds_present",
         side_effect=[400, 400],
     ) as bond_fn, mock.patch.object(block_terms, "_import_pycharmm") as imp:
         pycharmm = imp.return_value
@@ -114,12 +114,12 @@ def test_zero_mlpot_psf_mm_terms_hybrid_uses_ml_type_copies():
     sel.get_atom_indexes.return_value = [0, 1]
     sel.store.return_value = "mlsel"
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap.apply_zeroed_cgenff_params"
+        "karml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap.apply_zeroed_cgenff_params"
     ) as zero_prm_fn, mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap.assert_psf_bonds_present",
+        "karml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap.assert_psf_bonds_present",
         return_value=400,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.ml_type_copies.apply_ml_type_copies",
+        "karml.interfaces.pycharmmInterface.mlpot.ml_type_copies.apply_ml_type_copies",
         return_value={"types": 2, "bonds": 1, "angles": 0},
     ) as copies_fn, mock.patch.object(block_terms, "_import_pycharmm") as imp, mock.patch.object(
         block_terms, "_psf_torsion_counts", return_value=None
@@ -137,9 +137,9 @@ def test_zero_mlpot_psf_mm_terms_periodic_external_also_bonded_only():
     sel = mock.Mock()
     sel.get_atom_indexes.return_value = [0, 1, 2]
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap.apply_zeroed_cgenff_params"
+        "karml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap.apply_zeroed_cgenff_params"
     ) as zero_prm_fn, mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap.assert_psf_bonds_present",
+        "karml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap.assert_psf_bonds_present",
         return_value=400,
     ), mock.patch.object(block_terms, "_import_pycharmm") as imp:
         imp.return_value.coor.get_natom.return_value = 3
@@ -153,7 +153,7 @@ def test_zero_mlpot_psf_mm_terms_periodic_external_also_bonded_only():
 def test_apply_mlpot_registration_mm_off_periodic_external_uses_psf(monkeypatch):
     sel = mock.Mock()
     sel.get_atom_indexes.return_value = list(range(10))
-    monkeypatch.delenv("MMML_MLPOT_USE_BLOCK", raising=False)
+    monkeypatch.delenv("KARML_MLPOT_USE_BLOCK", raising=False)
     with mock.patch.object(
         block_terms, "zero_mlpot_psf_mm_terms", return_value="all"
     ) as zero_fn, mock.patch.object(block_terms, "apply_mlpot_periodic_external_block") as block_fn:
@@ -167,18 +167,18 @@ def test_apply_mlpot_registration_mm_off_periodic_external_uses_psf(monkeypatch)
 def test_mlpot_block_partial_ml_zeros_ml_block_elec_vdw():
     sel = mock.Mock()
     sel.get_atom_indexes.return_value = [0, 1, 2]
-    sel.store.return_value = "mmml_ml"
+    sel.store.return_value = "karml_ml"
 
     scripts: list[str] = []
 
     with mock.patch.object(block_terms, "_import_pycharmm") as imp, mock.patch(
-        "mmml.interfaces.pycharmmInterface.charmm_levels.run_charmm_script_quiet",
+        "karml.interfaces.pycharmmInterface.charmm_levels.run_charmm_script_quiet",
         side_effect=scripts.append,
     ):
         imp.return_value.coor.get_natom.return_value = 10
         tag = block_terms.apply_mlpot_energy_block(sel)
 
-    assert tag == "mmml_ml"
+    assert tag == "karml_ml"
     script = scripts[0]
     assert "COEFF 2 2 0.0 BOND 0.0 ANGL 0.0 DIHEdral 0.0 ELEC 0.0 VDW 0.0" in script
     assert "COEFF 1 2 0.0" in script

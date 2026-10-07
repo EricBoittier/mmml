@@ -41,28 +41,28 @@ def load_config(config_path: Path | str | None = None) -> dict[str, Any]:
         cfg = yaml.safe_load(f) or {}
     # These documented environment overrides must also affect the generated
     # campaign YAML, not merely pass the initial path-existence preflight.
-    if ckpt := os.environ.get("MMML_CKPT", "").strip():
+    if ckpt := os.environ.get("KARML_CKPT", "").strip():
         cfg["checkpoint"] = ckpt
     # Useful for isolated diagnostic/smoke runs without mutating a campaign
     # configuration file or colliding with its resumable artifacts.
-    if output_root := os.environ.get("MMML_PBC_OUTPUT_ROOT", "").strip():
+    if output_root := os.environ.get("KARML_PBC_OUTPUT_ROOT", "").strip():
         cfg["output_root"] = output_root
-    if raw_extra := os.environ.get("MMML_PBC_INIT_EXTRA_ARGS", "").strip():
+    if raw_extra := os.environ.get("KARML_PBC_INIT_EXTRA_ARGS", "").strip():
         cfg["pycharmm_init_extra_args"] = shlex.split(raw_extra)
     return cfg
 
 
 def resolve_checkpoint(raw: str) -> Path:
-    # 1. Respect MMML_CKPT environment override if set
-    env = os.environ.get("MMML_CKPT", "").strip()
+    # 1. Respect KARML_CKPT environment override if set
+    env = os.environ.get("KARML_CKPT", "").strip()
     if env:
         path = Path(env).expanduser().resolve()
         if path.exists():
             return path
 
-    if raw == "${MMML_CKPT}":
+    if raw == "${KARML_CKPT}":
         raise RuntimeError(
-            "MMML_CKPT is not set (config checkpoint: ${MMML_CKPT}). "
+            "KARML_CKPT is not set (config checkpoint: ${KARML_CKPT}). "
             "Export your DES dimers PhysNet checkpoint directory before running."
         )
     else:
@@ -90,7 +90,7 @@ def validate_checkpoint(path: Path) -> None:
         raise RuntimeError(
             f"Checkpoint path looks like a placeholder: {path}\n"
             "Set a real directory, e.g.\n"
-            "  export MMML_CKPT=/mmhome/boittier/home/mmml/examples/ckpts_json/DESdimers_params.json"
+            "  export KARML_CKPT=/mmhome/boittier/home/karml/examples/ckpts_json/DESdimers_params.json"
         )
     if not path.exists():
         raise RuntimeError(f"Checkpoint not found: {path}")
@@ -242,7 +242,7 @@ def composition_string(cell: RunCell) -> str:
 
 def cell_ml_atoms(cell: RunCell) -> int:
     """Exact ML atom count for pure or mixed campaign cells."""
-    from mmml.interfaces.pycharmmInterface.mlpot.mlpot_limits import estimate_ml_atoms
+    from karml.interfaces.pycharmmInterface.mlpot.mlpot_limits import estimate_ml_atoms
 
     if cell.components:
         return sum(

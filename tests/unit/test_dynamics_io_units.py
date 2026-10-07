@@ -5,7 +5,7 @@ from __future__ import annotations
 import sys
 import types
 
-from mmml.interfaces.pycharmmInterface.mlpot import dynamics as mdyn
+from karml.interfaces.pycharmmInterface.mlpot import dynamics as mdyn
 
 
 def _fake_dyn(monkeypatch, opened):

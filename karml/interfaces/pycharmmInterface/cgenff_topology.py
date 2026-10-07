@@ -17,7 +17,7 @@ import jax.numpy as jnp
 import numpy as np
 from jax import Array
 
-from mmml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_PRM, CGENFF_RTF
+from karml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_PRM, CGENFF_RTF
 
 try:
     from jax_md.mm_forcefields.base import BondedParameters, Topology
@@ -598,7 +598,7 @@ def load_cgenff_bonded_from_psf(
     molecule_id: Array | None = None,
 ) -> CgenffBondedSystem:
     """Load CGENFF bonded topology/parameters from a CHARMM PSF EXT file."""
-    from mmml.interfaces.pycharmmInterface.cgenff_cmap import (
+    from karml.interfaces.pycharmmInterface.cgenff_cmap import (
         attach_cmap_to_bonded,
         build_cmap_arrays,
     )

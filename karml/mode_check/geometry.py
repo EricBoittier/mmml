@@ -8,12 +8,12 @@ import numpy as np
 from ase import Atoms
 from ase.io import read as ase_read
 
-from mmml.analysis.dimer_molecules import MOLECULES
+from karml.analysis.dimer_molecules import MOLECULES
 
 
 def parse_composition_spec(spec: str) -> list[tuple[str, int]]:
     """Parse ``TIP3:2`` or ``MEOH:1,TIP3:1`` into ``[(RES, n), ...]``."""
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import parse_composition
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import parse_composition
 
     return parse_composition(spec)
 
@@ -40,7 +40,7 @@ def build_vacuum_cluster_from_molecules(
         key = str(res).upper()
         if key not in MOLECULES:
             raise KeyError(
-                f"residue {key!r} not in mmml.analysis.dimer_molecules.MOLECULES; "
+                f"residue {key!r} not in karml.analysis.dimer_molecules.MOLECULES; "
                 f"available={sorted(MOLECULES)}"
             )
         mono = MOLECULES[key]

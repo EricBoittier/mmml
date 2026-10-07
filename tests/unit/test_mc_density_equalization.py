@@ -30,7 +30,7 @@ def _args(**overrides) -> argparse.Namespace:
 
 
 def test_resolve_mc_density_target_defaults_to_single_residue_bulk_table():
-    from mmml.interfaces.pycharmmInterface.mlpot.mc_density import (
+    from karml.interfaces.pycharmmInterface.mlpot.mc_density import (
         resolve_mc_density_target_g_cm3,
     )
 
@@ -40,7 +40,7 @@ def test_resolve_mc_density_target_defaults_to_single_residue_bulk_table():
 
 
 def test_mc_density_equalization_moves_box_toward_target_density():
-    from mmml.interfaces.pycharmmInterface.mlpot.mc_density import (
+    from karml.interfaces.pycharmmInterface.mlpot.mc_density import (
         apply_mc_density_equalization,
         density_g_cm3_for_box,
     )
@@ -69,7 +69,7 @@ def test_mc_density_equalization_moves_box_toward_target_density():
 
 def test_mc_density_hold_box_side_freezes_l():
     """Geometry-floor MC must not expand a density-sized cell (34→51 class bug)."""
-    from mmml.interfaces.pycharmmInterface.mlpot.mc_density import (
+    from karml.interfaces.pycharmmInterface.mlpot.mc_density import (
         apply_mc_density_equalization,
     )
 
@@ -92,7 +92,7 @@ def test_mc_density_hold_box_side_freezes_l():
 
 
 def test_mc_density_equalization_preserves_intramonomer_geometry():
-    from mmml.interfaces.pycharmmInterface.mlpot.mc_density import (
+    from karml.interfaces.pycharmmInterface.mlpot.mc_density import (
         apply_mc_density_equalization,
     )
 
@@ -121,7 +121,7 @@ def test_mc_density_equalization_preserves_intramonomer_geometry():
 
 
 def test_mc_density_equalization_uses_explicit_box_as_initial_side():
-    from mmml.interfaces.pycharmmInterface.mlpot.mc_density import (
+    from karml.interfaces.pycharmmInterface.mlpot.mc_density import (
         apply_mc_density_equalization,
     )
 
@@ -144,7 +144,7 @@ def test_mc_density_equalization_uses_explicit_box_as_initial_side():
 
 
 def test_mc_density_equalization_default_scale_can_shrink_large_packmol_box():
-    from mmml.interfaces.pycharmmInterface.mlpot.mc_density import (
+    from karml.interfaces.pycharmmInterface.mlpot.mc_density import (
         apply_mc_density_equalization,
     )
 
@@ -177,7 +177,7 @@ def test_mc_density_equalization_default_scale_can_shrink_large_packmol_box():
 
 
 def test_mc_density_equalization_respects_mic_minimum_side():
-    from mmml.interfaces.pycharmmInterface.mlpot.mc_density import (
+    from karml.interfaces.pycharmmInterface.mlpot.mc_density import (
         apply_mc_density_equalization,
     )
 
@@ -210,7 +210,7 @@ def test_mc_density_equalization_respects_mic_minimum_side():
 
 
 def test_mc_density_equalization_skips_unknown_mixed_density_without_target():
-    from mmml.interfaces.pycharmmInterface.mlpot.mc_density import (
+    from karml.interfaces.pycharmmInterface.mlpot.mc_density import (
         apply_mc_density_equalization,
     )
 
@@ -232,7 +232,7 @@ def test_mc_density_equalization_skips_unknown_mixed_density_without_target():
 
 
 def test_mc_density_equalization_skips_unknown_mass_even_with_target():
-    from mmml.interfaces.pycharmmInterface.mlpot.mc_density import (
+    from karml.interfaces.pycharmmInterface.mlpot.mc_density import (
         apply_mc_density_equalization,
     )
 

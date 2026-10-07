@@ -7,7 +7,7 @@ source examples/m/_env.sh
 bash examples/m/run_all.sh
 ```
 
-See [`examples/m/README.md`](https://github.com/EricBoittier/mmml/blob/main/examples/m/README.md). Checkpoint and dataset:
+See [`examples/m/README.md`](https://github.com/EricBoittier/karml/blob/main/examples/m/README.md). Checkpoint and dataset:
 commit `30eb7a01f7fcf1d42a795f188526a80e547110fd` (`examples/m/kl.json`,
 `examples/m/nh3_ch3cl_filtered.npz`).
 
@@ -19,7 +19,7 @@ ASE nudged elastic band on `kl.json` between reactant / product XYZs under
 ```bash
 source examples/m/_env.sh
 bash examples/m/13_neb.sh
-# or: uv run mmml neb --config examples/m/yaml/neb.yaml --overwrite
+# or: uv run karml neb --config examples/m/yaml/neb.yaml --overwrite
 ```
 
 ## ADUMB (PyCHARMM)
@@ -45,7 +45,7 @@ an RXNCOR **`combination` of two distances** (CHARMM `COMBI_TYPE`):
 - Prefer `umbrella rxncor … min 0.0 max …` when libcharmm is unpatched.
   Unpatched `UM1RXN` treated the upper edge as `(max − min)` for any nonzero
   `min` (e.g. `min 2 max 6` → abort once value \(> 4\); `min -3 max 3` →
-  upper check against 6 instead of 3). mmml patches that check to `[min, max]`.
+  upper check against 6 instead of 3). karml patches that check to `[min, max]`.
   The 1D difference example uses `min -6 max 6` (matches component RESD walls;
   SN2 band ~[-3, 3]).
 - **Reactivity:** RESD walls are soft outer caps (~7.25 Å) and do **not** forbid
@@ -53,7 +53,7 @@ an RXNCOR **`combination` of two distances** (CHARMM `COMBI_TYPE`):
   bonded terms remain in `ENER INTERN` even with `include_mm: false`. The 1D
   YAML `delete bond/angle` removes C–Cl before heat. Do not replace the system
   with a product topology that has a hard C–N bond (same trap, other basin).
-  Optional: `MMML_ADUMB_RC_WALL_BACKEND=off` to A/B-test walls.
+  Optional: `KARML_ADUMB_RC_WALL_BACKEND=off` to A/B-test walls.
 
 ### Align `umbrella init` with heat length
 

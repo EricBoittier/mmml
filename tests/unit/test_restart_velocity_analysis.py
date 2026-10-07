@@ -6,7 +6,7 @@ from pathlib import Path
 
 import numpy as np
 
-from mmml.interfaces.pycharmmInterface.mlpot.restart_velocity_analysis import (
+from karml.interfaces.pycharmmInterface.mlpot.restart_velocity_analysis import (
     analyze_restart_velocities,
     collect_numbered_restart_paths,
     find_velocity_outliers,
@@ -90,8 +90,8 @@ def test_analyze_restart_velocities_report(tmp_path: Path) -> None:
 
 
 def test_plot_dashboard_log_scale_smoke(tmp_path: Path) -> None:
-    from mmml.cli.plot.plot_restart_velocities import _plot_dashboard
-    from mmml.interfaces.pycharmmInterface.mlpot.restart_velocity_analysis import (
+    from karml.cli.plot.plot_restart_velocities import _plot_dashboard
+    from karml.interfaces.pycharmmInterface.mlpot.restart_velocity_analysis import (
         RestartVelocityReport,
         VelocityOutlier,
     )

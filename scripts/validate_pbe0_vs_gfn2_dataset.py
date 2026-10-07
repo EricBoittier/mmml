@@ -88,7 +88,7 @@ def main() -> int:
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
-    from mmml.utils.plotting.styles import apply_plot_style
+    from karml.utils.plotting.styles import apply_plot_style
 
     apply_plot_style("icml")
     args.out.mkdir(parents=True, exist_ok=True)

@@ -13,11 +13,11 @@ set -euo pipefail
 
 ROOT="${SLURM_SUBMIT_DIR:?}"
 cd "$ROOT"
-source "$ROOT/scripts/resolve_mmml_env.sh"
-mmml_resolve_env "$ROOT"
+source "$ROOT/scripts/resolve_karml_env.sh"
+karml_resolve_env "$ROOT"
 
 export JAX_ENABLE_X64=1
-export MMML_ML_DTYPE=float64
+export KARML_ML_DTYPE=float64
 export XLA_PYTHON_CLIENT_PREALLOCATE=false
 
 ORBAX="$ROOT/artifacts/spooky_so3lr/step-00003000"
@@ -26,15 +26,15 @@ OUT="$ROOT/results/dimer_scan_campaign/full_comparison"
 
 mkdir -p "$ROOT/artifacts/diagnostics" "$OUT"
 if [[ ! -s "$JSON" ]]; then
-  "$MMML_PYTHON" -m mmml.cli.__main__ orbax-to-json "$ORBAX" -o "$JSON"
+  "$KARML_PYTHON" -m karml.cli.__main__ orbax-to-json "$ORBAX" -o "$JSON"
 fi
 
-"$MMML_PYTHON" scripts/run_dimer_scan_campaign.py \
+"$KARML_PYTHON" scripts/run_dimer_scan_campaign.py \
   --spookynet-checkpoint "$JSON" \
   --spookynet-tag hybrid_step3000 \
   --skip-xtb \
   --output-dir "$OUT"
 
-"$MMML_PYTHON" scripts/plot_2d_pes.py \
+"$KARML_PYTHON" scripts/plot_2d_pes.py \
   --csv "$OUT/scan_results.csv" \
   --output-dir "$OUT/pes_2d"

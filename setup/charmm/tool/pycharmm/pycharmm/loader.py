@@ -36,8 +36,8 @@ from .dimens import dimens as dimens_settings
 class CharmmLibraryLoadError(RuntimeError, OSError):
     """``libcharmm`` could not be loaded (missing file, bad path, missing symbol).
 
-    MMML patch: c52a1 loads the library lazily and raised a plain RuntimeError
-    here. The pre-c52a1 loader raised OSError at import, and MMML's optional-CHARMM
+    KARML patch: c52a1 loads the library lazily and raised a plain RuntimeError
+    here. The pre-c52a1 loader raised OSError at import, and KARML's optional-CHARMM
     paths (``except (ImportError, OSError)``) rely on that, so this error is both.
     """
 
@@ -53,7 +53,7 @@ class _CharmmLibLoader:
         # handle -- otherwise the stored handle would dangle.
         self._user_comm_handle = None
         self._user_comm = None
-        # MMML installs ``libcharmm.so`` / ``.dylib``. Upstream c52a1's default
+        # KARML installs ``libcharmm.so`` / ``.dylib``. Upstream c52a1's default
         # basename is ``libchmm``; accept either when a directory is searched.
         if os.environ.get('charmm_lib') is None:
             basenames = ("libcharmm", "libchmm")
@@ -95,8 +95,8 @@ class _CharmmLibLoader:
         # Validate library path early and warn if issues detected
         self._validate_library_path(charmm_lib_dir)
 
-        # MMML patch: dlopen the library now so ``import pycharmm`` raises
-        # OSError when libcharmm is missing, as it did before c52a1. MMML's
+        # KARML patch: dlopen the library now so ``import pycharmm`` raises
+        # OSError when libcharmm is missing, as it did before c52a1. KARML's
         # optional-CHARMM paths (``try: import pycharmm.X`` / ``except
         # (ImportError, OSError)``) depend on that. Only the dlopen is eager:
         # ``init_charmm`` still runs on first use, so set_mpi_comm() works.
@@ -311,9 +311,9 @@ class _LazyLib:
     def __getattr__(self, name):
         if name.startswith('__') and name.endswith('__'):
             raise AttributeError(name)
-        # MMML patch: ``pycharmm.lib`` is this proxy until something imports the
+        # KARML patch: ``pycharmm.lib`` is this proxy until something imports the
         # ``pycharmm.lib`` module, which then replaces the package attribute.
-        # MMML calls ``pycharmm.lib.charmm.<symbol>``, so make ``.charmm`` resolve
+        # KARML calls ``pycharmm.lib.charmm.<symbol>``, so make ``.charmm`` resolve
         # to the same library either way instead of a missing ``charmm`` symbol.
         if name == 'charmm':
             return self

@@ -3,14 +3,14 @@
 Test CLI tool to verify optional dependencies and core functionality.
 
 Usage:
-    python -m mmml.cli.test_deps
+    python -m karml.cli.test_deps
 """
 
 import sys
 
 
 def test_core_imports():
-    """Test that core MMML functionality works."""
+    """Test that core KARML functionality works."""
     print("=" * 70)
     print("TESTING CORE IMPORTS")
     print("=" * 70)
@@ -19,7 +19,7 @@ def test_core_imports():
     
     # Test model creation
     try:
-        from mmml.models.physnetjax.physnetjax.models.model import EF
+        from karml.models.physnetjax.physnetjax.models.model import EF
         EF(features=64, natoms=3)
         tests.append(("Model creation", True, None))
         print("✅ Model creation works")
@@ -37,7 +37,7 @@ def test_core_imports():
     
     # Test data loading
     try:
-        from mmml.data import DataConfig
+        from karml.data import DataConfig
         DataConfig()
         tests.append(("Data loading", True, None))
         print("✅ Data loading utilities work")
@@ -47,7 +47,7 @@ def test_core_imports():
     
     # Test training utilities
     try:
-        from mmml.models.physnetjax.physnetjax.utils.pretty_printer import init_table
+        from karml.models.physnetjax.physnetjax.utils.pretty_printer import init_table
         init_table(doCharges=False)
         tests.append(("Training utilities", True, None))
         print("✅ Training utilities work")
@@ -68,7 +68,7 @@ def check_optional_dependencies():
     
     # Check plotting dependencies
     try:
-        from mmml.models.physnetjax.physnetjax.utils.pretty_printer import HAS_ASCIICHARTPY, HAS_POLARS
+        from karml.models.physnetjax.physnetjax.utils.pretty_printer import HAS_ASCIICHARTPY, HAS_POLARS
         available['asciichartpy'] = HAS_ASCIICHARTPY
         available['polars'] = HAS_POLARS
         print(f"{'✅' if HAS_ASCIICHARTPY else '❌'} asciichartpy: {HAS_ASCIICHARTPY}")
@@ -119,7 +119,7 @@ def print_summary(core_tests, optional_deps):
 
 def main():
     """Run all tests."""
-    print("MMML Optional Dependencies Test")
+    print("KARML Optional Dependencies Test")
     print("=" * 70)
     
     # Test core functionality

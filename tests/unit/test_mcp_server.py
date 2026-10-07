@@ -1,4 +1,4 @@
-"""Tests for the MMML MCP server (no MD execution)."""
+"""Tests for the KARML MCP server (no MD execution)."""
 
 from __future__ import annotations
 
@@ -7,18 +7,18 @@ from pathlib import Path
 
 import pytest
 
-from mmml.mcp.allowlist import is_allowed_mmml_command, validate_cli_args
-from mmml.mcp.env import repo_root, runs_root
-from mmml.mcp.manifest import RunManifest, load_manifest, save_manifest
-from mmml.mcp.recipes import configure_run, list_recipe_names, load_recipe
-from mmml.mcp.server import list_capabilities
+from karml.mcp.allowlist import is_allowed_karml_command, validate_cli_args
+from karml.mcp.env import repo_root, runs_root
+from karml.mcp.manifest import RunManifest, load_manifest, save_manifest
+from karml.mcp.recipes import configure_run, list_recipe_names, load_recipe
+from karml.mcp.server import list_capabilities
 
 
 def test_allowlist_rejects_shell_metachar() -> None:
     with pytest.raises(ValueError):
         validate_cli_args(["foo; rm -rf /"])
-    assert is_allowed_mmml_command("md-system")
-    assert not is_allowed_mmml_command("rm")
+    assert is_allowed_karml_command("md-system")
+    assert not is_allowed_karml_command("rm")
 
 
 def test_list_recipes() -> None:
@@ -30,7 +30,7 @@ def test_list_recipes() -> None:
 
 
 def test_configure_run_smoke(tmp_path, monkeypatch) -> None:
-    monkeypatch.setenv("MMML_MCP_RUNS_ROOT", str(tmp_path / "runs"))
+    monkeypatch.setenv("KARML_MCP_RUNS_ROOT", str(tmp_path / "runs"))
     result = configure_run("test_smoke_001", recipe="dimer_smoke", mode="smoke")
     assert result["run_id"] == "test_smoke_001"
     run_dir = Path(result["run_dir"])
@@ -56,6 +56,6 @@ def test_list_capabilities_json() -> None:
     text = list_capabilities()
     data = json.loads(text)
     assert "dimer_smoke" in data["recipes"]
-    assert "md-system" in data["allowed_mmml_commands"]
+    assert "md-system" in data["allowed_karml_commands"]
     assert Path(data["repo_root"]) == repo_root()
     assert "mcp_runs" in data["runs_root"]

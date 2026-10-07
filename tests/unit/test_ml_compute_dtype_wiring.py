@@ -11,10 +11,10 @@ import pytest
 pytest.importorskip("jax")
 import jax.numpy as jnp
 
-from mmml.cli.run.md_pbc_suite.pycharmm_mlpot import parse_args as parse_pycharmm_mlpot_args
-from mmml.cli.run.md_system import build_pycharmm_command
-from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
-from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
+from karml.cli.run.md_pbc_suite.pycharmm_mlpot import parse_args as parse_pycharmm_mlpot_args
+from karml.cli.run.md_system import build_pycharmm_command
+from karml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
+from karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
     DecomposedMlpotCalculator,
     DecomposedMlpotModel,
     _DeferredDecomposedMlpotCalculator,
@@ -25,16 +25,16 @@ from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
 def _mock_build_patches():
     factory = MagicMock(return_value=(None, MagicMock(), None))
     return patch(
-        "mmml.interfaces.energy_forces.ml.assert_hybrid_ml_compatible",
+        "karml.interfaces.energy_forces.ml.assert_hybrid_ml_compatible",
         return_value=MagicMock(),
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.setup_calculator",
+        "karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.setup_calculator",
         return_value=factory,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.unpack_factory_result",
+        "karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.unpack_factory_result",
         return_value=(None, MagicMock(), None),
     ), patch(
-        "mmml.interfaces.pycharmmInterface.jax_device_policy.mlpot_jax_device_context",
+        "karml.interfaces.pycharmmInterface.jax_device_policy.mlpot_jax_device_context",
         return_value=MagicMock(__enter__=MagicMock(), __exit__=MagicMock()),
     ), factory
 
@@ -126,10 +126,10 @@ def test_decomposed_calculator_casts_positions_with_configured_dtype():
     dz = np.zeros(n, dtype=np.float64)
 
     with patch(
-        "mmml.interfaces.pycharmmInterface.jax_device_policy.mlpot_jax_device_context",
+        "karml.interfaces.pycharmmInterface.jax_device_policy.mlpot_jax_device_context",
         return_value=MagicMock(__enter__=MagicMock(), __exit__=MagicMock()),
     ), patch(
-        "mmml.interfaces.pycharmmInterface.charmm_mpi.recover_mpi_for_charmm_after_jax",
+        "karml.interfaces.pycharmmInterface.charmm_mpi.recover_mpi_for_charmm_after_jax",
     ):
         calc.calculate_charmm(
             n, 0, 0, None, x, y, zc, dx, dy, dz, 0, 0, None, None, None, None, None, None, None
@@ -172,23 +172,23 @@ def test_calculate_charmm_uses_cpu_context_while_jax_deferred():
     dz = np.zeros(n, dtype=np.float64)
 
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.jax_cpu_until_mlpot_registered",
+        "karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.jax_cpu_until_mlpot_registered",
         return_value=cpu_ctx,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.mlpot_jax_device_context",
+        "karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.mlpot_jax_device_context",
         return_value=gpu_ctx,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge.mlpot_runs_on_this_rank",
+        "karml.interfaces.pycharmmInterface.mlpot.mpi_bridge.mlpot_runs_on_this_rank",
         return_value=True,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.charmm_mpi.charmm_lib_links_mpi",
+        "karml.interfaces.pycharmmInterface.charmm_mpi.charmm_lib_links_mpi",
         return_value=False,
     ), patch.object(
         calc,
         "_requires_callback_pbc_box",
         return_value=False,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.charmm_mpi.recover_mpi_for_charmm_after_jax",
+        "karml.interfaces.pycharmmInterface.charmm_mpi.recover_mpi_for_charmm_after_jax",
     ), patch.object(
         model,
         "_maybe_promote_deferred_jax_on_hybrid_eval",
@@ -227,7 +227,7 @@ def test_decomposed_mlpot_defers_gpu_promote_until_first_ener_for_jax_pme_mesh()
     # this test exercises the mesh-defer logic regardless of whether it's
     # actually installed in the test environment.
     with patch(
-        "mmml.interfaces.pycharmmInterface.long_range_backend.have_jax_pme",
+        "karml.interfaces.pycharmmInterface.long_range_backend.have_jax_pme",
         return_value=True,
     ):
         z = np.zeros(8, dtype=int)
@@ -251,10 +251,10 @@ def test_decomposed_mlpot_defers_gpu_promote_until_first_ener_for_jax_pme_mesh()
 
 
 def test_promote_mlpot_jax_for_calculator_mini_skips_gpu_when_mpi_defers_sd():
-    from mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize import (
+    from karml.interfaces.pycharmmInterface.mlpot.calculator_minimize import (
         _promote_mlpot_jax_for_calculator_mini,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import DecomposedMlpotModel
+    from karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import DecomposedMlpotModel
 
     z = np.zeros(8, dtype=int)
     model = DecomposedMlpotModel(
@@ -267,7 +267,7 @@ def test_promote_mlpot_jax_for_calculator_mini_skips_gpu_when_mpi_defers_sd():
     )
     ctx = MagicMock(pyCModel=model)
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.materialize_deferred_mlpot_jax_before_sd",
+        "karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.materialize_deferred_mlpot_jax_before_sd",
     ) as materialize, patch.object(model, "promote_jax_factory_to_gpu") as promote:
         _promote_mlpot_jax_for_calculator_mini(ctx, verbose=False)
     materialize.assert_called_once_with(ctx, verbose=False, probe_charmm_ener=False)

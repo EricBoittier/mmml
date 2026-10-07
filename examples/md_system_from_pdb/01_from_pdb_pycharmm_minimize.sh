@@ -10,7 +10,7 @@ CFG="${ROOT}/examples/md_system_from_pdb/yaml/01_from_pdb_pycharmm_minimize.yaml
 OUT="${ARTIFACTS_DIR}/01_mini_pycharmm"
 
 echo "=== config $(basename "${CFG}") (${PDB_MONOMER}) ==="
-uv run mmml md-system \
+uv run karml md-system \
   --config "${CFG}" \
   --from-pdb "${PDB_MONOMER}" \
   --checkpoint "${CKPT_JSON}" \

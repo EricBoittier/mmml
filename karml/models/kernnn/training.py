@@ -17,22 +17,22 @@ import jax.numpy as jnp
 import numpy as np
 import optax
 
-from mmml.models.kernnn.args import build_train_parser as build_parser
-from mmml.models.kernnn.checkpoint import init_params, save_checkpoint
-from mmml.models.kernnn.dihedrals import h2co_hcoh_dihedral
-from mmml.models.kernnn.distances import (
+from karml.models.kernnn.args import build_train_parser as build_parser
+from karml.models.kernnn.checkpoint import init_params, save_checkpoint
+from karml.models.kernnn.dihedrals import h2co_hcoh_dihedral
+from karml.models.kernnn.distances import (
     DISTANCE_FNS,
     n_atoms_for_scheme,
     n_features_for_scheme,
 )
-from mmml.models.kernnn.kernels import KERNEL_FNS, print_kernel_table
-from mmml.models.kernnn.model import (
+from karml.models.kernnn.kernels import KERNEL_FNS, print_kernel_table
+from karml.models.kernnn.model import (
     KerNNConfig,
     KerNNStats,
     energy_and_forces,
 )
-from mmml.models.physnetjax.physnetjax.training.distill import blend_regression_loss
-from mmml.utils.cli_args import exit_if_unknown_long_options
+from karml.models.physnetjax.physnetjax.training.distill import blend_regression_loss
+from karml.utils.cli_args import exit_if_unknown_long_options
 
 EV_TO_KCAL_MOL = 23.060541945
 
@@ -71,7 +71,7 @@ def calibrate_teacher_energy_offset(
 def get_args(argv: list[str] | None = None):
     parser = build_parser()
     args, unknown = parser.parse_known_args(argv)
-    exit_if_unknown_long_options(unknown, prog="mmml kernnn-train")
+    exit_if_unknown_long_options(unknown, prog="karml kernnn-train")
     return args
 
 
@@ -160,8 +160,8 @@ def _load_physnet_teacher_ef_fn(checkpoint: str | Path, natoms: int):
     """Return ``(R_batch) -> (E, F)`` for a PhysNet/Spooky checkpoint."""
     import e3x
 
-    from mmml.models.kernnn import is_kernnn_checkpoint
-    from mmml.umbrella.checkpoint import load_params_and_model
+    from karml.models.kernnn import is_kernnn_checkpoint
+    from karml.umbrella.checkpoint import load_params_and_model
 
     if is_kernnn_checkpoint(checkpoint):
         raise ValueError(

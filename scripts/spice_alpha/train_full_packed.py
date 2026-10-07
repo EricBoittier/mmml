@@ -75,9 +75,9 @@ def main():
     import optax
 
     jax.config.update("jax_enable_x64", False)
-    from mmml.data.spice_alpha_ragged import SUBSET_IDS, fit_atomic_energy_refs, load_ragged, split_ragged, take_frames
-    from mmml.models.efield.packed import PackSpec, SubsetMetrics, iter_packed_batches, make_steps, prefetch
-    from mmml.models.efield.training import EFieldPhysNet, load_params, save_params_json
+    from karml.data.spice_alpha_ragged import SUBSET_IDS, fit_atomic_energy_refs, load_ragged, split_ragged, take_frames
+    from karml.models.efield.packed import PackSpec, SubsetMetrics, iter_packed_batches, make_steps, prefetch
+    from karml.models.efield.training import EFieldPhysNet, load_params, save_params_json
 
     out = args.out_dir
     out.mkdir(parents=True, exist_ok=True)

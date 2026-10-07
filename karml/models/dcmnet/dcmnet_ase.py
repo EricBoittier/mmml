@@ -8,7 +8,7 @@ This calculator wraps a trained DCMNet model to compute:
 - Molecular dipole moment
 
 Usage:
-    from mmml.dcmnet.dcmnet_ase import DCMNetCalculator
+    from karml.dcmnet.dcmnet_ase import DCMNetCalculator
     import pickle
     from ase import Atoms
     
@@ -37,7 +37,7 @@ import numpy as np
 import jax.numpy as jnp
 from ase.calculators.calculator import Calculator, all_changes
 
-from mmml.data.units import EANGSTROM_TO_DEBYE
+from karml.data.units import EANGSTROM_TO_DEBYE
 
 try:
     import e3x
@@ -186,7 +186,7 @@ class DCMNetCalculator(Calculator):
         dipole_positions_flat = self._last_dipole_positions.reshape(-1, 3)  # (n_atoms * n_dcm, 3)
         
         # Compute ESP using calc_esp function
-        from mmml.dcmnet.dcmnet.electrostatics import calc_esp
+        from karml.dcmnet.dcmnet.electrostatics import calc_esp
         
         grid_points_jnp = jnp.array(grid_points)
         if grid_points_jnp.ndim == 1:

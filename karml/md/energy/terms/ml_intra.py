@@ -5,7 +5,7 @@ trained model evaluates each monomer (peptide, water, …) in isolation, batched
 size with jax.vmap and PBC-unfolded via the displacement function. The energy is
 in the model's native units (eV, matching ``cg_jaxmd``); no conversion applied.
 
-Model + params come from the run :class:`~mmml.md.energy.registry.EnergyContext`
+Model + params come from the run :class:`~karml.md.energy.registry.EnergyContext`
 (``ctx.model`` / ``ctx.params``) unless overridden in the constructor, so the
 term stays model-agnostic (physnet / spooky both work — the factory probes for
 ``charges`` / ``spins`` support).
@@ -15,9 +15,9 @@ from __future__ import annotations
 
 from typing import Any, Sequence
 
-from mmml.md.energy.registry import EnergyContext, TermFns, register_term
-from mmml.md.energy.terms._common import resolve_displacement_fn, resolve_ml_model
-from mmml.md.system import MolecularSystem
+from karml.md.energy.registry import EnergyContext, TermFns, register_term
+from karml.md.energy.terms._common import resolve_displacement_fn, resolve_ml_model
+from karml.md.system import MolecularSystem
 
 __all__ = ["MLIntramolecularTerm"]
 
@@ -48,7 +48,7 @@ class MLIntramolecularTerm:
     def make(self, system: MolecularSystem, ctx: EnergyContext) -> TermFns:
         import jax.numpy as jnp
 
-        from mmml.interfaces.jaxmdInterface.hybrid_energy import make_monomer_energy_fn
+        from karml.interfaces.jaxmdInterface.hybrid_energy import make_monomer_energy_fn
 
         model, params = resolve_ml_model(self, ctx)
         displacement_fn = resolve_displacement_fn(system, ctx)

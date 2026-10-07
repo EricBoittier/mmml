@@ -9,7 +9,7 @@ import pytest
 
 
 def test_cubic_box_side_from_target_density_dcm60():
-    from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import (
+    from karml.interfaces.pycharmmInterface.mlpot.box_sizing import (
         cubic_box_length_from_geometry,
         cubic_box_side_from_target_density,
         total_mass_g_for_composition,
@@ -34,7 +34,7 @@ def test_cubic_box_side_from_target_density_dcm60():
 
 
 def test_resolve_initial_pbc_box_side_density_mode():
-    from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import (
+    from karml.interfaces.pycharmmInterface.mlpot.box_sizing import (
         cubic_box_side_from_target_density,
         resolve_initial_pbc_box_side,
         total_mass_g_for_composition,
@@ -68,7 +68,7 @@ def test_resolve_initial_pbc_box_side_density_mode():
 
 
 def test_resolve_density_packmol_cube_side_from_composition():
-    from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import (
+    from karml.interfaces.pycharmmInterface.mlpot.box_sizing import (
         resolve_density_packmol_cube_side,
     )
 
@@ -84,7 +84,7 @@ def test_resolve_density_packmol_cube_side_from_composition():
 
 
 def test_resolve_packmol_cube_side_from_args_uses_density_auto():
-    from mmml.interfaces.pycharmmInterface.packmol_placement import (
+    from karml.interfaces.pycharmmInterface.packmol_placement import (
         resolve_packmol_cube_side_from_args,
     )
 
@@ -112,7 +112,7 @@ def test_resolve_packmol_cube_side_from_args_uses_density_auto():
 
 
 def test_resolve_packmol_cube_side_smaller_than_explicit_sim_cell():
-    from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import (
+    from karml.interfaces.pycharmmInterface.mlpot.box_sizing import (
         resolve_packmol_cube_side_for_sim_cell,
     )
 
@@ -131,7 +131,7 @@ def test_resolve_packmol_cube_side_smaller_than_explicit_sim_cell():
 
 
 def test_cubic_side_from_cluster_extent_uses_max_axis_span():
-    from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import (
+    from karml.interfaces.pycharmmInterface.mlpot.box_sizing import (
         cubic_side_from_cluster_extent,
     )
 
@@ -148,7 +148,7 @@ def test_cubic_side_from_cluster_extent_uses_max_axis_span():
 
 
 def test_resolve_packmol_cube_side_from_args_explicit_box_size():
-    from mmml.interfaces.pycharmmInterface.packmol_placement import (
+    from karml.interfaces.pycharmmInterface.packmol_placement import (
         resolve_packmol_cube_side_from_args,
     )
 
@@ -173,7 +173,7 @@ def test_resolve_packmol_cube_side_from_args_explicit_box_size():
 
 
 def test_resolve_packmol_box_padding_defaults_small_for_fixed_box_composition():
-    from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import (
+    from karml.interfaces.pycharmmInterface.mlpot.box_sizing import (
         FIXED_BOX_COMPOSITION_PACKMOL_PADDING_A,
         resolve_packmol_box_padding_A,
         resolve_packmol_cube_side_for_sim_cell,
@@ -198,7 +198,7 @@ def test_resolve_packmol_box_padding_defaults_small_for_fixed_box_composition():
 
 
 def test_n_molecules_for_target_density_in_fixed_box_dcm32():
-    from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import (
+    from karml.interfaces.pycharmmInterface.mlpot.box_sizing import (
         n_molecules_for_target_density_in_fixed_box,
         total_mass_g_for_composition,
     )
@@ -215,7 +215,7 @@ def test_n_molecules_for_target_density_in_fixed_box_dcm32():
 
 
 def test_n_molecules_for_target_density_in_fixed_box_etoh32():
-    from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import (
+    from karml.interfaces.pycharmmInterface.mlpot.box_sizing import (
         SOLVENT_BULK_PROPS,
         n_molecules_for_target_density_in_fixed_box,
         total_mass_g_for_composition,
@@ -234,7 +234,7 @@ def test_n_molecules_for_target_density_in_fixed_box_etoh32():
 
 
 def test_apply_box_auto_count_composition_mutates_args():
-    from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import (
+    from karml.interfaces.pycharmmInterface.mlpot.box_sizing import (
         apply_box_auto_count_composition,
     )
 
@@ -255,7 +255,7 @@ def test_apply_box_auto_count_composition_mutates_args():
 
 
 def test_box_auto_count_mixed_stoichiometry():
-    from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import (
+    from karml.interfaces.pycharmmInterface.mlpot.box_sizing import (
         n_molecules_for_target_density_in_fixed_box,
         total_mass_g_for_composition,
     )
@@ -272,7 +272,7 @@ def test_box_auto_count_mixed_stoichiometry():
 
 
 def test_resolve_initial_pbc_box_side_explicit_box_size():
-    from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import (
+    from karml.interfaces.pycharmmInterface.mlpot.box_sizing import (
         resolve_initial_pbc_box_side,
     )
 
@@ -286,7 +286,7 @@ def test_resolve_initial_pbc_box_side_explicit_box_size():
 
 
 def test_bulk_density_fraction_requires_single_species():
-    from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import (
+    from karml.interfaces.pycharmmInterface.mlpot.box_sizing import (
         resolve_target_density_g_cm3,
     )
 
@@ -302,7 +302,7 @@ def test_bulk_density_fraction_requires_single_species():
 
 def test_meth_bulk_density_table_and_fraction():
     """Liquid methane must be in SOLVENT_BULK_PROPS for pbc_methane_ewald."""
-    from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import (
+    from karml.interfaces.pycharmmInterface.mlpot.box_sizing import (
         SOLVENT_BULK_PROPS,
         resolve_target_density_g_cm3,
     )
@@ -320,7 +320,7 @@ def test_meth_bulk_density_table_and_fraction():
 
 
 def test_should_run_mini_box_equil_skips_when_pretreat_npt():
-    from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import (
+    from karml.interfaces.pycharmmInterface.mlpot.box_sizing import (
         should_run_mini_box_equil,
     )
 
@@ -339,7 +339,7 @@ def test_should_run_mini_box_equil_skips_when_pretreat_npt():
 
 
 def test_should_run_mini_box_equil_true_for_pbc_mini():
-    from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import (
+    from karml.interfaces.pycharmmInterface.mlpot.box_sizing import (
         should_run_mini_box_equil,
     )
 
@@ -358,7 +358,7 @@ def test_should_run_mini_box_equil_true_for_pbc_mini():
 
 
 def test_resolve_mini_box_equil_durations_splits_total_evenly():
-    from mmml.interfaces.pycharmmInterface.mlpot.box_equil import (
+    from karml.interfaces.pycharmmInterface.mlpot.box_equil import (
         resolve_mini_box_equil_durations_ps,
     )
 
@@ -367,7 +367,7 @@ def test_resolve_mini_box_equil_durations_splits_total_evenly():
 
 
 def test_resolve_mini_box_equil_durations_explicit_legs():
-    from mmml.interfaces.pycharmmInterface.mlpot.box_equil import (
+    from karml.interfaces.pycharmmInterface.mlpot.box_equil import (
         resolve_mini_box_equil_durations_ps,
     )
 
@@ -380,7 +380,7 @@ def test_resolve_mini_box_equil_durations_explicit_legs():
 
 
 def test_resolve_mini_box_equil_hot_temp_default():
-    from mmml.interfaces.pycharmmInterface.mlpot.box_equil import (
+    from karml.interfaces.pycharmmInterface.mlpot.box_equil import (
         resolve_mini_box_equil_hot_temp_K,
     )
 
@@ -389,7 +389,7 @@ def test_resolve_mini_box_equil_hot_temp_default():
 
 
 def test_resolve_mini_box_equil_hot_temp_explicit():
-    from mmml.interfaces.pycharmmInterface.mlpot.box_equil import (
+    from karml.interfaces.pycharmmInterface.mlpot.box_equil import (
         resolve_mini_box_equil_hot_temp_K,
     )
 
@@ -400,7 +400,7 @@ def test_resolve_mini_box_equil_hot_temp_explicit():
 def test_apply_certified_box_size_from_box_json(tmp_path) -> None:
     import json
 
-    from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import (
+    from karml.interfaces.pycharmmInterface.mlpot.box_sizing import (
         apply_certified_box_size_from_artifacts,
     )
 
@@ -426,7 +426,7 @@ def test_resolve_box_size_accepts_make_box_aliases(tmp_path) -> None:
     """examples/m make-box wrote box_size/side_length_A before box_side_A."""
     import json
 
-    from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import (
+    from karml.interfaces.pycharmmInterface.mlpot.box_sizing import (
         resolve_box_size_from_certified_artifacts,
     )
 

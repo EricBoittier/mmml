@@ -9,7 +9,7 @@ All ML jobs use **`examples/m/model_ext.json`** (`checkpoint:` in config).
 
 | Axis | Config key | Applied to |
 |------|------------|------------|
-| Checkpoint | `checkpoint` | every ML job (`--checkpoint` / `MMML_CKPT`) |
+| Checkpoint | `checkpoint` | every ML job (`--checkpoint` / `KARML_CKPT`) |
 | Seeds | `seeds: [...]` | umbrella, ADUMB, DMC |
 | Temperatures (K) | `temperatures: [...]` | umbrella, ADUMB (classical NVT) |
 | Solvents | `solvents` | make-box, umbrella_sol, adumb_sol |
@@ -41,12 +41,12 @@ adumb_sol/{solvent}/T{T}/seed{S}/
 # Checkpoint (required)
 ls examples/m/model_ext.json
 
-cd ~/mmml
+cd ~/karml
 uv sync --extra gpu    # PyCHARMM + CHARMM for make-box / ADUMB
 uv sync --extra mbar   # pymbar for umbrella-mbar
 
 # CHARMM lib (GPU node). job_shell.sh also tries ensure_charmm_mlpot_limits.sh.
-export CHARMM_LIB_DIR=${CHARMM_LIB_DIR:-$HOME/.cache/mmml-charmm-build/tier_56000000_nodomdec/lib}
+export CHARMM_LIB_DIR=${CHARMM_LIB_DIR:-$HOME/.cache/karml-charmm-build/tier_56000000_nodomdec/lib}
 ```
 
 If `make_boxes` fails, check `artifacts/.../boxes/stdout.log` for Packmol / PyCHARMM /
@@ -56,7 +56,7 @@ If `make_boxes` fails, check `artifacts/.../boxes/stdout.log` for Packmol / PyCH
 
 ```bash
 cd workflows/nh3_ch3cl_reaction_path
-MMML_WORKFLOW_CONFIG=config.smoke.yaml bash scripts/snakemake_local.sh 2 -n
+KARML_WORKFLOW_CONFIG=config.smoke.yaml bash scripts/snakemake_local.sh 2 -n
 ```
 
 ## Studix GPU queue
@@ -67,7 +67,7 @@ Submit from the **login node** (do not run JAX/PyCHARMM on login):
 cd workflows/nh3_ch3cl_reaction_path
 
 # Smoke (TIP3, T=300, seed=0, ADUMB off)
-MMML_WORKFLOW_CONFIG=config.smoke.yaml \
+KARML_WORKFLOW_CONFIG=config.smoke.yaml \
   nohup bash scripts/snakemake_slurm.sh 4 > snakemake_gpu.log 2>&1 &
 
 # Full matrix
@@ -89,7 +89,7 @@ slurm:
 ## Local interactive GPU
 
 ```bash
-MMML_WORKFLOW_CONFIG=config.smoke.yaml bash scripts/snakemake_local.sh 2
+KARML_WORKFLOW_CONFIG=config.smoke.yaml bash scripts/snakemake_local.sh 2
 ```
 
 ## Vary seeds / temperatures
@@ -102,7 +102,7 @@ seeds: [0, 1, 2, 3]
 temperatures: [280, 300, 320]
 ```
 
-Then relaunch with `MMML_WORKFLOW_CONFIG=...`.
+Then relaunch with `KARML_WORKFLOW_CONFIG=...`.
 
 ## Summary
 

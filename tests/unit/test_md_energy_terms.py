@@ -1,4 +1,4 @@
-"""Parity tests for extracted ``mmml.md.energy.terms`` vs. the cg_jaxmd originals.
+"""Parity tests for extracted ``karml.md.energy.terms`` vs. the cg_jaxmd originals.
 
 The reference formulas are copied verbatim from ``examples/cg_jaxmd.py``
 (``_dihedral_angle_rad``, ``_periodic_angle_delta_rad``, ``_phi_psi_restraint_energy``,
@@ -14,16 +14,16 @@ import pytest
 jax = pytest.importorskip("jax")
 import jax.numpy as jnp  # noqa: E402
 
-from mmml.md.energy import HybridEnergy, available_terms  # noqa: E402
-from mmml.md.energy.terms import (  # noqa: E402
+from karml.md.energy import HybridEnergy, available_terms  # noqa: E402
+from karml.md.energy.terms import (  # noqa: E402
     DihedralRestraint,
     DihedralRestraintTerm,
     RepulsiveCoreVdwTerm,
     SMDBiasTerm,
 )
-from mmml.data.units import KCAL_MOL_TO_EV  # noqa: E402
-from mmml.md.energy.registry import EnergyContext  # noqa: E402
-from mmml.md.system import MolecularSystem  # noqa: E402
+from karml.data.units import KCAL_MOL_TO_EV  # noqa: E402
+from karml.md.energy.registry import EnergyContext  # noqa: E402
+from karml.md.system import MolecularSystem  # noqa: E402
 
 
 # --- reference implementations (verbatim from examples/cg_jaxmd.py) ---------
@@ -110,7 +110,7 @@ def test_smd_matches_reference(box):
     if box is None:
         disp = R[5] - R[0]
     else:
-        from mmml.interfaces.pycharmmInterface.pbc_utils_jax import mic_displacement
+        from karml.interfaces.pycharmmInterface.pbc_utils_jax import mic_displacement
 
         disp = mic_displacement(R[0], R[5], jnp.asarray(box))
     d = jnp.sqrt(jnp.sum(disp * disp) + 1e-12)

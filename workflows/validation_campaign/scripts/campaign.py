@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Prepare, submit, run, and summarize the MMML validation campaign.
+"""Prepare, submit, run, and summarize the KARML validation campaign.
 
     campaign.py list      [--environment E] [--tier T] [--goal G]
     campaign.py status    [--write] [--verbose]
@@ -81,7 +81,7 @@ def _summary_markdown(report: dict) -> str:
     dirty = "  **(dirty working tree)**" if git.get("dirty") else ""
 
     lines = [
-        "# MMML validation campaign -- proof-of-work summary",
+        "# KARML validation campaign -- proof-of-work summary",
         "",
         f"- generated: `{report['generated_utc']}`",
         f"- revision: `{rev}`{dirty}",
@@ -141,7 +141,7 @@ def cmd_status(args: argparse.Namespace) -> int:
     cfg = lib.campaign()
     report = lib.evaluate(cfg)
 
-    print(f"\nMMML validation campaign -- overall: {report['overall']}\n")
+    print(f"\nKARML validation campaign -- overall: {report['overall']}\n")
     print("GOALS")
     for goal, info in report["goals"].items():
         print(f"  {info['state']:<13} {goal}")

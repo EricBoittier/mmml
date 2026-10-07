@@ -5,8 +5,8 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from mmml.interfaces.pycharmmInterface.long_range_backend import compute_jax_pme_coulomb
-from mmml.interfaces.pycharmmInterface.mm_system_energy import (
+from karml.interfaces.pycharmmInterface.long_range_backend import compute_jax_pme_coulomb
+from karml.interfaces.pycharmmInterface.mm_system_energy import (
     CharmmNbondSettings,
     NonbondedSystemData,
     nonbonded_energy_and_forces,

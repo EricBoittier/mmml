@@ -21,7 +21,7 @@ import numpy as np
 import pytest
 from ase import units
 
-from mmml.cli.run.md_handoff import (
+from karml.cli.run.md_handoff import (
     CHARMM_AKMA_TIME_PS,
     MdHandoffState,
     handoff_in_charmm_velocity_units,
@@ -38,7 +38,7 @@ K_B_KCAL = 0.0019872041  # CHARMM KBOLTZ
 
 
 def _section(path: Path, marker: str) -> np.ndarray:
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         _restart_section_values,
     )
 
@@ -106,7 +106,7 @@ def test_ase_run_md_continues_handoff_velocities(tmp_path):
     from ase import Atoms
     from ase.calculators.lj import LennardJones
 
-    from mmml.cli.run.md_pbc_suite.ase import run_md
+    from karml.cli.run.md_pbc_suite.ase import run_md
 
     rng = np.random.default_rng(1)
     pos = np.stack(np.meshgrid(*[np.arange(3) * 3.5] * 3), -1).reshape(-1, 3)
@@ -129,14 +129,14 @@ def test_pre_dynamics_seed_uses_xold_positions(tmp_path):
     import shutil
     from unittest.mock import patch
 
-    from mmml.interfaces.pycharmmInterface.mlpot.staged_workflow import (
+    from karml.interfaces.pycharmmInterface.mlpot.staged_workflow import (
         _seed_charmm_coords_from_dynamics_restart,
     )
 
     res = tmp_path / "nve.res"
     shutil.copy(STUB, res)
-    with patch("mmml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions") as sync, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.clear_comparison_coordinates"
+    with patch("karml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions") as sync, patch(
+        "karml.interfaces.pycharmmInterface.mlpot.comp_velocities.clear_comparison_coordinates"
     ):
         assert _seed_charmm_coords_from_dynamics_restart(res, quiet=True) is True
     np.testing.assert_array_equal(sync.call_args[0][0], _section(STUB, "!XOLD, YOLD, ZOLD")[:60].reshape(20, 3))
@@ -151,7 +151,7 @@ def _route_args(tmp_path, src, *, setup, stages):
 
 
 def test_continue_from_charmm_dynamics_restart_becomes_in_place_readyn(tmp_path):
-    from mmml.cli.run.md_system import route_pycharmm_continue_from_dynamics_restart
+    from karml.cli.run.md_system import route_pycharmm_continue_from_dynamics_restart
 
     args = _route_args(tmp_path, STUB, setup="pbc_nve", stages="nve")
     dst = route_pycharmm_continue_from_dynamics_restart(args)
@@ -160,7 +160,7 @@ def test_continue_from_charmm_dynamics_restart_becomes_in_place_readyn(tmp_path)
 
 
 def test_continue_from_routing_requires_matching_ensemble_and_single_stage(tmp_path):
-    from mmml.cli.run.md_system import route_pycharmm_continue_from_dynamics_restart
+    from karml.cli.run.md_system import route_pycharmm_continue_from_dynamics_restart
 
     # plain (non-CPT) restart must not feed a CPT stage: READYN would read no piston
     assert route_pycharmm_continue_from_dynamics_restart(
@@ -174,7 +174,7 @@ def test_continue_from_routing_requires_matching_ensemble_and_single_stage(tmp_p
 
 
 def test_cpt_restart_is_recognised(tmp_path):
-    from mmml.cli.run.md_system import _charmm_dynamics_restart_kind
+    from karml.cli.run.md_system import _charmm_dynamics_restart_kind
 
     xtl = (" !CRYSTAL PARAMETERS\n"
            " 0.300000000000000D+02 0.000000000000000D+00 0.300000000000000D+02\n"

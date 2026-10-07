@@ -8,14 +8,14 @@ from unittest import mock
 import numpy as np
 import pytest
 
-from mmml.interfaces.pycharmmInterface.mlpot import mpi_bridge
+from karml.interfaces.pycharmmInterface.mlpot import mpi_bridge
 
 
 def test_mpi_rank_size_defers_mpi4py_before_init(monkeypatch):
     monkeypatch.setenv("OMPI_COMM_WORLD_RANK", "1")
     monkeypatch.setenv("OMPI_COMM_WORLD_SIZE", "4")
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge._mpi4py_is_initialized",
+        "karml.interfaces.pycharmmInterface.mlpot.mpi_bridge._mpi4py_is_initialized",
         return_value=False,
     ):
         rank, size = mpi_bridge.mpi_rank_size()
@@ -63,7 +63,7 @@ def test_mpi_rank_size_prefers_launcher_env_when_mpi4py_singleton():
                 create=True,
             ):
                 with mock.patch(
-                    "mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge._mpi4py_is_initialized",
+                    "karml.interfaces.pycharmmInterface.mlpot.mpi_bridge._mpi4py_is_initialized",
                     return_value=True,
                 ):
                     rank, size = mpi_bridge.mpi_rank_size()
@@ -72,33 +72,33 @@ def test_mpi_rank_size_prefers_launcher_env_when_mpi4py_singleton():
 
 
 def test_mlpot_runs_on_all_ranks_when_spatial_mpi(monkeypatch):
-    monkeypatch.setenv("MMML_MLPOT_SPATIAL_MPI", "1")
+    monkeypatch.setenv("KARML_MLPOT_SPATIAL_MPI", "1")
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge.mpi_rank_size",
+        "karml.interfaces.pycharmmInterface.mlpot.mpi_bridge.mpi_rank_size",
         return_value=(2, 4),
     ):
         assert mpi_bridge.mlpot_runs_on_this_rank() is True
 
 
 def test_mlpot_runs_on_rank0_only_when_size_gt_1(monkeypatch):
-    monkeypatch.delenv("MMML_MLPOT_RANK0_BRIDGE", raising=False)
-    monkeypatch.delenv("MMML_MLPOT_SPATIAL_MPI", raising=False)
+    monkeypatch.delenv("KARML_MLPOT_RANK0_BRIDGE", raising=False)
+    monkeypatch.delenv("KARML_MLPOT_SPATIAL_MPI", raising=False)
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge.mpi_rank_size",
+        "karml.interfaces.pycharmmInterface.mlpot.mpi_bridge.mpi_rank_size",
         return_value=(0, 4),
     ):
         assert mpi_bridge.mlpot_runs_on_this_rank() is True
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge.mpi_rank_size",
+        "karml.interfaces.pycharmmInterface.mlpot.mpi_bridge.mpi_rank_size",
         return_value=(2, 4),
     ):
         assert mpi_bridge.mlpot_runs_on_this_rank() is False
 
 
 def test_mlpot_runs_all_ranks_when_bridge_disabled(monkeypatch):
-    monkeypatch.setenv("MMML_MLPOT_RANK0_BRIDGE", "0")
+    monkeypatch.setenv("KARML_MLPOT_RANK0_BRIDGE", "0")
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge.mpi_rank_size",
+        "karml.interfaces.pycharmmInterface.mlpot.mpi_bridge.mpi_rank_size",
         return_value=(3, 4),
     ):
         assert mpi_bridge.mlpot_runs_on_this_rank() is True

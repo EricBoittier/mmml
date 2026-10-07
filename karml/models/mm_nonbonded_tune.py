@@ -6,7 +6,7 @@ The hybrid MLpot energy of a molecular liquid is
         + sum_{A<B} w_MM(r_AB) E_CGenFF(A, B)
 
 with ``r_AB`` the monomer centroid separation, ``s_ML`` the ML taper and
-``w_MM`` the MM handoff/taper (:mod:`mmml.interfaces.pycharmmInterface.calculator_utils`).
+``w_MM`` the MM handoff/taper (:mod:`karml.interfaces.pycharmmInterface.calculator_utils`).
 Only pair terms appear, so every many-body contribution of the teacher is
 missing. This module fits a handful of MM parameters so the hybrid reproduces
 teacher *interaction* energies/forces of whole liquid frames,
@@ -48,8 +48,8 @@ from typing import Any, Sequence
 
 import numpy as np
 
-from mmml.models.cgenff_mm import COULOMB_CONSTANT, RMIN_HALF_TO_SIGMA
-from mmml.models.mm_lj_scales import (
+from karml.models.cgenff_mm import COULOMB_CONSTANT, RMIN_HALF_TO_SIGMA
+from karml.models.mm_lj_scales import (
     MM_LJ_EPSILON_SCALE_BOUNDS,
     MM_LJ_SIGMA_SCALE_BOUNDS,
 )
@@ -101,14 +101,14 @@ class SwitchConfig:
         return float(self.mm_switch_on + extra * self.mm_switch_width)
 
     def ml_weight(self, r_com):
-        from mmml.interfaces.pycharmmInterface.calculator_utils import ml_switch_scale
+        from karml.interfaces.pycharmmInterface.calculator_utils import ml_switch_scale
 
         return ml_switch_scale(
             r_com, mm_switch_on=self.mm_switch_on, ml_switch_width=self.ml_switch_width
         )
 
     def mm_weight(self, r_com):
-        from mmml.interfaces.pycharmmInterface.calculator_utils import mm_switch_scale
+        from karml.interfaces.pycharmmInterface.calculator_utils import mm_switch_scale
 
         return mm_switch_scale(
             r_com,
@@ -200,7 +200,7 @@ class MonomerNonbonded:
     @classmethod
     def from_cgenff(cls, numbers: np.ndarray, positions: np.ndarray) -> "MonomerNonbonded":
         """Match a monomer geometry against the CGenFF RTF (graph isomorphism)."""
-        from mmml.data.cgenff_dataset import load_reference, match_cgenff_template
+        from karml.data.cgenff_dataset import load_reference, match_cgenff_template
 
         ref = load_reference()
         res, tidx, q = match_cgenff_template(ref, np.asarray(numbers), np.asarray(positions))
@@ -762,9 +762,9 @@ def lj_sidecar_payload(ff: MonomerNonbonded, params: TuneParams) -> dict[str, An
     """``hybrid_mm.json``-compatible LJ-scale block (+ charge scale / switch info).
 
     ``sigma`` scale == ``rmin`` scale. Types outside the monomer stay at 1.
-    :func:`mmml.models.mm_lj_scales.resolve_md_lj_scales` reads the LJ part.
+    :func:`karml.models.mm_lj_scales.resolve_md_lj_scales` reads the LJ part.
     """
-    from mmml.models.mm_lj_scales import cgenff_type_names_from_prm, mm_lj_scales_metadata
+    from karml.models.mm_lj_scales import cgenff_type_names_from_prm, mm_lj_scales_metadata
 
     names = cgenff_type_names_from_prm()
     sig = np.ones(len(names))

@@ -6,7 +6,7 @@ architecture design but are not implementations in this package.
 
 The ``on_overlap`` hook is the explicit, impure escape hatch for CHARMM
 repair/minimize (decision, §10) so energy terms stay pure. Concrete drivers
-migrate here from ``mmml.cli.run.md_pbc_suite`` (``ase.py``, ``jaxmd.py``,
+migrate here from ``karml.cli.run.md_pbc_suite`` (``ase.py``, ``jaxmd.py``,
 ``pycharmm_mlpot.py``) and, for apocharmm, from a new pybind11 driver.
 """
 
@@ -14,10 +14,10 @@ from __future__ import annotations
 
 from typing import Any, Callable, Protocol, runtime_checkable
 
-from mmml.md.config import EnsembleSpec
-from mmml.md.energy.registry import HybridEnergy
-from mmml.md.results import Trajectory
-from mmml.md.system import MolecularSystem
+from karml.md.config import EnsembleSpec
+from karml.md.energy.registry import HybridEnergy
+from karml.md.results import Trajectory
+from karml.md.system import MolecularSystem
 
 __all__ = ["Driver", "JaxmdDriver", "NonFiniteStateError"]
 
@@ -40,4 +40,4 @@ class Driver(Protocol):
 
 
 # Safe eager export: the implementation itself keeps jax/jax-md imports lazy.
-from mmml.md.drivers.jaxmd import JaxmdDriver, NonFiniteStateError  # noqa: E402
+from karml.md.drivers.jaxmd import JaxmdDriver, NonFiniteStateError  # noqa: E402

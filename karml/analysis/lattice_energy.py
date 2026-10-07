@@ -1,8 +1,8 @@
 """Lattice energy and sublimation enthalpy of a molecular crystal under CGenFF.
 
-This deliberately does not go through ``mmml md-system --evaluate-npz``. That
+This deliberately does not go through ``karml md-system --evaluate-npz``. That
 path resolves a periodic cell to a single cubic side
-(:func:`mmml.cli.run.md_stage_summary.cubic_box_side_from_cell`), which is fine
+(:func:`karml.cli.run.md_stage_summary.cubic_box_side_from_cell`), which is fine
 for the liquid boxes it was written for and wrong for a crystal: the acetone
 Pbca cell (9.17 x 7.53 x 21.25 A) would be run as a 12.65 A cube. Everything
 here therefore carries the full ``(3, 3)`` cell.
@@ -44,7 +44,7 @@ from typing import Sequence
 
 import numpy as np
 
-from mmml.models.cgenff_mm import COULOMB_CONSTANT, sigma_to_rmin_half
+from karml.models.cgenff_mm import COULOMB_CONSTANT, sigma_to_rmin_half
 
 __all__ = [
     "GAS_CONSTANT_KCAL_MOL_K",
@@ -200,7 +200,7 @@ def _assign_cgenff_parameters(
     rtf_path: Path | str | None = None,
 ) -> tuple[np.ndarray, np.ndarray, tuple[str, ...], np.ndarray, np.ndarray]:
     """Type every molecule against CGenFF; no live CHARMM session required."""
-    from mmml.data.cgenff_dataset import (
+    from karml.data.cgenff_dataset import (
         DEF_PRM_PATH,
         DEF_RTF_PATH,
         load_reference,
@@ -381,7 +381,7 @@ def periodic_coulomb_energy(
     import jax.numpy as jnp
     from scipy.special import erfc
 
-    from mmml.interfaces.pycharmmInterface.ewald_native import (
+    from karml.interfaces.pycharmmInterface.ewald_native import (
         build_kspace_integers,
         default_ewald_alpha,
         ewald_exclusion_correction,
@@ -468,7 +468,7 @@ def crystal_lattice_energy(
     """Intermolecular CGenFF energy per molecule for a periodic crystal.
 
     ``sigma_scale`` / ``epsilon_scale`` are the per-CGenFF-type multipliers
-    learned by hybrid training (see :mod:`mmml.models.mm_lj_scales`); passing
+    learned by hybrid training (see :mod:`karml.models.mm_lj_scales`); passing
     them evaluates the same crystal under the trained parameters, which turns
     the sublimation enthalpy into a validation observable for that fit.
     """
@@ -476,7 +476,7 @@ def crystal_lattice_energy(
         positions, atomic_numbers, cell, prm_path=prm_path, rtf_path=rtf_path
     )
     if sigma_scale is not None or epsilon_scale is not None:
-        from mmml.models.mm_lj_scales import apply_mm_lj_scales
+        from karml.models.mm_lj_scales import apply_mm_lj_scales
 
         scaled = apply_mm_lj_scales(sigmas, epsilons, sigma_scale, epsilon_scale)
         sigmas, epsilons = np.asarray(scaled[0]), np.asarray(scaled[1])
@@ -628,7 +628,7 @@ def decompose_lattice_energy_by_element_pair(
         positions, atomic_numbers, cell, prm_path=prm_path, rtf_path=rtf_path
     )
     if sigma_scale is not None or epsilon_scale is not None:
-        from mmml.models.mm_lj_scales import apply_mm_lj_scales
+        from karml.models.mm_lj_scales import apply_mm_lj_scales
 
         scaled = apply_mm_lj_scales(sigmas, epsilons, sigma_scale, epsilon_scale)
         sigmas, epsilons = np.asarray(scaled[0]), np.asarray(scaled[1])
@@ -821,7 +821,7 @@ def relax_cell_lengths(
         positions, atomic_numbers, cell, prm_path=prm_path, rtf_path=rtf_path
     )
     if sigma_scale is not None or epsilon_scale is not None:
-        from mmml.models.mm_lj_scales import apply_mm_lj_scales
+        from karml.models.mm_lj_scales import apply_mm_lj_scales
 
         scaled = apply_mm_lj_scales(sigmas, epsilons, sigma_scale, epsilon_scale)
         sigmas, epsilons = np.asarray(scaled[0]), np.asarray(scaled[1])

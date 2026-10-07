@@ -269,7 +269,7 @@ def write_position_dcd(
     The header stride is ``record_every`` integration steps. Velocities and
     the thermostat are not part of the DCD format; they stay in the NPZ.
     """
-    from mmml.utils.dcd_writer import DCDTrajectoryWriter
+    from karml.utils.dcd_writer import DCDTrajectoryWriter
 
     frames = np.asarray(positions, dtype=np.float64)
     if frames.ndim != 3 or frames.shape[-1] != 3:

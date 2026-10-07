@@ -22,7 +22,7 @@ from pathlib import Path
 
 import pytest
 
-from mmml.interfaces.pycharmmInterface.mlpot.staged_workflow import (
+from karml.interfaces.pycharmmInterface.mlpot.staged_workflow import (
     _can_seed_stage_from_memory,
     _equi_in_place_restart,
     _equi_restart_name,
@@ -358,11 +358,11 @@ def test_memory_seeding_is_refused_when_nothing_is_on_disk(tmp_path):
 def test_heat_prior_from_crd_is_the_baseline_snapshot(tmp_path):
     """``--from-crd --md-stages heat``: the only prior artifact is baseline.res.
 
-    It is an MMML coordinate snapshot, not a CHARMM dynamics restart, so heat
+    It is an KARML coordinate snapshot, not a CHARMM dynamics restart, so heat
     must start from in-memory coords instead of READYN (Fortran read abort).
     """
     paths = _paths(tmp_path)
-    _touch(paths["geometry_baseline_res"], "REST ... * MMML snapshot")
+    _touch(paths["geometry_baseline_res"], "REST ... * KARML snapshot")
     rread = _prior_restart_for_stage("heat", paths, restart_from=None)
     assert rread == paths["geometry_baseline_res"]
     assert _is_geometry_baseline_snapshot(rread, paths)
@@ -433,7 +433,7 @@ def test_a_successful_prior_run_does_not_resume(tmp_path):
 
 
 def test_completed_nve_continues_from_nve_res_not_baseline(tmp_path):
-    from mmml.interfaces.pycharmmInterface.mlpot.staged_restart_policy import (
+    from karml.interfaces.pycharmmInterface.mlpot.staged_restart_policy import (
         continue_completed_staged_run,
     )
 
@@ -450,7 +450,7 @@ def test_completed_nve_continues_from_nve_res_not_baseline(tmp_path):
 
 
 def test_completed_run_prefers_latest_stage_and_skips_earlier(tmp_path):
-    from mmml.interfaces.pycharmmInterface.mlpot.staged_restart_policy import (
+    from karml.interfaces.pycharmmInterface.mlpot.staged_restart_policy import (
         continue_completed_staged_run,
     )
 
@@ -468,7 +468,7 @@ def test_completed_run_prefers_latest_stage_and_skips_earlier(tmp_path):
 
 
 def test_failed_run_does_not_continue_from_nve_res(tmp_path):
-    from mmml.interfaces.pycharmmInterface.mlpot.staged_restart_policy import (
+    from karml.interfaces.pycharmmInterface.mlpot.staged_restart_policy import (
         continue_completed_staged_run,
     )
 
@@ -483,7 +483,7 @@ def test_failed_run_does_not_continue_from_nve_res(tmp_path):
 
 
 def test_explicit_restart_wins_over_completed_continuation(tmp_path):
-    from mmml.interfaces.pycharmmInterface.mlpot.staged_restart_policy import (
+    from karml.interfaces.pycharmmInterface.mlpot.staged_restart_policy import (
         continue_completed_staged_run,
     )
 
@@ -540,7 +540,7 @@ def test_a_non_numeric_exit_code_does_not_resume(tmp_path):
 def test_a_handoff_seed_restart_is_not_a_dynamics_restart(tmp_path):
     """Handoff seeds carry finite-T coords but are not a finished stage, so the
     stage-restart classifier must reject them."""
-    from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
+    from karml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
         is_handoff_seed_restart_path,
     )
 
@@ -552,7 +552,7 @@ def test_a_handoff_seed_restart_is_not_a_dynamics_restart(tmp_path):
 
 def test_a_handoff_seed_still_skips_the_cold_start_gate(tmp_path):
     """It is not a stage restart, but it *does* hold equilibrated coordinates."""
-    from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
+    from karml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
         is_handoff_seed_restart_path,
     )
 
@@ -566,7 +566,7 @@ def test_a_handoff_seed_still_skips_the_cold_start_gate(tmp_path):
 
 def test_heat_ignores_a_pretreat_restart(tmp_path):
     """A CHARMM-MM pretreat seed must not be resumed as if it were heat."""
-    from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
+    from karml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
         is_pretreat_mm_restart_path,
     )
 
@@ -603,7 +603,7 @@ def test_segmented_heat_falls_back_when_the_segment_file_is_absent(tmp_path):
 def test_overlap_chunk_dcds_are_reported_alongside_the_stage_dcd(tmp_path):
     """Overlap recovery writes extra chunk DCDs; a stage that produced only
     chunks still produced output."""
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         overlap_chunk_dcd_paths,
     )
 

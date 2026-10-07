@@ -4,7 +4,7 @@ jobs: 8
 latency-wait: 60
 retries: 1
 envvars:
-  - MMML_WORKFLOW_CONFIG
+  - KARML_WORKFLOW_CONFIG
   - JAX_ENABLE_X64
   - JAX_PLATFORMS
   - CHARMM_LIB_DIR

@@ -2,7 +2,7 @@
 #
 # Build all density variants (run on CHARMM GPU node):
 #   for frac in 0.5 0.75 1.0 1.25 1.5; do
-#     MMML_MPI_NP=1 ~/mmml/scripts/mmml-charmm-mpirun.sh liquid-box \
+#     KARML_MPI_NP=1 ~/karml/scripts/karml-charmm-mpirun.sh liquid-box \
 #       --composition "DCM:$(python -c "from workflows.pbc_solvent_burst.scripts.bulk_density import n_monomers_at_bulk_density; print(min(32, n_monomers_at_bulk_density('DCM', 27.0, $frac)))")" \
 #       --box-size 27 \
 #       --bulk-density-fraction "$frac" \
@@ -12,8 +12,8 @@
 #   done
 #
 # Hybrid calculator smoke (no PhysNet checkpoint) on a certified box:
-#   MMML_MPI_NP=1 ~/mmml/scripts/mmml-charmm-mpirun.sh md-system \
-#     --config ~/mmml/mmml/cli/run/dcm27_liquid_box.example.yaml \
+#   KARML_MPI_NP=1 ~/karml/scripts/karml-charmm-mpirun.sh md-system \
+#     --config ~/karml/karml/cli/run/dcm27_liquid_box.example.yaml \
 #     --from-psf ~/tests/boxes/dcm27_rho100/model.psf \
 #     --from-crd ~/tests/boxes/dcm27_rho100/model.crd \
 #     --jax-mm-spoof --jax-mm-spoof-psf ~/tests/boxes/dcm27_rho100/model.psf \

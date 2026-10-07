@@ -2,7 +2,7 @@
 Example: build mdcm from DCMNet H5 and run CHARMM DCM.
 
 Usage:
-    from mmml.interfaces.dcmInterface import build_mdcm_from_dcmnet, generate_dcm_xyz
+    from karml.interfaces.dcmInterface import build_mdcm_from_dcmnet, generate_dcm_xyz
 
     # Single frame:
     frames, charges_per_frame = build_mdcm_from_dcmnet(
@@ -25,13 +25,13 @@ Usage:
 
 # *AN EXAMPLE OF LOADING THE DCM MODULE IN pycharmm*
 #
-#  import mmml
-# from mmml.interfaces.pycharmmInterface import import_pycharmm
+#  import karml
+# from karml.interfaces.pycharmmInterface import import_pycharmm
 # import os
 # import sys
 # from pathlib import Path
 #
-# from mmml.cli.make.make_res import main_loop
+# from karml.cli.make.make_res import main_loop
 # import argparse
 # import pycharmm
 #

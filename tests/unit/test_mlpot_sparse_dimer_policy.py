@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from mmml.interfaces.pycharmmInterface.mlpot.mlpot_sparse_dimer_policy import (
+from karml.interfaces.pycharmmInterface.mlpot.mlpot_sparse_dimer_policy import (
     SparseDimerCapOverflow,
     max_dimer_pairs,
     raise_if_sparse_cap_saturated,
@@ -33,12 +33,12 @@ def test_resolve_max_active_dimers_free_space_promotes_lower_explicit():
 
 
 def test_resolve_max_active_dimers_env(monkeypatch):
-    monkeypatch.setenv("MMML_MLPOT_MAX_ACTIVE_DIMERS", "1500")
+    monkeypatch.setenv("KARML_MLPOT_MAX_ACTIVE_DIMERS", "1500")
     assert resolve_max_active_dimers(90, 4005) == 1500
 
 
 def test_resolve_max_active_dimers_free_space_promotes_lower_env(monkeypatch):
-    monkeypatch.setenv("MMML_MLPOT_MAX_ACTIVE_DIMERS", "1500")
+    monkeypatch.setenv("KARML_MLPOT_MAX_ACTIVE_DIMERS", "1500")
     assert resolve_max_active_dimers(90, 4005, free_space=True) == 4005
 
 
@@ -76,7 +76,7 @@ def test_resolve_max_active_dimers_flat_heuristic_undersizes_real_liquid_water()
     """Locks in the bug this module's density-aware branch fixes.
 
     Numbers are from the TIP3:903, L=30.307409163768842 A NVE run that
-    motivated this fix (mmml_calculator.py active_radius =
+    motivated this fix (karml_calculator.py active_radius =
     mm_switch_on + ml_switch_width = 7.5 A): every recorded frame of the
     actual trajectory had ~26,470-26,493 monomer pairs within that radius,
     while the flat "6 neighbors/monomer" heuristic caps at 5,418 -- a ~79.5%
@@ -96,7 +96,7 @@ def test_resolve_max_active_dimers_flat_heuristic_undersizes_real_liquid_water()
 
 def test_resolve_max_active_dimers_density_aware_covers_real_liquid_water():
     """Same real-run numbers as above, but with box_volume/active_radius
-    supplied (the PBC path `mmml_calculator.setup_calculator` now uses) --
+    supplied (the PBC path `karml_calculator.setup_calculator` now uses) --
     the resulting cap must comfortably cover the actually-measured near-pair
     count from the real trajectory, not just an idealized estimate.
     """

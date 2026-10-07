@@ -6,8 +6,8 @@ import argparse
 
 import pytest
 
-from mmml.cli.run.md_system import build_pycharmm_command
-from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+from karml.cli.run.md_system import build_pycharmm_command
+from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
     DEFAULT_CHARMM_MM_PRETREAT_DT_FS,
     apply_pretreat_dyn_freq_kwargs,
     resolve_charmm_mm_pretreat_heat_nstep,
@@ -15,7 +15,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
     resolve_pretreat_dynamics_print_kwargs,
     resolve_pretreat_dyn_inbfrq,
 )
-from mmml.interfaces.pycharmmInterface.mlpot.run_workflow import (
+from karml.interfaces.pycharmmInterface.mlpot.run_workflow import (
     build_charmm_mm_pretreat_handoff_sections,
 )
 from tests.unit.test_md_system_pycharmm_cmd import _pycharmm_args
@@ -80,7 +80,7 @@ def test_resolve_pretreat_dynamics_print_kwargs_suppresses_status():
 def test_build_pretreat_handoff_includes_thermodynamics_section():
     import numpy as np
 
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import CharmmMmPretreatSettings
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import CharmmMmPretreatSettings
 
     pos = np.linspace(0.0, 10.0, 30).reshape(10, 3)
     pretreat = CharmmMmPretreatSettings(
@@ -97,31 +97,31 @@ def test_build_pretreat_handoff_includes_thermodynamics_section():
     )
     with pytest.MonkeyPatch.context() as mp:
         mp.setattr(
-            "mmml.interfaces.pycharmmInterface.mlpot.run_workflow.charmm_grms",
+            "karml.interfaces.pycharmmInterface.mlpot.run_workflow.charmm_grms",
             lambda: 0.42,
         )
         mp.setattr(
-            "mmml.interfaces.pycharmmInterface.mlpot.pbc_env._read_charmm_box_sides_A",
+            "karml.interfaces.pycharmmInterface.mlpot.pbc_env._read_charmm_box_sides_A",
             lambda: (28.0, 28.0, 28.0),
         )
         mp.setattr(
-            "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.charmm_crystal_is_active",
+            "karml.interfaces.pycharmmInterface.mlpot.pbc_env.charmm_crystal_is_active",
             lambda **_: True,
         )
         mp.setattr(
-            "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.probe_charmm_cubic_box_side_A",
+            "karml.interfaces.pycharmmInterface.mlpot.pbc_env.probe_charmm_cubic_box_side_A",
             lambda **_: (28.0, "pbound"),
         )
         mp.setattr(
-            "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.resolve_charmm_cubic_box_side_A",
+            "karml.interfaces.pycharmmInterface.mlpot.pbc_env.resolve_charmm_cubic_box_side_A",
             lambda **kw: (float(kw.get("fallback_side_A") or 0.0), "pbound"),
         )
         mp.setattr(
-            "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.resolve_mlpot_mic_box_side_A",
+            "karml.interfaces.pycharmmInterface.mlpot.pbc_env.resolve_mlpot_mic_box_side_A",
             lambda **kw: (float(kw.get("fallback_side_A") or 0.0), "pbound"),
         )
         mp.setattr(
-            "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+            "karml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
             lambda: pos.copy(),
         )
         sections = build_charmm_mm_pretreat_handoff_sections(
@@ -151,7 +151,7 @@ def test_resolve_pretreat_dyn_inbfrq_scales_with_dt():
 
 
 def test_resolve_charmm_mm_pretreat_cpt_echeck_defaults_off():
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
         resolve_charmm_mm_pretreat_cpt_echeck,
     )
 
@@ -160,7 +160,7 @@ def test_resolve_charmm_mm_pretreat_cpt_echeck_defaults_off():
 
 
 def test_resolve_charmm_mm_pretreat_cpt_echeck_no_scale_legacy():
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
         resolve_charmm_mm_pretreat_cpt_echeck,
     )
 
@@ -170,7 +170,7 @@ def test_resolve_charmm_mm_pretreat_cpt_echeck_no_scale_legacy():
 
 
 def test_apply_pretreat_dyn_freq_kwargs_pbc():
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
         apply_pretreat_dyn_freq_kwargs,
     )
 

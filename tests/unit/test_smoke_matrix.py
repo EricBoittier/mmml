@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from mmml.validation.smoke_matrix import load_smoke_manifest, run_smoke_matrix
+from karml.validation.smoke_matrix import load_smoke_manifest, run_smoke_matrix
 
 
 def test_pcstudix_manifest_covers_calculators_backends_and_policy() -> None:
@@ -56,13 +56,13 @@ cases:
   - id: unavailable
     category: backend
     description: explicitly blocked dependency
-    requires_env: [MMML_SMOKE_MISSING_TEST_PATH]
+    requires_env: [KARML_SMOKE_MISSING_TEST_PATH]
     command: ["{python}", "-c", "raise SystemExit(99)"]
 """
         % artifact_code,
         encoding="utf-8",
     )
-    monkeypatch.delenv("MMML_SMOKE_MISSING_TEST_PATH", raising=False)
+    monkeypatch.delenv("KARML_SMOKE_MISSING_TEST_PATH", raising=False)
 
     summary = run_smoke_matrix(
         load_smoke_manifest(manifest_path),

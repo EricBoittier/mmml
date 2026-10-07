@@ -7,9 +7,9 @@ from pathlib import Path
 
 import pytest
 
-_IMPORT_PYCHARMM = "mmml.interfaces.pycharmmInterface.import_pycharmm"
-_SETUP_RES = "mmml.interfaces.pycharmmInterface.setupRes"
-_PYCHARMM_INTERFACE = "mmml.interfaces.pycharmmInterface"
+_IMPORT_PYCHARMM = "karml.interfaces.pycharmmInterface.import_pycharmm"
+_SETUP_RES = "karml.interfaces.pycharmmInterface.setupRes"
+_PYCHARMM_INTERFACE = "karml.interfaces.pycharmmInterface"
 
 
 class _FakeAtoms:
@@ -17,7 +17,7 @@ class _FakeAtoms:
 
 
 def _make_fake_utils(calls: list[str]) -> types.ModuleType:
-    fake = types.ModuleType("mmml.interfaces.pycharmmInterface.utils")
+    fake = types.ModuleType("karml.interfaces.pycharmmInterface.utils")
     fake.get_Z_from_psf = lambda: [1]
     fake.set_up_directories = lambda: calls.append("set_up_directories")
     return fake
@@ -53,7 +53,7 @@ def _install_fake_setupres_dependencies(monkeypatch: pytest.MonkeyPatch, calls: 
 
     monkeypatch.setitem(
         sys.modules,
-        "mmml.interfaces.pycharmmInterface.utils",
+        "karml.interfaces.pycharmmInterface.utils",
         _make_fake_utils(calls),
     )
 
@@ -104,11 +104,11 @@ def _install_fake_setupres_dependencies(monkeypatch: pytest.MonkeyPatch, calls: 
         return {"nbxmod": nbxmod}
 
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.nbonds_config.apply_nbonds_kwargs",
+        "karml.interfaces.pycharmmInterface.nbonds_config.apply_nbonds_kwargs",
         fake_apply_nbonds_kwargs,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.nbonds_config.vacuum_nbond_kwargs",
+        "karml.interfaces.pycharmmInterface.nbonds_config.vacuum_nbond_kwargs",
         fake_vacuum_nbond_kwargs,
     )
 
@@ -190,11 +190,11 @@ def test_make_res_main_loop_uses_single_checked_setup_path(monkeypatch: pytest.M
     monkeypatch.setitem(sys.modules, _IMPORT_PYCHARMM, _make_fake_import_pycharmm(calls))
     monkeypatch.setitem(
         sys.modules,
-        "mmml.interfaces.pycharmmInterface.utils",
+        "karml.interfaces.pycharmmInterface.utils",
         _make_fake_utils(calls),
     )
 
-    import mmml.interfaces.pycharmmInterface as pycharmm_interface
+    import karml.interfaces.pycharmmInterface as pycharmm_interface
 
     monkeypatch.setattr(pycharmm_interface, "setupRes", fake_setup_res, raising=False)
 
@@ -202,7 +202,7 @@ def test_make_res_main_loop_uses_single_checked_setup_path(monkeypatch: pytest.M
 
     monkeypatch.setattr(ase.io, "write", lambda path, obj: calls.append(f"ase_write:{path}"))
 
-    from mmml.cli.make import make_res
+    from karml.cli.make import make_res
 
     result = make_res.main_loop(types.SimpleNamespace(res="TIP3", skip_energy_show=True))
 

@@ -37,7 +37,7 @@ RESI PHEO         -1.00 ! C6H5O, phenoxide, adm jr.
 RESI APNH          0.00 ! C7H12N2O2, acetyl-prolineamide (aka AP2, APAM), R. Dunbrack
 RESI PDIP          0.00 ! C8H14N2O2, proline dipeptide
 RESI PNH2          1.00 ! C5H11N2O, prolineamide (aka TP2, PAMD), R. Dunbrack
-RESI METH          0.00 ! CH4, methane (MMML; CG331/HGA3 alkane types)
+RESI METH          0.00 ! CH4, methane (KARML; CG331/HGA3 alkane types)
 RESI ETHA          0.00 ! C2H6, ethane
 RESI PRPA          0.00 ! C3H8, propane, adm jr.
 RESI BUTA          0.00 ! C4H10, butane
@@ -937,4 +937,4 @@ RESI SM239          0.000 ! (2R)-1-acetyl-2-hydroxy-N-methylpyrrolidine-2-carbox
 RESI SM240          0.000 ! N-[(methylcarbamothioyl)methyl]acetamide                    
 RESI SM241          0.000 ! (2S,4S)-1-acetyl-4-fluoro-N-methylpyrrolidine-2-carboxamide 
 RESI SM242             0.000 ! N-[(2Z)-4-(methylsulfanyl)butan-2-ylidene]acetamide         
-RESI TRIALANINE     0.00 ! ACE–ALA×3–CT3 capped tri-alanine (mmml bundle)
+RESI TRIALANINE     0.00 ! ACE–ALA×3–CT3 capped tri-alanine (karml bundle)

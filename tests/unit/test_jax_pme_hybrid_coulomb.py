@@ -5,13 +5,13 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from mmml.interfaces.pycharmmInterface.jax_pme_hybrid_coulomb import (
+from karml.interfaces.pycharmmInterface.jax_pme_hybrid_coulomb import (
     _mm_switch_scales,
     hybrid_jax_pme_coulomb_correction,
     hybrid_jax_pme_mm_lr_correction,
     intra_monomer_jax_pme_coulomb,
 )
-from mmml.interfaces.pycharmmInterface.long_range_backend import compute_jax_pme_coulomb
+from karml.interfaces.pycharmmInterface.long_range_backend import compute_jax_pme_coulomb
 from tests.functionality.long_range._common import (
     have_jax_pme_package,
     ion_dimer_system,
@@ -97,7 +97,7 @@ def test_hybrid_correction_is_full_minus_intra_scaled():
         rtol=1e-10,
     )
     expected_f = full.forces_kcalmol_A - intra.forces_kcalmol_A
-    from mmml.interfaces.pycharmmInterface.jax_pme_hybrid_coulomb import (
+    from karml.interfaces.pycharmmInterface.jax_pme_hybrid_coulomb import (
         _scale_lr_with_com_switch,
     )
 
@@ -198,11 +198,11 @@ def test_zero_charges_skip_jax_pme_calls(monkeypatch):
         raise AssertionError("jax-pme should not be called for zero charges")
 
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.jax_pme_hybrid_coulomb.compute_jax_pme_coulomb",
+        "karml.interfaces.pycharmmInterface.jax_pme_hybrid_coulomb.compute_jax_pme_coulomb",
         _raise,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.jax_pme_hybrid_coulomb.intra_monomer_jax_pme_coulomb",
+        "karml.interfaces.pycharmmInterface.jax_pme_hybrid_coulomb.intra_monomer_jax_pme_coulomb",
         _raise,
     )
     system = ion_dimer_system(separation_A=6.0, box_length_A=40.0)
@@ -227,11 +227,11 @@ def test_zero_coulomb_still_reuses_switch_scale_for_dispersion(monkeypatch):
         raise AssertionError("Coulomb jax-pme should not be called for zero charges")
 
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.jax_pme_hybrid_coulomb.compute_jax_pme_coulomb",
+        "karml.interfaces.pycharmmInterface.jax_pme_hybrid_coulomb.compute_jax_pme_coulomb",
         _raise,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.jax_pme_hybrid_coulomb.intra_monomer_jax_pme_coulomb",
+        "karml.interfaces.pycharmmInterface.jax_pme_hybrid_coulomb.intra_monomer_jax_pme_coulomb",
         _raise,
     )
     system = ion_dimer_system(separation_A=6.0, box_length_A=40.0)
@@ -255,7 +255,7 @@ def test_hybrid_coulomb_only_skips_dispersion(monkeypatch):
 
     def _fake_coulomb(*args, **kwargs):
         positions = np.asarray(args[0], dtype=np.float64)
-        from mmml.interfaces.pycharmmInterface.long_range_backend import LongRangeInteractionResult
+        from karml.interfaces.pycharmmInterface.long_range_backend import LongRangeInteractionResult
 
         return LongRangeInteractionResult(
             energy_kcalmol=1.0,
@@ -266,11 +266,11 @@ def test_hybrid_coulomb_only_skips_dispersion(monkeypatch):
         raise AssertionError("dispersion jax-pme should be skipped")
 
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.jax_pme_hybrid_coulomb.hybrid_jax_pme_coulomb_correction",
+        "karml.interfaces.pycharmmInterface.jax_pme_hybrid_coulomb.hybrid_jax_pme_coulomb_correction",
         _fake_coulomb,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.jax_pme_hybrid_coulomb.hybrid_jax_pme_lj_dispersion_correction",
+        "karml.interfaces.pycharmmInterface.jax_pme_hybrid_coulomb.hybrid_jax_pme_lj_dispersion_correction",
         _raise_dispersion,
     )
     system = ion_dimer_system(separation_A=6.0, box_length_A=40.0)
@@ -291,7 +291,7 @@ def test_hybrid_coulomb_only_skips_dispersion(monkeypatch):
 
 
 def test_com_switch_jit_cache_reuses_same_fn() -> None:
-    from mmml.interfaces.pycharmmInterface.jax_pme_hybrid_coulomb import (
+    from karml.interfaces.pycharmmInterface.jax_pme_hybrid_coulomb import (
         _cached_com_switch_value_and_grad_fn,
         _com_switch_jit_key,
         reset_com_switch_jit_cache,
@@ -316,7 +316,7 @@ def test_com_switch_jit_cache_reuses_same_fn() -> None:
 
 
 def test_hybrid_lr_shared_com_switch_matches_independent() -> None:
-    from mmml.interfaces.pycharmmInterface.jax_pme_hybrid_coulomb import (
+    from karml.interfaces.pycharmmInterface.jax_pme_hybrid_coulomb import (
         _com_switch_value_and_grad,
         hybrid_jax_pme_mm_lr_correction,
         reset_com_switch_jit_cache,

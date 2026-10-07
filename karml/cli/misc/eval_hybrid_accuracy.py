@@ -22,7 +22,7 @@ quantity training optimised (via ``_eval_forward``).
 
 Usage
 -----
-    uv run python -m mmml.cli.misc.eval_hybrid_accuracy \\
+    uv run python -m karml.cli.misc.eval_hybrid_accuracy \\
         --params  artifacts/.../params_<tag>_<stamp>.json \\
         --data    artifacts/.../des_dimers_cgenff_top50.npz \\
         --config  examples/lj_scales/train_des_warmstart.yaml \\
@@ -108,9 +108,9 @@ def main(argv=None) -> int:
 
     import jax
 
-    from mmml.models.physnetjax.checkpoint_utils import load_physnet_checkpoint
-    from mmml.models.physnetjax.physnetjax.data.data import prepare_datasets
-    from mmml.models.physnetjax.physnetjax.training.evalstep import _eval_forward
+    from karml.models.physnetjax.checkpoint_utils import load_physnet_checkpoint
+    from karml.models.physnetjax.physnetjax.data.data import prepare_datasets
+    from karml.models.physnetjax.physnetjax.training.evalstep import _eval_forward
 
     params, config = load_physnet_checkpoint(args.params)
     print(f"loaded params: {args.params}")
@@ -158,7 +158,7 @@ def main(argv=None) -> int:
     if args.config is not None:
         import yaml
 
-        from mmml.cli.make.make_training import _build_hybrid_mm_config, build_parser
+        from karml.cli.make.make_training import _build_hybrid_mm_config, build_parser
 
         cfg = yaml.safe_load(args.config.read_text()) or {}
         ns = build_parser().parse_args([])
@@ -173,8 +173,8 @@ def main(argv=None) -> int:
         if hybrid_mm is not None:
             print(f"hybrid ML/MM scoring enabled ({hybrid_mm['hybrid_hamiltonian']})")
 
-    from mmml.models.physnetjax.physnetjax.data.batches import _pair_indices, _prepare_batches
-    from mmml.models.physnetjax.physnetjax.models.model import EF
+    from karml.models.physnetjax.physnetjax.data.batches import _pair_indices, _prepare_batches
+    from karml.models.physnetjax.physnetjax.models.model import EF
 
     model = EF(**{k: v for k, v in config.items() if k in EF.__dataclass_fields__})
 

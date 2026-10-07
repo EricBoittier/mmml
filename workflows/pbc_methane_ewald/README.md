@@ -48,7 +48,7 @@ electrostatic (DES+q0 skipped — no charge head), real ML (`jax_mm_spoof: false
 ```bash
 export JAX_ENABLE_X64=1
 # optional single-ckpt override (named matrix still applies unless edited)
-# export MMML_CKPT=/path/to/params.json
+# export KARML_CKPT=/path/to/params.json
 ```
 
 GPU node with PyCHARMM + OpenCL, `packmol`, `snakemake`,
@@ -62,7 +62,7 @@ bash scripts/preflight.sh
 snakemake -n
 
 # Smoke on Slurm
-MMML_WORKFLOW_CONFIG=config.smoke.yaml bash scripts/snakemake_slurm.sh
+KARML_WORKFLOW_CONFIG=config.smoke.yaml bash scripts/snakemake_slurm.sh
 
 # Full matrix
 bash scripts/snakemake_slurm.sh
@@ -93,6 +93,6 @@ uv run pytest tests/unit/test_pbc_methane_ewald_campaign.py -q
 
 ## METH residue
 
-Methane is not in stock CGenFF; MMML adds `RESI METH` (neutral CH₄ using
-alkane `CG331`/`HGA3` types) plus `mmml/data/molecules/meth_monomer.pdb`.
+Methane is not in stock CGenFF; KARML adds `RESI METH` (neutral CH₄ using
+alkane `CG331`/`HGA3` types) plus `karml/data/molecules/meth_monomer.pdb`.
 Aliases: `CH4`, `methane` → `METH`.

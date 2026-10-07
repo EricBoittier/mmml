@@ -33,7 +33,7 @@ A rejected seed keeps its frames in ``traj.rejected.extxyz`` (not matched by
 
 Output per seed: ``<out>/seed_<k>/traj.extxyz`` + ``summary.json``.
 Feed the extxyz files to metatrain, or to
-``mmml pet-physnet-distill --from-box-extxyz`` for ML/MM cluster labels.
+``karml pet-physnet-distill --from-box-extxyz`` for ML/MM cluster labels.
 """
 
 from __future__ import annotations
@@ -109,7 +109,7 @@ def molecule_damage_check(monomer: Atoms, tol_A: float | None):
     ``monomer`` copies, or None when disabled."""
     if tol_A is None:
         return None
-    from mmml.distill.box_clusters import bond_graph, damaged_molecules
+    from karml.distill.box_clusters import bond_graph, damaged_molecules
 
     ref = np.asarray(monomer.get_positions(), dtype=np.float64)
     bonds = bond_graph(monomer.get_atomic_numbers(), ref)
@@ -171,7 +171,7 @@ def run_seed(calc, cfg: BoxDatasetConfig, *, seed: int, out_dir: Path) -> dict:
     from ase.md.velocitydistribution import Stationary, thermalize_momenta
     from ase.optimize import FIRE
 
-    from mmml.md.metatomic_pbc import append_training_frame
+    from karml.md.metatomic_pbc import append_training_frame
 
     out = Path(out_dir) / f"seed_{int(seed):04d}"
     out.mkdir(parents=True, exist_ok=True)

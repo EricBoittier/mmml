@@ -161,7 +161,7 @@ def test_resilient_disables_bonded_mm_mini_for_mini_smoke(
 ) -> None:
     ckpt = tmp_path / "params.json"
     ckpt.write_text("{}", encoding="utf-8")
-    monkeypatch.setenv("MMML_CKPT", str(ckpt))
+    monkeypatch.setenv("KARML_CKPT", str(ckpt))
     cfg = load_config(WORKFLOW / "config.yaml")
     cell = cell_from_cli(
         cfg,
@@ -203,7 +203,7 @@ def test_resilient_all_ml_keeps_sidecar_backend_for_overlap_recovery(
     """All-ML DCM: sidecar in campaign; runtime routes bonded recovery to MLpot SD."""
     ckpt = tmp_path / "params.json"
     ckpt.write_text("{}", encoding="utf-8")
-    monkeypatch.setenv("MMML_CKPT", str(ckpt))
+    monkeypatch.setenv("KARML_CKPT", str(ckpt))
     cfg = load_config(WORKFLOW / "config.yaml")
     cell = cell_from_cli(
         cfg,
@@ -222,7 +222,7 @@ def test_resilient_all_ml_keeps_sidecar_backend_for_overlap_recovery(
 def test_campaign_forwards_allow_high_grms(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     ckpt = tmp_path / "params.json"
     ckpt.write_text("{}", encoding="utf-8")
-    monkeypatch.setenv("MMML_CKPT", str(ckpt))
+    monkeypatch.setenv("KARML_CKPT", str(ckpt))
     cfg = load_config(WORKFLOW / "config.yaml")
     cell = cell_from_cli(
         cfg, "resilient", "DCM", 77, temperature=50.0, box_size=32.0, heat_thermostat="bussi"
@@ -246,7 +246,7 @@ def test_campaign_forwards_lr_solver_knobs(cfg: dict, cell: RunCell) -> None:
 def test_config_yaml_declares_lr_solver(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     ckpt = tmp_path / "params.json"
     ckpt.write_text("{}", encoding="utf-8")
-    monkeypatch.setenv("MMML_CKPT", str(ckpt))
+    monkeypatch.setenv("KARML_CKPT", str(ckpt))
     cfg = load_config(WORKFLOW / "config.yaml")
     assert cfg.get("lr_solver") == "mic"
     cell = next(iter_matrix_cells(cfg))
@@ -402,12 +402,12 @@ def test_setup_variants_known_ids() -> None:
         assert v.description
 
 
-def test_build_campaign_resolves_mmml_ckpt(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, cfg: dict, cell: RunCell) -> None:
+def test_build_campaign_resolves_karml_ckpt(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, cfg: dict, cell: RunCell) -> None:
     ckpt = tmp_path / "params.json"
     ckpt.write_text("{}", encoding="utf-8")
-    monkeypatch.setenv("MMML_CKPT", str(ckpt))
+    monkeypatch.setenv("KARML_CKPT", str(ckpt))
     cfg = dict(cfg)
-    cfg["checkpoint"] = "${MMML_CKPT}"
+    cfg["checkpoint"] = "${KARML_CKPT}"
     campaign = build_campaign(cfg, cell)
     assert campaign["defaults"]["checkpoint"] == str(ckpt.resolve())
 
@@ -418,15 +418,15 @@ def test_resolve_checkpoint_defaults_to_bundled_json(
     bundled = tmp_path / "examples" / "ckpts_json" / "DESdimers_params.json"
     bundled.parent.mkdir(parents=True)
     bundled.write_text("{}", encoding="utf-8")
-    monkeypatch.delenv("MMML_CKPT", raising=False)
+    monkeypatch.delenv("KARML_CKPT", raising=False)
     monkeypatch.setattr(cl, "repo_root", lambda: tmp_path)
-    assert cl.resolve_checkpoint("${MMML_CKPT}") == bundled.resolve()
+    assert cl.resolve_checkpoint("${KARML_CKPT}") == bundled.resolve()
 
 
 def test_validate_checkpoint_rejects_missing(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("MMML_CKPT", "/no/such/checkpoint.json")
+    monkeypatch.setenv("KARML_CKPT", "/no/such/checkpoint.json")
     with pytest.raises(RuntimeError, match="Checkpoint not found"):
-        cl.resolve_checkpoint("${MMML_CKPT}")
+        cl.resolve_checkpoint("${KARML_CKPT}")
 
 
 def test_build_md_system_campaign_argv(tmp_path: Path, cfg: dict, cell: RunCell) -> None:

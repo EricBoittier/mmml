@@ -68,7 +68,7 @@ def _water(n_molecules: int, rng, r_oh=0.9572, theta_deg=104.52, jitter=0.0):
 
 def test_tip3_geometry_is_internally_consistent() -> None:
     """r_HH is derived from the angle, so the three constraints cannot disagree."""
-    from mmml.md.constraints import tip3_rigid_constraints
+    from karml.md.constraints import tip3_rigid_constraints
 
     spec = tip3_rigid_constraints(1)
     r_oh, theta = 0.9572, np.deg2rad(104.52)
@@ -88,7 +88,7 @@ def test_shake_projects_step_sized_displacements(x64, jitter) -> None:
     reference bond, which only spans the constraint gradient while the
     displacement is small. 0.05 A is already generous for a 0.25 fs step.
     """
-    from mmml.md.constraints import (
+    from karml.md.constraints import (
         constraint_residuals,
         shake_positions,
         tip3_rigid_constraints,
@@ -116,7 +116,7 @@ def test_shake_projects_step_sized_displacements(x64, jitter) -> None:
 
 def test_shake_is_a_noop_on_an_already_rigid_configuration(x64) -> None:
     """An ideal geometry must come back bit-for-bit, or SHAKE injects drift."""
-    from mmml.md.constraints import shake_positions, tip3_rigid_constraints
+    from karml.md.constraints import shake_positions, tip3_rigid_constraints
 
     rng = np.random.default_rng(1)
     r = _water(25, rng)
@@ -126,7 +126,7 @@ def test_shake_is_a_noop_on_an_already_rigid_configuration(x64) -> None:
 
 
 def test_rattle_removes_velocity_along_every_bond(x64) -> None:
-    from mmml.md.constraints import (
+    from karml.md.constraints import (
         rattle_velocities,
         tip3_rigid_constraints,
     )
@@ -147,7 +147,7 @@ def test_rattle_removes_velocity_along_every_bond(x64) -> None:
 
 def test_rattle_conserves_linear_momentum(x64) -> None:
     """Constraint impulses are internal, so total momentum must not move."""
-    from mmml.md.constraints import rattle_velocities, tip3_rigid_constraints
+    from karml.md.constraints import rattle_velocities, tip3_rigid_constraints
 
     rng = np.random.default_rng(3)
     n = 20
@@ -172,7 +172,7 @@ def test_constrained_nve_conserves_energy_under_a_bond_breaking_potential(x64) -
     import jax
     import jax.numpy as jnp
 
-    from mmml.md.constraints import (
+    from karml.md.constraints import (
         constraint_residuals,
         rattle_velocities,
         shake_positions,
@@ -245,7 +245,7 @@ def test_unconstrained_control_actually_dissociates(x64) -> None:
     import jax
     import jax.numpy as jnp
 
-    from mmml.md.constraints import tip3_rigid_constraints
+    from karml.md.constraints import tip3_rigid_constraints
 
     rng = np.random.default_rng(4)
     n = 8
@@ -277,7 +277,7 @@ def test_rigid_water_spec_from_args_is_off_by_default() -> None:
     """Existing runs must be unaffected unless the flag is passed."""
     from argparse import Namespace
 
-    from mmml.md.constraints import rigid_water_spec_from_args
+    from karml.md.constraints import rigid_water_spec_from_args
 
     offsets = np.arange(0, 3 * 5 + 1, 3)
     assert rigid_water_spec_from_args(Namespace(), 5, offsets) is None
@@ -291,7 +291,7 @@ def test_rigid_water_spec_refuses_heterogeneous_monomers() -> None:
     """One repeated pattern would constrain whatever sits at those offsets."""
     from argparse import Namespace
 
-    from mmml.md.constraints import rigid_water_spec_from_args
+    from karml.md.constraints import rigid_water_spec_from_args
 
     offsets = np.array([0, 3, 3 + 5, 3 + 5 + 3])
     with pytest.raises(NotImplementedError, match="3-atom monomers"):
@@ -304,7 +304,7 @@ def test_wrapped_apply_fn_keeps_monomers_rigid(x64) -> None:
     from jax_md import dataclasses as jmd
     from jax_md import simulate
 
-    from mmml.md.constraints import (
+    from karml.md.constraints import (
         constraint_residuals,
         tip3_rigid_constraints,
         wrap_apply_fn_with_constraints,
@@ -347,7 +347,7 @@ def test_virial_decomposition_is_additive_and_isolates_internal_forces(x64) -> N
     """w_atomic = w_molecular + w_internal, and purely internal forces move only w_internal."""
     import jax.numpy as jnp
 
-    from mmml.md.constraints import (
+    from karml.md.constraints import (
         molecular_virial_decomposition,
         tip3_rigid_constraints,
     )
@@ -373,8 +373,8 @@ def test_virial_decomposition_is_additive_and_isolates_internal_forces(x64) -> N
 
 def test_md_system_forwards_rigid_water_to_the_jaxmd_subprocess() -> None:
     """The flag is useless if it does not survive the subprocess hand-off."""
-    from mmml.cli.run.md_system import build_parser
-    from mmml.cli.run.md_pbc_suite.jaxmd import build_parser as jaxmd_parser
+    from karml.cli.run.md_system import build_parser
+    from karml.cli.run.md_pbc_suite.jaxmd import build_parser as jaxmd_parser
 
     args = build_parser().parse_args(["--rigid-water", "--rigid-water-roh", "0.96"])
     assert args.rigid_water is True
@@ -396,7 +396,7 @@ def test_constrained_nve_apply_fn_conserves_energy(x64) -> None:
     import jax.numpy as jnp
     from jax_md import space
 
-    from mmml.md.constraints import constrained_nve, constraint_residuals, tip3_rigid_constraints
+    from karml.md.constraints import constrained_nve, constraint_residuals, tip3_rigid_constraints
 
     rng = np.random.default_rng(11)
     n = 8
@@ -446,7 +446,7 @@ def test_step_boundary_projection_drifts_more_than_interleaving(x64) -> None:
     import jax.numpy as jnp
     from jax_md import simulate, space
 
-    from mmml.md.constraints import (
+    from karml.md.constraints import (
         constrained_nve,
         tip3_rigid_constraints,
         wrap_apply_fn_with_constraints,
@@ -502,7 +502,7 @@ def test_jaxmd_jargs_whitelist_carries_rigid_water() -> None:
     """
     import inspect
 
-    from mmml.cli.run.md_pbc_suite import jaxmd
+    from karml.cli.run.md_pbc_suite import jaxmd
 
     src = inspect.getsource(jaxmd)
     start = src.index("jargs = SimpleNamespace(")

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Export NPZ dimer → CGenFF PDB, then mmml make-box with ACN / TIP3 / DMSO.
+# Export NPZ dimer → CGenFF PDB, then karml make-box with ACN / TIP3 / DMSO.
 # Needs Packmol + PyCHARMM (same as other make-box / md-system builds).
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -67,7 +67,7 @@ make_one() {
     cd "${work}"
     echo "=== make-box --solvent ${solvent} (n=${N_SOLVENT}, L=${BOX_SIZE}) ==="
     cmd=(
-      uv run mmml make-box
+      uv run karml make-box
       --pdb "${SOLUTE_PDB}"
       --res "nh3ch3cl_${tag}"
       --box-size "${BOX_SIZE}"

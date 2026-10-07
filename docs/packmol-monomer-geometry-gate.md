@@ -13,7 +13,7 @@ Related: [Packmol placement](packmol-placement.md), [Liquid box workflow](liquid
 
 ## The failure it catches
 
-A local `mmml liquid-box` build of `MEOH:327` in `L = 28 Å`:
+A local `karml liquid-box` build of `MEOH:327` in `L = 28 Å`:
 
 | Stage | Artifact | Monomer skeleton vs template |
 |-------|----------|------------------------------|
@@ -32,13 +32,13 @@ producing a spurious 0.000 Å inter-monomer MIC contact. The run then burned the
 template to 4.10 Å in the cached cluster. No minimization does that.
 
 The corruption is environmental (a broken local CHARMM/pycharmm build), not an
-mmml logic bug. The bug in mmml was that **nothing noticed**.
+karml logic bug. The bug in karml was that **nothing noticed**.
 
 ---
 
 ## What the gate checks
 
-`mmml/utils/monomer_internal_geometry.py`
+`karml/utils/monomer_internal_geometry.py`
 
 Packmol places *rigid copies* of a CHARMM-minimized monomer template, so before
 the cluster relax every monomer has exactly the template's internal geometry.
@@ -55,7 +55,7 @@ that template:
 The scan is O(monomers × skeleton pairs) — 3924 distances for `MEOH:327`,
 microseconds.
 
-Wired in at `mmml/cli/run/md_pbc_suite/cluster.py`:
+Wired in at `karml/cli/run/md_pbc_suite/cluster.py`:
 
 - **after** the cluster `minimize_charmm_mm_only`, **before** `save_packmol_cluster_cache` —
   a distorted build raises `RuntimeError` and **no cache entry is written**;
@@ -76,7 +76,7 @@ cache entry from the failing run.)
 
 ### Escape hatch
 
-`MMML_MAX_MONOMER_INTERNAL_DEVIATION_A` overrides the threshold; `0` disables the
+`KARML_MAX_MONOMER_INTERNAL_DEVIATION_A` overrides the threshold; `0` disables the
 gate (it still measures and prints).
 
 ---
@@ -173,7 +173,7 @@ O–H bond out with it.
 The isolated monomer looked healthy throughout only because all three atoms of one
 water are mutually excluded, so nonbonded never enters that minimization.
 
-pc-studix looked healthy for a mundane reason: the numbers came from `~/mmml_gate2`,
+pc-studix looked healthy for a mundane reason: the numbers came from `~/karml_gate2`,
 a non-git copy of the tree that simply lacks `examples/m/par_ch3cl.prm`, so the
 append never fired and the latch never armed. Hiding those two files on the darwin
 build reproduced the healthy result exactly.
@@ -199,7 +199,7 @@ and 1-3 distances instead of relying on inspection.
 
 Confirmed directly on pc-studix — one compute node, one `libcharmm.so`, one
 checkout, `MEOH:4` L = 15 Å seed 23, the *only* difference being whether the
-bundled append files are reachable (`MMML_CGENFF_EXTRA_RTF` / `_PRM`):
+bundled append files are reachable (`KARML_CGENFF_EXTRA_RTF` / `_PRM`):
 
 | Arm | append RTF/PRM resolved | worst monomer |
 |-----|-------------------------|---------------|
@@ -207,7 +207,7 @@ bundled append files are reachable (`MMML_CGENFF_EXTRA_RTF` / `_PRM`):
 | B | `top_ch3cl.rtf`, `par_ch3cl.prm` | **0.424 Å** — gate raises |
 
 So **no CHARMM build was ever healthy**; the pc-studix checkout was just missing an
-optional data file. Production runs from `~/mmml` on pc-studix, which does ship
+optional data file. Production runs from `~/karml` on pc-studix, which does ship
 `examples/m/par_ch3cl.prm`, were building boxes with VDW switched off. The 0.35 Å
 threshold itself is unaffected: it was calibrated on arm-A-style runs, which have a
 live nonbonded table and are genuinely healthy.

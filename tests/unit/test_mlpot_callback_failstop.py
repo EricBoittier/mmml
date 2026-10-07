@@ -10,8 +10,8 @@ from pathlib import Path
 
 import pytest
 
-from mmml.interfaces.pycharmmInterface.mlpot import callback_failstop
-from mmml.interfaces.pycharmmInterface.mlpot.callback_failstop import (
+from karml.interfaces.pycharmmInterface.mlpot import callback_failstop
+from karml.interfaces.pycharmmInterface.mlpot.callback_failstop import (
     EXIT_CODE_ENV,
     MLPOT_CALLBACK_FAILURE_EXIT_CODE,
     MlpotCallbackAborted,
@@ -86,7 +86,7 @@ def test_exception_calls_exit_path_with_code_and_traceback(
         guarded(0)
     assert info.value.code == 86
     err = capsys.readouterr().err
-    assert "MMML MLPOT CALLBACK FAILURE" in err
+    assert "KARML MLPOT CALLBACK FAILURE" in err
     assert "Traceback (most recent call last)" in err
     assert "Molecule extent 2.64 A" in err
     rec = last_mlpot_callback_failure()
@@ -146,7 +146,7 @@ def test_wrapping_is_idempotent() -> None:
 _CTYPES_CHILD = textwrap.dedent(
     """
     import atexit, ctypes, sys
-    from mmml.interfaces.pycharmmInterface.mlpot.callback_failstop import fail_closed_callback
+    from karml.interfaces.pycharmmInterface.mlpot.callback_failstop import fail_closed_callback
 
     atexit.register(lambda: print("ATEXIT-RAN", flush=True))
     FT = ctypes.CFUNCTYPE(ctypes.c_double, ctypes.c_int)
@@ -273,7 +273,7 @@ def test_rebind_registers_fail_closed_entry(monkeypatch):
 
     import numpy as np
 
-    from mmml.interfaces.pycharmmInterface.mlpot import setup as mlpot_setup
+    from karml.interfaces.pycharmmInterface.mlpot import setup as mlpot_setup
 
     bound = {}
 
@@ -309,7 +309,7 @@ def test_rebind_registers_fail_closed_entry(monkeypatch):
         mlpot=_Mlpot(),
     )
     assert mlpot_setup.rebind_mlpot_calculator_from_pycmodel(ctx) is True
-    assert getattr(bound["fn"], "__mmml_fail_closed__", False)
+    assert getattr(bound["fn"], "__karml_fail_closed__", False)
     with pytest.raises(_ExitCalled) as info:
         bound["fn"]()
     assert info.value.code == 86

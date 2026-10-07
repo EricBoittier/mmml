@@ -2,7 +2,7 @@
 """Run 1D separation scans for water and benzene dimers.
 
 By default, this script runs in '--spoof' mode to instantly generate realistic
-potential energy curves for the MMML Zoo documentation. Run with '--real' to
+potential energy curves for the KARML Zoo documentation. Run with '--real' to
 execute the actual quantum chemical (xTB) and JAX neural network evaluations.
 """
 
@@ -89,16 +89,16 @@ def generate_spoofed_benzene(distances):
 
 def run_real_scans(distances_water, distances_benzene):
     """Run actual evaluations (requires installed models & takes ~2 minutes)."""
-    from mmml.analysis.dimer_molecules import make_oriented_scan_geometries
-    from mmml.analysis.dimer_scans import make_xtb_calculator, min_fragment_contact_distance
-    from mmml.interfaces.calculators.simple_inference import create_calculator_from_checkpoint
-    from mmml.models.spookynet_calc import SpookyNetCalculator
-    from mmml.models.mbd import QCMLMBDCalculator
-    from mmml.models.multipoles import LearnedMolecularMultipoleElectrostatics
-    from mmml.cli.env import collect_env_report
+    from karml.analysis.dimer_molecules import make_oriented_scan_geometries
+    from karml.analysis.dimer_scans import make_xtb_calculator, min_fragment_contact_distance
+    from karml.interfaces.calculators.simple_inference import create_calculator_from_checkpoint
+    from karml.models.spookynet_calc import SpookyNetCalculator
+    from karml.models.mbd import QCMLMBDCalculator
+    from karml.models.multipoles import LearnedMolecularMultipoleElectrostatics
+    from karml.cli.env import collect_env_report
     
     report = collect_env_report()
-    physnet_path = report["MMML_CKPT"]
+    physnet_path = report["KARML_CKPT"]
     spookynet_path = report["SPOOKYNET_CKPT"]
     mbd_path = report["MBD_CKPT"]
     multipoles_path = report["MULTIPOLES_CKPT"]
@@ -165,7 +165,7 @@ def run_real_scans(distances_water, distances_benzene):
     return water_df, benzene_df
 
 def main():
-    parser = argparse.ArgumentParser(description="MMML Zoo 1D scan generator")
+    parser = argparse.ArgumentParser(description="KARML Zoo 1D scan generator")
     parser.add_argument("--real", action="store_true", help="Run real evaluations instead of spoofing")
     args = parser.parse_args()
     
@@ -181,7 +181,7 @@ def main():
         benzene_df = generate_spoofed_benzene(benzene_distances)
         
     # Save CSV files
-    out_dir = Path("artifacts/mmml_zoo")
+    out_dir = Path("artifacts/karml_zoo")
     out_dir.mkdir(parents=True, exist_ok=True)
     
     water_csv = out_dir / "water_dimer_scan.csv"
@@ -259,10 +259,10 @@ def main():
     ax2.legend(frameon=True, facecolor="white", edgecolor="#e5e7eb", fontsize=10, loc="upper right")
     ax2.tick_params(labelsize=10)
     
-    fig.suptitle("MMML Zoo: Out-of-the-Box Model Performance Profiles", fontsize=16, fontweight="bold", y=0.98)
+    fig.suptitle("KARML Zoo: Out-of-the-Box Model Performance Profiles", fontsize=16, fontweight="bold", y=0.98)
     plt.tight_layout()
     
-    plot_path = out_dir / "mmml_zoo_1d_scans.png"
+    plot_path = out_dir / "karml_zoo_1d_scans.png"
     plt.savefig(plot_path, dpi=300, bbox_inches="tight")
     print(f"✓ Saved plot to {plot_path}")
 

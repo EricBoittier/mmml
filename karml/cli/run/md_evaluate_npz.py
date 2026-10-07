@@ -1,4 +1,4 @@
-"""Single-point MMML evaluation from an NPZ geometry file."""
+"""Single-point KARML evaluation from an NPZ geometry file."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from typing import Any
 
 import numpy as np
 
-from mmml.cli.run.md_handoff import (
+from karml.cli.run.md_handoff import (
     MdHandoffState,
     apply_handoff_geometry_to_atoms,
     cluster_geometry_from_handoff,
@@ -17,13 +17,13 @@ from mmml.cli.run.md_handoff import (
     resolve_handoff_box,
     set_handoff_in,
 )
-from mmml.interfaces.pycharmmInterface.cutoffs import handoff_widths_from_args
-from mmml.interfaces.pycharmmInterface.hybrid_reference import (
+from karml.interfaces.pycharmmInterface.cutoffs import handoff_widths_from_args
+from karml.interfaces.pycharmmInterface.hybrid_reference import (
     GeometryNpzPayload as EvaluateNpzPayload,
     apply_npz_charges_to_psf,
     load_geometry_npz,
 )
-from mmml.data.units import (
+from karml.data.units import (
     CALCULATOR_UNITS,
     EV_TO_HARTREE,
     convert_energy,
@@ -37,8 +37,8 @@ from mmml.data.units import (
     normalize_force_unit,
     reference_energy_ev_at_frame,
 )
-from mmml.interfaces.pycharmmInterface.mm_energy_forces import DEFAULT_JAX_MD_SKIN_DISTANCE_A
-from mmml.interfaces.pycharmmInterface.mmml_calculator import ev2kcalmol
+from karml.interfaces.pycharmmInterface.mm_energy_forces import DEFAULT_JAX_MD_SKIN_DISTANCE_A
+from karml.interfaces.pycharmmInterface.karml_calculator import ev2kcalmol
 
 load_evaluate_npz = load_geometry_npz
 
@@ -182,7 +182,7 @@ def _print_evaluate_npz_summary(
     if isinstance(max_f, list):
         max_f = float(np.max(max_f)) if max_f else None
     if quiet:
-        parts = [f"mmml evaluate-npz ({backend}):"]
+        parts = [f"karml evaluate-npz ({backend}):"]
         if energy is not None:
             parts.append(f"E={format_energy_ev_kcal(float(energy))}")
         if max_f is not None:
@@ -193,7 +193,7 @@ def _print_evaluate_npz_summary(
         print(" ".join(parts), flush=True)
         return
 
-    print(f"mmml md-system evaluate-npz ({backend}):", flush=True)
+    print(f"karml md-system evaluate-npz ({backend}):", flush=True)
     if energy is not None:
         print(f"  energy = {format_energy_ev_kcal(float(energy))}", flush=True)
     else:
@@ -426,7 +426,7 @@ def enrich_compare_with_force_sources(
         cmp["charmm_energy_terms_kcal_mol"] = dict(charmm_energy_terms_kcal_mol)
     if reference_forces_ev is None or not force_sources:
         return
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
         compare_force_sources_to_reference,
     )
 
@@ -644,7 +644,7 @@ def save_evaluate_compare_diagnostics(
     mm_switch_width: float | None = None,
 ) -> tuple[dict[str, str], dict[str, Any]]:
     """Write CSV and optional plots of model–reference errors vs COM distance."""
-    from mmml.interfaces.pycharmmInterface.cutoffs import (
+    from karml.interfaces.pycharmmInterface.cutoffs import (
         DEFAULT_ML_SWITCH_WIDTH,
         DEFAULT_MM_SWITCH_ON,
         DEFAULT_MM_SWITCH_WIDTH,
@@ -980,7 +980,7 @@ def _psf_z_for_composition(
     atoms_per_list: list[int],
     residue_labels: list[str],
 ) -> np.ndarray:
-    from mmml.cli.run.md_pbc_suite.ase import _build_cluster_psf_topology_only, _parse_composition
+    from karml.cli.run.md_pbc_suite.ase import _build_cluster_psf_topology_only, _parse_composition
 
     return _build_cluster_psf_topology_only(
         _parse_composition(composition),
@@ -1023,7 +1023,7 @@ def _resolve_evaluator_z_and_handoff_layout(
 
     warnings.append(
         "handoff atomic_numbers use a different atom order than PSF/reference; "
-        "using PSF order for MMML evaluation"
+        "using PSF order for KARML evaluation"
     )
     return z_psf, handoff_z, warnings
 
@@ -1081,7 +1081,7 @@ def save_evaluate_trajectory_npz(
         "R": r.reshape(1, n_atoms, 3),
         "E": np.array([float(energy_eV) * EV_TO_HARTREE], dtype=np.float64),
         "E_eV": np.array([float(energy_eV)], dtype=np.float64),
-        "_mmml_units": np.array(_evaluate_npz_units_json()),
+        "_karml_units": np.array(_evaluate_npz_units_json()),
     }
     if forces_eV_A is not None:
         f_ev = np.asarray(forces_eV_A, dtype=np.float64).reshape(n_atoms, 3)
@@ -1147,7 +1147,7 @@ def save_evaluate_trajectory_npz_multi(
         "R": r,
         "E": e_ev * EV_TO_HARTREE,
         "E_eV": e_ev,
-        "_mmml_units": np.array(_evaluate_npz_units_json()),
+        "_karml_units": np.array(_evaluate_npz_units_json()),
     }
     if frame_indices is not None:
         payload["source_indices"] = np.asarray(frame_indices, dtype=np.int32).reshape(-1)
@@ -1221,7 +1221,7 @@ def _reference_frame_indices_override(args: Any) -> list[int] | None:
 
 
 def should_evaluate_reference_trajectory(args: Any) -> bool:
-    """True when MMML should loop over frames from ``--evaluate-reference-npz``."""
+    """True when KARML should loop over frames from ``--evaluate-reference-npz``."""
     if getattr(args, "evaluate_reference_npz", None) is None:
         return False
     if resolve_evaluate_max_frames(args) != 1:
@@ -1240,7 +1240,7 @@ def compare_evaluate_to_reference_npz(
     reference_energy_unit: str | None = None,
     reference_force_unit: str | None = None,
 ) -> dict[str, Any]:
-    """Compare MMML single-point results to a reference trajectory NPZ frame."""
+    """Compare KARML single-point results to a reference trajectory NPZ frame."""
     ref_path = Path(reference_path).expanduser().resolve()
     if reference_energy_unit is None:
         reference_energy_unit = infer_reference_energy_unit(ref_path)
@@ -1340,7 +1340,7 @@ def _resolve_evaluate_backend(args: Any) -> str:
     return backend
 
 
-def _mmml_cutoff_args(args: Any) -> tuple[float, float, float]:
+def _karml_cutoff_args(args: Any) -> tuple[float, float, float]:
     ml_w, mm_on, mm_w = handoff_widths_from_args(args)
     return ml_w, mm_on, mm_w
 
@@ -1371,7 +1371,7 @@ def _build_atoms_for_evaluate(
     return atoms
 
 
-def _attach_ase_mmml_calculator(
+def _attach_ase_karml_calculator(
     args: Any,
     *,
     atoms: Any,
@@ -1383,11 +1383,11 @@ def _attach_ase_mmml_calculator(
     L: float | None,
     at_codes_override: np.ndarray | None,
 ) -> Any:
-    from mmml.cli.run.md_pbc_suite.ase import _factory_mmml
+    from karml.cli.run.md_pbc_suite.ase import _factory_karml
 
-    ml_w, mm_on, mm_w = _mmml_cutoff_args(args)
+    ml_w, mm_on, mm_w = _karml_cutoff_args(args)
     atoms_per = atoms_per_list[0] if len(set(atoms_per_list)) == 1 else atoms_per_list
-    calc = _factory_mmml(
+    calc = _factory_karml(
         z=z,
         r=atoms.get_positions(),
         n_mol=n_monomers,
@@ -1434,7 +1434,7 @@ def _attach_ase_mmml_calculator(
     return calc
 
 
-def _evaluate_atoms_mmml(
+def _evaluate_atoms_karml(
     atoms: Any,
     *,
     z: np.ndarray,
@@ -1453,7 +1453,7 @@ def _evaluate_atoms_mmml(
     return normalize_metrics_to_ev(raw, atoms=atoms)
 
 
-def _evaluate_ase_mmml(
+def _evaluate_ase_karml(
     args: Any,
     *,
     atoms: Any,
@@ -1465,7 +1465,7 @@ def _evaluate_ase_mmml(
     L: float | None,
     at_codes_override: np.ndarray | None,
 ) -> dict[str, Any]:
-    _attach_ase_mmml_calculator(
+    _attach_ase_karml_calculator(
         args,
         atoms=atoms,
         z=z,
@@ -1476,7 +1476,7 @@ def _evaluate_ase_mmml(
         L=L,
         at_codes_override=at_codes_override,
     )
-    return _evaluate_atoms_mmml(
+    return _evaluate_atoms_karml(
         atoms,
         z=z,
         n_monomers=n_monomers,
@@ -1485,7 +1485,7 @@ def _evaluate_ase_mmml(
     )
 
 
-def _evaluate_jaxmd_mmml(
+def _evaluate_jaxmd_karml(
     args: Any,
     *,
     atoms: Any,
@@ -1497,17 +1497,17 @@ def _evaluate_jaxmd_mmml(
     L: float | None,
     at_codes_override: np.ndarray | None,
 ) -> dict[str, Any]:
-    from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
-    from mmml.interfaces.pycharmmInterface.mmml_calculator import setup_calculator
+    from karml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
+    from karml.interfaces.pycharmmInterface.karml_calculator import setup_calculator
     import pycharmm.psf as psf
 
-    ml_w, mm_on, mm_w = _mmml_cutoff_args(args)
+    ml_w, mm_on, mm_w = _karml_cutoff_args(args)
     # Resolved once and used at all three construction/evaluation sites below,
     # which previously hardcoded True and so ignored the term flags entirely.
     _do_ml, _do_mm, _do_ml_dimer = evaluate_term_flags(args)
     if not getattr(args, "quiet", False):
         print(
-            f"mmml evaluate: doML={_do_ml} doMM={_do_mm} doML_dimer={_do_ml_dimer}",
+            f"karml evaluate: doML={_do_ml} doMM={_do_mm} doML_dimer={_do_ml_dimer}",
             flush=True,
         )
     if at_codes_override is not None:
@@ -1528,7 +1528,7 @@ def _evaluate_jaxmd_mmml(
         MAX_ATOMS_PER_SYSTEM=max(atoms_per_list) * 2,
         cell=False if not use_pbc else float(L),
         at_codes_override=at_codes,
-        # --backend jaxmd builds its calculator here, not through _factory_mmml,
+        # --backend jaxmd builds its calculator here, not through _factory_karml,
         # so the mode has to be forwarded on this path too. Omitting it made
         # bonded_intra silently no-op: the arms came back bit-identical to plain
         # PhysNet (spans 193.88 / 293.79 kcal/mol) with no error anywhere.
@@ -1645,14 +1645,14 @@ def setup_pycharmm_eval_mlpot(
     L: float | None,
 ) -> tuple[Any, Any]:
     """Register MLpot for evaluate / dyna-probe (returns ``ctx``, ``calc``)."""
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
         apply_charmm_output_from_args,
         resolve_checkpoint,
         resolve_pbc_box_side,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import setup_charmm_environment
-    from mmml.interfaces.pycharmmInterface.mlpot.run_workflow import _register_mlpot_context
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+    from karml.interfaces.pycharmmInterface.mlpot.pbc_env import setup_charmm_environment
+    from karml.interfaces.pycharmmInterface.mlpot.run_workflow import _register_mlpot_context
+    from karml.interfaces.pycharmmInterface.mlpot.setup import (
         setup_default_nbonds,
         sync_charmm_positions,
     )
@@ -1695,7 +1695,7 @@ def _pycharmm_eval_metrics(
     quiet: bool,
 ) -> dict[str, Any]:
     """ENER FORCE + force lanes at current CHARMM coordinates (MLpot already registered)."""
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
         charmm_energy_row,
         collect_evaluate_force_sources_ev_angstrom,
         refresh_mlpot_energy_and_grms,
@@ -1754,7 +1754,7 @@ def _evaluate_pycharmm(
     L: float | None,
     mlpot_state: tuple[Any, Any] | None = None,
 ) -> dict[str, Any]:
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
+    from karml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
 
     quiet = bool(getattr(args, "quiet", False))
     if mlpot_state is None:
@@ -1785,9 +1785,9 @@ def _evaluate_pycharmm(
 
 def _prepare_evaluate_npz_context(args: Any) -> dict[str, Any]:
     """Shared setup for single- and multi-frame ``--evaluate-npz`` runs."""
-    from mmml.cli.base import resolve_checkpoint_paths
-    from mmml.cli.run.md_pbc_suite.ase import _cubic_box_length, _parse_composition
-    from mmml.interfaces.pycharmmInterface.hybrid_reference import load_reference_trajectory_npz
+    from karml.cli.base import resolve_checkpoint_paths
+    from karml.cli.run.md_pbc_suite.ase import _cubic_box_length, _parse_composition
+    from karml.interfaces.pycharmmInterface.hybrid_reference import load_reference_trajectory_npz
 
     npz_path = Path(args.evaluate_npz).expanduser().resolve()
     frame = int(getattr(args, "evaluate_frame", 0) or 0)
@@ -1970,10 +1970,10 @@ def _prepare_evaluate_npz_context(args: Any) -> dict[str, Any]:
 
 
 def _evaluate_reference_trajectory(args: Any, ctx: dict[str, Any]) -> int:
-    """Evaluate MMML on multiple frames from ``--evaluate-reference-npz``."""
-    from mmml.interfaces.pycharmmInterface.charmm_mpi import prepare_serial_charmm_mpi_env
-    from mmml.interfaces.pycharmmInterface.jax_compile_threads import apply_jax_compile_xla_flags
-    from mmml.interfaces.pycharmmInterface.jax_device_policy import (
+    """Evaluate KARML on multiple frames from ``--evaluate-reference-npz``."""
+    from karml.interfaces.pycharmmInterface.charmm_mpi import prepare_serial_charmm_mpi_env
+    from karml.interfaces.pycharmmInterface.jax_compile_threads import apply_jax_compile_xla_flags
+    from karml.interfaces.pycharmmInterface.jax_device_policy import (
         apply_mlpot_jax_compilation_cache_env,
     )
 
@@ -2002,7 +2002,7 @@ def _evaluate_reference_trajectory(args: Any, ctx: dict[str, Any]) -> int:
     n_eval = int(len(frame_indices))
 
     if backend == "ase":
-        _attach_ase_mmml_calculator(
+        _attach_ase_karml_calculator(
             args,
             atoms=atoms,
             z=z,
@@ -2015,7 +2015,7 @@ def _evaluate_reference_trajectory(args: Any, ctx: dict[str, Any]) -> int:
         )
         pycharmm_state = None
     elif backend == "jaxmd":
-        _evaluate_jaxmd_mmml(
+        _evaluate_jaxmd_karml(
             args,
             atoms=atoms,
             z=z,
@@ -2044,11 +2044,11 @@ def _evaluate_reference_trajectory(args: Any, ctx: dict[str, Any]) -> int:
     ref_forces_list: list[np.ndarray] = []
     per_frame_compare: list[dict[str, Any]] = []
     ref_energy_unit, ref_force_unit = resolve_reference_units(reference.path, args)
-    ml_w, mm_on, mm_w = _mmml_cutoff_args(args)
+    ml_w, mm_on, mm_w = _karml_cutoff_args(args)
 
     if not getattr(args, "quiet", False):
         print(
-            f"mmml md-system evaluate-npz ({backend}): "
+            f"karml md-system evaluate-npz ({backend}): "
             f"evaluating {n_eval} frames from {reference.path.name}",
             flush=True,
         )
@@ -2083,7 +2083,7 @@ def _evaluate_reference_trajectory(args: Any, ctx: dict[str, Any]) -> int:
                 mlpot_state=pycharmm_state,
             )
         else:
-            metrics = _evaluate_atoms_mmml(
+            metrics = _evaluate_atoms_karml(
                 atoms,
                 z=z,
                 n_monomers=n_monomers,
@@ -2301,7 +2301,7 @@ def _evaluate_reference_trajectory(args: Any, ctx: dict[str, Any]) -> int:
 
 
 def run_evaluate_npz(args: Any) -> int:
-    """Evaluate MMML energy/forces at NPZ geometry in the selected backend runtime."""
+    """Evaluate KARML energy/forces at NPZ geometry in the selected backend runtime."""
     ctx = _prepare_evaluate_npz_context(args)
     if ctx["reference"] is not None:
         return _evaluate_reference_trajectory(args, ctx)
@@ -2321,11 +2321,11 @@ def run_evaluate_npz(args: Any) -> int:
 
     backend = _resolve_evaluate_backend(args)
     if backend == "pycharmm":
-        from mmml.interfaces.pycharmmInterface.charmm_mpi import prepare_serial_charmm_mpi_env
-        from mmml.interfaces.pycharmmInterface.jax_compile_threads import (
+        from karml.interfaces.pycharmmInterface.charmm_mpi import prepare_serial_charmm_mpi_env
+        from karml.interfaces.pycharmmInterface.jax_compile_threads import (
             apply_jax_compile_xla_flags,
         )
-        from mmml.interfaces.pycharmmInterface.jax_device_policy import (
+        from karml.interfaces.pycharmmInterface.jax_device_policy import (
             apply_mlpot_jax_compilation_cache_env,
         )
 
@@ -2343,7 +2343,7 @@ def run_evaluate_npz(args: Any) -> int:
             L=L,
         )
     elif backend == "jaxmd":
-        metrics = _evaluate_jaxmd_mmml(
+        metrics = _evaluate_jaxmd_karml(
             args,
             atoms=atoms,
             z=z,
@@ -2355,7 +2355,7 @@ def run_evaluate_npz(args: Any) -> int:
             at_codes_override=payload.at_codes,
         )
     else:
-        metrics = _evaluate_ase_mmml(
+        metrics = _evaluate_ase_karml(
             args,
             atoms=atoms,
             z=z,
@@ -2506,8 +2506,8 @@ def run_evaluate_npz(args: Any) -> int:
                 force_sources=metrics.get("force_sources_all"),
                 charmm_energy_terms_kcal_mol=metrics.get("charmm_energy_terms_kcal_mol"),
             )
-            ml_w, mm_on, _mm_w = _mmml_cutoff_args(args)
-            from mmml.interfaces.pycharmmInterface.hybrid_reference import compute_com_distances
+            ml_w, mm_on, _mm_w = _karml_cutoff_args(args)
+            from karml.interfaces.pycharmmInterface.hybrid_reference import compute_com_distances
 
             com_dist = float(
                 compute_com_distances(
@@ -2531,7 +2531,7 @@ def run_evaluate_npz(args: Any) -> int:
             }
             if not getattr(args, "quiet", False):
                 print(
-                    f"mmml md-system: evaluate reference compare failed: {exc}",
+                    f"karml md-system: evaluate reference compare failed: {exc}",
                     file=__import__("sys").stderr,
                     flush=True,
                 )

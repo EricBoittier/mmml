@@ -34,12 +34,12 @@ from _common import (
     setup_charmm_liquid_density_cluster,
     two_dimer_cluster,
 )
-from mmml.interfaces.pycharmmInterface.jax_md_neighbor_list import (
+from karml.interfaces.pycharmmInterface.jax_md_neighbor_list import (
     create_jax_md_neighbor_list,
     have_jax_md,
 )
-from mmml.interfaces.pycharmmInterface.nl_backend import build_mm_pairs_with_backend
-from mmml.interfaces.pycharmmInterface.nl_reference import (
+from karml.interfaces.pycharmmInterface.nl_backend import build_mm_pairs_with_backend
+from karml.interfaces.pycharmmInterface.nl_reference import (
     extract_valid_pairs,
     filter_pairs_under_cutoff,
     have_vesin,

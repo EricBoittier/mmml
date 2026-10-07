@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import numpy as np
 
-from mmml.interfaces.pycharmmInterface.mlpot.jax_charmm_parity_report import (
+from karml.interfaces.pycharmmInterface.mlpot.jax_charmm_parity_report import (
     RecoveryMmParityMetrics,
     collect_recovery_mm_parity_metrics,
     emit_recovery_mm_parity_dashboard,
@@ -17,10 +17,10 @@ def test_collect_recovery_mm_parity_metrics_computes_deltas():
     ctx = MagicMock(use_pbc=False)
     positions = np.zeros((3, 3))
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.jax_charmm_parity_report._charmm_recovery_reference",
+        "karml.interfaces.pycharmmInterface.mlpot.jax_charmm_parity_report._charmm_recovery_reference",
         return_value=({"bonded": 10.0, "vdw": 2.0, "total": 12.0}, np.ones((3, 3))),
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.jax_charmm_parity_report._jax_recovery_reference",
+        "karml.interfaces.pycharmmInterface.mlpot.jax_charmm_parity_report._jax_recovery_reference",
         return_value=({"bonded": 10.0, "vdw": 2.0, "total": 12.0}, np.ones((3, 3))),
     ):
         metrics = collect_recovery_mm_parity_metrics(ctx, positions)
@@ -45,7 +45,7 @@ def test_emit_recovery_mm_parity_dashboard_calls_rich():
         within_tolerance=True,
     )
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.jax_charmm_parity_report.emit_dashboard",
+        "karml.interfaces.pycharmmInterface.mlpot.jax_charmm_parity_report.emit_dashboard",
     ) as dashboard:
         emit_recovery_mm_parity_dashboard(metrics, context="test")
     dashboard.assert_called_once()

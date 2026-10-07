@@ -65,7 +65,7 @@ def estimate_akma_velocities_from_position_delta(
         return None
     delta = p1 - p0
     if cell is not None:
-        from mmml.utils.geometry_checks import _mic
+        from karml.utils.geometry_checks import _mic
 
         delta = _mic(delta, np.asarray(cell, dtype=np.float64).reshape(3, 3))
     v_ang_ps = delta / dt
@@ -89,10 +89,10 @@ def _try_bussi_finite_difference_velocities(
     quiet: bool = True,
 ) -> np.ndarray | None:
     """Estimate AKMA velocities from in-memory or restart coordinate deltas."""
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         read_restart_coordinate_frames,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
+    from karml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
 
     cell = _charmm_cubic_cell_matrix()
     masses = None
@@ -155,7 +155,7 @@ def clamp_velocity_assignment_temp_k(temperature_K: float) -> float:
 
 
 def _import_pycharmm():
-    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+    import karml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
     import pycharmm
 
     return pycharmm
@@ -189,7 +189,7 @@ def _velocity_array_matches_psf(vel: np.ndarray) -> bool:
 
 
 def _restart_file_matches_psf(path: Path) -> bool:
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         read_restart_natom,
     )
 
@@ -208,7 +208,7 @@ def charmm_velocities_akma() -> np.ndarray | None:
     Uses ``coor.get_velocity`` only. COMP is not a reliable velocity source:
     with ``iasvel=1`` dynamics it often holds comparison coordinates (positions).
     """
-    from mmml.interfaces.pycharmmInterface.mlpot.run_state_checkpoint import (
+    from karml.interfaces.pycharmmInterface.mlpot.run_state_checkpoint import (
         _charmm_velocities_array,
     )
 
@@ -245,9 +245,9 @@ def charmm_synced_velocities_akma() -> np.ndarray | None:
 
 
 def _staging_alias_for_restart(path: Path) -> Path | None:
-    """Fortran staging copy for *path* under ``/tmp/mmml-charmm-io/<hash>/``."""
+    """Fortran staging copy for *path* under ``/tmp/karml-charmm-io/<hash>/``."""
     try:
-        from mmml.interfaces.pycharmmInterface.charmm_paths import charmm_io_staging_root
+        from karml.interfaces.pycharmmInterface.charmm_paths import charmm_io_staging_root
 
         resolved = path.expanduser().resolve()
         tag = sha256(str(resolved).encode()).hexdigest()[:16]
@@ -255,7 +255,7 @@ def _staging_alias_for_restart(path: Path) -> Path | None:
     except OSError:
         try:
             tag = sha256(str(path.expanduser()).encode()).hexdigest()[:16]
-            from mmml.interfaces.pycharmmInterface.charmm_paths import charmm_io_staging_root
+            from karml.interfaces.pycharmmInterface.charmm_paths import charmm_io_staging_root
 
             return charmm_io_staging_root() / tag / path.name.lower()
         except Exception:
@@ -297,7 +297,7 @@ def _expand_restart_velocity_candidates(path: Path | str | None) -> list[Path]:
     if p.suffix.lower() != ".res":
         return candidates
     try:
-        from mmml.interfaces.pycharmmInterface.mlpot.artifact_paths import (
+        from karml.interfaces.pycharmmInterface.mlpot.artifact_paths import (
             alternate_overlap_scratch,
             overlap_restart_slot_paths,
         )
@@ -409,7 +409,7 @@ def charmm_velocities_akma_for_thermostat() -> np.ndarray | None:
     ):
         return vel
     try:
-        from mmml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
+        from karml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
             comparison_comp_looks_like_spatial_coords,
             comparison_matches_main_positions,
             comparison_velocities_akma,
@@ -470,7 +470,7 @@ def capture_charmm_velocities_for_bussi(
             return vel
 
     try:
-        from mmml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
+        from karml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
             comparison_comp_looks_like_spatial_coords,
             comparison_matches_main_positions,
             comparison_velocities_akma,
@@ -666,7 +666,7 @@ def _pycharmm_coor_module():
 def sync_charmm_velocities_akma(velocities_akma: np.ndarray) -> None:
     """Write AKMA velocities into CHARMM main and COMP sets."""
     global _last_synced_velocities_akma
-    from mmml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
+    from karml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
         sync_comparison_velocities_akma,
     )
 
@@ -724,7 +724,7 @@ def assign_maxwell_boltzmann_velocities_via_ase(
         ZeroRotation,
     )
 
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import ase_from_pycharmm_state
+    from karml.interfaces.pycharmmInterface.import_pycharmm import ase_from_pycharmm_state
 
     temp = clamp_velocity_assignment_temp_k(temperature_K)
 
@@ -813,7 +813,7 @@ def _read_restart_velocities_akma(
     """Load warm ``!VELOCITIES`` / ``!VX,VY,VZ`` from a restart ladder."""
     if path is None and not fallback_paths:
         return None
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         read_restart_velocities,
     )
 
@@ -842,7 +842,7 @@ def _read_restart_velocities_akma(
             continue
         if velocities_are_cold(vel):
             continue
-        from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
             restart_velocities_match_coordinates,
         )
 
@@ -1173,8 +1173,8 @@ def append_bussi_rescale_ase_frame(
     from ase import Atoms
     from ase.io.trajectory import Trajectory
 
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
-    from mmml.interfaces.pycharmmInterface.utils import get_Z_from_psf
+    from karml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
+    from karml.interfaces.pycharmmInterface.utils import get_Z_from_psf
 
     path = Path(traj_path).expanduser().resolve()
     path.parent.mkdir(parents=True, exist_ok=True)

@@ -12,7 +12,7 @@ from typing import Any, Sequence
 
 import numpy as np
 
-from mmml.interfaces.pycharmmInterface.charmm_jax_energy_benchmark import (
+from karml.interfaces.pycharmmInterface.charmm_jax_energy_benchmark import (
     ForceDelta,
     TermDelta,
     _force_delta,
@@ -83,7 +83,7 @@ class TrajectoryMmContext:
 def _charmm_mm_energy_components_kcalmol() -> dict[str, float]:
     import pycharmm.energy as energy
 
-    from mmml.interfaces.pycharmmInterface.cgenff_bonded_reference import (
+    from karml.interfaces.pycharmmInterface.cgenff_bonded_reference import (
         charmm_bonded_energy_components_kcalmol,
         charmm_nonbonded_energy_components_kcalmol,
     )
@@ -151,7 +151,7 @@ def load_trajectory_mm_context(
     extra_prm_files: Sequence[Path | str] = (),
 ) -> TrajectoryMmContext:
     """Load bonded/nonbonded JAX data once for a trajectory comparison."""
-    from mmml.interfaces.pycharmmInterface.mm_system_energy import (
+    from karml.interfaces.pycharmmInterface.mm_system_energy import (
         load_bonded_system_from_psf,
         load_nonbonded_system_from_charmm,
     )
@@ -198,14 +198,14 @@ def ensure_full_cgenff_mm_session(
     if not reregister_cgenff:
         return
 
-    from mmml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap import (
+    from karml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap import (
         apply_full_cgenff_params,
     )
 
     apply_full_cgenff_params(verbose=verbose)
     box_side = _box_side_from_cell(ctx.cell)
     if box_side is not None and box_side > 0.0:
-        from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+        from karml.interfaces.pycharmmInterface.mlpot.pbc_env import (
             restore_charmm_cubic_crystal_lattice,
         )
 
@@ -221,15 +221,15 @@ def compare_frame_mm_energy(
     """Compare live PyCHARMM ``ENER FORCE`` vs JAX CGenFF clone at one geometry."""
     import pycharmm.energy as energy
 
-    from mmml.interfaces.pycharmmInterface.cgenff_bonded_reference import (
+    from karml.interfaces.pycharmmInterface.cgenff_bonded_reference import (
         charmm_cmap_is_active,
         run_charmm_bonded_ener_force,
         set_charmm_positions,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
         charmm_total_forces_kcalmol_A,
     )
-    from mmml.interfaces.pycharmmInterface.mm_system_energy import (
+    from karml.interfaces.pycharmmInterface.mm_system_energy import (
         mm_system_energy_and_forces,
     )
 
@@ -325,7 +325,7 @@ def compare_trajectory_mm_energy(
 
     box_side = _box_side_from_cell(ctx.cell)
     if box_side is not None and box_side > 0.0:
-        from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+        from karml.interfaces.pycharmmInterface.mlpot.pbc_env import (
             ensure_charmm_crystal_for_cpt,
         )
 
@@ -359,14 +359,14 @@ def run_short_nvt_dynamics_dcd(
     minimize_sd_steps: int = 20,
 ) -> Path:
     """Run a short Hoover NVT segment and write coordinates to a DCD file."""
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         CharmmMmMinimizeConfig,
         CharmmTrajectoryFiles,
         build_hoover_heat_dynamics,
         minimize_charmm_mm_only,
         run_dynamics,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import ensure_charmm_crystal_for_cpt
+    from karml.interfaces.pycharmmInterface.mlpot.pbc_env import ensure_charmm_crystal_for_cpt
 
     if int(n_frames) < 1:
         raise ValueError("n_frames must be >= 1")
@@ -436,7 +436,7 @@ def read_trajectory_positions(
     frame_stride: int = 1,
 ) -> tuple[np.ndarray, dict[str, Any]]:
     """Read coordinates from a CHARMM DCD file."""
-    from mmml.utils.dcd_reader import read_dcd_trajectory
+    from karml.utils.dcd_reader import read_dcd_trajectory
 
     positions, header = read_dcd_trajectory(
         dcd_path,

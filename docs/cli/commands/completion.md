@@ -1,4 +1,4 @@
-# `mmml completion`
+# `karml completion`
 
 Shell tab-completion setup.
 
@@ -6,20 +6,20 @@ Shell tab-completion setup.
 See the dedicated [Tab completion](../completion.md) page for bash/zsh/fish setup.
 
 ```bash
-mmml completion bash
-eval "$(mmml completion bash)"
+karml completion bash
+eval "$(karml completion bash)"
 ```
 
 ## Usage
 
 ```bash
-mmml completion --help
+karml completion --help
 ```
 
 !!! note
     No `build_parser()` hook — see module docstring or run the command without arguments for usage.
 
-Implementation: `mmml.cli.completion`
+Implementation: `karml.cli.completion`
 
 
 ## Related docs

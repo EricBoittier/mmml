@@ -15,7 +15,7 @@ import pytest
 
 def test_defaults_are_self_consistent():
     """The shipped defaults must not violate their own coupling rule."""
-    from mmml.cli.make.make_training import parse_args
+    from karml.cli.make.make_training import parse_args
 
     a = parse_args(["--data", "x.npz", "--hybrid-mm"])
     assert a.cutoff == 6.0
@@ -24,7 +24,7 @@ def test_defaults_are_self_consistent():
 
 
 def test_shared_default_moved_to_6():
-    from mmml.interfaces.pycharmmInterface.cutoffs import (
+    from karml.interfaces.pycharmmInterface.cutoffs import (
         DEFAULT_ML_SWITCH_WIDTH,
         DEFAULT_MM_SWITCH_ON,
         DEFAULT_MM_SWITCH_WIDTH,
@@ -38,15 +38,15 @@ def test_shared_default_moved_to_6():
 
 def test_training_and_md_share_the_same_default():
     """One source of truth: a drift here is a silent train/deploy mismatch."""
-    from mmml.cli.make.make_training import parse_args
-    from mmml.interfaces.pycharmmInterface.cutoffs import DEFAULT_MM_SWITCH_ON
+    from karml.cli.make.make_training import parse_args
+    from karml.interfaces.pycharmmInterface.cutoffs import DEFAULT_MM_SWITCH_ON
 
     a = parse_args(["--data", "x.npz"])
     assert a.mm_switch_on == DEFAULT_MM_SWITCH_ON
 
 
 def test_handoff_beyond_the_basis_is_rejected():
-    from mmml.cli.make.make_training import parse_args, validate_train_args
+    from karml.cli.make.make_training import parse_args, validate_train_args
 
     a = parse_args(
         ["--data", "x.npz", "--hybrid-mm", "--cutoff", "5.0", "--mm-switch-on", "8.0"]
@@ -56,7 +56,7 @@ def test_handoff_beyond_the_basis_is_rejected():
 
 
 def test_handoff_within_the_basis_is_allowed():
-    from mmml.cli.make.make_training import _validate_handoff_within_cutoff, parse_args
+    from karml.cli.make.make_training import _validate_handoff_within_cutoff, parse_args
 
     a = parse_args(
         ["--data", "x.npz", "--hybrid-mm", "--cutoff", "8.0", "--mm-switch-on", "6.0"]
@@ -66,7 +66,7 @@ def test_handoff_within_the_basis_is_allowed():
 
 def test_guard_only_applies_to_hybrid_runs():
     """A plain ML run has no MM handoff to be consistent with."""
-    from mmml.cli.make.make_training import _validate_handoff_within_cutoff, parse_args
+    from karml.cli.make.make_training import _validate_handoff_within_cutoff, parse_args
 
     a = parse_args(["--data", "x.npz", "--cutoff", "5.0", "--mm-switch-on", "8.0"])
     _validate_handoff_within_cutoff(a)  # not hybrid -> no-op
@@ -74,8 +74,8 @@ def test_guard_only_applies_to_hybrid_runs():
 
 def test_checkpoint_records_the_handoff_it_trained_with():
     """This metadata is what lets MD detect a mismatched taper."""
-    from mmml.models.hybrid_energy import HybridMMConfig
-    from mmml.models.mm_charge_mode import hybrid_mm_metadata_dict
+    from karml.models.hybrid_energy import HybridMMConfig
+    from karml.models.mm_charge_mode import hybrid_mm_metadata_dict
 
     cfg = HybridMMConfig(
         master_sigmas=(3.6,), master_epsilons=(0.078,),

@@ -12,7 +12,7 @@
       "methods_evaluated": [
         "MM",
         "ML",
-        "MMML"
+        "KARML"
       ],
       "status": "SUCCESS",
       "metrics": {
@@ -36,7 +36,7 @@
       "dry_run": false,
       "methods_evaluated": [
         "MM",
-        "MMML"
+        "KARML"
       ],
       "status": "SUCCESS",
       "metrics": {
@@ -61,7 +61,7 @@
       "methods_evaluated": [
         "MM",
         "ML",
-        "MMML"
+        "KARML"
       ],
       "status": "SUCCESS",
       "metrics": {
@@ -86,7 +86,7 @@
       "methods_evaluated": [
         "MM",
         "ML",
-        "MMML"
+        "KARML"
       ],
       "status": "SUCCESS",
       "metrics": {
@@ -111,7 +111,7 @@
       "methods_evaluated": [
         "MM",
         "ML",
-        "MMML"
+        "KARML"
       ],
       "status": "SUCCESS",
       "metrics": {
@@ -136,7 +136,7 @@
       "methods_evaluated": [
         "MM",
         "ML",
-        "MMML"
+        "KARML"
       ],
       "status": "SUCCESS",
       "metrics": {

@@ -32,8 +32,8 @@ def main() -> None:
     import jax
     import jax.numpy as jnp
 
-    from mmml.models.efield.model_functions import predicted_polarizability_bohr3
-    from mmml.models.efield.training import (
+    from karml.models.efield.model_functions import predicted_polarizability_bohr3
+    from karml.models.efield.training import (
         MessagePassingModel,
         load_ef_npz,
         load_params,

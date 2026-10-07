@@ -6,11 +6,11 @@ import jax
 import numpy as np
 import pytest
 
-from mmml.models.physnetjax.physnetjax.data.data import prepare_datasets
+from karml.models.physnetjax.physnetjax.data.data import prepare_datasets
 
 
-def test_prepare_datasets_skips_mmml_units_metadata(tmp_path):
-    """fix-and-split embeds _mmml_units; loader must not crash on 0-d metadata."""
+def test_prepare_datasets_skips_karml_units_metadata(tmp_path):
+    """fix-and-split embeds _karml_units; loader must not crash on 0-d metadata."""
     n_samples, natoms = 8, 3
     payload = {
         "R": np.random.randn(n_samples, natoms, 3),
@@ -20,7 +20,7 @@ def test_prepare_datasets_skips_mmml_units_metadata(tmp_path):
         "N": np.full(n_samples, natoms, dtype=np.int32),
         "D": np.random.randn(n_samples, 3) * 0.05,
         "Q": np.zeros(n_samples, dtype=np.float64),
-        "_mmml_units": np.array(json.dumps({"D": "e_angstrom"})),
+        "_karml_units": np.array(json.dumps({"D": "e_angstrom"})),
     }
     npz_path = tmp_path / "train.npz"
     np.savez_compressed(npz_path, **payload)
@@ -36,7 +36,7 @@ def test_prepare_datasets_skips_mmml_units_metadata(tmp_path):
     assert train_data["R"].shape == (5, natoms, 3)
     assert valid_data["R"].shape == (2, natoms, 3)
     assert train_data["Q"].shape == (5, 1)
-    assert "_mmml_units" not in train_data
+    assert "_karml_units" not in train_data
 
 
 def test_prepare_datasets_q_reshaped_to_n_samples_by_one(tmp_path):

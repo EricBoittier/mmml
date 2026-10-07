@@ -6,7 +6,7 @@ from pathlib import Path
 
 import numpy as np
 
-from mmml.utils.psf_subset import (
+from karml.utils.psf_subset import (
     indices_for_resnames,
     parse_resname_list,
     write_subset_psf,

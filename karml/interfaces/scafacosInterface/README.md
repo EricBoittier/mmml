@@ -1,6 +1,6 @@
 # ScaFaCoS interface
 
-[ScaFaCoS](https://github.com/scafacos/scafacos) (“Scalable Fast Coulomb Solvers”) is a parallel C library for electrostatic and gravitational problems in periodic boundary conditions. MMML can use it as an **optional long-range Coulomb backend** alongside the default truncated minimum-image (MIC) path in JAX.
+[ScaFaCoS](https://github.com/scafacos/scafacos) (“Scalable Fast Coulomb Solvers”) is a parallel C library for electrostatic and gravitational problems in periodic boundary conditions. KARML can use it as an **optional long-range Coulomb backend** alongside the default truncated minimum-image (MIC) path in JAX.
 
 Project home: [www.scafacos.de](http://www.scafacos.de)
 
@@ -20,14 +20,14 @@ make -j
 make install
 ```
 
-Enable the shared library for MMML:
+Enable the shared library for KARML:
 
 ```bash
 export SCAFACOS_LIB=$HOME/.local/scafacos/lib/libfcs.so
 export LD_LIBRARY_PATH=$HOME/.local/scafacos/lib:$LD_LIBRARY_PATH
 ```
 
-ScaFaCoS is built with MPI. MMML uses `mpi4py`’s communicator handle (`MPI.COMM_WORLD` by default). Install the MMML CHARMM extra when running under MPI:
+ScaFaCoS is built with MPI. KARML uses `mpi4py`’s communicator handle (`MPI.COMM_WORLD` by default). Install the KARML CHARMM extra when running under MPI:
 
 ```bash
 uv sync --extra charmm-interface
@@ -42,7 +42,7 @@ Shared-library installs must expose plugin ``.so`` files on ``LD_LIBRARY_PATH``
 
 ```python
 from mpi4py import MPI  # initialize MPI before ScaFaCoS
-from mmml.interfaces.scafacosInterface import have_scafacos
+from karml.interfaces.scafacosInterface import have_scafacos
 
 print("ScaFaCoS:", have_scafacos())
 ```
@@ -50,18 +50,18 @@ print("ScaFaCoS:", have_scafacos())
 Or from the shell:
 
 ```bash
-python -c "from mmml.interfaces.long_range_backend import describe_lr_solver; print(describe_lr_solver())"
+python -c "from karml.interfaces.long_range_backend import describe_lr_solver; print(describe_lr_solver())"
 ```
 
 ## Selecting the backend
 
 | Mechanism | Example |
 |-----------|---------|
-| Environment | `export MMML_LR_SOLVER=scafacos` |
+| Environment | `export KARML_LR_SOLVER=scafacos` |
 | Auto (default) | `mic` — truncated MIC in the switched-MM pair loop |
-| Explicit MIC | `MMML_LR_SOLVER=mic` |
-| jax-pme (opt-in) | `MMML_LR_SOLVER=jax_pme` or `lr_solver: jax_pme` in YAML |
-| ScaFaCoS (opt-in) | `MMML_LR_SOLVER=scafacos` |
+| Explicit MIC | `KARML_LR_SOLVER=mic` |
+| jax-pme (opt-in) | `KARML_LR_SOLVER=jax_pme` or `lr_solver: jax_pme` in YAML |
+| ScaFaCoS (opt-in) | `KARML_LR_SOLVER=scafacos` |
 
 Additional ScaFaCoS options:
 
@@ -79,7 +79,7 @@ Method availability depends on how ScaFaCoS was configured (`./configure --help`
 
 ```python
 import numpy as np
-from mmml.interfaces.scafacosInterface import compute_scafacos_coulomb
+from karml.interfaces.scafacosInterface import compute_scafacos_coulomb
 
 n = 4
 L = 30.0  # Å cubic box
@@ -93,7 +93,7 @@ print(result.energy_kcalmol, result.forces_kcalmol_A.shape)
 ### Session lifecycle (tuning + multiple steps)
 
 ```python
-from mmml.interfaces.scafacosInterface import ScaFaCoSSession
+from karml.interfaces.scafacosInterface import ScaFaCoSSession
 
 with ScaFaCoSSession(method="p3m") as fcs:
     fcs.configure_cubic_box(box_length_A=40.0, n_atoms=100)
@@ -101,10 +101,10 @@ with ScaFaCoSSession(method="p3m") as fcs:
     out = fcs.run_coulomb(positions_A, charges_e)
 ```
 
-### Backend factory (MMML integration)
+### Backend factory (KARML integration)
 
 ```python
-from mmml.interfaces.pycharmmInterface.long_range_backend import (
+from karml.interfaces.pycharmmInterface.long_range_backend import (
     create_lr_solver,
     pick_lr_solver,
 )
@@ -116,7 +116,7 @@ result = solver.compute(pos, chg, box_length_A=40.0)
 
 ## C API mapping
 
-MMML’s `scafacos_session.py` wraps the public ScaFaCoS frontend (see upstream `fcs_interface_p.h`):
+KARML’s `scafacos_session.py` wraps the public ScaFaCoS frontend (see upstream `fcs_interface_p.h`):
 
 | ScaFaCoS C call | Python wrapper |
 |-----------------|----------------|
@@ -140,7 +140,7 @@ Hybrid ML/MM dynamics today:
 
 ### `periodic_external` mode (`--mm-nonbond-mode periodic_external`)
 
-Wired into `mmml md-system` / staged PyCHARMM workflows:
+Wired into `karml md-system` / staged PyCHARMM workflows:
 
 - **JAX real-space LJ and Coulomb are off** (`doMM=False` in the ML JIT path).
 - **Coulomb** — ScaFaCoS in the MLpot callback (`periodic_mm_external.py`).
@@ -154,7 +154,7 @@ See [LONG_RANGE_ELECTROSTATICS.md](../pycharmmInterface/mlpot/LONG_RANGE_ELECTRO
 
 ## License note
 
-ScaFaCoS is licensed under GPL/LGPL. MMML’s ctypes wrapper is MIT-licensed; linking against `libfcs` at runtime is your responsibility on shared clusters. Consult your site policies and the ScaFaCoS `COPYING.*` files.
+ScaFaCoS is licensed under GPL/LGPL. KARML’s ctypes wrapper is MIT-licensed; linking against `libfcs` at runtime is your responsibility on shared clusters. Consult your site policies and the ScaFaCoS `COPYING.*` files.
 
 ## References
 

@@ -8,8 +8,8 @@ import pytest
 jax = pytest.importorskip("jax")
 import jax.numpy as jnp
 
-from mmml.md.restraints import DihedralCV, cv_from_spec, periodic_delta_deg
-from mmml.umbrella.energy import (
+from karml.md.restraints import DihedralCV, cv_from_spec, periodic_delta_deg
+from karml.umbrella.energy import (
     numpy_bias_matrix_cv,
     packed_bias_energies_cv,
     packed_bias_forces_cv,
@@ -68,7 +68,7 @@ def test_dihedral_value_and_bias_forces():
 
 
 def test_umbrella_config_dihedral_roundtrip():
-    from mmml.umbrella.config import UmbrellaConfig
+    from karml.umbrella.config import UmbrellaConfig
 
     cfg = UmbrellaConfig.from_dict(
         {
@@ -95,7 +95,7 @@ def test_umbrella_config_dihedral_roundtrip():
 
 
 def test_stretch_seed_rejects_dihedral():
-    from mmml.umbrella.structure import pack_window_seeds
+    from karml.umbrella.structure import pack_window_seeds
 
     r0 = _planar_frame()
     with pytest.raises(ValueError, match="dihedral"):
@@ -109,7 +109,7 @@ def test_stretch_seed_rejects_dihedral():
 
 
 def test_fill_u_kln_periodic_dihedral():
-    from mmml.umbrella.mbar import fill_u_kln
+    from karml.umbrella.mbar import fill_u_kln
 
     # Two windows, one atomless-looking frame with known φ≈±90-ish planar setup
     r = _planar_frame()

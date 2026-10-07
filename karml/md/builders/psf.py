@@ -18,11 +18,11 @@ from pathlib import Path
 
 import numpy as np
 
-from mmml.md.builders._topology import (
+from karml.md.builders._topology import (
     molecule_ids_from_bonds,
     monomer_indices_from_mol_id,
 )
-from mmml.md.system import FFParams, MolecularSystem, SystemSpec
+from karml.md.system import FFParams, MolecularSystem, SystemSpec
 
 __all__ = ["PsfSystemBuilder"]
 
@@ -59,7 +59,7 @@ class PsfSystemBuilder:
             )
 
         # Lazy import: keep CHARMM/jax out of module import; only load when building.
-        from mmml.interfaces.pycharmmInterface.mm_system_energy import (
+        from karml.interfaces.pycharmmInterface.mm_system_energy import (
             load_nonbonded_system_from_charmm,
         )
 

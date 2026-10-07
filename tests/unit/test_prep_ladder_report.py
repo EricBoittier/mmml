@@ -4,14 +4,14 @@ from __future__ import annotations
 
 import pytest
 
-from mmml.data.units import format_grms_kcal_ev_a
-from mmml.utils import prep_ladder_report, rich_report
+from karml.data.units import format_grms_kcal_ev_a
+from karml.utils import prep_ladder_report, rich_report
 
 
 @pytest.fixture(autouse=True)
 def _no_rich(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("MMML_NO_RICH", "1")
-    monkeypatch.delenv("MMML_QUIET", raising=False)
+    monkeypatch.setenv("KARML_NO_RICH", "1")
+    monkeypatch.delenv("KARML_QUIET", raising=False)
     rich_report._console.cache_clear()
 
 

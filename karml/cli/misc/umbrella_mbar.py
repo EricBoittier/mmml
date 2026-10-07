@@ -2,7 +2,7 @@
 """CLI for MBAR post-processing of umbrella sampling runs.
 
 Usage:
-    mmml umbrella-mbar --run-dir out/umbrella [--checkpoint PATH] [--temperature-K 300]
+    karml umbrella-mbar --run-dir out/umbrella [--checkpoint PATH] [--temperature-K 300]
 """
 
 from __future__ import annotations
@@ -12,9 +12,9 @@ import json
 from pathlib import Path
 from typing import Any
 
-from mmml.umbrella.config import UmbrellaMbarConfig
-from mmml.umbrella.io import SUMMARY_JSON
-from mmml.umbrella.mbar import run_umbrella_mbar
+from karml.umbrella.config import UmbrellaMbarConfig
+from karml.umbrella.io import SUMMARY_JSON
+from karml.umbrella.mbar import run_umbrella_mbar
 
 
 def _format_pmf_report(result: dict[str, Any]) -> list[str]:
@@ -54,7 +54,7 @@ def _format_pmf_report(result: dict[str, Any]) -> list[str]:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="mmml umbrella-mbar",
+        prog="karml umbrella-mbar",
         description=(
             "MBAR analysis for a completed umbrella-sample run. "
             "Reads umbrella_snapshots.npz from --run-dir and updates umbrella_summary.json."
@@ -66,7 +66,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--run-dir",
         type=Path,
         required=True,
-        help="Output directory from mmml umbrella-sample",
+        help="Output directory from karml umbrella-sample",
     )
     parser.add_argument(
         "--checkpoint",

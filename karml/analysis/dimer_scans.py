@@ -196,7 +196,7 @@ def build_rigid_dimer_2d(
     """Place two rigid monomers at a fixed separation distance and transverse offset.
 
     Pass ``center='none'`` when *monomer_a* and *monomer_b* are already centred
-    and pre-oriented (e.g. from :func:`mmml.analysis.dimer_molecules.orient_molecule`).
+    and pre-oriented (e.g. from :func:`karml.analysis.dimer_molecules.orient_molecule`).
     """
     direction = normalized_vector(axis, name="axis")
     trans_direction = normalized_vector(transverse_axis, name="transverse_axis")

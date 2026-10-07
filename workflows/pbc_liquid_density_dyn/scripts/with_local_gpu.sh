@@ -8,8 +8,8 @@ if [[ $# -lt 1 ]]; then
   exit 2
 fi
 
-SLOTS="${MMML_LOCAL_GPU_SLOTS:-2}"
-DIR="${MMML_GPU_LOCK_DIR:-/tmp/mmml_gpu_slots_${USER:-$(id -un)}}"
+SLOTS="${KARML_LOCAL_GPU_SLOTS:-2}"
+DIR="${KARML_GPU_LOCK_DIR:-/tmp/karml_gpu_slots_${USER:-$(id -un)}}"
 mkdir -p "$DIR"
 
 if [[ "$SLOTS" -le 1 ]]; then

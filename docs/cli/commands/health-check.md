@@ -1,29 +1,29 @@
-# `mmml health-check`
+# `karml health-check`
 
-Validate MMML/PyCHARMM/JAX interface health.
+Validate KARML/PyCHARMM/JAX interface health.
 
 
 ## Usage
 
 ```bash
-mmml health-check --help
+karml health-check --help
 ```
 
 ## Options
 
 ```text
-usage: mmml health-check [-h] [--only CHECK [CHECK ...]]
+usage: karml health-check [-h] [--only CHECK [CHECK ...]]
                          [--skip CHECK [CHECK ...]] [--live]
                          [--checkpoint CHECKPOINT] [--live-residue LIVE_RESIDUE]
                          [--live-n-molecules LIVE_N_MOLECULES] [--require-gpu]
                          [--json] [--strict] [--prelaunch] [--tier2]
 
-Validate MMML interface health before PyCHARMM / MLpot jobs: imports, JAX
+Validate KARML interface health before PyCHARMM / MLpot jobs: imports, JAX
 devices, libcharmm, MLpot symbols, Packmol, checkpoint, MPI.
 
 Input & configuration:
   --checkpoint CHECKPOINT
-                        PhysNet checkpoint (default: MMML_CKPT).
+                        PhysNet checkpoint (default: KARML_CKPT).
   --live-residue LIVE_RESIDUE
                         Residue for --live smoke (default: DCM).
 
@@ -49,17 +49,17 @@ Other options:
                         mpirun).
   --tier2               Also run spatial-MPI GPU checks inside the mpi section.
 
-Examples: # Fast preflight on a GPU node (no CHARMM energy eval): mmml health-
+Examples: # Fast preflight on a GPU node (no CHARMM energy eval): karml health-
 check --require-gpu # Under the MPI launcher (recommended on MPI-linked
-libcharmm): MMML_MPI_NP=1 ./scripts/mmml-charmm-mpirun.sh health-check
+libcharmm): KARML_MPI_NP=1 ./scripts/karml-charmm-mpirun.sh health-check
 --require-gpu --strict # Include live MLpot registration + CHARMM ENER on DCM:2:
-MMML_MPI_NP=1 ./scripts/mmml-charmm-mpirun.sh health-check --live --checkpoint
-"$MMML_CKPT" # Smallest liquid-DCM density smoke (after modules + CHARMM build):
-mmml liquid-box --composition DCM:20 --target-density-g-cm3 1.326 \ --profile
+KARML_MPI_NP=1 ./scripts/karml-charmm-mpirun.sh health-check --live --checkpoint
+"$KARML_CKPT" # Smallest liquid-DCM density smoke (after modules + CHARMM build):
+karml liquid-box --composition DCM:20 --target-density-g-cm3 1.326 \ --profile
 standard -o boxes/dcm20 --charmm-sd-steps 50 --charmm-abnr-steps 50
-MMML_MPI_NP=1 ./scripts/mmml-charmm-mpirun.sh md-system \ --from-psf
+KARML_MPI_NP=1 ./scripts/karml-charmm-mpirun.sh md-system \ --from-psf
 boxes/dcm20/model.psf --from-crd boxes/dcm20/model.crd \ --checkpoint
-"$MMML_CKPT" --md-stages mini --mini-nstep 20 --no-echeck --quiet Checks: core,
+"$KARML_CKPT" --md-stages mini --mini-nstep 20 --no-echeck --quiet Checks: core,
 jax, charmm, mlpot, packmol, checkpoint, mpi (+ live with --live).
 ```
 

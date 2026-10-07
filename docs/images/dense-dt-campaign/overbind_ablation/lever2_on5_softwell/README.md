@@ -12,7 +12,7 @@ per-ray min at $r\ge 3.4$ Å).
 
 Gates: soft median ∈ lit −5…−3 (±0.5), deepest ≳ −15, mean-curve ≳ −8.
 
-Best ckpt: `/mmhome/boittier/home/mmml/artifacts/lj_scales/ckpts/hybrid_mm_lever2_on5_softwell-657cb7db-74a1-4623-84a5-f772b8fe7928/epoch-20`.
+Best ckpt: `/mmhome/boittier/home/karml/artifacts/lj_scales/ckpts/hybrid_mm_lever2_on5_softwell-657cb7db-74a1-4623-84a5-f772b8fe7928/epoch-20`.
 
 ## Why the lever works (and why earlier FT failed)
 

@@ -5,18 +5,18 @@ Design package for Phase 2 multi-rank ML. Single-rank callers can use
 ``pool`` add optional mpi4py collectives when available.
 """
 
-from mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.active_set import (
+from karml.interfaces.pycharmmInterface.mlpot.mpi_spatial.active_set import (
     RankActiveSet,
     build_all_rank_active_sets,
     build_rank_active_set,
 )
-from mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.dedup import (
+from karml.interfaces.pycharmmInterface.mlpot.mpi_spatial.dedup import (
     assign_canonical_dimer_owner,
     deduplicate_rank_active_sets,
     union_active_dimer_ids,
     verify_unique_dimer_coverage,
 )
-from mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domain import (
+from karml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domain import (
     DomdecAlignedGrid,
     SpatialDomainGrid,
     compute_monomer_coms,
@@ -25,7 +25,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domain import (
     rank_for_com,
     resolve_halo_radius,
 )
-from mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domdec_atoms import (
+from karml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domdec_atoms import (
     discover_domdec_symbols,
     domdec_summary,
     get_ghost_atom_indices,
@@ -33,22 +33,22 @@ from mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domdec_atoms import (
     get_ndir,
     is_domdec_active,
 )
-from mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domdec_info import (
+from karml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domdec_info import (
     DomdecApiSurvey,
     survey_domdec_api,
 )
-from mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.force_exchange import (
+from karml.interfaces.pycharmmInterface.mlpot.mpi_spatial.force_exchange import (
     merge_partial_forces,
     mpi_allreduce_energy,
     mpi_allreduce_forces,
 )
-from mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.batch_builder import (
+from karml.interfaces.pycharmmInterface.mlpot.mpi_spatial.batch_builder import (
     SpatialBatchIndices,
     build_spatial_batch_indices,
     make_spatial_domain_grid,
     per_rank_physnet_budget,
 )
-from mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.pool import (
+from karml.interfaces.pycharmmInterface.mlpot.mpi_spatial.pool import (
     MlpotPoolConfig,
     gather_active_system_counts,
 )

@@ -6,7 +6,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from mmml.cli.misc.diagnose_learning_curve_outliers import (
+from karml.cli.misc.diagnose_learning_curve_outliers import (
     RunRecord,
     detect_spikes,
     flag_run_outliers,

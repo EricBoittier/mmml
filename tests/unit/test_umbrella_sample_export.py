@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from mmml.umbrella.sample import center_com_positions, select_lowest_energy_frames
+from karml.umbrella.sample import center_com_positions, select_lowest_energy_frames
 
 
 def test_center_com_positions_moves_mass_weighted_com_to_origin():

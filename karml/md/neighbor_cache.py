@@ -2,18 +2,18 @@
 
 ``mm_energy_forces.update_mm_pairs`` already skips MM pair rebuilds while every
 atom has moved less than ``skin / 2``, and does that check on device so only a
-scalar crosses the PCIe bus. The ``mmml.md`` driver's ``neighbor_fn``
-(:mod:`mmml.md.neighbors`) had no such reuse: every block boundary paid a full
+scalar crosses the PCIe bus. The ``karml.md`` driver's ``neighbor_fn``
+(:mod:`karml.md.neighbors`) had no such reuse: every block boundary paid a full
 host rebuild plus a full position download.
 
 :func:`with_verlet_skin` wraps any ``neighbor_fn(pos, box)`` with that policy.
 The wrapped list must be built at ``cutoff + skin`` for reuse to be sound — the
-callers in :mod:`mmml.md.neighbors` do this. Pairs between ``cutoff`` and
+callers in :mod:`karml.md.neighbors` do this. Pairs between ``cutoff`` and
 ``cutoff + skin`` are harmless for ``mm_nonbonded``, which zeroes every pair
 beyond ``ctofnb`` explicitly.
 
 The wrapper sets ``device_native = True`` so
-:class:`~mmml.md.drivers.JaxmdDriver` hands it device arrays directly; the
+:class:`~karml.md.drivers.JaxmdDriver` hands it device arrays directly; the
 download then happens only on an actual rebuild.
 """
 
@@ -23,7 +23,7 @@ from typing import Any, Callable, Mapping
 
 import numpy as np
 
-from mmml.md.nl_cadence import verlet_reuse_displacement_limit_A
+from karml.md.nl_cadence import verlet_reuse_displacement_limit_A
 
 __all__ = ["with_verlet_skin", "NeighborCacheStats"]
 

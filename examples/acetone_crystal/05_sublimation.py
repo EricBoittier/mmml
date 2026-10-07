@@ -24,12 +24,12 @@ from __future__ import annotations
 import os
 import sys
 
-from mmml.analysis.acetone_crystal import (
+from karml.analysis.acetone_crystal import (
     ACETONE_CRYSTAL_PHASES,
     ACETONE_SUBLIMATION_REFERENCE,
     read_acetone_phase,
 )
-from mmml.analysis.lattice_energy import KCAL_MOL_TO_KJ_MOL, crystal_lattice_energy
+from karml.analysis.lattice_energy import KCAL_MOL_TO_KJ_MOL, crystal_lattice_energy
 
 CUTOFF = float(os.environ.get("ACO_CUTOFF", "12.0"))
 SCALES_FILE = os.environ.get("ACO_SCALES", "").strip()
@@ -41,7 +41,7 @@ PLAUSIBLE_KJ_MOL = (25.0, 60.0)
 
 sigma_scale = epsilon_scale = None
 if SCALES_FILE:
-    from mmml.models.mm_lj_scales import load_mm_lj_scales_sidecar
+    from karml.models.mm_lj_scales import load_mm_lj_scales_sidecar
 
     payload = load_mm_lj_scales_sidecar(SCALES_FILE)
     if payload is None:

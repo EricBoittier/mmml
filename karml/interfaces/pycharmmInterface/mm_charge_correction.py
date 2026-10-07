@@ -1,6 +1,6 @@
 """MD-side helpers for hybrid MM charge Modes B/C (dimer-only).
 
-See ``docs/hybrid-mm-charges.md`` and :mod:`mmml.models.mm_charge_mode`.
+See ``docs/hybrid-mm-charges.md`` and :mod:`karml.models.mm_charge_mode`.
 """
 
 from __future__ import annotations
@@ -10,7 +10,7 @@ from typing import Any
 
 import jax.numpy as jnp
 
-from mmml.models.mm_charge_mode import (
+from karml.models.mm_charge_mode import (
     MMChargeMode,
     apply_mm_charge_mode,
     hybrid_mm_metadata_dict,
@@ -59,7 +59,7 @@ def assert_mm_charge_mode_dimer_supported(
     mode = parse_mm_charge_mode(mode)
     if mode in (MMChargeMode.FIXED, MMChargeMode.LATENT_MEAN):
         # latent_mean's charges are a precomputed template injected once at
-        # setup (see mmml.models.latent_charge_template) -- no live q_ML, no
+        # setup (see karml.models.latent_charge_template) -- no live q_ML, no
         # AB-dimer forward, so none of the dimer-only/doML/lr_solver
         # restrictions below apply. It is the liquid-compatible mode.
         return

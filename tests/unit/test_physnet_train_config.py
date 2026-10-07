@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from mmml.cli.make.make_training import (
+from karml.cli.make.make_training import (
     CONFIG_ALIASES,
     apply_mapping_to_namespace,
     namespace_from_yaml,
@@ -294,7 +294,7 @@ def test_validate_distill_requires_teacher(monkeypatch):
         raise KeyError("missing")
 
     monkeypatch.setattr(
-        "mmml.cli.make.make_training.resolve_hf_physnet_model",
+        "karml.cli.make.make_training.resolve_hf_physnet_model",
         _fail,
     )
     with pytest.raises(ValueError, match="teacher checkpoint"):
@@ -304,7 +304,7 @@ def test_validate_distill_requires_teacher(monkeypatch):
 def test_validate_transfer_model_checkpoint_conflict():
     args = parse_args([])
     args.data = "train.npz"
-    args.physnet_transfer_model = "mmml-default"
+    args.physnet_transfer_model = "karml-default"
     args.physnet_checkpoint = "teacher.json"
     with pytest.raises(ValueError, match="physnet-transfer-model"):
         validate_train_args(args)

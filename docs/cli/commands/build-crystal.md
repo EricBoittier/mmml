@@ -1,4 +1,4 @@
-# `mmml build-crystal`
+# `karml build-crystal`
 
 Symmetry-aware crystals (PyXtal).
 
@@ -8,10 +8,10 @@ literature CIF + `make-res` atom names (`--literature`) — exact experimental u
 cell, tiled to a simulation supercell (≥28 Å edges by default) at literature ρ.
 
 ```bash
-mmml make-res --res DCM --skip-energy-show
-mmml build-crystal --literature dcm --monomer-pdb pdb/dcm.pdb -o pdb/dcm_crystal.pdb
-mmml build-crystal --literature dcm --supercell 4,4,3 -o dcm_super.extxyz
-mmml build-crystal --literature aco -o acetone_pbca_150k.pdb
+karml make-res --res DCM --skip-energy-show
+karml build-crystal --literature dcm --monomer-pdb pdb/dcm.pdb -o pdb/dcm_crystal.pdb
+karml build-crystal --literature dcm --supercell 4,4,3 -o dcm_super.extxyz
+karml build-crystal --literature aco -o acetone_pbca_150k.pdb
 ```
 
 PyXtal (`uv sync --extra chem`) is optional for random placement in the same
@@ -53,13 +53,13 @@ relaxing to ambient pressure and for the H···Cl versus Cl···Cl decompositi
     `--write-charmm` installs a **cubic** CHARMM IMAGE. The acetone Pbca cell is
     9.17 × 7.53 × 21.25 Å, which no cubic box represents, so MD started that way
     would run a differently shaped cell than the one you built. For a static
-    periodic energy on the true cell use `mmml.analysis.lattice_energy` instead.
+    periodic energy on the true cell use `karml.analysis.lattice_energy` instead.
 
 ```bash
-mmml build-crystal \
-  -m "$(python -c 'from mmml.paths import default_dcm_molecule_xyz; print(default_dcm_molecule_xyz())')" \
+karml build-crystal \
+  -m "$(python -c 'from karml.paths import default_dcm_molecule_xyz; print(default_dcm_molecule_xyz())')" \
   --spg 60 --z 4 --target-density-g-cm3 1.972 -o dcm_pyxtal.extxyz
-mmml build-crystal -m benzene --spg 14 --z 2 --target-density-g-cm3 1.202 -o benzene.extxyz
+karml build-crystal -m benzene --spg 14 --z 2 --target-density-g-cm3 1.202 -o benzene.extxyz
 ```
 
 Liquid DCM boxes use **1.326 g/cm³** (`liquid-box`, `md-system`).
@@ -70,13 +70,13 @@ Literature vs make-res+CIF vs PyXtal tables are in the
 ## Usage
 
 ```bash
-mmml build-crystal --help
+karml build-crystal --help
 ```
 
 ## Options
 
 ```text
-usage: mmml build-crystal [-h] [--literature PRESET] [--from-cif PATH]
+usage: karml build-crystal [-h] [--literature PRESET] [--from-cif PATH]
                           [--residue NAME] [--monomer-pdb PATH]
                           [--min-box-side ANG] [--box-size ANG] [--write-charmm]
                           [-m SPEC] [--stoichiometry Z [Z ...]]

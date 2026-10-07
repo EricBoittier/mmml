@@ -1,32 +1,32 @@
 # MCP examples — builds and hybrid calculators
 
-Runnable templates for the MCP `build_smoke` recipe and direct `mmml` use.
+Runnable templates for the MCP `build_smoke` recipe and direct `karml` use.
 Configs here are copied into `artifacts/mcp_runs/<run_id>/configs/` on `configure_run`.
 
 ## MCP workflow (`build_smoke`)
 
 ```bash
-cd /path/to/mmml
-source examples/md_cpu/_env.sh   # JAX_PLATFORMS=cpu, MMML_CKPT, …
+cd /path/to/karml
+source examples/md_cpu/_env.sh   # JAX_PLATFORMS=cpu, KARML_CKPT, …
 export CHARMM_HOME=... CHARMM_LIB_DIR=...   # required for make-res / liquid-box / hybrid
 
 # 1. Configure run (writes manifest + hybrid YAML templates)
 uv run python -c "
-from mmml.mcp.recipes import configure_run
+from karml.mcp.recipes import configure_run
 print(configure_run('build001', recipe='build_smoke', mode='smoke'))
 "
 
 # 2. Stages (dry-run first)
 uv run python -c "
-from mmml.mcp.recipes import run_recipe_stage
+from karml.mcp.recipes import run_recipe_stage
 for stage in ['make_res','box_build','hybrid_md_ase','hybrid_md_jaxmd','hybrid_md_pycharmm']:
     print(stage, run_recipe_stage('build001', stage, mode='smoke', dry_run=True)['state'])
 "
 
 # 3. Execute (requires PyCHARMM + Packmol)
-uv run python -c "from mmml.mcp.recipes import run_recipe_stage; run_recipe_stage('build001','make_res',mode='smoke')"
-uv run python -c "from mmml.mcp.recipes import run_recipe_stage; run_recipe_stage('build001','box_build',mode='smoke',background=True)"
-uv run python -c "from mmml.mcp.recipes import run_recipe_stage; run_recipe_stage('build001','hybrid_md_jaxmd',mode='smoke')"
+uv run python -c "from karml.mcp.recipes import run_recipe_stage; run_recipe_stage('build001','make_res',mode='smoke')"
+uv run python -c "from karml.mcp.recipes import run_recipe_stage; run_recipe_stage('build001','box_build',mode='smoke',background=True)"
+uv run python -c "from karml.mcp.recipes import run_recipe_stage; run_recipe_stage('build001','hybrid_md_jaxmd',mode='smoke')"
 ```
 
 Or use the shell driver:
@@ -38,7 +38,7 @@ DRY_RUN=1 bash examples/mcp/run_build_smoke.sh build001   # print commands only
 
 ## Hybrid calculator — three backends
 
-All use `setup_calculator()` in `mmml_calculator.py` (ML PhysNet + CHARMM MM).
+All use `setup_calculator()` in `karml_calculator.py` (ML PhysNet + CHARMM MM).
 
 | Backend | Module | ASE API | JAX API |
 |---------|--------|---------|---------|
@@ -46,22 +46,22 @@ All use `setup_calculator()` in `mmml_calculator.py` (ML PhysNet + CHARMM MM).
 | **JAX-MD** | `md_pbc_suite/jaxmd.py` | — | `spherical_cutoff_calculator` |
 | **PyCHARMM** | `md_pbc_suite/pycharmm_mlpot.py` | MLpot registration | CHARMM dynamics |
 
-### Direct `mmml md-system` (vacuum NVE smoke)
+### Direct `karml md-system` (vacuum NVE smoke)
 
 ```bash
 source examples/md_cpu/_env.sh
 
 # ASE — VelocityVerlet + hybrid calculator
-mmml md-system --config mmml/mcp/examples/hybrid_ase.yaml --run-all
+karml md-system --config karml/mcp/examples/hybrid_ase.yaml --run-all
 
 # JAX-MD — jax-md integrator + JAX forces
-mmml md-system --config mmml/mcp/examples/hybrid_jaxmd.yaml --run-all
+karml md-system --config karml/mcp/examples/hybrid_jaxmd.yaml --run-all
 
 # PyCHARMM — MLpot / CHARMM dynamics
-mmml md-system --config mmml/mcp/examples/hybrid_pycharmm.yaml --run-all
+karml md-system --config karml/mcp/examples/hybrid_pycharmm.yaml --run-all
 ```
 
-Set `MMML_CKPT` or edit `defaults.checkpoint` in each YAML.
+Set `KARML_CKPT` or edit `defaults.checkpoint` in each YAML.
 
 **Packmol placement:** vacuum `free_nve` jobs need `packmol_radius` (or `box_size`)
 in `defaults` so cluster geometry can be built. JAX-MD `free_nve` omits `--box-size`
@@ -79,7 +79,7 @@ from `pyproject.toml`.
 from pathlib import Path
 import numpy as np
 import ase
-from mmml.interfaces.pycharmmInterface.mmml_calculator import setup_calculator
+from karml.interfaces.pycharmmInterface.karml_calculator import setup_calculator
 
 ckpt = Path("examples/ckpts_json/DESdimers_params.json")
 n_mono, n_atoms = 2, 10
@@ -110,7 +110,7 @@ for use with `jax-md` integrators:
 ```python
 from pathlib import Path
 import jax.numpy as jnp
-from mmml.interfaces.pycharmmInterface.mmml_calculator import setup_calculator
+from karml.interfaces.pycharmmInterface.karml_calculator import setup_calculator
 
 ckpt = Path("examples/ckpts_json/DESdimers_params.json")
 z = jnp.array([6, 1, 1, 17, 17] * 2, dtype=jnp.int32)
@@ -129,37 +129,37 @@ e, f = jax_fn(r, z)
 print("E (eV):", float(e))
 ```
 
-Run dynamics via `mmml md-system --config mmml/mcp/examples/hybrid_jaxmd.yaml --run-all`
+Run dynamics via `karml md-system --config karml/mcp/examples/hybrid_jaxmd.yaml --run-all`
 or MCP stage `hybrid_md_jaxmd`.
 
 ### Programmatic hybrid calculator (PyCHARMM MLpot)
 
 ```python
-# Prefer the campaign YAML + mmml md-system for production:
-# mmml md-system --config mmml/mcp/examples/hybrid_pycharmm.yaml --run-all
+# Prefer the campaign YAML + karml md-system for production:
+# karml md-system --config karml/mcp/examples/hybrid_pycharmm.yaml --run-all
 #
 # MPI-linked libcharmm may require:
-# MMML_MPI_NP=1 ./scripts/mmml-charmm-mpirun.sh md-system --config ... --run-all
+# KARML_MPI_NP=1 ./scripts/karml-charmm-mpirun.sh md-system --config ... --run-all
 ```
 
 ### PBC from certified `liquid-box`
 
-After `mmml liquid-box` (or MCP `box_build` stage):
+After `karml liquid-box` (or MCP `box_build` stage):
 
 ```bash
-mmml md-system --config mmml/mcp/examples/hybrid_pbc_jaxmd.yaml --run-all
+karml md-system --config karml/mcp/examples/hybrid_pbc_jaxmd.yaml --run-all
 ```
 
-## Geometry commands (allowlisted for MCP `submit_mmml_command`)
+## Geometry commands (allowlisted for MCP `submit_karml_command`)
 
 ```bash
-mmml make-res --res DCM --skip-energy-show
-mmml liquid-box --composition DCM:12 -o boxes/liquid --profile standard --box-size 24
-mmml make-box --res DCM --n 12 --box-size 24
+karml make-res --res DCM --skip-energy-show
+karml liquid-box --composition DCM:12 -o boxes/liquid --profile standard --box-size 24
+karml make-box --res DCM --n 12 --box-size 24
 ```
 
 ## See also
 
 - [`examples/md_cpu/README.md`](../../examples/md_cpu/README.md) — CPU smoke matrix
 - [`docs/liquid-box-workflow.md`](../../docs/liquid-box-workflow.md) — two-phase liquid workflow
-- [`mmml/mcp/README.md`](../README.md) — MCP server tools
+- [`karml/mcp/README.md`](../README.md) — MCP server tools

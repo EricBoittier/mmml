@@ -1,7 +1,7 @@
 # Mode B — latent MM charges (dimer-only)
 #   q_MM = neutralize_per_monomer(q_ML)
 #
-#   mmml md-system --config examples/hybrid_mm_charges/md_latent.yaml --run-all
+#   karml md-system --config examples/hybrid_mm_charges/md_latent.yaml --run-all
 #
 # Requires a charges=True checkpoint trained with mm_charge_mode: latent.
 # Liquids (n_monomers != 2) and lr_solver: jax_pme are refused.

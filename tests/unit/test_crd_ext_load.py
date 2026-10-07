@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
     read_crd_coordinates,
 )
 

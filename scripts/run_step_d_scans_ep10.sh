@@ -1,5 +1,5 @@
 #!/bin/bash
-cd /mmhome/boittier/home/mmml
+cd /mmhome/boittier/home/karml
 source .venv/bin/activate
 python scripts/run_dimer_scan_campaign.py \
   --spookynet-checkpoint spooky_so3lr_muon3_epoch0010.json \

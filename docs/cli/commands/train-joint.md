@@ -1,4 +1,4 @@
-# `mmml train-joint`
+# `karml train-joint`
 
 Joint PhysNet+DCMNet training.
 
@@ -6,13 +6,13 @@ Joint PhysNet+DCMNet training.
 ## Usage
 
 ```bash
-mmml train-joint --help
+karml train-joint --help
 ```
 
 ## Options
 
 ```text
-usage: mmml train-joint [-h] --train-efd TRAIN_EFD --train-esp TRAIN_ESP
+usage: karml train-joint [-h] --train-efd TRAIN_EFD --train-esp TRAIN_ESP
                         --valid-efd VALID_EFD --valid-esp VALID_ESP
                         [--subtract-atom-energies]
                         [--physnet-features PHYSNET_FEATURES]
@@ -230,7 +230,7 @@ Other options:
                         category.
   --use-repo-physnet-params
                         Initialize the PhysNet part of joint DCMNet training
-                        from the bundled repo PhysNet parameters (mmml/models/ph
+                        from the bundled repo PhysNet parameters (karml/models/ph
                         ysnetjax/defaults/meoh_dimer_portable.json).
   --print-freq PRINT_FREQ
                         Print frequency (epochs)

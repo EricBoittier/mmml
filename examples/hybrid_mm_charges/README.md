@@ -33,13 +33,13 @@ Staged MIC LJ then Ewald TL (ML-only under Ewald; adjusted LJ stays MIC/jax_mic)
 
 ```bash
 # once, from the repo root
-.venv/bin/python -m ipykernel install --user --name mmml-venv --display-name "mmml venv"
+.venv/bin/python -m ipykernel install --user --name karml-venv --display-name "karml venv"
 ```
 
-Then pick `mmml venv` via **Kernel → Change Kernel**. The kernelspec `uv` installs
+Then pick `karml venv` via **Kernel → Change Kernel**. The kernelspec `uv` installs
 is named `python3` but has a bare `"python"` in its `argv`, so it resolves against
 `PATH` and will happily start an active conda interpreter instead of `.venv`. That
-fails on the first `import mmml...` with
+fails on the first `import karml...` with
 
 ```
 TypeError: 'type' object is not subscriptable
@@ -82,9 +82,9 @@ for what it checks and why `--skip-ml-dimers` isn't the mechanism used.
 | B `latent` + Ewald | [`md_latent_ewald_dimer.yaml`](md_latent_ewald_dimer.yaml) | Dimer-only; same bonded ownership |
 
 ```bash
-export MMML_CKPT=/path/to/params.json   # Mode B needs charges=True / latent-trained
-mmml md-system --config examples/hybrid_mm_charges/md_fixed_ewald_dimer.yaml --run-all
-mmml md-system --config examples/hybrid_mm_charges/md_latent_ewald_dimer.yaml --run-all
+export KARML_CKPT=/path/to/params.json   # Mode B needs charges=True / latent-trained
+karml md-system --config examples/hybrid_mm_charges/md_fixed_ewald_dimer.yaml --run-all
+karml md-system --config examples/hybrid_mm_charges/md_latent_ewald_dimer.yaml --run-all
 ```
 
 For a larger liquid Mode A Ewald smoke see [`md_fixed_ewald.yaml`](md_fixed_ewald.yaml)
@@ -99,11 +99,11 @@ YAML keys match CLI flags (`lr_solver`, `pme_box_length`, `pme_accuracy`,
 `mm_include_lj`, …). CLI overrides the config when both are set.
 
 ```bash
-mmml physnet-train --config examples/hybrid_mm_charges/train_fixed.yaml
-mmml physnet-train --config examples/hybrid_mm_charges/train_fixed_nvalchemiops_pme.yaml
-mmml physnet-train --config examples/hybrid_mm_charges/train_fixed_ewald.yaml
-mmml physnet-train --config examples/hybrid_mm_charges/train_latent.yaml
-mmml physnet-train --config examples/hybrid_mm_charges/train_fixed_plus_latent.yaml
+karml physnet-train --config examples/hybrid_mm_charges/train_fixed.yaml
+karml physnet-train --config examples/hybrid_mm_charges/train_fixed_nvalchemiops_pme.yaml
+karml physnet-train --config examples/hybrid_mm_charges/train_fixed_ewald.yaml
+karml physnet-train --config examples/hybrid_mm_charges/train_latent.yaml
+karml physnet-train --config examples/hybrid_mm_charges/train_fixed_plus_latent.yaml
 ```
 
 ## MD (dimer vacuum smoke)
@@ -115,17 +115,17 @@ jax-pme is refused for B/C (Mode D has no such restriction).
 
 ```bash
 # After training + orbax-to-json (or point checkpoint at an existing JSON)
-mmml md-system --config examples/hybrid_mm_charges/md_fixed.yaml --run-all
-mmml md-system --config examples/hybrid_mm_charges/md_fixed_nvalchemiops_pme.yaml --run-all
-mmml md-system --config examples/hybrid_mm_charges/md_fixed_ewald.yaml --run-all
-mmml md-system --config examples/hybrid_mm_charges/md_latent.yaml --run-all
-mmml md-system --config examples/hybrid_mm_charges/md_fixed_plus_latent.yaml --run-all
+karml md-system --config examples/hybrid_mm_charges/md_fixed.yaml --run-all
+karml md-system --config examples/hybrid_mm_charges/md_fixed_nvalchemiops_pme.yaml --run-all
+karml md-system --config examples/hybrid_mm_charges/md_fixed_ewald.yaml --run-all
+karml md-system --config examples/hybrid_mm_charges/md_latent.yaml --run-all
+karml md-system --config examples/hybrid_mm_charges/md_fixed_plus_latent.yaml --run-all
 ```
 
 Full-box PME MD flags (CLI equivalent of the nvalchemiops train config)::
 
 ```bash
-mmml md-system --setup pbc_nvt --backend pycharmm \
+karml md-system --setup pbc_nvt --backend pycharmm \
   --composition DCM:20 --box-size 30 \
   --mm-nonbond-mode periodic_external \
   --lr-solver nvalchemiops_pme \
@@ -138,7 +138,7 @@ Same, with the pure-JAX native Ewald solver (no external PME library, no CUDA
 requirement — drop-in wherever `nvalchemiops` isn't installed)::
 
 ```bash
-mmml md-system --setup pbc_nvt --backend pycharmm \
+karml md-system --setup pbc_nvt --backend pycharmm \
   --composition DCM:20 --box-size 30 \
   --mm-nonbond-mode periodic_external \
   --lr-solver ewald \
@@ -164,7 +164,7 @@ python scripts/compute_latent_monomer_charges.py \
   --out ./ckpts/mp2_nms/latent_charge_template_DCM.npz
 
 # 2) Run the liquid box with it, same lr_solver as training (ewald)
-mmml md-system --setup pbc_nvt --backend pycharmm \
+karml md-system --setup pbc_nvt --backend pycharmm \
   --composition DCM:20 --box-size 30 \
   --mm-nonbond-mode periodic_external \
   --lr-solver ewald \
@@ -189,7 +189,7 @@ charge 0 (only appropriate where every monomer reliably has neighbors —
 see [Mode E's v1 limitation](../../docs/hybrid-mm-charges.md#mode-e--latent_dynamic-md-only-liquid-compatible-live)):
 
 ```bash
-mmml md-system --setup pbc_nvt --backend pycharmm \
+karml md-system --setup pbc_nvt --backend pycharmm \
   --composition DCM:20 --box-size 30 \
   --mm-nonbond-mode periodic_external \
   --lr-solver ewald \

@@ -6,7 +6,7 @@ set -euo pipefail
 WORKFLOW_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 REPO_ROOT="$(cd "$WORKFLOW_ROOT/../.." && pwd)"
 RUN_TAG="${1:?usage: job_shell.sh RUN_TAG}"
-CONFIG="${MMML_WORKFLOW_CONFIG:-$WORKFLOW_ROOT/config.yaml}"
+CONFIG="${KARML_WORKFLOW_CONFIG:-$WORKFLOW_ROOT/config.yaml}"
 if [[ "$CONFIG" != /* ]]; then
   if [[ -f "$WORKFLOW_ROOT/$CONFIG" ]]; then
     CONFIG="$WORKFLOW_ROOT/$CONFIG"
@@ -20,15 +20,15 @@ if [[ "${HOME:-}" == /scicore/* && -r "$REPO_ROOT/scripts/scicore_env.sh" ]]; th
   source "$REPO_ROOT/scripts/scicore_env.sh"
 fi
 
-# shellcheck source=../../../scripts/resolve_mmml_env.sh
-source "$REPO_ROOT/scripts/resolve_mmml_env.sh"
-mmml_resolve_env "$REPO_ROOT"
-PY="${MMML_PYTHON}"
+# shellcheck source=../../../scripts/resolve_karml_env.sh
+source "$REPO_ROOT/scripts/resolve_karml_env.sh"
+karml_resolve_env "$REPO_ROOT"
+PY="${KARML_PYTHON}"
 
-# Wrapper experiments may leave MMML_NO_MPI_RERUN=1 in the submitter env; scrub
+# Wrapper experiments may leave KARML_NO_MPI_RERUN=1 in the submitter env; scrub
 # so CLI auto-rerun under mpirun still runs for MPI-linked CHARMM.
-if [[ "${MMML_FORCE_NO_MPI_RERUN:-}" != "1" ]]; then
-  unset MMML_NO_MPI_RERUN || true
+if [[ "${KARML_FORCE_NO_MPI_RERUN:-}" != "1" ]]; then
+  unset KARML_NO_MPI_RERUN || true
 fi
 
 export JAX_ENABLE_X64="${JAX_ENABLE_X64:-1}"

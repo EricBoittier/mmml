@@ -21,7 +21,7 @@ def test_jaxmd_exposes_skip_bfgs_defaulting_on():
     whatever the runner actually declared. The runner's parser is now
     ``build_parser``, so ask it directly.
     """
-    from mmml.cli.run.md_pbc_suite.jaxmd import build_parser
+    from karml.cli.run.md_pbc_suite.jaxmd import build_parser
 
     p = build_parser()
 
@@ -36,7 +36,7 @@ def test_md_system_exposes_and_forwards_skip_bfgs():
     A flag that parses but is not forwarded is worse than no flag: it looks
     honoured and silently is not.
     """
-    from mmml.cli.run.md_system import build_command, parse_args
+    from karml.cli.run.md_system import build_command, parse_args
 
     jax_args = parse_args(["--backend", "jaxmd", "--setup", "pbc_nve"])
     backend, jax_cmd = build_command(jax_args)
@@ -59,7 +59,7 @@ def test_skip_bfgs_overrides_bfgs_first_order():
     """
     import inspect
 
-    from mmml.cli.run.md_pbc_suite import jaxmd
+    from karml.cli.run.md_pbc_suite import jaxmd
 
     src = inspect.getsource(jaxmd)
     assert 'if bool(getattr(args, "skip_bfgs", False)):\n                order = "fire-first"' in src \
@@ -76,6 +76,6 @@ def test_the_line_search_variant_still_exists_elsewhere():
     """
     from pathlib import Path
 
-    src = Path("mmml/interfaces/pycharmmInterface/mlpot/calculator_minimize.py").read_text()
+    src = Path("karml/interfaces/pycharmmInterface/mlpot/calculator_minimize.py").read_text()
     assert "BFGSLineSearch" in src
     assert "use_bfgs_line_search" in src

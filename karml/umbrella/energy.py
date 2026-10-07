@@ -1,6 +1,6 @@
 """Packed-batch ML + harmonic umbrella bias energies.
 
-Each CV dimension is a :class:`~mmml.md.restraints.LinearDistanceCV`, i.e. a
+Each CV dimension is a :class:`~karml.md.restraints.LinearDistanceCV`, i.e. a
 linear combination of interatomic distances. A bare ``(i, j)`` pair is accepted
 everywhere a CV is and promoted to the plain-distance special case, so existing
 distance-umbrella callers are unaffected; the general form is what makes an
@@ -14,7 +14,7 @@ from typing import Any, Callable, Sequence
 
 import numpy as np
 
-from mmml.md.restraints import (
+from karml.md.restraints import (
     AngleWall,
     BondRetentionWall,
     DihedralCV,
@@ -22,7 +22,7 @@ from mmml.md.restraints import (
     cv_from_spec,
     periodic_delta_deg,
 )
-from mmml.md.restraints.linear_distance import ReactionChannelRestraint
+from karml.md.restraints.linear_distance import ReactionChannelRestraint
 
 
 def _resolve_wall(spec):
@@ -35,7 +35,7 @@ def _resolve_wall(spec):
     :class:`FlatBottomWall` on a linear CV. All expose ``energy_batched`` and
     ``forces_batched``, so the sampler does not care which it has.
 
-    NOTE this duplicates ``mmml.umbrella.config._resolve_wall``. Both must know
+    NOTE this duplicates ``karml.umbrella.config._resolve_wall``. Both must know
     every wall kind: adding one to only the config copy gets past argument
     parsing and then fails inside ``make_packed_energy_fn``.
     """
@@ -113,8 +113,8 @@ def packed_cv_values(
     """CV value for each packed window copy. Shape ``(K,)``.
 
     Generalises :func:`packed_cv_distances` to
-    :class:`~mmml.md.restraints.LinearDistanceCV` or
-    :class:`~mmml.md.restraints.DihedralCV`.
+    :class:`~karml.md.restraints.LinearDistanceCV` or
+    :class:`~karml.md.restraints.DihedralCV`.
     """
     return cv_from_spec(cv).value_batched(positions_packed, n_atoms, n_windows)
 

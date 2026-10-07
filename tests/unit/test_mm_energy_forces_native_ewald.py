@@ -20,8 +20,8 @@ jax.config.update("jax_enable_x64", True)
 
 
 def test_ewald_branch_matches_hybrid_ewald_coulomb_energy():
-    from mmml.interfaces.pycharmmInterface.mm_energy_forces import build_mm_energy_forces_fn
-    from mmml.models.ewald_hybrid_coulomb import hybrid_ewald_coulomb_energy
+    from karml.interfaces.pycharmmInterface.mm_energy_forces import build_mm_energy_forces_fn
+    from karml.models.ewald_hybrid_coulomb import hybrid_ewald_coulomb_energy
 
     rng = np.random.default_rng(3)
     n_atoms = 8
@@ -42,7 +42,7 @@ def test_ewald_branch_matches_hybrid_ewald_coulomb_energy():
     fake_psf.get_iac.return_value = np.ones(n_atoms, dtype=np.int32)
 
     with patch("pycharmm.psf", fake_psf), patch(
-        "mmml.interfaces.pycharmmInterface.mm_energy_forces._get_actual_psf_charges",
+        "karml.interfaces.pycharmmInterface.mm_energy_forces._get_actual_psf_charges",
         return_value=charges,
     ):
         mm_fn = build_mm_energy_forces_fn(
@@ -87,7 +87,7 @@ def test_ewald_branch_matches_hybrid_ewald_coulomb_energy():
 
 def test_ewald_branch_include_lj_adds_nonzero_vdw():
     """include_lj=True returns VDW channel from COM-switched intermolecular LJ."""
-    from mmml.interfaces.pycharmmInterface.mm_energy_forces import build_mm_energy_forces_fn
+    from karml.interfaces.pycharmmInterface.mm_energy_forces import build_mm_energy_forces_fn
 
     # Two monomers close enough that mm_switch is on (complementary handoff).
     R = np.array(
@@ -126,7 +126,7 @@ def test_ewald_branch_include_lj_adds_nonzero_vdw():
     with patch("pycharmm.psf", fake_psf), patch(
         "pycharmm.param", fake_param
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mm_energy_forces._get_actual_psf_charges",
+        "karml.interfaces.pycharmmInterface.mm_energy_forces._get_actual_psf_charges",
         return_value=charges,
     ), patch("builtins.open", _fake_open):
         mm_fn = build_mm_energy_forces_fn(
@@ -154,7 +154,7 @@ def test_ewald_branch_include_lj_adds_nonzero_vdw():
 
 
 def test_ewald_branch_requires_pbc_cell():
-    from mmml.interfaces.pycharmmInterface.mm_energy_forces import build_mm_energy_forces_fn
+    from karml.interfaces.pycharmmInterface.mm_energy_forces import build_mm_energy_forces_fn
 
     n_atoms = 8
     n_mono = 2
@@ -163,7 +163,7 @@ def test_ewald_branch_requires_pbc_cell():
     fake_psf.get_iac.return_value = np.ones(n_atoms, dtype=np.int32)
 
     with patch("pycharmm.psf", fake_psf), patch(
-        "mmml.interfaces.pycharmmInterface.mm_energy_forces._get_actual_psf_charges",
+        "karml.interfaces.pycharmmInterface.mm_energy_forces._get_actual_psf_charges",
         return_value=np.zeros(n_atoms),
     ):
         with pytest.raises(ValueError, match="pbc_cell|PBC cell"):
@@ -193,7 +193,7 @@ def test_ewald_include_intra_false_zeroes_single_tip3_forces():
     ``ewald_include_intra=False`` into ``build_mm_energy_forces_fn`` would leave
     those intramolecular forces on.
     """
-    from mmml.interfaces.pycharmmInterface.mm_energy_forces import build_mm_energy_forces_fn
+    from karml.interfaces.pycharmmInterface.mm_energy_forces import build_mm_energy_forces_fn
 
     # Bundled tip3.pdb geometry (OH2, H1, H2) + TIP3P charges.
     R = np.array(
@@ -213,7 +213,7 @@ def test_ewald_include_intra_false_zeroes_single_tip3_forces():
 
     def _max_force(*, include_intra: bool) -> float:
         with patch("pycharmm.psf", fake_psf), patch(
-            "mmml.interfaces.pycharmmInterface.mm_energy_forces._get_actual_psf_charges",
+            "karml.interfaces.pycharmmInterface.mm_energy_forces._get_actual_psf_charges",
             return_value=charges,
         ):
             mm_fn = build_mm_energy_forces_fn(

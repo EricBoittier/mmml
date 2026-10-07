@@ -3,8 +3,8 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 from jax_md import space
-from mmml.models.physnetjax.physnetjax.models.model import PhysNet
-from mmml.interfaces.jaxmdInterface.hybrid_energy import make_peptide_water_ml_energy_fn
+from karml.models.physnetjax.physnetjax.models.model import PhysNet
+from karml.interfaces.jaxmdInterface.hybrid_energy import make_peptide_water_ml_energy_fn
 
 
 class SizeCheckingModel:

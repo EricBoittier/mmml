@@ -88,7 +88,7 @@ def find_minima(e: np.ndarray, prominence: float) -> list[int]:
 
 
 def main() -> int:
-    from mmml.interfaces.pycharmmInterface.cutoffs import (
+    from karml.interfaces.pycharmmInterface.cutoffs import (
         DEFAULT_ML_SWITCH_WIDTH,
         DEFAULT_MM_SWITCH_ON,
         DEFAULT_MM_SWITCH_WIDTH,
@@ -108,7 +108,7 @@ def main() -> int:
         type=float,
         default=None,
         help="Skip r-points with intermolecular atom–atom dmin below this (Å). "
-        "Default: mmml.analysis.dimer_scans.DEFAULT_ORIENT_MIN_CONTACT_A (2.0). "
+        "Default: karml.analysis.dimer_scans.DEFAULT_ORIENT_MIN_CONTACT_A (2.0). "
         "COM–COM r alone is not steric for DCM — clash points invent deep wells.",
     )
     # Default = kT at 150 K. A sub-thermal threshold counts ripple your dynamics
@@ -133,14 +133,14 @@ def main() -> int:
     import jax
     import jax.numpy as jnp
 
-    from mmml.analysis.dimer_scans import (
+    from karml.analysis.dimer_scans import (
         DEFAULT_ORIENT_MIN_CONTACT_A,
         intermolecular_min_distance,
     )
-    from mmml.cli.misc.physnet_evaluate import _load_physnet_checkpoint
-    from mmml.models.hybrid_energy import HYBRID_MM_BATCH_KEYS, hybrid_forward
-    from mmml.models.physnetjax.physnetjax.data.batches import prepare_batches_jit
-    from mmml.models.short_range_wall import inter_monomer_wall_energy
+    from karml.cli.misc.physnet_evaluate import _load_physnet_checkpoint
+    from karml.models.hybrid_energy import HYBRID_MM_BATCH_KEYS, hybrid_forward
+    from karml.models.physnetjax.physnetjax.data.batches import prepare_batches_jit
+    from karml.models.short_range_wall import inter_monomer_wall_energy
 
     min_contact = (
         DEFAULT_ORIENT_MIN_CONTACT_A if args.min_contact is None else float(args.min_contact)

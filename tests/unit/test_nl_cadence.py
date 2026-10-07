@@ -1,7 +1,7 @@
 """Neighbor-list cadence policy: behavior + parity with jaxmd_runner.
 
-``mmml.md.nl_cadence`` is a light copy of the cadence policy that
-``jaxmd_runner`` owns, so the λ driver and ``mmml.md`` driver can share it
+``karml.md.nl_cadence`` is a light copy of the cadence policy that
+``jaxmd_runner`` owns, so the λ driver and ``karml.md`` driver can share it
 without importing rich / HDF5 / pycharmm. These tests are what stops the two
 copies drifting apart silently.
 """
@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import pytest
 
-from mmml.md.nl_cadence import (
+from karml.md.nl_cadence import (
     ENSEMBLE_UPDATE_INTERVAL,
     resolve_block_steps,
     resolve_update_interval,
@@ -86,7 +86,7 @@ def test_verlet_limit_is_half_the_skin_and_clamps_negative():
 
 def test_parity_with_jaxmd_runner_policy():
     """The two copies of the policy must agree, or drift goes unnoticed."""
-    jaxmd_runner = pytest.importorskip("mmml.cli.run.jaxmd_runner")
+    jaxmd_runner = pytest.importorskip("karml.cli.run.jaxmd_runner")
 
     assert jaxmd_runner.ENSEMBLE_JAXMD_UPDATE_INTERVAL == ENSEMBLE_UPDATE_INTERVAL
 
@@ -129,7 +129,7 @@ def test_parity_with_jaxmd_runner_policy():
 
 
 def test_parity_with_mm_energy_forces_skin_limit():
-    mm = pytest.importorskip("mmml.interfaces.pycharmmInterface.mm_energy_forces")
+    mm = pytest.importorskip("karml.interfaces.pycharmmInterface.mm_energy_forces")
     for skin in (0.0, 0.25, 0.5, 2.0, -1.0):
         assert verlet_reuse_displacement_limit_A(skin) == (
             mm.verlet_reuse_displacement_limit_A(skin)

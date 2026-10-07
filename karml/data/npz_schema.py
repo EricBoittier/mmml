@@ -1,10 +1,10 @@
 """
-Standardized NPZ data format schema for MMML.
+Standardized NPZ data format schema for KARML.
 
 Defines the canonical structure for all NPZ files used across DCMNet,
-PhysNetJAX, and other models in the MMML ecosystem.
+PhysNetJAX, and other models in the KARML ecosystem.
 
-Units Convention (ingest / Molpro-PySCF, used by ``mmml validate``):
+Units Convention (ingest / Molpro-PySCF, used by ``karml validate``):
     - Coordinates (R): Angstrom
     - Energies (E): Hartree
     - Forces (F): Hartree/Bohr
@@ -211,7 +211,7 @@ def validate_npz(
     verbose: bool = True
 ) -> Tuple[bool, Optional[Dict]]:
     """
-    Validate an NPZ file against the MMML schema.
+    Validate an NPZ file against the KARML schema.
     
     Parameters
     ----------
@@ -318,7 +318,7 @@ def main():
         sys.exit(0 if is_valid else 1)
     else:
         print("Usage: python npz_schema.py <npz_file>")
-        print("   or: mmml validate <npz_file>")
+        print("   or: karml validate <npz_file>")
         print("\nSchema Information:")
         print("\nRequired keys:")
         for key, desc in REQUIRED_KEYS.items():

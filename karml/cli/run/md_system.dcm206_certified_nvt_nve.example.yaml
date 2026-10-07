@@ -1,11 +1,11 @@
 # DCM:206 certified liquid-box → JAX-MD NVT → JAX-MD NVE (handoff).
 #
-# Prerequisites (run from the campaign directory, e.g. mmml_tutorial/acodcm):
+# Prerequisites (run from the campaign directory, e.g. karml_tutorial/acodcm):
 #   boxes/dcm206/{model.psf,model.crd,box.json}   # liquid-box PASS
 #   checkpoint path below points at your hybrid ckpt
 #
 # Run:
-#   mmml md-system --config md_system.dcm206_certified_nvt_nve.yaml --run-all
+#   karml md-system --config md_system.dcm206_certified_nvt_nve.yaml --run-all
 #
 # Or copy this file into the campaign dir and edit checkpoint / paths.
 #

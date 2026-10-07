@@ -20,7 +20,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from mmml.utils.plotting.styles import apply_plot_style
+from karml.utils.plotting.styles import apply_plot_style
 
 
 COMPONENTS = (
@@ -185,12 +185,12 @@ def main() -> None:
                 f'<figcaption class="text-small text-muted">{label}</figcaption></figure>'
             )
         fragment = (
-            '<div id="mmml-component-energy-surfaces">\n'
+            '<div id="karml-component-energy-surfaces">\n'
             '<style>\n'
-            '#mmml-component-energy-surfaces{display:grid;gap:16px;color:var(--foreground);}\n'
-            '#mmml-component-energy-surfaces figure{margin:0;}\n'
-            '#mmml-component-energy-surfaces img{display:block;width:100%;height:auto;}\n'
-            '#mmml-component-energy-surfaces figcaption{margin-top:4px;}\n'
+            '#karml-component-energy-surfaces{display:grid;gap:16px;color:var(--foreground);}\n'
+            '#karml-component-energy-surfaces figure{margin:0;}\n'
+            '#karml-component-energy-surfaces img{display:block;width:100%;height:auto;}\n'
+            '#karml-component-energy-surfaces figcaption{margin-top:4px;}\n'
             '</style>\n'
             + "\n".join(figures)
             + '\n</div>\n'

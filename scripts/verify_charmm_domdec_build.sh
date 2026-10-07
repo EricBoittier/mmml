@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Report whether a MMML CHARMM binary was built with CMake domdec=ON (requires colfft + FFTW/MKL).
+# Report whether a KARML CHARMM binary was built with CMake domdec=ON (requires colfft + FFTW/MKL).
 #
 # CMakeCache.txt stores the REQUESTED value (-Ddomdec=ON) even when CMakeLists.txt
 # silently overrides it to OFF due to missing FFTW/MKL. Use `nm` on the binary to check
@@ -23,8 +23,8 @@ platform_tag() {
 
 BUILD_DIRS=(
   "${CHARMM_BUILD_DIR:-}"
-  "${HOME}/.cache/mmml-charmm-build/$(platform_tag)-exec"
-  "${HOME}/.cache/mmml-charmm-build/$(platform_tag)"
+  "${HOME}/.cache/karml-charmm-build/$(platform_tag)-exec"
+  "${HOME}/.cache/karml-charmm-build/$(platform_tag)"
   "$CHARMM_HOME/build/cmake"
 )
 
@@ -96,14 +96,14 @@ if [[ -x "$CHARMM_EXE" ]] && command -v nm >/dev/null 2>&1; then
     echo "    export FFTW_ROOT=\${EBROOTFFTW}" >&2
     echo "" >&2
     echo "  Or check the library build cache for an already-found FFTW path:" >&2
-    _lib_cache="\${HOME}/.cache/mmml-charmm-build/$(platform_tag)/CMakeCache.txt"
-    if [[ -f "$HOME/.cache/mmml-charmm-build/$(platform_tag)/CMakeCache.txt" ]]; then
-      _inc="$(grep '^FFTW_INCLUDE_DIR:PATH=' "$HOME/.cache/mmml-charmm-build/$(platform_tag)/CMakeCache.txt" 2>/dev/null | cut -d= -f2- || true)"
+    _lib_cache="\${HOME}/.cache/karml-charmm-build/$(platform_tag)/CMakeCache.txt"
+    if [[ -f "$HOME/.cache/karml-charmm-build/$(platform_tag)/CMakeCache.txt" ]]; then
+      _inc="$(grep '^FFTW_INCLUDE_DIR:PATH=' "$HOME/.cache/karml-charmm-build/$(platform_tag)/CMakeCache.txt" 2>/dev/null | cut -d= -f2- || true)"
       if [[ -n "$_inc" ]]; then
         echo "    Library build found FFTW include at: $_inc" >&2
         echo "    → export FFTW_ROOT=$(dirname "$_inc")" >&2
       else
-        echo "    grep -i fftw_include $HOME/.cache/mmml-charmm-build/$(platform_tag)/CMakeCache.txt" >&2
+        echo "    grep -i fftw_include $HOME/.cache/karml-charmm-build/$(platform_tag)/CMakeCache.txt" >&2
       fi
     fi
     echo "" >&2
@@ -120,7 +120,7 @@ elif [[ -x "$CHARMM_EXE" ]]; then
 fi
 
 # FFTW path in library build cache (informational).
-_lib_cache="$HOME/.cache/mmml-charmm-build/$(platform_tag)/CMakeCache.txt"
+_lib_cache="$HOME/.cache/karml-charmm-build/$(platform_tag)/CMakeCache.txt"
 if [[ -f "$_lib_cache" ]]; then
   _fftw_inc="$(grep '^FFTW_INCLUDE_DIR:PATH=' "$_lib_cache" 2>/dev/null | cut -d= -f2- || true)"
   _fftw_lib="$(grep '^FFTW_LIBRARY:FILEPATH=' "$_lib_cache" 2>/dev/null | cut -d= -f2- || true)"

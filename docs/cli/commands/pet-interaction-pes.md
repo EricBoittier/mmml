@@ -1,4 +1,4 @@
-# `mmml pet-interaction-pes`
+# `karml pet-interaction-pes`
 
 PET-MAD interaction slices, surfaces, and trimer many-body leftover.
 
@@ -12,8 +12,8 @@ ICML style and are reproducible from the written JSON.
 
 ```bash
 export PET_MAD_CKPT=/path/to/pet-mad-xs-v1.5.0.pt
-JAX_PLATFORMS=cpu MMML_METATOMIC_DEVICE=cpu \
-  mmml pet-interaction-pes --checkpoint "$PET_MAD_CKPT"
+JAX_PLATFORMS=cpu KARML_METATOMIC_DEVICE=cpu \
+  karml pet-interaction-pes --checkpoint "$PET_MAD_CKPT"
 ```
 
 Worked example: [PET-MAD ethanol PBC](../../examples/pet-mad-etoh-pbc.md).
@@ -21,13 +21,13 @@ Worked example: [PET-MAD ethanol PBC](../../examples/pet-mad-etoh-pbc.md).
 ## Usage
 
 ```bash
-mmml pet-interaction-pes --help
+karml pet-interaction-pes --help
 ```
 
 ## Options
 
 ```text
-usage: mmml pet-interaction-pes [-h] [--checkpoint CHECKPOINT]
+usage: karml pet-interaction-pes [-h] [--checkpoint CHECKPOINT]
                                 [--from-json FROM_JSON] [--water-xyz WATER_XYZ]
                                 [--ethanol-xyz ETHANOL_XYZ]
                                 [--include-acetone | --no-include-acetone]
@@ -93,7 +93,7 @@ output:
 
 ## Related docs
 
-- [Metatomic in MMML](../../metatomic.md)
+- [Metatomic in KARML](../../metatomic.md)
 - [PET-MAD ethanol PBC example](../../examples/pet-mad-etoh-pbc.md)
 - [Plotting style guide](../../plotting-style-guide.md)
 

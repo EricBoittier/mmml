@@ -12,7 +12,7 @@ bulk_density_n_min: 4
 bulk_density_n_max: 4
 temperatures: [300.0]
 box_sizes: [20.0]
-checkpoint: ${MMML_CKPT}
+checkpoint: ${KARML_CKPT}
 output_root: artifacts/pbc_solvent_burst_scicore_small_mix
 seed_base: 20260714
 
@@ -73,4 +73,4 @@ packmol_tolerance: 2.0
 ml_gpu_count: 1
 ml_batch_size: 32
 ml_compute_dtype: float64
-mpirun_wrapper: ../../scripts/mmml-charmm-mpirun.sh
+mpirun_wrapper: ../../scripts/karml-charmm-mpirun.sh

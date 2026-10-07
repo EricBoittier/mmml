@@ -1,7 +1,7 @@
 # Mode B — latent MM charges (replace CGenFF in E_MM Coulomb)
 #   q_MM = neutralize_per_monomer(q_ML)
 #
-#   mmml physnet-train --config examples/hybrid_mm_charges/train_latent.yaml
+#   karml physnet-train --config examples/hybrid_mm_charges/train_latent.yaml
 #
 # Requires charges: true (charge head). Dimer-trained AB context; liquids deferred.
 

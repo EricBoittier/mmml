@@ -10,7 +10,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from mmml.acquisition.pipeline import (
+from karml.acquisition.pipeline import (
     load_config,
     load_manifest,
     run_all,
@@ -21,7 +21,7 @@ from mmml.acquisition.pipeline import (
     stage_prepare_pool,
     stage_select,
 )
-from mmml.acquisition.splits import SPLIT_CANDIDATE, SPLIT_TEST, SPLIT_VALID, assert_split_isolation
+from karml.acquisition.splits import SPLIT_CANDIDATE, SPLIT_TEST, SPLIT_VALID, assert_split_isolation
 
 REPO = Path(__file__).resolve().parents[2]
 SMOKE = REPO / "workflows" / "label_acquisition" / "config.smoke.yaml"
@@ -95,9 +95,9 @@ def test_reference_labels_cannot_enter_extract(tmp_path: Path, smoke_cfg):
     payload = json.loads(man_path.read_text())
     payload["records"][0]["extra"] = {"reference_energy": 1.0}
     # pipeline load_manifest does not currently round-trip extra; inject via records_from extract guard
-    from mmml.acquisition.linear_student import init_linear_student
-    from mmml.acquisition.representations import extract_activations
-    from mmml.acquisition.splits import StructureRecord
+    from karml.acquisition.linear_student import init_linear_student
+    from karml.acquisition.representations import extract_activations
+    from karml.acquisition.splits import StructureRecord
 
     rec = StructureRecord(
         index=0,
@@ -118,7 +118,7 @@ def test_reference_labels_cannot_enter_extract(tmp_path: Path, smoke_cfg):
 def test_cli_help_does_not_import_jax():
     script = """
 import sys
-from mmml.cli.parser_utils import get_subcommand_parser
+from karml.cli.parser_utils import get_subcommand_parser
 p = get_subcommand_parser("label-acquire")
 assert p is not None
 assert "jax" not in sys.modules
@@ -146,6 +146,6 @@ def test_snakemake_smoke_dry_run():
         cwd=workflow,
         capture_output=True,
         text=True,
-        env={**dict(**{k: v for k, v in __import__("os").environ.items()}), "MMML_WORKFLOW_CONFIG": str(workflow / "config.smoke.yaml")},
+        env={**dict(**{k: v for k, v in __import__("os").environ.items()}), "KARML_WORKFLOW_CONFIG": str(workflow / "config.smoke.yaml")},
     )
     assert proc.returncode == 0, proc.stderr or proc.stdout

@@ -7,12 +7,12 @@ It extracts loss values, parameter statistics, and other metrics from saved chec
 
 Usage:
     # Plot training from checkpoint directory
-    python -m mmml.cli.plot_checkpoint_history \
+    python -m karml.cli.plot_checkpoint_history \
         checkpoints/run_name/run-uuid/ \
         --output training_analysis.png
     
     # With log scale for loss
-    python -m mmml.cli.plot_checkpoint_history \
+    python -m karml.cli.plot_checkpoint_history \
         checkpoints/run_name/run-uuid/ \
         --output training_analysis.png \
         --log-loss
@@ -308,10 +308,10 @@ def create_summary_report(ckpt_dir: Path, metrics: Dict, output_dir: Path):
     report_lines.append("RECOMMENDED ACTIONS")
     report_lines.append("-"*80)
     report_lines.append("To plot actual loss values, use:")
-    report_lines.append(f"  python -m mmml.cli.plot_training {ckpt_dir.parent.parent}")
+    report_lines.append(f"  python -m karml.cli.plot_training {ckpt_dir.parent.parent}")
     report_lines.append("")
     report_lines.append("To evaluate best checkpoint:")
-    report_lines.append("  python -m mmml.cli.evaluate_model \\")
+    report_lines.append("  python -m karml.cli.evaluate_model \\")
     report_lines.append(f"      {ckpt_dir}/epoch-{max(metrics['epochs'])} \\")
     report_lines.append("      --test-data splits/data_test.npz")
     report_lines.append("")
@@ -336,12 +336,12 @@ def main():
         epilog="""
 Examples:
   # Analyze glycol training
-  python -m mmml.cli.plot_checkpoint_history \\
+  python -m karml.cli.plot_checkpoint_history \\
       examples/glycol/checkpoints/glycol_production/glycol_production-*/ \\
       --output glycol_training_analysis.png
   
   # With log scale
-  python -m mmml.cli.plot_checkpoint_history \\
+  python -m karml.cli.plot_checkpoint_history \\
       checkpoints/run/run-uuid/ \\
       --output analysis.png \\
       --log-loss

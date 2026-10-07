@@ -154,7 +154,7 @@ class DihedralCV:
 
 def cv_from_spec(spec: Any) -> Any:
     """Dispatch ``LinearDistanceCV`` vs ``DihedralCV`` from a YAML/Python spec."""
-    from mmml.md.restraints.linear_distance import LinearDistanceCV
+    from karml.md.restraints.linear_distance import LinearDistanceCV
 
     if isinstance(spec, (DihedralCV, LinearDistanceCV)):
         return spec

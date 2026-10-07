@@ -35,9 +35,9 @@ def _repo_root() -> Path:
     return workflow_root().parents[1]
 
 
-def _resolve_mmml_cmd(md_argv: list[str]) -> list[str]:
-    py = os.environ.get("MMML_PYTHON", sys.executable)
-    return [py, "-m", "mmml.cli.__main__", "md-system", *md_argv]
+def _resolve_karml_cmd(md_argv: list[str]) -> list[str]:
+    py = os.environ.get("KARML_PYTHON", sys.executable)
+    return [py, "-m", "karml.cli.__main__", "md-system", *md_argv]
 
 
 def _resolve_restart(
@@ -129,7 +129,7 @@ def main() -> int:
         print(exc, file=sys.stderr)
         return 1
 
-    from mmml.interfaces.pycharmmInterface.mlpot.artifact_paths import model_psf
+    from karml.interfaces.pycharmmInterface.mlpot.artifact_paths import model_psf
 
     psf = model_psf(leg_dir)
     if not psf.is_file():
@@ -149,7 +149,7 @@ def main() -> int:
         leg_id=leg_id,
         out_dir=paths["out_dir"],
     )
-    cmd = _resolve_mmml_cmd(md_argv)
+    cmd = _resolve_karml_cmd(md_argv)
 
     print(f"=== heat resume: {tag} ===", flush=True)
     print(f"leg_dir={leg_dir}", flush=True)

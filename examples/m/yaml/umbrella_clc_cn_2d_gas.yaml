@@ -1,6 +1,6 @@
 # 2D fixed-bias umbrella (gas phase): Cl–C × N–C distances.
 #
-#   uv run mmml umbrella-sample --config examples/m/yaml/umbrella_clc_cn_2d_gas.yaml --overwrite
+#   uv run karml umbrella-sample --config examples/m/yaml/umbrella_clc_cn_2d_gas.yaml --overwrite
 
 checkpoint: ../kl.json
 structure: ../neb/reag_0_opt.xyz

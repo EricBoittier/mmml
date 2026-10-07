@@ -26,8 +26,8 @@ from _common import (
     resolve_checkpoint,
     setup_charmm_nbonds,
 )
-from mmml.interfaces.pycharmmInterface.mmml_calculator import ev2kcalmol
-from mmml.models.physnetjax.physnetjax.calc.helper_mlp import get_ase_calc, get_pyc
+from karml.interfaces.pycharmmInterface.karml_calculator import ev2kcalmol
+from karml.models.physnetjax.physnetjax.calc.helper_mlp import get_ase_calc, get_pyc
 
 
 def _callback_energy_forces(pyc, positions: np.ndarray) -> tuple[float, np.ndarray]:
@@ -88,7 +88,7 @@ def main() -> int:
     z, r = build_ase_cluster(args.residue, args.n_molecules, args.spacing)
     n_atoms = len(z)
 
-    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+    import karml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
     import pycharmm
     import pycharmm.energy as energy
 

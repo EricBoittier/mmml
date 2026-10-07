@@ -11,7 +11,7 @@ import pytest
 
 os.environ.setdefault("JAX_PLATFORMS", "cpu")
 
-from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
+from karml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
 
 
 def _box27_case_names() -> list[str]:
@@ -50,7 +50,7 @@ def test_dcm_box27_synthetic_case_geometry(case_name: str) -> None:
 
 @pytest.mark.parametrize("case_name", _box27_case_names())
 def test_dcm_box27_hybrid_calculator_jax_mm_spoof(case_name: str) -> None:
-    from mmml.interfaces.pycharmmInterface.mmml_calculator import setup_calculator
+    from karml.interfaces.pycharmmInterface.karml_calculator import setup_calculator
     from tests.functionality.neighbor_lists._common import (
         build_liquid_density_synthetic_case,
         liquid_density_synthetic_cases,
@@ -79,7 +79,7 @@ def test_dcm_box27_hybrid_calculator_jax_mm_spoof(case_name: str) -> None:
         return fake_mm_fn
 
     with patch(
-        "mmml.interfaces.pycharmmInterface.mmml_calculator.build_mm_energy_forces_fn",
+        "karml.interfaces.pycharmmInterface.karml_calculator.build_mm_energy_forces_fn",
         side_effect=fake_build_mm,
     ):
         factory = setup_calculator(

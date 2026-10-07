@@ -21,10 +21,10 @@ from typing import Any, Sequence
 
 import numpy as np
 
-from mmml.data.units import KCAL_MOL_TO_EV
-from mmml.md.energy.capacity import COMPUTE_DTYPE
-from mmml.md.energy.registry import EnergyContext, TermFns, register_term
-from mmml.md.system import MolecularSystem
+from karml.data.units import KCAL_MOL_TO_EV
+from karml.md.energy.capacity import COMPUTE_DTYPE
+from karml.md.energy.registry import EnergyContext, TermFns, register_term
+from karml.md.system import MolecularSystem
 
 __all__ = ["RepulsiveCoreVdwTerm"]
 

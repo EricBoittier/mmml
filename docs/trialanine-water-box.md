@@ -2,12 +2,12 @@
 
 A minimal **periodic peptide + water** system for PyCHARMM and JAX MM cross-checks — no Packmol, no protein `toppar`, no MLpot.
 
-For **peptide ML + solvent MM** (partial MLpot), use [`mmml md-embedding`](examples/md-embedding-design.md) `build` — it reuses this box builder and registers PhysNet on segment `PEPT`.
+For **peptide ML + solvent MM** (partial MLpot), use [`karml md-embedding`](examples/md-embedding-design.md) `build` — it reuses this box builder and registers PhysNet on segment `PEPT`.
 
 **Teaching exercise** (gas/solvent φ/ψ maps → dihedral umbrella, plus how to
 swap peptides): [Peptide φ/ψ scan → umbrella PMF](examples/tria-phi-psi-scan.md).
 
-The peptide is a single CGENFF residue **`TRIA`** (documented as **TRIALANINE**: ACE–ALA×3–CT3) in `mmml/data/charmm/top_trialanine_cgenff.rtf`. Waters are TIP3 on a simple cubic grid inside a cubic cell.
+The peptide is a single CGENFF residue **`TRIA`** (documented as **TRIALANINE**: ACE–ALA×3–CT3) in `karml/data/charmm/top_trialanine_cgenff.rtf`. Waters are TIP3 on a simple cubic grid inside a cubic cell.
 
 ![Tri-alanine + TIP3 periodic box](images/structures/trialanine-water-box.png)
 
@@ -20,7 +20,7 @@ CHARMM sequence names are at most **four characters**, so the sequence token is 
 Regenerate the RTF after topology changes (requires protein toppar **only for export**):
 
 ```bash
-./scripts/mmml-charmm-mpirun.sh python scripts/export_trialanine_cgenff_rtf.py
+./scripts/karml-charmm-mpirun.sh python scripts/export_trialanine_cgenff_rtf.py
 ```
 
 ---
@@ -38,7 +38,7 @@ flowchart LR
 
 ![Build pipeline schematic](images/plots/trialanine-build-pipeline.png)
 
-Python entry point: `mmml.interfaces.pycharmmInterface.trialanine_water_box.build_trialanine_water_box_in_charmm`.
+Python entry point: `karml.interfaces.pycharmmInterface.trialanine_water_box.build_trialanine_water_box_in_charmm`.
 
 Default smoke parameters: **10 waters**, **28 Å** cube → **72 atoms** (42 peptide + 30 water).
 
@@ -47,11 +47,11 @@ Default smoke parameters: **10 waters**, **28 Å** cube → **72 atoms** (42 pep
 ## Smoke build (PyCHARMM)
 
 ```bash
-./scripts/mmml-charmm-mpirun.sh python -c "
+./scripts/karml-charmm-mpirun.sh python -c "
 from pathlib import Path
-from mmml.interfaces.pycharmmInterface.import_pycharmm import ensure_pycharmm_loaded
+from karml.interfaces.pycharmmInterface.import_pycharmm import ensure_pycharmm_loaded
 ensure_pycharmm_loaded()
-from mmml.interfaces.pycharmmInterface.trialanine_water_box import build_trialanine_water_box_in_charmm
+from karml.interfaces.pycharmmInterface.trialanine_water_box import build_trialanine_water_box_in_charmm
 box = build_trialanine_water_box_in_charmm(n_waters=10, box_side_A=28.0, seed=11, workdir=Path('/tmp/tria_box'))
 print(len(box.positions), box.psf_path)
 "
@@ -72,7 +72,7 @@ can differ from the MIC-mapped component sum by several kcal/mol.
 
 Run the parity report (metrics tables, JSON, and PNG plots)::
 
-    ./scripts/mmml-charmm-mpirun.sh python scripts/diagnose_trialanine_nb_mismatch.py \\
+    ./scripts/karml-charmm-mpirun.sh python scripts/diagnose_trialanine_nb_mismatch.py \\
       -o artifacts/trialanine_nb_parity
 
 Outputs under ``artifacts/trialanine_nb_parity/``:
@@ -92,7 +92,7 @@ Outputs under ``artifacts/trialanine_nb_parity/``:
 
 CHARMM per-category terms use selective ``BLOCK`` (``SEGID PEPT`` / ``SOLV``). Pass
 ``--category-block`` to the diagnostic script. Under ``mpirun`` this can hang unless
-``MMML_ALLOW_SELECTIVE_BONDED_BLOCK=1`` — default run skips it and still reports
+``KARML_ALLOW_SELECTIVE_BONDED_BLOCK=1`` — default run skips it and still reports
 JAX category breakdown + switch audit.
 
 The functionality test uses ``energy_atol=0.7`` kcal/mol on the 72-atom TRIA box
@@ -109,7 +109,7 @@ The functionality test uses ``energy_atol=0.7`` kcal/mol on the 72-atom TRIA box
 | Term | PyCHARMM | JAX (MIC) | Notes |
 |------|----------|-----------|--------|
 | VDW | ≈ −2 kcal/mol | ≈ +12–32 kcal/mol | **Fixed**: wrong PSF exclusion parse inflated pep–pep VDW |
-| Elec | ≈ −12 kcal/mol | ≈ −15 kcal/mol | Smaller gap when ``MMML_LR_SOLVER=mic`` |
+| Elec | ≈ −12 kcal/mol | ≈ −15 kcal/mol | Smaller gap when ``KARML_LR_SOLVER=mic`` |
 
 After the fix, typical deltas (seed 31 perturb): total MM **≈0.2–0.5 kcal/mol**;
 bonded exact; VDW **≈0.3–0.6 kcal/mol** on the all-in-one ``TRIA`` residue.
@@ -130,7 +130,7 @@ bonded exact; VDW **≈0.3–0.6 kcal/mol** on the all-in-one ``TRIA`` residue.
 3. **Single ``RESI TRIA`` (42 atoms)** — All peptide atoms share one residue; CHARMM and JAX
    agree on graph-distance ≥3 pairs, but CHARMM net intra-peptide VDW is much smaller than JAX.
 4. **Long-range backend** — default ``lr_solver`` is **MIC** (truncated pair loop). For CHARMM
-   comparison tests that require explicit MIC, pass ``lr_solver='mic'`` or ``MMML_LR_SOLVER=mic``.
+   comparison tests that require explicit MIC, pass ``lr_solver='mic'`` or ``KARML_LR_SOLVER=mic``.
    Opt into jax-pme with ``lr_solver: jax_pme`` when you need k-space Coulomb.
 
 ### Practical guidance
@@ -146,7 +146,7 @@ bonded exact; VDW **≈0.3–0.6 kcal/mol** on the all-in-one ``TRIA`` residue.
 
 ```bash
 # Bonded + total-MM (total-MM may fail; see above)
-./scripts/mmml-charmm-mpirun.sh python -m pytest \
+./scripts/karml-charmm-mpirun.sh python -m pytest \
   tests/functionality/charmm/test_trialanine_water_box_mm.py -m pycharmm -v
 
 # Unit tests (no CHARMM)
@@ -159,7 +159,7 @@ See also: `tests/functionality/charmm/README_trialanine_water_box.md`.
 
 ## Doc figures
 
-Bundled CHARMM-built coordinates (`mmml/data/charmm/trialanine-water-smoke.extxyz`) feed MkDocs figures.
+Bundled CHARMM-built coordinates (`karml/data/charmm/trialanine-water-smoke.extxyz`) feed MkDocs figures.
 
 ```bash
 # Once per release (PyCHARMM + CHARMM_HOME):

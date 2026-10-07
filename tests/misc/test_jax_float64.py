@@ -89,7 +89,7 @@ import jax
 jax.config.update("jax_enable_x64", True)
 import jax.numpy as jnp
 
-from mmml.utils.model_checkpoint import json_to_params, to_jsonable
+from karml.utils.model_checkpoint import json_to_params, to_jsonable
 
 params = {"x": [[0.1, 0.2], [0.3, 0.4]]}
 with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:

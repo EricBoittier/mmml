@@ -1,6 +1,6 @@
 """Host-side Verlet list over molecule centroids for sparse ML dimer selection.
 
-The sparse-dimer path in ``mmml_calculator.get_ML_energy_fn`` selects the ML
+The sparse-dimer path in ``karml_calculator.get_ML_energy_fn`` selects the ML
 dimers whose centroid separation is ``< active_radius`` (``mm_switch_on`` +
 ``ml_dimer_active_margin``). Without a list it evaluates that distance for all
 ``n(n-1)/2`` pairs every step. This module keeps a candidate list of pairs with
@@ -30,8 +30,8 @@ jitted function (after ``ml_reorder_indices``), the same quantity as
 the host list uses the true one plus a small float tolerance, so the list is a
 superset of the in-graph active set.
 
-Env: ``MMML_ML_DIMER_CENTROID_NL`` (on/off), ``MMML_ML_DIMER_CENTROID_NL_SKIN_A``,
-``MMML_ML_DIMER_CENTROID_NL_HEADROOM``.
+Env: ``KARML_ML_DIMER_CENTROID_NL`` (on/off), ``KARML_ML_DIMER_CENTROID_NL_SKIN_A``,
+``KARML_ML_DIMER_CENTROID_NL_HEADROOM``.
 """
 
 from __future__ import annotations
@@ -42,9 +42,9 @@ from typing import Any, Optional, Sequence
 
 import numpy as np
 
-CENTROID_NL_ENV = "MMML_ML_DIMER_CENTROID_NL"
-CENTROID_NL_SKIN_ENV = "MMML_ML_DIMER_CENTROID_NL_SKIN_A"
-CENTROID_NL_HEADROOM_ENV = "MMML_ML_DIMER_CENTROID_NL_HEADROOM"
+CENTROID_NL_ENV = "KARML_ML_DIMER_CENTROID_NL"
+CENTROID_NL_SKIN_ENV = "KARML_ML_DIMER_CENTROID_NL_SKIN_A"
+CENTROID_NL_HEADROOM_ENV = "KARML_ML_DIMER_CENTROID_NL_HEADROOM"
 DEFAULT_CENTROID_NL_SKIN_A = 1.0
 DEFAULT_CENTROID_NL_HEADROOM = 1.3
 # Å added to the list radius: host float64 vs in-graph (possibly float32) COM
@@ -55,7 +55,7 @@ _FALSE = ("0", "false", "no", "off")
 
 
 def resolve_centroid_nl_enabled(flag: Optional[bool]) -> bool:
-    """Explicit argument wins, then ``MMML_ML_DIMER_CENTROID_NL``, default on."""
+    """Explicit argument wins, then ``KARML_ML_DIMER_CENTROID_NL``, default on."""
     if flag is not None:
         return bool(flag)
     env = (os.environ.get(CENTROID_NL_ENV) or "").strip().lower()

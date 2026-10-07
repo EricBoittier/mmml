@@ -7,8 +7,8 @@ box, keeps FIRE intermediates and NVT frames (labelled E/F, cell) in
 
 Example::
 
-    MMML_METATOMIC_DEVICE=cuda CUDA_VISIBLE_DEVICES=0 \\
-      mmml pet-box-dataset --checkpoint pet-mad-xs-v1.5.0.pt \\
+    KARML_METATOMIC_DEVICE=cuda CUDA_VISIBLE_DEVICES=0 \\
+      karml pet-box-dataset --checkpoint pet-mad-xs-v1.5.0.pt \\
       --seeds 0-15 --out-dir runs/etoh_box_dataset
 """
 
@@ -39,7 +39,7 @@ def parse_seeds(text: str) -> list[int]:
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        prog="mmml pet-box-dataset",
+        prog="karml pet-box-dataset",
         description=(
             "Many-seed periodic PET dataset: random packing, FIRE intermediates "
             "and Langevin NVT frames, labelled with the driving model (extxyz)."
@@ -110,9 +110,9 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    from mmml.distill.box_dataset import BoxDatasetConfig, flag_energy_outliers, run_seed
-    from mmml.interfaces.calculators.metatomic import load_metatomic_calculator
-    from mmml.md.metatomic_pbc import (
+    from karml.distill.box_dataset import BoxDatasetConfig, flag_energy_outliers, run_seed
+    from karml.interfaces.calculators.metatomic import load_metatomic_calculator
+    from karml.md.metatomic_pbc import (
         default_etoh_monomer_xyz,
         n_molecules_for_residue_box,
     )

@@ -155,7 +155,7 @@ _auto_find_fftw_root() {
 }
 
 PLATFORM_TAG="$(_platform_tag)"
-LOCAL_BUILD="${CHARMM_BUILD_DIR:-${HOME}/.cache/mmml-charmm-build/${PLATFORM_TAG}}"
+LOCAL_BUILD="${CHARMM_BUILD_DIR:-${HOME}/.cache/karml-charmm-build/${PLATFORM_TAG}}"
 OPENMPI_ROOT="${OPENMPI_ROOT:-${EBROOTOPENMPI:-}}"
 if [[ -z "$OPENMPI_ROOT" || ! -x "${OPENMPI_ROOT}/bin/mpicc" ]]; then
   if _mpi_found="$(_auto_find_openmpi_root 2>/dev/null)"; then
@@ -211,34 +211,34 @@ fi
 [[ -z "$FFTWF_ROOT" ]] && FFTWF_ROOT="$FFTW_ROOT"
 
 # libcharmm.so needs shared FFTW; cluster /opt static .a lacks -fPIC.
-_MMML_FFTW_PIC="${MMML_FFTW_ROOT:-${HOME}/.local/fftw-3.3.10-pic}"
+_KARML_FFTW_PIC="${KARML_FFTW_ROOT:-${HOME}/.local/fftw-3.3.10-pic}"
 _pic_fftw_ready() {
-  [[ -f "${_MMML_FFTW_PIC}/lib/libfftw3.so" && -f "${_MMML_FFTW_PIC}/lib/libfftw3f.so" ]]
+  [[ -f "${_KARML_FFTW_PIC}/lib/libfftw3.so" && -f "${_KARML_FFTW_PIC}/lib/libfftw3f.so" ]]
 }
-if [[ -n "${MMML_FFTW_ROOT:-}" ]]; then
+if [[ -n "${KARML_FFTW_ROOT:-}" ]]; then
   if _pic_fftw_ready; then
-    FFTW_ROOT="$_MMML_FFTW_PIC"
-    FFTWF_ROOT="$_MMML_FFTW_PIC"
-    echo "Using PIC/shared FFTW (MMML_FFTW_ROOT): $FFTW_ROOT" >&2
+    FFTW_ROOT="$_KARML_FFTW_PIC"
+    FFTWF_ROOT="$_KARML_FFTW_PIC"
+    echo "Using PIC/shared FFTW (KARML_FFTW_ROOT): $FFTW_ROOT" >&2
   else
-    echo "rebuild_charmm_mlpot: MMML_FFTW_ROOT=$_MMML_FFTW_PIC but shared libs are missing." >&2
-    echo "  Expected: \$_MMML_FFTW_PIC/lib/libfftw3.so and libfftw3f.so" >&2
+    echo "rebuild_charmm_mlpot: KARML_FFTW_ROOT=$_KARML_FFTW_PIC but shared libs are missing." >&2
+    echo "  Expected: \$_KARML_FFTW_PIC/lib/libfftw3.so and libfftw3f.so" >&2
     echo "  One-time build (~5–15 min):" >&2
     echo "    bash scripts/build_fftw_pic.sh" >&2
     echo "  Then:" >&2
-    echo "    export MMML_FFTW_ROOT=\${HOME}/.local/fftw-3.3.10-pic" >&2
-    echo "    export FFTW_ROOT=\$MMML_FFTW_ROOT FFTWF_ROOT=\$MMML_FFTW_ROOT" >&2
+    echo "    export KARML_FFTW_ROOT=\${HOME}/.local/fftw-3.3.10-pic" >&2
+    echo "    export FFTW_ROOT=\$KARML_FFTW_ROOT FFTWF_ROOT=\$KARML_FFTW_ROOT" >&2
     echo "    OPENMPI_ROOT=/opt/gcc-12.2.0/openmpi-4.1.4/build bash scripts/rebuild_charmm_mlpot.sh --clean" >&2
     exit 1
   fi
 elif [[ -z "${FFTW_ROOT:-}" || "${FFTW_ROOT}" == /opt/* || "${FFTW_ROOT}" == /srv/opt/* ]]; then
   if _pic_fftw_ready; then
-    FFTW_ROOT="$_MMML_FFTW_PIC"
-    FFTWF_ROOT="$_MMML_FFTW_PIC"
+    FFTW_ROOT="$_KARML_FFTW_PIC"
+    FFTWF_ROOT="$_KARML_FFTW_PIC"
     echo "Using PIC/shared FFTW: $FFTW_ROOT" >&2
   fi
 fi
-unset _MMML_FFTW_PIC
+unset _KARML_FFTW_PIC
 
 if [[ "$(uname -s)" == "Darwin" ]]; then
   LIB_BASENAME="libcharmm.dylib"
@@ -261,26 +261,26 @@ usage() {
 Usage: $(basename "$0") [--clean] [--use-nfs-build] [--debug] [--no-domdec] [--no-mpi] [--skip-packmol] [--native-exec]
 
   --clean             Remove the cmake build directory and reconfigure from scratch.
-  --use-nfs-build     Build in setup/charmm/build/cmake (default: \$HOME/.cache/mmml-charmm-build/<platform>).
+  --use-nfs-build     Build in setup/charmm/build/cmake (default: \$HOME/.cache/karml-charmm-build/<platform>).
   --debug             RelWithDebInfo + -g -fbacktrace (readable gdb/addr2line on segfaults).
   --no-domdec         CMake -Ddomdec=OFF (no DOMDEC send_coord_to_recip path; MPI MLpot SD).
   --no-mpi            CMake -Dmpi=OFF (serial libcharmm; implies --no-domdec). Separate
                       build dir .../${PLATFORM_TAG}-nompi so MPI and serial caches coexist.
-  --skip-packmol      Skip rebuilding mmml/generate/packmol/packmol for this platform.
+  --skip-packmol      Skip rebuilding karml/generate/packmol/packmol for this platform.
   --native-exec       Build charmm executable (as_library=OFF) for DOMDEC tier3 smoke; skips Packmol.
 
 Build profile (default): MPI + DOMDEC + COLFFT + KEY_LIBRARY (as_library=ON), domdec_gpu=OFF.
 Also enables KEY_ADUMBRXNCOR (pref keyword ADUMBRXNCOR; CHARMM ``?ADUMBRXN``) so
 ``umbrella rxncor`` works with adaptive umbrella + RXNCOR (examples/m ADUMB smokes).
-Also builds Packmol (mmml/generate/packmol/packmol) unless --skip-packmol or --native-exec.
+Also builds Packmol (karml/generate/packmol/packmol) unless --skip-packmol or --native-exec.
 MLpot workflows run with DOMDEC compiled in but disabled at runtime (domdec off, mpirun -np 1).
 Use --no-domdec when MLpot SD still segfaults in send_coord_to_recip after JAX warmup.
-Use --no-mpi for day-to-day pytest / bonded parity without mmml-charmm-mpirun.sh.
+Use --no-mpi for day-to-day pytest / bonded parity without karml-charmm-mpirun.sh.
 Use --native-exec (or scripts/rebuild_charmm_native_exec.sh) for Tier 3 DOMDEC np>1 smoke.
 
 Environment:
   CHARMM_HOME       CHARMM source tree (default: $ROOT/setup/charmm)
-  CHARMM_BUILD_DIR  CMake build directory (default: \$HOME/.cache/mmml-charmm-build/${PLATFORM_TAG}
+  CHARMM_BUILD_DIR  CMake build directory (default: \$HOME/.cache/karml-charmm-build/${PLATFORM_TAG}
                     or .../${PLATFORM_TAG}-nompi with --no-mpi)
   CHARMM_BUILD_TYPE CMake build type (default: Release; --debug sets RelWithDebInfo)
   CHARMM_PYTHON     Interpreter for the pycharmm pip target (default: \$ROOT/.venv/bin/python
@@ -289,7 +289,7 @@ Environment:
   MPI_CC/MPI_CXX/MPI_FC  Override MPI compiler wrappers (ignored with --no-mpi)
   FFTW_ROOT         Double-precision FFTW prefix (libfftw3); falls back to EBROOTFFTW.
   FFTWF_ROOT        Single-precision FFTW prefix (libfftw3f); defaults to FFTW_ROOT.
-  MMML_FFTW_ROOT    User PIC/shared FFTW prefix (default: ~/.local/fftw-3.3.10-pic).
+  KARML_FFTW_ROOT    User PIC/shared FFTW prefix (default: ~/.local/fftw-3.3.10-pic).
                     Build once: bash scripts/build_fftw_pic.sh
                     Full guide: docs/fftw-build.md
                     On clusters that split precisions (e.g. fftw-X.Y.Z vs fftw-X.Y.Z-dp),
@@ -332,14 +332,14 @@ if [[ ! -f "$F90" ]]; then
   exit 1
 fi
 
-if [[ -n "${MMML_PATCH_SOURCE:-}" ]]; then
-  if [[ ! -f "$MMML_PATCH_SOURCE" ]]; then
-    echo "rebuild_charmm_mlpot: MMML_PATCH_SOURCE not found: $MMML_PATCH_SOURCE" >&2
+if [[ -n "${KARML_PATCH_SOURCE:-}" ]]; then
+  if [[ ! -f "$KARML_PATCH_SOURCE" ]]; then
+    echo "rebuild_charmm_mlpot: KARML_PATCH_SOURCE not found: $KARML_PATCH_SOURCE" >&2
     exit 1
   fi
-  if ! cmp -s "$MMML_PATCH_SOURCE" "$F90"; then
-    echo "Applying tier api_func.F90 from $MMML_PATCH_SOURCE"
-    cp -f "$MMML_PATCH_SOURCE" "$F90"
+  if ! cmp -s "$KARML_PATCH_SOURCE" "$F90"; then
+    echo "Applying tier api_func.F90 from $KARML_PATCH_SOURCE"
+    cp -f "$KARML_PATCH_SOURCE" "$F90"
   fi
 fi
 
@@ -361,7 +361,7 @@ if [[ "$NO_MPI" != 1 ]]; then
       [[ -n "$line" ]] && eval "$line"
     done < <(
       python3 -c "
-from mmml.interfaces.pycharmmInterface.charmm_mpi import mpi_shell_setup_lines
+from karml.interfaces.pycharmmInterface.charmm_mpi import mpi_shell_setup_lines
 print('\n'.join(mpi_shell_setup_lines()))
 " 2>/dev/null || true
     )
@@ -403,7 +403,7 @@ fi
 # Drop stale NFS cmake cache from an old repo path (e.g. studixh -> mmhome).
 if [[ -d "$NFS_BUILD" ]]; then
   if [[ -f "$NFS_BUILD/CMakeCache.txt" ]]; then
-    if grep -qE 'studixh|CMAKE_HOME_DIRECTORY:INTERNAL=.*/mmml/setup/charmm/build/cmake' \
+    if grep -qE 'studixh|CMAKE_HOME_DIRECTORY:INTERNAL=.*/karml/setup/charmm/build/cmake' \
       "$NFS_BUILD/CMakeCache.txt" 2>/dev/null; then
       cached_src="$(grep '^CHARMM_SOURCE_DIR:STATIC=' "$NFS_BUILD/CMakeCache.txt" | cut -d= -f2- || true)"
       if [[ -n "$cached_src" && "$cached_src" != "$CHARMM_HOME" ]]; then
@@ -521,7 +521,7 @@ _assert_charmm_domdec_cmake_flags() {
 # library build's CMakeCache (which succeeded when the library was built).
 # ---------------------------------------------------------------------------
 if [[ -z "$FFTW_ROOT" ]]; then
-  _lib_cache="${HOME}/.cache/mmml-charmm-build/$(_platform_tag)/CMakeCache.txt"
+  _lib_cache="${HOME}/.cache/karml-charmm-build/$(_platform_tag)/CMakeCache.txt"
   if [[ -f "$_lib_cache" ]]; then
     _fftw_inc="$(grep '^FFTW_INCLUDE_DIR:PATH=' "$_lib_cache" 2>/dev/null | cut -d= -f2- || true)"
     if [[ -n "$_fftw_inc" && -d "$_fftw_inc" ]]; then
@@ -697,8 +697,8 @@ if [[ "$needs_configure" == 1 ]]; then
           echo "rebuild_charmm_mlpot: $_lib_name is static ($_lib_val) — cannot link into libcharmm.so (needs -fPIC)." >&2
           echo "  One-time fix on this node:" >&2
           echo "    bash scripts/build_fftw_pic.sh" >&2
-          echo "    export MMML_FFTW_ROOT=\${HOME}/.local/fftw-3.3.10-pic" >&2
-          echo "    export FFTW_ROOT=\$MMML_FFTW_ROOT FFTWF_ROOT=\$MMML_FFTW_ROOT" >&2
+          echo "    export KARML_FFTW_ROOT=\${HOME}/.local/fftw-3.3.10-pic" >&2
+          echo "    export FFTW_ROOT=\$KARML_FFTW_ROOT FFTWF_ROOT=\$KARML_FFTW_ROOT" >&2
           echo "    OPENMPI_ROOT=/opt/gcc-12.2.0/openmpi-4.1.4/build bash scripts/rebuild_charmm_mlpot.sh --clean" >&2
           exit 1
         fi
@@ -790,7 +790,7 @@ Verify Tier 3 DOMDEC smoke (dense ~40Å prep, np=2):
   CHARMM_EXE=$EXE_OUT bash scripts/run_domdec_dcm10_smoke.sh tier3
 
 If domdec ndir is "extraneous" at runtime, DOMDEC was not compiled in (check domdec/colfft in CMakeCache).
-Site c47 /opt/charmm/c47* rejects np=2 NDIR; use this MMML native binary instead.
+Site c47 /opt/charmm/c47* rejects np=2 NDIR; use this KARML native binary instead.
 EOF
   exit 0
 fi
@@ -854,30 +854,30 @@ fi
 if [[ "$NO_MPI" == 1 ]]; then
   cat <<EOF
 Installed serial $LIB_OUT (and $CHARMM_HOME/lib/$LIB_BASENAME).
-MPI cmake cache (if any) remains under \${HOME}/.cache/mmml-charmm-build/${PLATFORM_TAG}.
+MPI cmake cache (if any) remains under \${HOME}/.cache/karml-charmm-build/${PLATFORM_TAG}.
 
 Pytest / bonded parity without OpenMPI launcher:
   export CHARMM_HOME="$CHARMM_HOME"
   export CHARMM_LIB_DIR="$CHARMM_HOME/lib"
-  export MMML_NO_CHARMM_MPI=1
-  export MMML_NO_MPI_RERUN=1
+  export KARML_NO_CHARMM_MPI=1
+  export KARML_NO_MPI_RERUN=1
   unset OMPI_COMM_WORLD_RANK OMPI_COMM_WORLD_SIZE PMI_RANK PMI_SIZE
   ldd "\$CHARMM_LIB_DIR/$LIB_BASENAME" | grep -i mpi || echo "OK: no libmpi"
   uv run pytest tests/functionality/charmm/test_jax_mm_spoof_bonded_pycharmm.py -v
 
-Do not use scripts/mmml-charmm-mpirun.sh with this lib.
+Do not use scripts/karml-charmm-mpirun.sh with this lib.
 Restore MPI lib later: ./scripts/rebuild_charmm_mlpot.sh --clean
 EOF
 else
   cat <<EOF
 Verify:
-  uv run python -c "from mmml.interfaces.pycharmmInterface.mlpot.mlpot_limits import mlpot_limits_message; print(mlpot_limits_message())"
+  uv run python -c "from karml.interfaces.pycharmmInterface.mlpot.mlpot_limits import mlpot_limits_message; print(mlpot_limits_message())"
 Expect: max_Nml=50000, max_Npr=8000000, source=api_func.F90 ($LIB_BASENAME is up to date)
-  uv run python -c "from mmml.interfaces.pycharmmInterface.packmol_placement import packmol_executable; print(packmol_executable())"
+  uv run python -c "from karml.interfaces.pycharmmInterface.packmol_placement import packmol_executable; print(packmol_executable())"
 If you see max_Nml=100: rebuild with scripts/rebuild_charmm_mlpot.sh (paths auto-discover from setup/charmm).
 
 Segfault diagnosis:
-  MMML_MPI_GDB=1 ./scripts/mmml-charmm-mpirun.sh md-system --config ...
+  KARML_MPI_GDB=1 ./scripts/karml-charmm-mpirun.sh md-system --config ...
   (uses OMPI_MCA_orte_abort_print_stack=1 by default; ignore PRRTE Sphinx help noise)
 EOF
 fi

@@ -1,8 +1,8 @@
 # Liquid box workflow — design
 
-Dense periodic liquid boxes are a solved problem in classical MD. In MMML the difficulty is not Packmol or box sizing — it is getting from a plausible initial geometry to a **hybrid ML+MM minimization basin** at target liquid density without drowning in recovery flags.
+Dense periodic liquid boxes are a solved problem in classical MD. In KARML the difficulty is not Packmol or box sizing — it is getting from a plausible initial geometry to a **hybrid ML+MM minimization basin** at target liquid density without drowning in recovery flags.
 
-This document defines a **two-phase workflow** that separates box certification (MM-only) from hybrid MD, and describes the `mmml liquid-box` spike that implements Phase A.
+This document defines a **two-phase workflow** that separates box certification (MM-only) from hybrid MD, and describes the `karml liquid-box` spike that implements Phase A.
 
 See also: [md-system-configs.md § Resilient density prep](md-system-configs.md#resilient-density-prep-liquid_prep-true), [Packmol placement](packmol-placement.md).
 
@@ -10,7 +10,7 @@ See also: [md-system-configs.md § Resilient density prep](md-system-configs.md#
 
 ## Problem statement
 
-Today, `mmml md-system` runs Packmol (default for `composition`), MC density equalization, CHARMM MM relaxation, pre-MLpot geometry recovery, MLpot registration, minimization, GRMS waterfalls, density prep ladders, and dynamics overlap rescue in one long `staged_workflow`. Each failure mode gained its own hook; the same recovery steps (monomer repack, MC volume moves, lattice ABNR) appear in four different places.
+Today, `karml md-system` runs Packmol (default for `composition`), MC density equalization, CHARMM MM relaxation, pre-MLpot geometry recovery, MLpot registration, minimization, GRMS waterfalls, density prep ladders, and dynamics overlap rescue in one long `staged_workflow`. Each failure mode gained its own hook; the same recovery steps (monomer repack, MC volume moves, lattice ABNR) appear in four different places.
 
 **Symptoms:**
 
@@ -35,7 +35,7 @@ Today, `mmml md-system` runs Packmol (default for `composition`), MC density equ
 
 ```mermaid
 flowchart TD
-  subgraph phaseA ["Phase A — mmml liquid-box (MM only)"]
+  subgraph phaseA ["Phase A — karml liquid-box (MM only)"]
     A1[Packmol @ start_density]
     A2[MC → target ρ]
     A3[CHARMM SD/ABNR]
@@ -47,7 +47,7 @@ flowchart TD
     A5 -->|yes| CERT["box.json + REPORT.md + model.psf/crd"]
   end
 
-  subgraph phaseB ["Phase B — mmml md-system (hybrid)"]
+  subgraph phaseB ["Phase B — karml md-system (hybrid)"]
     B1[Register MLpot]
     B2[SD mini]
     B3{GRMS ≤ threshold?}
@@ -66,7 +66,7 @@ flowchart TD
 
 ## Artifact layout
 
-After `mmml liquid-box` completes successfully:
+After `karml liquid-box` completes successfully:
 
 ```
 output-dir/
@@ -123,7 +123,7 @@ Explicit flags still override profile defaults.
 
 ```bash
 # Build + certify (MM only; no checkpoint required)
-mmml liquid-box \
+karml liquid-box \
   --composition DCM:206 \
   --target-density-g-cm3 1.326 \
   --profile dense \
@@ -134,7 +134,7 @@ cat boxes/dcm206/REPORT.md
 ls boxes/dcm206/prep_ladder/
 
 # Hybrid MD from certified box (ase/jaxmd/pycharmm all honor --from-psf/--from-crd)
-mmml md-system \
+karml md-system \
   --from-psf boxes/dcm206/model.psf \
   --from-crd boxes/dcm206/model.crd \
   --checkpoint /path/to/DESdimers_params.json \
@@ -175,7 +175,7 @@ All [box-sizing](md-system-configs.md) and Packmol composition flags from `md-sy
 ### Spike (this PR)
 
 - [x] Design doc (this file)
-- [x] `mmml liquid-box` CLI entry point
+- [x] `karml liquid-box` CLI entry point
 - [x] `liquid_box_build.run_liquid_box_build()` — extracts MM-only legs from `staged_workflow`
 - [x] `box.json` + `REPORT.md` certification output
 - [x] Unit tests for profiles, report writing, argv wiring (mocked CHARMM)
@@ -187,7 +187,7 @@ All [box-sizing](md-system-configs.md) and Packmol composition flags from `md-sy
 - [ ] Unify recovery into one `run_box_recovery_loop()` shared by gate, ladder, cleanup
 - [ ] Skip preventive prep in `staged_workflow` when certified `box.json` is present
 - [ ] CHARMM tier preflight in `liquid-box` (today: same as staged workflow when MLpot follows)
-- [ ] YAML example `mmml/cli/run/liquid_box.example.yaml`
+- [ ] YAML example `karml/cli/run/liquid_box.example.yaml`
 
 ---
 
@@ -217,10 +217,10 @@ MM GRMS is recorded in `box.json` but does **not** gate certification in Phase A
 ### New dense liquid
 
 ```bash
-mmml liquid-box --composition DCM:206 --profile dense \
+karml liquid-box --composition DCM:206 --profile dense \
   --target-density-g-cm3 1.326 -o boxes/dcm206
 
-mmml md-system --from-psf boxes/dcm206/model.psf \
+karml md-system --from-psf boxes/dcm206/model.psf \
   --from-crd boxes/dcm206/model.crd \
   --checkpoint DESdimers_params.json \
   --md-stages mini,heat,equi -o runs/dcm206_equil
@@ -229,7 +229,7 @@ mmml md-system --from-psf boxes/dcm206/model.psf \
 ### Fast iteration — tune density without MLpot
 
 ```bash
-mmml liquid-box --composition DCM:206 --profile conservative \
+karml liquid-box --composition DCM:206 --profile conservative \
   --bulk-density-fraction 0.55 -o boxes/dcm206_try2
 # inspect prep_ladder/ and REPORT.md; repeat until PASS
 ```
@@ -237,7 +237,7 @@ mmml liquid-box --composition DCM:206 --profile conservative \
 ### Recovery — run broke mid-equil
 
 ```bash
-mmml md-system --restart-from runs/dcm206_equil/heat.res \
+karml md-system --restart-from runs/dcm206_equil/heat.res \
   --cleanup --md-stages heat,equi -o runs/dcm206_fix
 # inspect cleanup/; re-run production without --cleanup
 ```
@@ -250,11 +250,11 @@ mmml md-system --restart-from runs/dcm206_equil/heat.res \
 
 | Module | Role |
 |--------|------|
-| `mmml/cli/run/liquid_box.py` | CLI parser + dispatch |
-| `mmml/interfaces/pycharmmInterface/mlpot/liquid_box_build.py` | Phase A orchestration |
-| `mmml/interfaces/pycharmmInterface/mlpot/density_prep_ladder.py` | Pre-MLpot geometry gate (reused) |
-| `mmml/interfaces/pycharmmInterface/mlpot/recovery_progress.py` | `prep_ladder/` checkpoints |
-| `mmml/interfaces/pycharmmInterface/mlpot/staged_workflow.py` | Phase B (today includes Phase A) |
+| `karml/cli/run/liquid_box.py` | CLI parser + dispatch |
+| `karml/interfaces/pycharmmInterface/mlpot/liquid_box_build.py` | Phase A orchestration |
+| `karml/interfaces/pycharmmInterface/mlpot/density_prep_ladder.py` | Pre-MLpot geometry gate (reused) |
+| `karml/interfaces/pycharmmInterface/mlpot/recovery_progress.py` | `prep_ladder/` checkpoints |
+| `karml/interfaces/pycharmmInterface/mlpot/staged_workflow.py` | Phase B (today includes Phase A) |
 
 ### Consolidation target
 

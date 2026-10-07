@@ -26,7 +26,7 @@ temperatures: [50.0]
 temperature_ladder: false
 box_sizes: [32.0]
 
-checkpoint: ${MMML_CKPT}
+checkpoint: ${KARML_CKPT}
 output_root: artifacts/dcm_density_setup_compare
 seed_base: 4242
 

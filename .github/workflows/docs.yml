@@ -17,7 +17,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v6
-      - uses: ./.github/actions/setup-mmml
+      - uses: ./.github/actions/setup-karml
       - name: Refresh generated docs and fail on drift
         run: uv run python scripts/ci/refresh_generated_docs.py --diff
       - name: Upload regen patch
@@ -34,7 +34,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - uses: ./.github/actions/setup-mmml
+      - uses: ./.github/actions/setup-karml
       - name: Build MkDocs
         run: |
           uv run python scripts/plot_mlpot_settings.py
@@ -46,7 +46,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - uses: ./.github/actions/setup-mmml
+      - uses: ./.github/actions/setup-karml
       - name: Set up Node.js
         uses: actions/setup-node@v6
         with:
@@ -62,12 +62,12 @@ jobs:
           EOF
       - name: Build PDF docs
         env:
-          MMML_MERMAID_PUPPETEER_CONFIG: mermaid-puppeteer-config.json
+          KARML_MERMAID_PUPPETEER_CONFIG: mermaid-puppeteer-config.json
         run: |
           uv run python scripts/plot_mlpot_settings.py
           uv run python scripts/build_docs_pdf.py
       - name: Upload PDF artifact
         uses: actions/upload-artifact@v4
         with:
-          name: mmml-docs-pdf
-          path: site/mmml-docs.pdf
+          name: karml-docs-pdf
+          path: site/karml-docs.pdf

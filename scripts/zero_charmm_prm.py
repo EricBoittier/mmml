@@ -7,8 +7,8 @@ no energy but topology lookup must remain intact.
 
 Usage:
     python scripts/zero_charmm_prm.py \\
-        mmml/data/charmm/par_all36_cgenff.prm \\
-        mmml/data/charmm/zeroed_par_all36_cgenff.prm
+        karml/data/charmm/par_all36_cgenff.prm \\
+        karml/data/charmm/zeroed_par_all36_cgenff.prm
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from mmml.interfaces.pycharmmInterface.charmm_prm_zero import (
+from karml.interfaces.pycharmmInterface.charmm_prm_zero import (
     bonded_only_prm_text,
     zero_prm_file,
     zero_prm_line,

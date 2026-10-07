@@ -1,4 +1,4 @@
-# MLpot workflows (`mmml.interfaces.pycharmmInterface.mlpot`)
+# MLpot workflows (`karml.interfaces.pycharmmInterface.mlpot`)
 
 Helpers for **CHARMM MLpot** (PhysNet, KerNN, or metatomic AtomisticModel), based
 on the validated scripts in `tests/functionality/mlpot/`.
@@ -8,7 +8,7 @@ with a `.pt` export. Fragment ML/MM (`--metatomic-eval-mode fragments`, default)
 or whole-system USER. Torch is not placed inside the JAX spherical_fn. See
 [`docs/metatomic.md`](../../../../docs/metatomic.md).
 
-**Nonbond lists:** how CHARMM and MMML neighbor lists interact, update frequencies, and NVE stability — see [NONBOND_LISTS.md](NONBOND_LISTS.md).
+**Nonbond lists:** how CHARMM and KARML neighbor lists interact, update frequencies, and NVE stability — see [NONBOND_LISTS.md](NONBOND_LISTS.md).
 
 **Long-range electrostatics:** optional ScaFaCoS / jax-pme backends for k-space Coulomb beyond the JAX MM cutoff — see [LONG_RANGE_ELECTROSTATICS.md](LONG_RANGE_ELECTROSTATICS.md) and [ScaFaCoS README](../../scafacosInterface/README.md).
 
@@ -16,7 +16,7 @@ or whole-system USER. Torch is not placed inside the JAX spherical_fn. See
 
 ```python
 import ase
-from mmml.interfaces.pycharmmInterface.mlpot import (
+from karml.interfaces.pycharmmInterface.mlpot import (
     load_physnet_mlpot_bundle,
     register_mlpot,
     select_all_atoms,
@@ -55,7 +55,7 @@ A manifest ``minimize_snapshots_<tag>.json`` lists every snapshot.
 |-----|---------------|------|-----------|
 | 00 | ``00_packmol_cluster_<tag>`` | packmol | Packmol placement (PSF+PDB) |
 | 01 | ``01_charmm_mm_<tag>`` | MM | CGENFF SD/ABNR before MLpot |
-| 02 | ``02_mlpot_mmml_<tag>`` | MMML | MLpot PhysNet SD (USER term) |
+| 02 | ``02_mlpot_karml_<tag>`` | KARML | MLpot PhysNet SD (USER term) |
 | 03 | ``03_bonded_mm_after_mini_<tag>`` | bonded_MM | Bonded-only recovery after mini (if run) |
 | 04 | ``04_bonded_mm_after_heat_<tag>`` | bonded_MM | Bonded-only recovery after heat (if run) |
 | 10+ | ``10_rescue_<context>_<tag>`` | intra_rescue | Overlap / intra close-contact rescue |
@@ -68,7 +68,7 @@ MLpot on the **whole** system; two SD passes — free, then `cons_fix` on select
 
 ```python
 from pathlib import Path
-from mmml.interfaces.pycharmmInterface.mlpot import (
+from karml.interfaces.pycharmmInterface.mlpot import (
     MinimizeWithMlpotConfig,
     minimize_with_mlpot,
     select_by_resid,
@@ -101,7 +101,7 @@ Prefer **CRD** over PDB when reloading minimized structures (avoids ML nonbond e
 
 ```python
 from pathlib import Path
-from mmml.interfaces.pycharmmInterface.mlpot import (
+from karml.interfaces.pycharmmInterface.mlpot import (
     CharmmTrajectoryFiles,
     build_heat_dynamics,
     build_nve_dynamics,
@@ -142,7 +142,7 @@ Chained production restarts: `production_restart_chain(data_dir, n_segments=10)`
 Same as production `dyna.inp` — quartic wall outside ``droff``:
 
 ```python
-from mmml.interfaces.pycharmmInterface.mlpot import apply_flat_bottom_workflow
+from karml.interfaces.pycharmmInterface.mlpot import apply_flat_bottom_workflow
 
 apply_flat_bottom_workflow(radius=20.0, force=1.0, center_at_origin=True)
 ```
@@ -161,20 +161,20 @@ Script 05: ``--echeck 100`` (default; auto-loosened for large clusters — DCM:9
 
 See `partial_mm.py` — segment registration works; **ML–MM pair electrostatics** (`idxu`/`idxv`) raise `NotImplementedError` until implemented in `PyCharmm_Calculator`.
 
-## CLI (`mmml md-system --backend pycharmm`)
+## CLI (`karml md-system --backend pycharmm`)
 
 Vacuum MLpot workflows are wired into the main MD CLI (same logic as scripts 04–05):
 
 ```bash
-mmml md-system --setup free_nve --backend pycharmm --residue ACO --n-molecules 4 \
+karml md-system --setup free_nve --backend pycharmm --residue ACO --n-molecules 4 \
   --flat-bottom-radius 20 --ps 0.5 --fix-resids 1,3
 
-mmml md-system --setup pycharmm_minimize --composition ACO:2 --mini-nstep 30
+karml md-system --setup pycharmm_minimize --composition ACO:2 --mini-nstep 30
 
-python -m mmml.cli.run.md_pbc_suite.pycharmm_mlpot --phase dynamics --ensemble nve --help
+python -m karml.cli.run.md_pbc_suite.pycharmm_mlpot --phase dynamics --ensemble nve --help
 ```
 
-Implementation: `mmml/cli/run/md_pbc_suite/pycharmm_mlpot.py`, `mlpot/run_workflow.py`, shared flags in `mlpot/cli_common.py`.
+Implementation: `karml/cli/run/md_pbc_suite/pycharmm_mlpot.py`, `mlpot/run_workflow.py`, shared flags in `mlpot/cli_common.py`.
 
 ## Periodic boundaries (PBC) with MIC
 
@@ -185,7 +185,7 @@ For ``--setup pbc_*``, the PyCHARMM backend:
 
 **Do not “fix” `stop_gradient` on the ML-dimer MIC wrap.** Monomer B is
 shifted by an exact-MIC lattice vector with `stop_gradient(shift)` in
-`mmml_calculator`. That shift is piecewise-constant (Jacobian ≈ 0 almost
+`karml_calculator`. That shift is piecewise-constant (Jacobian ≈ 0 almost
 everywhere). Replacing it with smooth MIC and/or VJP’ing forces through the
 wrap to chase NVE force–energy consistency creates huge forces near ±L/2 and
 breaks minimize/MD. See `.cursor/rules/pbc-dimer-mic-wrap.mdc`.
@@ -215,7 +215,7 @@ MLpot MIC PBC synced to CHARMM L=39.821 Å (was 40.000 Å)
 Single-monomer ``PyCharmm_Calculator`` (``n_monomers=1``) does not yet use MIC; multi-monomer Packmol clusters use the decomposed path above.
 
 ```bash
-mmml md-system --setup pbc_nvt --backend pycharmm \
+karml md-system --setup pbc_nvt --backend pycharmm \
   --composition DCM:20 --box-size 20 --packmol-radius 5 \
   --mini-nstep 100 --output-dir artifacts/pycharmm_mlpot/dcm20_pbc
 ```
@@ -224,10 +224,10 @@ mmml md-system --setup pbc_nvt --backend pycharmm \
 
 ## Single-point evaluation (`--evaluate-npz`)
 
-Run one MMML energy/force evaluation at a fixed geometry without dynamics — useful for smoke-testing each backend in its runtime environment:
+Run one KARML energy/force evaluation at a fixed geometry without dynamics — useful for smoke-testing each backend in its runtime environment:
 
 ```bash
-mmml md-system \
+karml md-system \
   --evaluate-npz path/to/geometry.npz \
   --composition DCM:9 \
   --checkpoint examples/ckpts_json/DESdimers_params.json \
@@ -251,18 +251,18 @@ Backends: `ase` (ASE calculator), `jaxmd` (ASE + JIT spherical kernel), `pycharm
 
 ## Cutoff optimization
 
-Three entry points share `mmml.interfaces.pycharmmInterface.hybrid_reference` and canonical cutoff names (`ml_switch_width`, `mm_switch_on`, `mm_switch_width`; legacy aliases `ml_cutoff`, `mm_cutoff`):
+Three entry points share `karml.interfaces.pycharmmInterface.hybrid_reference` and canonical cutoff names (`ml_switch_width`, `mm_switch_on`, `mm_switch_width`; legacy aliases `ml_cutoff`, `mm_cutoff`):
 
 | Tool | NPZ format | Topology |
 |------|------------|----------|
-| `mmml md-system --evaluate-npz` | single frame: `positions` | `--composition` or NPZ `atomic_numbers` |
-| `mmml md-system --optimize-cutoffs --reference-npz` | trajectory: `R`, optional `E`, `F` | `--composition` required |
-| `python -m mmml.cli.misc.opt_mmml` | trajectory: `R`, optional `E`, `F` | PDB + `--n-atoms-monomer` |
+| `karml md-system --evaluate-npz` | single frame: `positions` | `--composition` or NPZ `atomic_numbers` |
+| `karml md-system --optimize-cutoffs --reference-npz` | trajectory: `R`, optional `E`, `F` | `--composition` required |
+| `python -m karml.cli.misc.opt_karml` | trajectory: `R`, optional `E`, `F` | PDB + `--n-atoms-monomer` |
 
 Grid search example (ASE hybrid calculator, no dynamics):
 
 ```bash
-mmml md-system \
+karml md-system \
   --optimize-cutoffs \
   --reference-npz path/to/qm_traj.npz \
   --composition DCM:2 \
@@ -294,7 +294,7 @@ To enable lightweight wall-time metrics for CHARMM MLpot callbacks **and** the
 ASE/jaxmd calculator path (per-call ``calculate`` + multi-GPU chunk apply):
 
 ```bash
-mmml md-system ... --backend jaxmd --mlpot-profile \
+karml md-system ... --backend jaxmd --mlpot-profile \
   --ml-gpu-count 2 --ml-batch-size 256
 # writes <output-dir>/mlpot_profile.json and prints a one-line summary
 ```
@@ -302,17 +302,17 @@ mmml md-system ... --backend jaxmd --mlpot-profile \
 Optional TensorBoard device trace (prefer a short ``--ps``):
 
 ```bash
-mmml md-system ... --backend jaxmd --mlpot-profile \
-  --jax-profiler-dir /tmp/mmml_jax_trace
-tensorboard --logdir /tmp/mmml_jax_trace
+karml md-system ... --backend jaxmd --mlpot-profile \
+  --jax-profiler-dir /tmp/karml_jax_trace
+tensorboard --logdir /tmp/karml_jax_trace
 ```
 
 Environment variables (same effect when set before Python starts):
 
 ```bash
-export MMML_MLPOT_PROFILE=1
-export MMML_JAX_COMPILE_TIMERS=1
-export MMML_JAX_PROFILER_DIR=/tmp/mmml_jax_trace   # optional
+export KARML_MLPOT_PROFILE=1
+export KARML_JAX_COMPILE_TIMERS=1
+export KARML_JAX_PROFILER_DIR=/tmp/karml_jax_trace   # optional
 ```
 
 Check ``mlpot_profile.json`` fields ``last_n_gpus`` / ``chunk_apply_mean_ms`` —
@@ -322,7 +322,7 @@ if ``last_n_gpus`` stays 1 with ``--ml-gpu-count 2``, batching never split
 ### Python cProfile on MD System CLI
 You can profile the python-level code (coordinate synchronizations, exclusions setup, CLI arguments parsing) when running standard configs:
 ```bash
-./.venv/bin/python -m cProfile -o md_system.prof -m mmml.cli md-system <arguments>
+./.venv/bin/python -m cProfile -o md_system.prof -m karml.cli md-system <arguments>
 ```
 Analyze the results using `snakeviz`:
 ```bash

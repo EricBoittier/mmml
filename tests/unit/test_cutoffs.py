@@ -7,13 +7,13 @@ import warnings
 import numpy as np
 import pytest
 
-from mmml.interfaces.pycharmmInterface.calculator_utils import (
+from karml.interfaces.pycharmmInterface.calculator_utils import (
     GAMMA_ON as CALC_GAMMA_ON,
     _sharpstep as calc_sharpstep,
     ml_switch_simple,
     mm_switch_simple,
 )
-from mmml.interfaces.pycharmmInterface.cutoffs import (
+from karml.interfaces.pycharmmInterface.cutoffs import (
     GAMMA_OFF,
     GAMMA_ON,
     CutoffParameters,
@@ -85,7 +85,7 @@ def test_handoff_widths_from_args_namespace() -> None:
 def test_cutoff_grids_from_args_canonical() -> None:
     from argparse import Namespace
 
-    from mmml.interfaces.pycharmmInterface.cutoffs import cutoff_grids_from_args
+    from karml.interfaces.pycharmmInterface.cutoffs import cutoff_grids_from_args
 
     args = Namespace(
         ml_switch_width_grid="1.5,2.0",

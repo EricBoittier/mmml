@@ -71,10 +71,10 @@ def load_config(config_path: Path | str | None = None) -> dict[str, Any]:
             inc_path = (path.parent / inc_path).resolve()
         cfg = _deep_merge(cfg, load_config(inc_path))
     cfg = _deep_merge(cfg, {k: v for k, v in raw.items() if k != "include"})
-    if ckpt := os.environ.get("MMML_CKPT", "").strip():
+    if ckpt := os.environ.get("KARML_CKPT", "").strip():
         # Keep named checkpoint matrix; also expose a default single checkpoint.
         cfg.setdefault("checkpoint", ckpt)
-    if output_root := os.environ.get("MMML_PBC_OUTPUT_ROOT", "").strip():
+    if output_root := os.environ.get("KARML_PBC_OUTPUT_ROOT", "").strip():
         cfg["output_root"] = output_root
     return cfg
 
@@ -91,12 +91,12 @@ def checkpoint_map(cfg: dict[str, Any]) -> dict[str, str]:
 
 
 def resolve_checkpoint_path(raw: str) -> Path:
-    env = os.environ.get("MMML_CKPT", "").strip()
-    if env and raw in {"${MMML_CKPT}", "$MMML_CKPT"}:
+    env = os.environ.get("KARML_CKPT", "").strip()
+    if env and raw in {"${KARML_CKPT}", "$KARML_CKPT"}:
         path = Path(env).expanduser().resolve()
         if path.exists():
             return path
-        raise RuntimeError(f"MMML_CKPT not found: {path}")
+        raise RuntimeError(f"KARML_CKPT not found: {path}")
     expanded = Path(os.path.expandvars(str(raw))).expanduser()
     if expanded.exists():
         return expanded.resolve()
@@ -305,7 +305,7 @@ def composition_string(cell: RunCell) -> str:
 
 
 def cell_ml_atoms(cell: RunCell) -> int:
-    from mmml.interfaces.pycharmmInterface.mlpot.mlpot_limits import estimate_ml_atoms
+    from karml.interfaces.pycharmmInterface.mlpot.mlpot_limits import estimate_ml_atoms
 
     return estimate_ml_atoms(cell.n_monomers, solvent=cell.solvent)
 

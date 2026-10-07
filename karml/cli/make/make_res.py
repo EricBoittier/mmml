@@ -17,9 +17,9 @@ def build_parser() -> argparse.ArgumentParser:
         description="Generate a CGENFF residue (PDB, PSF, topology) via PyCHARMM.",
         epilog=(
             "Examples:\n"
-            "  mmml make-res --list-residues\n"
-            "  mmml make-res --list-residues --no-pager | grep -i acetone\n"
-            "  mmml make-res --res ACO"
+            "  karml make-res --list-residues\n"
+            "  karml make-res --list-residues --no-pager | grep -i acetone\n"
+            "  karml make-res --res ACO"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -59,11 +59,11 @@ def validate_args(args: argparse.Namespace) -> None:
 
 
 def main_loop(args):
-    from mmml.interfaces.pycharmmInterface import setupRes
-    from mmml.interfaces.pycharmmInterface.utils import set_up_directories
+    from karml.interfaces.pycharmmInterface import setupRes
+    from karml.interfaces.pycharmmInterface.utils import set_up_directories
 
     set_up_directories()  # ensure pdb/, psf/, xyz/, res/, dcd/ exist before CHARMM
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import (
+    from karml.interfaces.pycharmmInterface.import_pycharmm import (
         reset_block,
         reset_block_no_internal,
     )

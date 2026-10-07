@@ -24,7 +24,7 @@ checkpoint and no CHARMM**.
 
 "ML monomers + MM" in spirit, not via ``--skip-ml-dimers``
 ------------------------------------------------------------
-``hybrid_forward`` (the training-time assembly ``mmml_calculator`` mirrors)
+``hybrid_forward`` (the training-time assembly ``karml_calculator`` mirrors)
 has no standalone flag to disable the switched ML-dimer term -- that MD-only
 diagnostic knob (``doML_dimer=False`` / ``--skip-ml-dimers``) lives on the
 deployed calculator, not this training-side function, and Mode B needs a
@@ -59,9 +59,9 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-# Canonical ML<->MM handoff defaults (mmml/interfaces/pycharmmInterface/cutoffs.py) --
+# Canonical ML<->MM handoff defaults (karml/interfaces/pycharmmInterface/cutoffs.py) --
 # reused here rather than re-hardcoding the same numbers.
-from mmml.interfaces.pycharmmInterface.cutoffs import (
+from karml.interfaces.pycharmmInterface.cutoffs import (
     DEFAULT_ML_SWITCH_WIDTH,
     DEFAULT_MM_SWITCH_ON,
     DEFAULT_MM_SWITCH_WIDTH,
@@ -151,7 +151,7 @@ def _build_batch() -> dict:
 
 
 def run_mode(mm_charge_mode: str) -> dict:
-    from mmml.models.hybrid_energy import hybrid_forward
+    from karml.models.hybrid_energy import hybrid_forward
 
     batch = _build_batch()
     out = hybrid_forward(
@@ -185,11 +185,11 @@ def cross_check_e_mm_against_md_kernel(mm_charge_mode: str) -> float:
     the *same effective per-atom charges* ``hybrid_forward`` used into the
     standalone ``compute_native_ewald_coulomb`` kernel and compare in eV.
     """
-    from mmml.data.units import KCAL_MOL_TO_EV
-    from mmml.interfaces.pycharmmInterface.long_range_backend import (
+    from karml.data.units import KCAL_MOL_TO_EV
+    from karml.interfaces.pycharmmInterface.long_range_backend import (
         compute_native_ewald_coulomb,
     )
-    from mmml.models.mm_charge_mode import apply_mm_charge_mode
+    from karml.models.mm_charge_mode import apply_mm_charge_mode
 
     batch = _build_batch()
     n = int(batch["R"].shape[0])

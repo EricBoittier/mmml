@@ -1,8 +1,8 @@
 """GPU neighbor-list path: Vesin + CuPy + DLPack interchange with JAX.
 
-Selected automatically (``MMML_MM_NL_DEVICE=auto``, the default) when CuPy and
+Selected automatically (``KARML_MM_NL_DEVICE=auto``, the default) when CuPy and
 ``vesin>=0.6.1`` work and JAX's default device is a GPU (``pip install
-'mmml[nl-gpu]'``); ``MMML_MM_NL_DEVICE=cpu`` forces the Vesin + NumPy path.
+'karml[nl-gpu]'``); ``KARML_MM_NL_DEVICE=cpu`` forces the Vesin + NumPy path.
 Positions may already be on the JAX GPU (no host copy) or on the host (one small
 H2D copy); the padded pairs are handed to JAX via DLPack either way.
 
@@ -29,11 +29,11 @@ from typing import Literal, Tuple
 
 import numpy as np
 
-from mmml.interfaces.pycharmmInterface.nl_backend import (
+from karml.interfaces.pycharmmInterface.nl_backend import (
     _resolve_max_pairs,
     pick_static_rebuild_backend,
 )
-from mmml.interfaces.pycharmmInterface.nl_reference import (
+from karml.interfaces.pycharmmInterface.nl_reference import (
     cell_matrix_3x3,
     have_vesin,
 )
@@ -196,7 +196,7 @@ def _patch_cupy_wheel_includes(wheel_include: str) -> None:
         return
     flag = f"-I{wheel_include}"
     existing = getattr(compiler, "_get_extra_include_dir_opts", None)
-    if existing is None or getattr(existing, "_mmml_wheel_include", None) == flag:
+    if existing is None or getattr(existing, "_karml_wheel_include", None) == flag:
         return
 
     def _wrapped():
@@ -205,7 +205,7 @@ def _patch_cupy_wheel_includes(wheel_include: str) -> None:
             opts = (flag,) + opts
         return opts
 
-    _wrapped._mmml_wheel_include = flag  # type: ignore[attr-defined]
+    _wrapped._karml_wheel_include = flag  # type: ignore[attr-defined]
     # Clear memoized empty include-dir results from before the patch.
     cache = getattr(existing, "_cache", None)
     if isinstance(cache, dict):
@@ -265,17 +265,17 @@ MmNlDeviceRequest = Literal["cpu", "gpu", "auto"]
 
 
 def resolve_mm_nl_device_request(name: str | None = None) -> MmNlDeviceRequest:
-    """Requested NL device: argument > ``MMML_MM_NL_DEVICE`` > ``auto``.
+    """Requested NL device: argument > ``KARML_MM_NL_DEVICE`` > ``auto``.
 
     ``auto`` (default) uses the GPU pair list when CuPy + ``vesin>=0.6.1`` work
     and JAX's default device is a GPU; otherwise the CPU (Vesin + NumPy) path.
     ``gpu`` asks for the same path but warns once if it is unavailable;
     ``cpu`` never touches CuPy.
     """
-    raw = (name or os.environ.get("MMML_MM_NL_DEVICE") or "auto").strip().lower()
+    raw = (name or os.environ.get("KARML_MM_NL_DEVICE") or "auto").strip().lower()
     if raw in ("cpu", "gpu", "auto"):
         return raw  # type: ignore[return-value]
-    raise ValueError(f"MMML_MM_NL_DEVICE must be auto|cpu|gpu; got {raw!r}")
+    raise ValueError(f"KARML_MM_NL_DEVICE must be auto|cpu|gpu; got {raw!r}")
 
 
 def resolve_mm_nl_device(name: str | None = None) -> MmNlDeviceName:
@@ -369,7 +369,7 @@ def gpu_nl_path_available(name: str | None = None, *, positions=None) -> bool:
         return False
     reason = None
     if not have_cupy():
-        reason = "cupy not installed (pip install 'mmml[nl-gpu]')"
+        reason = "cupy not installed (pip install 'karml[nl-gpu]')"
     elif not have_vesin():
         reason = "vesin not installed"
     else:
@@ -391,7 +391,7 @@ def gpu_nl_path_available(name: str | None = None, *, positions=None) -> bool:
         return True
     if req == "gpu" and not _WARNED_GPU_UNAVAILABLE:
         _WARNED_GPU_UNAVAILABLE = True
-        print(f"[nl_gpu] MMML_MM_NL_DEVICE=gpu but GPU pair list unavailable: {reason}; using CPU", flush=True)
+        print(f"[nl_gpu] KARML_MM_NL_DEVICE=gpu but GPU pair list unavailable: {reason}; using CPU", flush=True)
     return False
 
 
@@ -465,7 +465,7 @@ def vesin_mic_pair_keys_cupy(
     ``dist < cutoff``, canonical ``i < j``, inter-monomer only, dimer COM
     distance ``>= mm_r_min`` by MIC, lexicographic order without duplicates.
     """
-    from mmml.interfaces.pycharmmInterface.nl_reference import unique_mic_orthorhombic
+    from karml.interfaces.pycharmmInterface.nl_reference import unique_mic_orthorhombic
 
     n = int(pos_cp.shape[0])
     cutoff = float(cutoff)
@@ -528,7 +528,7 @@ def rebuild_vesin_pairs_gpu(
     """
     if check_available and not gpu_nl_path_available(positions=positions):
         raise RuntimeError(
-            "GPU NL path requires MMML_MM_NL_DEVICE=auto|gpu, working CuPy JIT, "
+            "GPU NL path requires KARML_MM_NL_DEVICE=auto|gpu, working CuPy JIT, "
             "vesin>=0.6.1 (Blackwell/sm_120), and a JAX GPU device"
         )
     ordinal = _cuda_ordinal(_jax_target_device(positions))
@@ -549,7 +549,7 @@ def rebuild_vesin_pairs_gpu(
             cell_list_density_estimate=cell_list_density_estimate,
         )
         if n_valid > capacity:
-            from mmml.interfaces.pycharmmInterface.cell_list import PairListTruncationError
+            from karml.interfaces.pycharmmInterface.cell_list import PairListTruncationError
 
             raise PairListTruncationError(n_valid, capacity)
         pair_idx = cp.zeros((int(capacity), 2), dtype=cp.int32)
@@ -578,7 +578,7 @@ def profile_nl_sync_components(
     import jax
     import jax.numpy as jnp
 
-    from mmml.interfaces.pycharmmInterface.nl_backend import build_mm_pairs_with_backend
+    from karml.interfaces.pycharmmInterface.nl_backend import build_mm_pairs_with_backend
 
     jax.block_until_ready(positions_jax)
 

@@ -6,7 +6,7 @@ not absolute MM vs MP2 total energies.
 
 Examples (CHARMM node)::
 
-    ./scripts/mmml-charmm-mpirun.sh python scripts/compare_dcm_mp2_mm.py \\
+    ./scripts/karml-charmm-mpirun.sh python scripts/compare_dcm_mp2_mm.py \\
       --data new-dcm-round-2-only_MP2_41950.npz \\
       --checkpoint /path/to/checkpoint.json \\
       -o artifacts/dcm_mp2_mm_compare \\
@@ -14,10 +14,10 @@ Examples (CHARMM node)::
       --max-frames 200 --stride 10
 
     # Hybrid-only: no CHARMM / mpirun required (doMM=False)
-    export MMML_CKPT=~/mmml/examples/ckpts_json/DESdimers_params.json
+    export KARML_CKPT=~/karml/examples/ckpts_json/DESdimers_params.json
     uv run python scripts/compare_dcm_mp2_mm.py \\
       --data new-dcm-round-2-only_MP2_41950.npz \\
-      --checkpoint "$MMML_CKPT" \\
+      --checkpoint "$KARML_CKPT" \\
       --hybrid-only -o artifacts/dcm_mp2_hybrid_compare --max-frames 200
 """
 
@@ -37,7 +37,7 @@ if str(REPO) not in sys.path:
 
 
 def _parse_args() -> argparse.Namespace:
-    from mmml.interfaces.pycharmmInterface.dcm_mp2_mm_compare import HYBRID_CALCULATOR_CHOICES
+    from karml.interfaces.pycharmmInterface.dcm_mp2_mm_compare import HYBRID_CALCULATOR_CHOICES
 
     parser = argparse.ArgumentParser(
         description="DCM MP2 geometries vs CHARMM/JAX MM and hybrid ML calculators",
@@ -65,7 +65,7 @@ def _parse_args() -> argparse.Namespace:
         "--checkpoint",
         type=Path,
         default=None,
-        help="MMML checkpoint for hybrid / direct ML calculators",
+        help="KARML checkpoint for hybrid / direct ML calculators",
     )
     parser.add_argument(
         "--calculators",
@@ -138,7 +138,7 @@ def main() -> int:
     if args.checkpoint is None and args.calculators != ["hybrid-ml"]:
         raise SystemExit("--calculators requires --checkpoint")
 
-    from mmml.interfaces.pycharmmInterface.dcm_mp2_mm_compare import (
+    from karml.interfaces.pycharmmInterface.dcm_mp2_mm_compare import (
         parse_monomer_permutation,
         resolve_hybrid_checkpoint,
         run_dcm_mp2_mm_comparison,

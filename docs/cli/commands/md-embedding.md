@@ -1,4 +1,4 @@
-# `mmml md-embedding`
+# `karml md-embedding`
 
 Solvated peptide partial MLpot (train/build/run).
 
@@ -6,13 +6,13 @@ Solvated peptide partial MLpot (train/build/run).
 ## Usage
 
 ```bash
-mmml md-embedding --help
+karml md-embedding --help
 ```
 
 ## Options
 
 ```text
-usage: mmml md-embedding [-h] {train,build,run} ...
+usage: karml md-embedding [-h] {train,build,run} ...
 
 Solvated-peptide MD embedding: train PhysNet on peptide NPZ, build CHARMM
 PEPT+TIP3 box, register partial MLpot (n_monomers=1). See docs/examples/md-

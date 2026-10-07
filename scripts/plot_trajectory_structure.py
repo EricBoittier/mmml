@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from ase.io import read
 
-from mmml.utils.plotting.trajectory_structure import (
+from karml.utils.plotting.trajectory_structure import (
     element_pair_rdfs,
     hydrogen_bond_analysis,
     heavy_atom_pair_distance_umap,
@@ -18,7 +18,7 @@ from mmml.utils.plotting.trajectory_structure import (
     radius_of_gyration_and_diffusion,
     water_tetrahedrality,
 )
-from mmml.utils.plotting.styles import apply_plot_style
+from karml.utils.plotting.styles import apply_plot_style
 
 
 def plot_rdfs(radii, rdfs, output: Path) -> None:

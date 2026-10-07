@@ -6,7 +6,7 @@ import jax.numpy as jnp
 import numpy as np
 from ase import Atoms
 
-from mmml.models.mbd import (
+from karml.models.mbd import (
     HARTREE_PER_BOHR_TO_EV_PER_ANGSTROM,
     HARTREE_TO_EV,
     E3xMBDModel,

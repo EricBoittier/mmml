@@ -1,5 +1,5 @@
 import pycharmm
-from mmml.interfaces.pycharmmInterface.setup import init_charmm
+from karml.interfaces.pycharmmInterface.setup import init_charmm
 from pycharmm import read, write
 init_charmm()
 read.sequence_string("ALA")

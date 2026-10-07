@@ -10,14 +10,14 @@
 #SBATCH --error=artifacts/spooky_q0_retrain_smoke/slurm-%j.err
 set -euo pipefail
 
-ROOT="${MMML_REPO:-$HOME/mmml}"
+ROOT="${KARML_REPO:-$HOME/karml}"
 cd "$ROOT"
-source "$ROOT/scripts/resolve_mmml_env.sh"
-mmml_resolve_env "$ROOT"
+source "$ROOT/scripts/resolve_karml_env.sh"
+karml_resolve_env "$ROOT"
 export JAX_ENABLE_X64=1
 export XLA_PYTHON_CLIENT_PREALLOCATE=false
 
-"$MMML_PYTHON" scripts/train_so3lr_spooky_extxyz.py \
+"$KARML_PYTHON" scripts/train_so3lr_spooky_extxyz.py \
   --mode train \
   --cache-path /mmhome/boittier/home/so3lr_orbax_cache/so3lr_train_flat_5ba739ddac63717d \
   --workdir "$ROOT/artifacts/spooky_q0_retrain_smoke" \

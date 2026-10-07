@@ -1,7 +1,7 @@
-# Metatomic in MMML (PyCHARMM MLpot + ASE)
+# Metatomic in KARML (PyCHARMM MLpot + ASE)
 
 Metatomic supplies a TorchScript `AtomisticModel` (typically a `.pt` file) as an
-ASE calculator. MMML does **not** put torch inside a `jax.jit` spherical
+ASE calculator. KARML does **not** put torch inside a `jax.jit` spherical
 function. The CHARMM USER term is an ASE adapter; optional JAX MM stays in a
 separate MM-only `setup_calculator` path.
 
@@ -11,7 +11,7 @@ Install (optional extra; CI does not require torch):
 uv sync --extra metatomic
 ```
 
-Device: `MMML_METATOMIC_DEVICE` (default `cpu`). Do not set CUDA at import time.
+Device: `KARML_METATOMIC_DEVICE` (default `cpu`). Do not set CUDA at import time.
 
 Units: ASE/metatomic energy is **eV**, forces **eV/Å**. CHARMM USER energy and
 `dx/dy/dz` are **kcal/mol** and **kcal/mol/Å** (`EV_TO_KCAL_MOL`).
@@ -20,7 +20,7 @@ Units: ASE/metatomic energy is **eV**, forces **eV/Å**. CHARMM USER energy and
 
 | `--metatomic-eval-mode` | USER term | Use when |
 |---|---|---|
-| `fragments` (default) | Isolated-monomer metatomic + switched dimer interaction `s(r_com)·(E(AB)−E(A)−E(B))` | The MMML ML/MM scheme (same split as PhysNet MLpot) |
+| `fragments` (default) | Isolated-monomer metatomic + switched dimer interaction `s(r_com)·(E(AB)−E(A)−E(B))` | The KARML ML/MM scheme (same split as PhysNet MLpot) |
 | `whole_system` | One metatomic evaluation on the ML selection | All-ML USER; CHARMM ELEC/VDW should already be off under the jax_mic energy policy |
 
 Fragment PBC: monomer B is wrapped by an **exact MIC lattice shift of its COM**
@@ -53,29 +53,29 @@ when `--ml-potential-mode` is unset.
 
 ```bash
 # PyCHARMM USER = fragment metatomic ML/MM (no CHARMM in this agent session)
-mmml md-system --backend pycharmm \
+karml md-system --backend pycharmm \
   --ml-potential-mode metatomic \
   --checkpoint /path/to/export.pt \
   --metatomic-eval-mode fragments \
   --composition DCM:2 --setup pycharmm_minimize
 
 # All-ML USER
-mmml md-system --backend pycharmm \
+karml md-system --backend pycharmm \
   --ml-potential-mode metatomic \
   --checkpoint /path/to/export.pt \
   --metatomic-eval-mode whole_system \
   --no-include-mm
 
 # ASE scans (no CHARMM)
-mmml dimer-scan DCM DCM --calculator metatomic --checkpoint /path/to/export.pt
-mmml ic-scan --calculator metatomic --checkpoint /path/to/export.pt --structure mol.xyz ...
-mmml pet-interaction-pes --checkpoint /path/to/export.pt
+karml dimer-scan DCM DCM --calculator metatomic --checkpoint /path/to/export.pt
+karml ic-scan --calculator metatomic --checkpoint /path/to/export.pt --structure mol.xyz ...
+karml pet-interaction-pes --checkpoint /path/to/export.pt
 ```
 
 Python:
 
 ```python
-from mmml.interfaces.pycharmmInterface.mlpot import build_metatomic_mlpot_model
+from karml.interfaces.pycharmmInterface.mlpot import build_metatomic_mlpot_model
 
 model = build_metatomic_mlpot_model(
     "export.pt",
@@ -88,7 +88,7 @@ calc = model.get_pycharmm_calculator(ml_atom_indices=range(n_atoms))
 # energy_kcal = calc.calculate_charmm(...)
 ```
 
-Public imports: `mmml.interfaces.calculators.load_metatomic_calculator`,
+Public imports: `karml.interfaces.calculators.load_metatomic_calculator`,
 `AseFragmentHybridCalculator`, `have_metatomic`, `is_metatomic_checkpoint`.
 
 Energy/forces provider: `ProviderSpec(name="metatomic", options={"checkpoint": ...})`.
@@ -163,14 +163,14 @@ call, against 26.8 s for one ASE call per fragment; results agree to 3e-5 eV.
 An injected ASE calculator keeps the per-call path. Re-run:
 
 ```bash
-JAX_PLATFORMS=cpu MMML_METATOMIC_DEVICE=cpu \
+JAX_PLATFORMS=cpu KARML_METATOMIC_DEVICE=cpu \
   uv run python tests/functionality/metatomic/compare_jax_cost.py
 ```
 
 Local CHARMM smoke (serial `libcharmm`; `rebuild_charmm_mlpot.sh --no-mpi`):
 
 ```bash
-export MMML_NO_CHARMM_MPI=1 MMML_NO_MPI_RERUN=1 MMML_METATOMIC_DEVICE=cpu
+export KARML_NO_CHARMM_MPI=1 KARML_NO_MPI_RERUN=1 KARML_METATOMIC_DEVICE=cpu
 uv run python tests/functionality/metatomic/pycharmm_md_smoke.py --run \
   --checkpoint export.pt --residue ACO --n-molecules 2 --spacing 5.0 \
   --mini-nstep 3 --nstep 5 --no-echeck
@@ -188,7 +188,7 @@ CHARMM `RESI HEME` (protein heme stream, not CGenFF) with PET-OMOL S:
 
 ```bash
 uv run --no-sync python -c "from upet import save_upet; save_upet(model='pet-omol', size='s', version='1.0.0', output='pet-omol-s-v1.0.0.pt')"
-uv run --no-sync mmml md-system --backend pycharmm --ml-potential-mode metatomic \
+uv run --no-sync karml md-system --backend pycharmm --ml-potential-mode metatomic \
   --metatomic-eval-mode whole_system --checkpoint pet-omol-s-v1.0.0.pt \
   --residue HEME --n-molecules 1 --counterions SOD --builder gas --no-include-mm \
   --charmm-zero-energy-terms vdw,elec,bonded --setup free_nve
@@ -218,15 +218,15 @@ bulk), **`whole_system`** PET-MAD. CHARMM-free ASE MD is first-class CLI:
 ```bash
 export PET_MAD_CKPT=/path/to/pet-mad-xs-v1.5.0.pt
 # CHARMM-free ASE (grid pack, no Packmol / CHARMM)
-mmml metatomic-pbc-md --ensemble nvt --n-steps 5
+karml metatomic-pbc-md --ensemble nvt --n-steps 5
 # NVE conservation: FIRE mini, then VelocityVerlet (0.2 ps default)
-mmml metatomic-pbc-md --ensemble nve --minimize-steps 60 --n-steps 400
+karml metatomic-pbc-md --ensemble nve --minimize-steps 60 --n-steps 400
 # wrappers: ./examples/pet_mad_etoh_pbc/run_smoke.sh  and  run_nve.sh
 
 # Production: MM-certify the box, then all-ML USER
-mmml liquid-box --composition ETOH:338 --box-size 32 \
+karml liquid-box --composition ETOH:338 --box-size 32 \
   --target-density-g-cm3 0.789 -o boxes/etoh338_32A
-mmml md-system --config examples/pet_mad_etoh_pbc/yaml/pbc_nvt.yaml \
+karml md-system --config examples/pet_mad_etoh_pbc/yaml/pbc_nvt.yaml \
   --job-id nvt --from-psf boxes/etoh338_32A/model.psf \
   --from-crd boxes/etoh338_32A/model.crd --checkpoint "$PET_MAD_CKPT"
 ```
@@ -242,8 +242,8 @@ YAML `nve` is 0.2 ps after mini. Details, pass/fail, and YAML:
 Interaction PES (CHARMM-free single points; no MD):
 
 ```bash
-JAX_PLATFORMS=cpu MMML_METATOMIC_DEVICE=cpu \
-  mmml pet-interaction-pes --checkpoint /path/to/pet-mad-xs-v1.5.0.pt
+JAX_PLATFORMS=cpu KARML_METATOMIC_DEVICE=cpu \
+  karml pet-interaction-pes --checkpoint /path/to/pet-mad-xs-v1.5.0.pt
 ```
 
 Writes linear OH···O vs acceptor–acceptor \(E_\mathrm{int}(r)\) slices
@@ -275,27 +275,27 @@ baked into `E`; MLpot applies it at MD time.
 
 ```bash
 # 1. Label (CHARMM-free). --preset smoke is tiny; md is the MD-oriented mix.
-JAX_PLATFORMS=cpu MMML_METATOMIC_DEVICE=cpu \
-  uv run mmml pet-physnet-distill \
-    --checkpoint /tmp/mmml-metatomic-models/pet-mad-xs-v1.5.0.pt \
+JAX_PLATFORMS=cpu KARML_METATOMIC_DEVICE=cpu \
+  uv run karml pet-physnet-distill \
+    --checkpoint /tmp/karml-metatomic-models/pet-mad-xs-v1.5.0.pt \
     --out-dir ./acetone_pet_distill --preset smoke
 
 # 2. Train the student (warm-start DESdimers architecture, no live .pt teacher)
-uv run mmml physnet-train --config ./acetone_pet_distill/physnet-train.yaml
+uv run karml physnet-train --config ./acetone_pet_distill/physnet-train.yaml
 
 # 3. Held-out teacher vs student (same NPZ units, eV)
-uv run mmml physnet-evaluate \
+uv run karml physnet-evaluate \
   --checkpoint ./ckpts/acetone_pet_student \
   --data ./acetone_pet_distill/valid.npz
 
 # 4. Downstream MD (you run this; not in agent sessions)
-uv run mmml md-system --backend pycharmm \
+uv run karml md-system --backend pycharmm \
   --ml-potential-mode physnet \
   --checkpoint ./ckpts/acetone_pet_student \
   --residue ACO --n-molecules 2 --setup pycharmm_minimize
 ```
 
-Pass for (1): `train.npz` / `valid.npz` have finite `E`/`F`, `_mmml_units` is
+Pass for (1): `train.npz` / `valid.npz` have finite `E`/`F`, `_karml_units` is
 eV / eV/Å, `report.json` records teacher path and counts.
 Pass for (2–3): valid force MAE well below a raw DESdimers-on-PET baseline.
 Pass for (4): finite USER, short NVE without explosion; with `cons_fix` on one
@@ -307,7 +307,7 @@ flag loads a Flax tree. The NPZ *is* the teacher.
 ### Batched TorchScript teacher and larger PETs
 
 Labelling defaults to `--teacher-backend torchscript`
-(`mmml/distill/batched_teacher.py`). Monomers, dimers and both dimer
+(`karml/distill/batched_teacher.py`). Monomers, dimers and both dimer
 fragments go into one request. Structures are sorted by size, packed under
 `--max-atoms-per-batch` / `--max-systems-per-batch`, and each pack is one
 `AtomisticModel.forward` over a `list[System]`. Forces are `-dE/dR` from one
@@ -326,7 +326,7 @@ and `metatrain` (fine-tuning). To export another teacher:
 python -c "from upet import list_upet; list_upet()"
 python -c "from upet import save_upet; \
   save_upet(model='pet-omol', size='m', version='1.0.0', output='pet-omol-m-v1.0.0.pt')"
-mmml pet-physnet-distill --checkpoint pet-omol-m-v1.0.0.pt \
+karml pet-physnet-distill --checkpoint pet-omol-m-v1.0.0.pt \
   --out-dir ./acetone_omol_m --preset md --max-atoms-per-batch 2048
 ```
 
@@ -334,7 +334,7 @@ Lower `--max-atoms-per-batch` if an `l`/`xl` model runs out of GPU memory.
 
 ### Training data from periodic liquid MD
 
-`mmml pet-box-dataset` builds the periodic dataset from many independent
+`karml pet-box-dataset` builds the periodic dataset from many independent
 starts:
 
 - Each seed packs its own box: a random subset of simple-cubic sites, random
@@ -350,9 +350,9 @@ and `info` tags `seed`, `phase` (`fire`/`md`) and `T_target_K`. metatrain reads
 these files directly. Split seeds across GPUs:
 
 ```bash
-CUDA_VISIBLE_DEVICES=0 mmml pet-box-dataset --checkpoint pet-mad-xs-v1.5.0.pt \
+CUDA_VISIBLE_DEVICES=0 karml pet-box-dataset --checkpoint pet-mad-xs-v1.5.0.pt \
   --seeds 0-15 --temperatures 300,350,400 --out-dir runs/etoh_multiseed &
-CUDA_VISIBLE_DEVICES=1 mmml pet-box-dataset --checkpoint pet-mad-xs-v1.5.0.pt \
+CUDA_VISIBLE_DEVICES=1 karml pet-box-dataset --checkpoint pet-mad-xs-v1.5.0.pt \
   --seeds 16-31 --temperatures 300,350,400 --out-dir runs/etoh_multiseed &
 ```
 
@@ -374,7 +374,7 @@ model that drove the MD. The sampling follows the MLpot Hamiltonian:
 - Labels default to `mlmm` (see above).
 
 ```bash
-mmml pet-physnet-distill --checkpoint pet-mad-m-v1.6.0.pt \
+karml pet-physnet-distill --checkpoint pet-mad-m-v1.6.0.pt \
   --from-box-extxyz runs/etoh_multiseed/seed_*/traj.extxyz --atoms-per-monomer 9 \
   --reference-monomer-xyz examples/pet_mad_etoh_pbc/etoh.xyz \
   --out-dir runs/etoh_clusters

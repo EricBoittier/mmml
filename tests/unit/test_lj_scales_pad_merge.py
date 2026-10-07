@@ -11,7 +11,7 @@ import numpy as np
 import pytest
 import yaml
 
-from mmml.cli.run.md_system import parse_md_system_args
+from karml.cli.run.md_system import parse_md_system_args
 
 _REPO = Path(__file__).resolve().parents[2]
 _PAD_MERGE = _REPO / "examples/lj_scales/_pad_merge_npz.py"

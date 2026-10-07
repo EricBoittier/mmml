@@ -5,10 +5,10 @@
 #   #6  exact SD plateau -> hybrid calculator FIRE switch   (dynamics.py)
 #
 # Run both:
-#   mmml md-system --config mmml/cli/run/md_system.stability_smoke.example.yaml --run-all
+#   karml md-system --config karml/cli/run/md_system.stability_smoke.example.yaml --run-all
 # Or one at a time (campaign runs are selected with --job-id):
-#   mmml md-system --config .../md_system.stability_smoke.example.yaml --run-all --job-id heat_blowup
-#   mmml md-system --config .../md_system.stability_smoke.example.yaml --run-all --job-id sd_plateau
+#   karml md-system --config .../md_system.stability_smoke.example.yaml --run-all --job-id heat_blowup
+#   karml md-system --config .../md_system.stability_smoke.example.yaml --run-all --job-id sd_plateau
 #
 # These are BEST-EFFORT triggers: the pre-dynamics minimization ladder may
 # rescue the geometry before the guard fires. If a run does NOT trip, tighten

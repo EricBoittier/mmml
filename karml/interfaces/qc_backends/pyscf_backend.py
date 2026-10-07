@@ -7,7 +7,7 @@ from typing import Any
 import numpy as np
 from ase import Atoms
 
-from mmml.interfaces.qc_backends.npz_output import stack_frame_results
+from karml.interfaces.qc_backends.npz_output import stack_frame_results
 
 
 class PySCFBackend:
@@ -45,7 +45,7 @@ class PySCFBackend:
     def _get_compute_fn(self):
         if self._compute_fn is not None:
             return self._compute_fn
-        from mmml.interfaces.pyscf4gpuInterface.calcs import compute_dft_single
+        from karml.interfaces.pyscf4gpuInterface.calcs import compute_dft_single
 
         return compute_dft_single
 

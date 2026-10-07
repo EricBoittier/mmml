@@ -6,7 +6,7 @@ from pathlib import Path
 
 import numpy as np
 
-from mmml.utils.ase_structure_plot import (
+from karml.utils.ase_structure_plot import (
     DOCS_STRUCTURE_STYLE,
     PBC_ATOM_RADII,
     PBC_ROTATION,

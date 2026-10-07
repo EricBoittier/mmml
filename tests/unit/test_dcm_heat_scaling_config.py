@@ -23,10 +23,10 @@ from heat_lib import (  # noqa: E402
 
 @pytest.fixture
 def cfg(tmp_path, monkeypatch):
-    monkeypatch.setenv("MMML_CKPT", str(tmp_path))
+    monkeypatch.setenv("KARML_CKPT", str(tmp_path))
     (tmp_path / "params.json").write_text("{}")
     return {
-        "checkpoint": "${MMML_CKPT}",
+        "checkpoint": "${KARML_CKPT}",
         "output_root": "artifacts/pycharmm_mlpot",
         "seed_base": 123456,
         "setup": "pycharmm_full",

@@ -4,7 +4,7 @@ The public release uses one HDF5 group per molecule and ``M`` conformers per
 group (``conformations`` of shape ``(M, N, 3)``). That is not the PhysNetJAX
 ``mol_*`` / ``positions`` / ``total_forces`` layout in ``read_h5.py``.
 
-Bundled ``units_map`` is already MMML **train** units (Å, eV, eV/Å, e·Å)
+Bundled ``units_map`` is already KARML **train** units (Å, eV, eV/Å, e·Å)
 except ``dft_total_gradient``, which is ∇E. This module stores ``F = −∇E``.
 
 Never download Zenodo from here. Tests use synthetic HDF5 only.
@@ -21,7 +21,7 @@ from typing import Any, Iterator, Literal, Mapping, Sequence
 
 import numpy as np
 
-from mmml.data.units import polar_e_angstrom2_per_volt_to_bohr3
+from karml.data.units import polar_e_angstrom2_per_volt_to_bohr3
 
 UnitsKind = Literal["canonical", "atomic", "unknown"]
 
@@ -308,14 +308,14 @@ def pad_frames(
         "F": F,
         "D": D,
         "Q": Q,
-        "_mmml_units": np.array(json.dumps(units)),
+        "_karml_units": np.array(json.dumps(units)),
     }
     if has_polar:
         out["polar"] = np.asarray(polar, dtype=np.float64)
     if write_efield:
         out["Ef"] = np.zeros((n, 3), dtype=np.float64)
         units["Ef"] = "zero"
-        out["_mmml_units"] = np.array(json.dumps(units))
+        out["_karml_units"] = np.array(json.dumps(units))
     return out
 
 
@@ -342,7 +342,7 @@ def assert_train_npz_contract(data: Mapping[str, Any]) -> None:
         d = np.asarray(data["D"])
         if d.shape != (n_struct, 3):
             raise ValueError(f"D must be (n, 3), got {d.shape}")
-    units = data.get("_mmml_units")
+    units = data.get("_karml_units")
     if units is not None:
         parsed = json.loads(str(np.asarray(units).reshape(-1)[0]))
         if parsed.get("E") not in {"ev", "eV"} or parsed.get("F") not in {
@@ -350,7 +350,7 @@ def assert_train_npz_contract(data: Mapping[str, Any]) -> None:
             "ev/angstrom",
             "eV/Angstrom",
         }:
-            raise ValueError(f"_mmml_units is not train units: {parsed}")
+            raise ValueError(f"_karml_units is not train units: {parsed}")
 
 
 def max_atomic_number(data: Mapping[str, Any]) -> int:
@@ -437,11 +437,11 @@ def check_efield_train_npz(path: Path | str) -> list[str]:
         finite = np.isfinite(polar).all(axis=(-2, -1))
         if not bool(finite.any()):
             problems.append(f"{dest.name}: polar is all-NaN")
-    units_raw = raw["_mmml_units"] if "_mmml_units" in files else None
+    units_raw = raw["_karml_units"] if "_karml_units" in files else None
     if units_raw is not None:
         parsed = json.loads(str(np.asarray(units_raw).reshape(-1)[0]))
         if str(parsed.get("E", "")).lower() not in {"ev"}:
-            problems.append(f"{dest.name}: _mmml_units E={parsed.get('E')!r} (want ev)")
+            problems.append(f"{dest.name}: _karml_units E={parsed.get('E')!r} (want ev)")
         if str(parsed.get("polar", "")).lower() != "bohr3":
             problems.append(
                 f"{dest.name}: polar units {parsed.get('polar')!r} (want bohr3; reconvert with --polar-units bohr3)"
@@ -492,7 +492,7 @@ def convert_spice_alpha_hdf5(
             if kind == "unknown":
                 print(
                     "convert: units_map missing or empty; assuming SPICE-α "
-                    "README units (Å, eV, eV/Å) and writing _mmml_units from that",
+                    "README units (Å, eV, eV/Å) and writing _karml_units from that",
                     file=sys.stderr,
                     flush=True,
                 )
@@ -570,7 +570,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--efield",
         action="store_true",
-        help="Write Ef = 0 (n, 3) for mmml efield-train (zero-field DFT).",
+        help="Write Ef = 0 (n, 3) for karml efield-train (zero-field DFT).",
     )
     parser.add_argument(
         "--polar-units",

@@ -3,8 +3,8 @@
 
 Exercises ``md-system --ml-spatial-mpi`` on CPU with:
 
-- ``--mlpot-profile`` / ``MMML_MLPOT_PROFILE`` (ML vs CHARMM callback timers)
-- ``MMML_JAX_COMPILE_TIMERS`` (JAX/XLA compile wall time)
+- ``--mlpot-profile`` / ``KARML_MLPOT_PROFILE`` (ML vs CHARMM callback timers)
+- ``KARML_JAX_COMPILE_TIMERS`` (JAX/XLA compile wall time)
 - optional ``cProfile`` per rank-0 Python process
 
 **Dry-run (CI / laptop):**
@@ -16,18 +16,18 @@ python tests/functionality/mlpot/10_spatial_mpi_cpu_profile.py --dry-run
 **Single np run (cluster CPU node):**
 
 ```bash
-export MMML_CKPT=$PWD/examples/ckpts_json/DESdimers_params.json
-export MMML_MLPOT_DEVICE=cpu JAX_PLATFORMS=cpu
+export KARML_CKPT=$PWD/examples/ckpts_json/DESdimers_params.json
+export KARML_MLPOT_DEVICE=cpu JAX_PLATFORMS=cpu
 python tests/functionality/mlpot/10_spatial_mpi_cpu_profile.py --run \\
-  --np 4 --omp 2 --checkpoint "$MMML_CKPT"
+  --np 4 --omp 2 --checkpoint "$KARML_CKPT"
 ```
 
 **Full sweep (1/2/4/8 ranks on 8 CPUs):**
 
 ```bash
-export MMML_CKPT=$PWD/examples/ckpts_json/DESdimers_params.json
+export KARML_CKPT=$PWD/examples/ckpts_json/DESdimers_params.json
 python tests/functionality/mlpot/10_spatial_mpi_cpu_profile.py --sweep \\
-  --checkpoint "$MMML_CKPT" --cpus 8 --output-dir artifacts/spatial_mpi_cpu_profile
+  --checkpoint "$KARML_CKPT" --cpus 8 --output-dir artifacts/spatial_mpi_cpu_profile
 ```
 
 Or use the shell wrapper (writes CSV + cProfile summaries):
@@ -62,15 +62,15 @@ from pathlib import Path
 
 
 _ENV_KEYS = (
-    "MMML_MLPOT_DEVICE",
+    "KARML_MLPOT_DEVICE",
     "JAX_PLATFORMS",
     "OMP_NUM_THREADS",
-    "MMML_MPI_NP",
-    "MMML_MLPOT_SPATIAL_MPI",
-    "MMML_JAX_COMPILE_THREADS",
-    "MMML_FORCE_JAX_COMPILE_THREADS",
-    "MMML_MLPOT_PROFILE",
-    "MMML_JAX_COMPILE_TIMERS",
+    "KARML_MPI_NP",
+    "KARML_MLPOT_SPATIAL_MPI",
+    "KARML_JAX_COMPILE_THREADS",
+    "KARML_FORCE_JAX_COMPILE_THREADS",
+    "KARML_MLPOT_PROFILE",
+    "KARML_JAX_COMPILE_TIMERS",
     "CHARMM_LIB_DIR",
 )
 
@@ -80,7 +80,7 @@ _PROFILE_RE = re.compile(
     r"CHARMM\+overhead=(?P<charmm>[0-9.]+)s"
 )
 _JAX_TIMER_RE = re.compile(
-    r"mmml: JAX compile timers — estimated compile=(?P<compile>[0-9.]+)s, "
+    r"karml: JAX compile timers — estimated compile=(?P<compile>[0-9.]+)s, "
     r"run=(?P<run>[0-9.]+)s"
 )
 
@@ -126,7 +126,7 @@ def _parse_args() -> argparse.Namespace:
         default=_default_template(),
         help="YAML template with REPLACE_* tokens",
     )
-    parser.add_argument("--checkpoint", default=None, help="PhysNet checkpoint (or MMML_CKPT)")
+    parser.add_argument("--checkpoint", default=None, help="PhysNet checkpoint (or KARML_CKPT)")
     parser.add_argument("--output-dir", default=None, help="Run output directory")
     parser.add_argument("--box-size", type=float, default=25.0, help="PBC cube side (Å)")
     parser.add_argument("--mini-nstep", type=int, default=20, help="Mini dynamics steps")
@@ -168,11 +168,11 @@ def _parse_args() -> argparse.Namespace:
 
 
 def _resolve_checkpoint(raw: str | None, *, required: bool = True) -> str:
-    value = raw or os.environ.get("MMML_CKPT") or os.environ.get("MMML_CHECKPOINT")
+    value = raw or os.environ.get("KARML_CKPT") or os.environ.get("KARML_CHECKPOINT")
     if not value:
         if required:
-            raise SystemExit("10_spatial_mpi_cpu_profile: set --checkpoint or MMML_CKPT")
-        return "<MMML_CKPT>"
+            raise SystemExit("10_spatial_mpi_cpu_profile: set --checkpoint or KARML_CKPT")
+        return "<KARML_CKPT>"
     path = Path(value).expanduser()
     if not path.exists():
         if required:
@@ -243,20 +243,20 @@ def _write_cprofile_summary(prof_path: Path, out_path: Path) -> None:
 
 def _cpu_env(*, omp: int, np_: int, jax_threads: int) -> dict[str, str]:
     env = os.environ.copy()
-    env["MMML_MLPOT_DEVICE"] = "cpu"
+    env["KARML_MLPOT_DEVICE"] = "cpu"
     env["JAX_PLATFORMS"] = "cpu"
     env["OMP_NUM_THREADS"] = str(omp)
-    env["MMML_MPI_NP"] = str(np_)
-    env["MMML_NO_MPI_RERUN"] = "1"
-    env["MMML_MLPOT_PROFILE"] = "1"
-    env["MMML_JAX_COMPILE_TIMERS"] = "1"
-    env["MMML_NO_JAX_COMPILE_THREADS"] = "0"
-    env["MMML_JAX_COMPILE_THREADS"] = str(jax_threads)
-    env["MMML_FORCE_JAX_COMPILE_THREADS"] = "1"
+    env["KARML_MPI_NP"] = str(np_)
+    env["KARML_NO_MPI_RERUN"] = "1"
+    env["KARML_MLPOT_PROFILE"] = "1"
+    env["KARML_JAX_COMPILE_TIMERS"] = "1"
+    env["KARML_NO_JAX_COMPILE_THREADS"] = "0"
+    env["KARML_JAX_COMPILE_THREADS"] = str(jax_threads)
+    env["KARML_FORCE_JAX_COMPILE_THREADS"] = "1"
     if np_ > 1:
-        env["MMML_MLPOT_SPATIAL_MPI"] = "1"
+        env["KARML_MLPOT_SPATIAL_MPI"] = "1"
     else:
-        env.pop("MMML_MLPOT_SPATIAL_MPI", None)
+        env.pop("KARML_MLPOT_SPATIAL_MPI", None)
     return env
 
 
@@ -284,7 +284,7 @@ def _run_one(
         ml_batch_size=ml_batch_size,
     )
     root = _repo_root()
-    mpi_sh = root / "scripts/mmml-charmm-mpirun.sh"
+    mpi_sh = root / "scripts/karml-charmm-mpirun.sh"
     py = sys.executable
     log_path = run_dir / "stdout.log"
     prof_path = run_dir / "md_system.prof"
@@ -305,7 +305,7 @@ def _run_one(
             "-o",
             str(prof_path),
             "-m",
-            "mmml.cli.__main__",
+            "karml.cli.__main__",
             *md_tail,
         ]
     else:
@@ -355,11 +355,11 @@ def _dry_run(args: argparse.Namespace, checkpoint: str) -> int:
     print("CPUs:", args.cpus, "  np-list:", args.np_list)
     print("\nSingle run example:")
     print(
-        f"  MMML_CKPT={checkpoint} MMML_MLPOT_DEVICE=cpu JAX_PLATFORMS=cpu \\\n"
+        f"  KARML_CKPT={checkpoint} KARML_MLPOT_DEVICE=cpu JAX_PLATFORMS=cpu \\\n"
         f"  python {Path(__file__).name} --run --np 4 --omp 2 --checkpoint {checkpoint}"
     )
     print("\nSweep wrapper:")
-    print(f"  MMML_CKPT={checkpoint} bash {sweep_sh}")
+    print(f"  KARML_CKPT={checkpoint} bash {sweep_sh}")
     return 0
 
 

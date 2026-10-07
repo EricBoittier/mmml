@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from ase import Atoms
 
-from mmml.utils.plotting.fes import calculate_fes, evaluate_coordinates, plot_fes
+from karml.utils.plotting.fes import calculate_fes, evaluate_coordinates, plot_fes
 
 
 def test_calculate_fes_has_zero_minimum_and_expected_shape():

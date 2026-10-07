@@ -26,14 +26,14 @@
 #   reused ~ calls                       -> the cost is inside the model itself
 set -uo pipefail
 
-REPO="${MMML_REPO:-$HOME/mmml_npt}"
+REPO="${KARML_REPO:-$HOME/karml_npt}"
 cd "$REPO" || exit 1
-export MMML_SCICORE_CMAKE="${MMML_SCICORE_CMAKE:-CMake/3.31.8-GCCcore-14.3.0}"
-export MMML_SCICORE_TOOLCHAIN="${MMML_SCICORE_TOOLCHAIN:-foss/2025a}"
+export KARML_SCICORE_CMAKE="${KARML_SCICORE_CMAKE:-CMake/3.31.8-GCCcore-14.3.0}"
+export KARML_SCICORE_TOOLCHAIN="${KARML_SCICORE_TOOLCHAIN:-foss/2025a}"
 # shellcheck disable=SC1091
 source scripts/scicore_env.sh
-if [[ ! -f "$REPO/setup/charmm/libcharmm.so" && -f "$HOME/mmml/setup/charmm/libcharmm.so" ]]; then
-  export CHARMM_LIB_DIR="$HOME/mmml/setup/charmm" CHARMM_HOME="$HOME/mmml/setup/charmm"
+if [[ ! -f "$REPO/setup/charmm/libcharmm.so" && -f "$HOME/karml/setup/charmm/libcharmm.so" ]]; then
+  export CHARMM_LIB_DIR="$HOME/karml/setup/charmm" CHARMM_HOME="$HOME/karml/setup/charmm"
 fi
 source .venv/bin/activate
 export PYTHONPATH="$REPO${PYTHONPATH:+:$PYTHONPATH}"
@@ -58,7 +58,7 @@ nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -1
 # --ps 0 so nothing beyond setup + pre-minimisation runs.
 PYTHONPROFILEIMPORTTIME=0 uv run python -X importtime -c "
 import cProfile, pstats, io, sys, runpy
-sys.argv = ['mmml', 'md-system',
+sys.argv = ['karml', 'md-system',
   '--backend','jaxmd','--setup','pbc_nvt',
   '--composition','TIP3:${nmol}',
   '--from-psf','${BOX}/model.psf','--from-crd','${BOX}/model.crd',
@@ -74,7 +74,7 @@ sys.argv = ['mmml', 'md-system',
 pr = cProfile.Profile()
 pr.enable()
 try:
-    runpy.run_module('mmml.cli.__main__', run_name='__main__')
+    runpy.run_module('karml.cli.__main__', run_name='__main__')
 except SystemExit:
     pass
 finally:

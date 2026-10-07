@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from mmml.acquisition.selection import (
+from karml.acquisition.selection import (
     farthest_point_sampling,
     greedy_doptimal,
     largest_norm_indices,

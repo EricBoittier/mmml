@@ -4,18 +4,18 @@
 #   export PET_MAD_CKPT=/path/to/pet-mad-xs-v1.5.0.pt
 #   ./examples/pet_mad_etoh_pbc/run_smoke.sh
 #
-# Optional: N_STEPS, ENSEMBLE (nvt|nve), MMML_METATOMIC_DEVICE, OUT_DIR, N_MOL
+# Optional: N_STEPS, ENSEMBLE (nvt|nve), KARML_METATOMIC_DEVICE, OUT_DIR, N_MOL
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
 
-CKPT="${PET_MAD_CKPT:-${MMML_CKPT:-/tmp/mmml-metatomic-models/pet-mad-xs-v1.5.0.pt}}"
+CKPT="${PET_MAD_CKPT:-${KARML_CKPT:-/tmp/karml-metatomic-models/pet-mad-xs-v1.5.0.pt}}"
 OUT_DIR="${OUT_DIR:-./scratch/pet_mad_etoh_pbc/ase_smoke}"
 N_STEPS="${N_STEPS:-5}"
 ENSEMBLE="${ENSEMBLE:-nvt}"
 export JAX_PLATFORMS="${JAX_PLATFORMS:-cpu}"
-export MMML_METATOMIC_DEVICE="${MMML_METATOMIC_DEVICE:-cpu}"
+export KARML_METATOMIC_DEVICE="${KARML_METATOMIC_DEVICE:-cpu}"
 
 if [[ ! -f "$CKPT" ]]; then
   echo "set PET_MAD_CKPT to a metatomic .pt (missing: $CKPT)" >&2
@@ -23,7 +23,7 @@ if [[ ! -f "$CKPT" ]]; then
 fi
 
 cmd=(
-  uv run mmml metatomic-pbc-md
+  uv run karml metatomic-pbc-md
   --checkpoint "$CKPT"
   --residue ETOH
   --box-size 32

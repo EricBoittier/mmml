@@ -90,14 +90,14 @@ def handoff_from_charmm(
     step: int | None = None,
     metadata: dict[str, Any] | None = None,
 ) -> MdHandoffState:
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         read_restart_coordinates,
         read_restart_velocities,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.run_state_checkpoint import (
+    from karml.interfaces.pycharmmInterface.mlpot.run_state_checkpoint import (
         _charmm_velocities_array,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
+    from karml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
 
     positions = get_charmm_positions_array()
     velocities = _charmm_velocities_array()
@@ -146,8 +146,8 @@ def handoff_from_charmm(
     pbc = False
     box_side_source: str | None = None
     try:
-        import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
-        from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+        import karml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+        from karml.interfaces.pycharmmInterface.mlpot.pbc_env import (
             cubic_box_matrix_from_side,
             resolve_charmm_cubic_box_side_A,
         )
@@ -160,7 +160,7 @@ def handoff_from_charmm(
         pbc = True
     except Exception:
         if restart_p is not None:
-            from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+            from karml.interfaces.pycharmmInterface.mlpot.pbc_env import (
                 parse_cubic_box_side_from_charmm_restart,
             )
 
@@ -291,7 +291,7 @@ def _restart_natom_matches(path: Path, expected_natom: int | None) -> bool:
     """Cheap NATOM precheck before parsing full restart coordinates."""
     if expected_natom is None:
         return True
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         read_restart_natom,
     )
 
@@ -433,7 +433,7 @@ def resolve_handoff_restart_template(
 
 def _sync_charmm_velocities(velocities: np.ndarray) -> None:
     """Write handoff/restart velocities into CHARMM main or comparison sets."""
-    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+    from karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
         sync_charmm_velocities_akma,
     )
 
@@ -444,7 +444,7 @@ def _sync_charmm_velocities(velocities: np.ndarray) -> None:
 def _handoff_positions_for_charmm_restart(handoff: MdHandoffState) -> np.ndarray:
     """Prefer live CHARMM coords when the caller already synced aligned positions."""
     try:
-        from mmml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
+        from karml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
 
         live = get_charmm_positions_array()
         if (
@@ -493,11 +493,11 @@ def prepare_pycharmm_handoff_continuation(
         save_handoff_to_res(payload, seed, template_res=template)
     else:
         try:
-            import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
-            from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+            import karml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+            from karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
                 rewrite_dynamics_restart_validated,
             )
-            from mmml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
+            from karml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
 
             sync_charmm_positions(payload.positions)
             if rewrite_dynamics_restart_validated(seed):
@@ -561,7 +561,7 @@ def prepare_pycharmm_handoff_continuation(
                 flush=True,
             )
     else:
-        from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+        from karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
             restore_charmm_state_from_restart,
         )
 
@@ -635,7 +635,7 @@ def cluster_layout_from_composition_string(
     # Use the same supported-solvent atom counts as the PBC resource estimator
     # whenever every residue is known, and retain the uniform fallback for
     # arbitrary user residues.
-    from mmml.interfaces.pycharmmInterface.mlpot.mlpot_limits import (
+    from karml.interfaces.pycharmmInterface.mlpot.mlpot_limits import (
         PBC_BURST_ML_ATOMS_PER_MONOMER,
     )
 
@@ -711,7 +711,7 @@ def cluster_geometry_from_handoff(
                 raise ValueError(f"invalid composition token {token!r}; use RES:COUNT")
             res, cnt = token.split(":", 1)
             parts.append((res.strip().upper(), int(cnt)))
-        from mmml.cli.run.md_pbc_suite.ase import _build_cluster_psf_topology_only
+        from karml.cli.run.md_pbc_suite.ase import _build_cluster_psf_topology_only
 
         z = _build_cluster_psf_topology_only(
             parts,
@@ -791,7 +791,7 @@ def ensure_psf_for_handoff_cluster(
     n_atoms = int(len(atomic_numbers))
     if _live_psf_matches_handoff(n_atoms):
         if positions is not None:
-            from mmml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
+            from karml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
 
             sync_charmm_positions(np.asarray(positions, dtype=np.float64))
         if not quiet:
@@ -801,7 +801,7 @@ def ensure_psf_for_handoff_cluster(
             )
         return
 
-    from mmml.cli.run.md_pbc_suite.ase import _build_cluster_psf_topology_only
+    from karml.cli.run.md_pbc_suite.ase import _build_cluster_psf_topology_only
 
     psf_z = _build_cluster_psf_topology_only(
         composition,
@@ -818,7 +818,7 @@ def ensure_psf_for_handoff_cluster(
         residue_labels=residue_labels,
     )
     if positions is not None:
-        from mmml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
+        from karml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
 
         sync_charmm_positions(np.asarray(positions, dtype=np.float64))
     if not quiet:
@@ -844,7 +844,7 @@ def _kinetic_temperature_k_from_ase_velocities(
     velocities_ang_fs: np.ndarray,
     masses_amu: np.ndarray,
 ) -> float | None:
-    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+    from karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
         _AMU_ANG_PS2_TO_KCALMOL,
         _KCALMOL_PER_K,
     )
@@ -919,7 +919,7 @@ def resolve_handoff_velocity_units(
     vel = handoff.velocities
     if vel is None:
         return "akma"
-    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+    from karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
         MAX_REASONABLE_VELOCITY_TEMP_K,
         MIN_VELOCITY_ASSIGNMENT_TEMP_K,
     )
@@ -1017,7 +1017,7 @@ def kinetic_temperature_k_from_ang_ps_velocities(
     ndegf: int | None = None,
 ) -> float:
     """Kinetic temperature for ordinary velocities in Å/ps."""
-    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+    from karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
         _AMU_ANG_PS2_TO_KCALMOL,
         _KCALMOL_PER_K,
     )
@@ -1214,7 +1214,7 @@ def resolve_atomic_numbers_for_res(
     psf_path: Path | str | None = None,
 ) -> np.ndarray:
     """Resolve atomic numbers for a CHARMM restart (NPZ, PSF, or packmol cluster)."""
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         read_restart_coordinates,
         read_restart_natom,
     )
@@ -1293,7 +1293,7 @@ def res_to_trajectory(
     """Write one or more CHARMM restarts to an ASE ``.traj`` file."""
     from ase.io.trajectory import Trajectory
 
-    from mmml.interfaces.pycharmmInterface.mlpot.restart_velocity_analysis import (
+    from karml.interfaces.pycharmmInterface.mlpot.restart_velocity_analysis import (
         collect_numbered_restart_paths,
     )
 
@@ -1371,12 +1371,12 @@ def apply_handoff_geometry_to_atoms(
                 handoff=handoff,
             )
         else:
-            from mmml.utils.geometry_checks import wrap_monomers_primary_cell
+            from karml.utils.geometry_checks import wrap_monomers_primary_cell
 
             pos = wrap_monomers_primary_cell(pos, offsets, cell_mat)
         atoms.set_positions(pos)
     if sync_charmm:
-        from mmml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
+        from karml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
 
         sync_charmm_positions(np.asarray(atoms.get_positions(), dtype=np.float64))
 
@@ -1436,7 +1436,7 @@ def align_fresh_cluster_positions_for_charmm_pbc(
     """Map fresh Packmol/MC coords in ``[0, L)`` to CHARMM image-centered frame."""
     if not cluster_positions_use_jaxmd_primary_cell_frame(positions, box_side_A):
         return np.asarray(positions, dtype=np.float64)
-    from mmml.interfaces.pycharmmInterface.mlpot.mc_density import (
+    from karml.interfaces.pycharmmInterface.mlpot.mc_density import (
         monomer_offsets_from_atoms_per,
     )
 
@@ -1467,7 +1467,7 @@ def align_handoff_positions_for_charmm_pbc(
     if handoff is not None and not handoff_needs_charmm_pbc_alignment(handoff):
         return np.asarray(positions, dtype=np.float64)
 
-    from mmml.utils.geometry_checks import wrap_monomers_primary_cell
+    from karml.utils.geometry_checks import wrap_monomers_primary_cell
 
     L = float(box_side_A)
     if L <= 0.0:
@@ -1520,8 +1520,8 @@ def rewrap_charmm_pbc_molecules(
     4. Converts back to CHARMM ``[-L/2, L/2]`` frame  (``pos - L/2``).
     """
     import numpy as _np
-    from mmml.interfaces.pycharmmInterface.mlpot.mc_density import monomer_offsets_from_atoms_per
-    from mmml.utils.geometry_checks import ensure_monomers_inside_cell, wrap_monomers_primary_cell
+    from karml.interfaces.pycharmmInterface.mlpot.mc_density import monomer_offsets_from_atoms_per
+    from karml.utils.geometry_checks import ensure_monomers_inside_cell, wrap_monomers_primary_cell
 
     L = float(box_side_A)
     pos_jax = _np.asarray(pos_charmm, dtype=_np.float64) + 0.5 * L
@@ -1550,7 +1550,7 @@ def align_handoff_positions_for_jaxmd_pbc(
     if handoff is not None and not handoff_needs_jaxmd_pbc_alignment(handoff):
         return np.asarray(positions, dtype=np.float64)
 
-    from mmml.utils.geometry_checks import wrap_monomers_primary_cell
+    from karml.utils.geometry_checks import wrap_monomers_primary_cell
 
     L = float(box_side_A)
     if L <= 0.0:
@@ -1619,12 +1619,12 @@ def _cell_from_scalar(side_a: float | None) -> np.ndarray | None:
 
 
 def load_handoff_from_res(path: Path, *, atomic_numbers: np.ndarray | None = None) -> MdHandoffState:
-  from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+  from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
     read_restart_last_step,
     read_restart_positions,
     read_restart_velocities,
   )
-  from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+  from karml.interfaces.pycharmmInterface.mlpot.pbc_env import (
     parse_cubic_box_side_from_charmm_restart,
   )
 
@@ -1746,7 +1746,7 @@ def load_handoff_from_npz(path: Path, *, frame: int = 0) -> MdHandoffState:
 def load_handoff_from_h5(path: Path, *, frame: int = -1) -> MdHandoffState:
   import h5py
 
-  from mmml.utils.hdf5_reporter import load_hdf5_trajectory
+  from karml.utils.hdf5_reporter import load_hdf5_trajectory
 
   # NVT reporters often omit ``box`` (constant cell). Require positions only;
   # velocities/box are optional — caller supplies ``--box-size`` / PSF+CRD cell.
@@ -1798,7 +1798,7 @@ def load_handoff_from_traj(path: Path, *, frame: int = -1) -> MdHandoffState:
 
 
 def load_run_state(path: Path) -> MdHandoffState:
-  from mmml.interfaces.pycharmmInterface.mlpot.run_state_checkpoint import (
+  from karml.interfaces.pycharmmInterface.mlpot.run_state_checkpoint import (
     load_run_state_tree,
   )
 
@@ -1943,10 +1943,10 @@ def enrich_handoff_from_restart_files(
 
     from dataclasses import replace
 
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         read_restart_velocities,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+    from karml.interfaces.pycharmmInterface.mlpot.pbc_env import (
         parse_cubic_box_side_from_charmm_restart,
     )
 
@@ -2018,7 +2018,7 @@ def enrich_handoff_from_restart_files(
 
 
 def _integrator_from_npz(data) -> dict[str, Any] | None:
-  from mmml.md.restart import unflatten_restart
+  from karml.md.restart import unflatten_restart
 
   flat = {key: data[key] for key in data.files if str(key).startswith("integrator_")}
   if not flat:
@@ -2037,7 +2037,7 @@ def handoff_to_npz_dict(handoff: MdHandoffState) -> dict[str, Any]:
     "metadata": json.dumps(meta),
   }
   if handoff.integrator:
-    from mmml.md.restart import flatten_restart
+    from karml.md.restart import flatten_restart
 
     for key, value in flatten_restart(handoff.integrator).items():
       out[f"integrator_{key}"] = value
@@ -2091,7 +2091,7 @@ def _write_synthetic_charmm_restart(
             lines.append(" " + " ".join(_fmt(flat[j]) for j in range(i, min(i + 3, len(flat)))))
         return lines
 
-    from mmml.interfaces.pycharmmInterface.charmm_restart_io import (
+    from karml.interfaces.pycharmmInterface.charmm_restart_io import (
         crystal_parameter_lines,
         format_rest_header,
         lattice_type_for_cell,
@@ -2138,7 +2138,7 @@ def _format_fortran_float(value: float) -> str:
 
 
 def _is_overlap_scratch_restart(path: Path) -> bool:
-    from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
+    from karml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
         is_overlap_scratch_restart_path,
     )
 
@@ -2176,7 +2176,7 @@ def _is_usable_restart_template(
     quiet: bool = False,
 ) -> bool:
     """Validate restart coordinates for handoff templating (content, not filename)."""
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         read_restart_coordinates,
         read_restart_natom,
         restart_has_nonfinite_coordinates,
@@ -2242,11 +2242,11 @@ def _write_handoff_restart_via_charmm(
     template_res: Path,
 ) -> Path:
     """Load a Fortran-valid template in CHARMM, apply handoff state, native ``write restart``."""
-    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+    from karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
         restore_charmm_state_from_restart,
         rewrite_dynamics_restart_validated,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
+    from karml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
 
     template = Path(template_res).expanduser().resolve()
     if not _is_usable_restart_template(template, expected_natom=len(handoff.positions)):
@@ -2255,14 +2255,14 @@ def _write_handoff_restart_via_charmm(
     restore_charmm_state_from_restart(template)
     sync_charmm_positions(handoff.positions)
     if handoff.velocities is not None:
-        from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+        from karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
             sync_charmm_velocities_akma,
         )
 
         sync_charmm_velocities_akma(handoff.velocities)
     if handoff.cell is not None:
-        from mmml.cli.run.md_stage_summary import cubic_box_side_from_cell
-        from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import prepare_charmm_pbc
+        from karml.cli.run.md_stage_summary import cubic_box_side_from_cell
+        from karml.interfaces.pycharmmInterface.mlpot.pbc_env import prepare_charmm_pbc
 
         side = cubic_box_side_from_cell(handoff.cell)
         if side is not None and float(side) > 0.0:
@@ -2344,7 +2344,7 @@ def _patch_handoff_into_restart_template(
             side = float(cell_arr.flat[0])
             cell_arr = np.diag([side, side, side])
         if float(np.max(np.abs(cell_arr))) > 0.0:
-            from mmml.interfaces.pycharmmInterface.charmm_restart_io import (
+            from karml.interfaces.pycharmmInterface.charmm_restart_io import (
                 crystal_parameter_lines,
                 lattice_type_for_cell,
                 set_rest_header_lattice_token,
@@ -2442,7 +2442,7 @@ def save_handoff_to_res(
   template_res: Path | None = None,
 ) -> Path:
   """Write CHARMM ``.res`` from handoff (template patch or in-memory CHARMM)."""
-  from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+  from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
       read_restart_coordinates,
   )
 
@@ -2457,13 +2457,13 @@ def save_handoff_to_res(
 
       charmm_loaded = False
       try:
-          from mmml.interfaces.pycharmmInterface.import_pycharmm import (
+          from karml.interfaces.pycharmmInterface.import_pycharmm import (
               PYCHARMM_AVAILABLE,
           )
 
           # Importing the bootstrap module is not proof that native CHARMM was
           # loaded.  Unit-test collection deliberately sets
-          # MMML_WARMUP_MLPOT_JAX_ONLY=1, which leaves the module importable but
+          # KARML_WARMUP_MLPOT_JAX_ONLY=1, which leaves the module importable but
           # PYCHARMM_AVAILABLE=False.  Entering the native restart writer in
           # that state can terminate the process inside MPI/Fortran before
           # pytest can report a Python exception.
@@ -2512,16 +2512,16 @@ def save_handoff_to_res(
           return path
 
   try:
-    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
-    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+    import karml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+    from karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
       rewrite_dynamics_restart_validated,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
+    from karml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
 
     sync_charmm_positions(handoff.positions)
     if rewrite_dynamics_restart_validated(path):
         # Verify that the written restart contains finite coordinates
-        from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import read_restart_coordinates
+        from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import read_restart_coordinates
         if read_restart_coordinates(path) is None:
             raise ValueError(f"In-memory restart {path.name} has no finite coordinates after rewrite validation")
         return path
@@ -2530,7 +2530,7 @@ def save_handoff_to_res(
 
   try:
       _write_synthetic_charmm_restart(handoff, path)
-      from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import read_restart_coordinates
+      from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import read_restart_coordinates
       if read_restart_coordinates(path) is not None:
           import sys
           print(f"save_handoff_to_res: fell back to synthetic restart {path.name}", file=sys.stderr, flush=True)
@@ -2617,7 +2617,7 @@ def resolve_jaxmd_minimize_steps_for_handoff(
     """JAX-MD runner FIRE step counts after handoff policy.
 
     Handoff continuations skip vacuum/COM and ASE/CHARMM pre-min, but still run
-    PBC-aware FIRE so coordinates relax on the MMML surface in the periodic cell.
+    PBC-aware FIRE so coordinates relax on the KARML surface in the periodic cell.
     """
     if not skip_pre_min:
         return int(jaxmd_minimize_steps), int(jaxmd_pbc_minimize_steps)
@@ -2641,7 +2641,7 @@ def resolve_handoff_box(
 
     handoff_side: float | None = None
     if handoff is not None and handoff.cell is not None:
-        from mmml.cli.run.md_stage_summary import cubic_box_side_from_cell
+        from karml.cli.run.md_stage_summary import cubic_box_side_from_cell
 
         side = cubic_box_side_from_cell(handoff.cell)
         if side is not None and float(side) > 0:
@@ -2756,8 +2756,8 @@ def summarize_handoff_policy(
             "mm_switch_on": mm_switch_on,
             "mm_switch_width": mm_switch_width,
         },
-        "initial_mmml_energy_eV": initial_energy_eV,
-        "initial_mmml_fmax_eVA": initial_fmax_eVA,
+        "initial_karml_energy_eV": initial_energy_eV,
+        "initial_karml_fmax_eVA": initial_fmax_eVA,
     }
 
 
@@ -2771,7 +2771,7 @@ def write_handoff_policy_json(summary: dict[str, Any], path: Path) -> Path:
 def print_handoff_policy_panel(summary: dict[str, Any], *, quiet: bool = False) -> None:
     if quiet:
         return
-    from mmml.utils.rich_report import emit_table
+    from karml.utils.rich_report import emit_table
 
     rows: list[tuple[str, Any]] = [
         ("Handoff active", summary.get("handoff_active")),
@@ -2802,9 +2802,9 @@ def print_handoff_policy_panel(summary: dict[str, Any], *, quiet: bool = False) 
                 f"{cutoffs.get('mm_switch_width')}",
             )
         )
-    if summary.get("initial_mmml_fmax_eVA") is not None:
+    if summary.get("initial_karml_fmax_eVA") is not None:
         rows.append(
-            ("Initial MMML |F|max (eV/Å)", f"{summary.get('initial_mmml_fmax_eVA'):.4f}")
+            ("Initial KARML |F|max (eV/Å)", f"{summary.get('initial_karml_fmax_eVA'):.4f}")
         )
     for w in summary.get("box_warnings") or []:
         rows.append(("Warning", w))

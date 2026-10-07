@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 import pytest
 
-from mmml.interfaces.pycharmmInterface.mlpot.recovery_progress import (
+from karml.interfaces.pycharmmInterface.mlpot.recovery_progress import (
     CLEANUP_SUBDIR,
     PREP_LADDER_SUBDIR,
     RecoveryProgressStore,
@@ -21,7 +21,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.recovery_progress import (
 
 def _args(**overrides) -> argparse.Namespace:
     base = dict(
-        output_dir=Path("/tmp/mmml_run"),
+        output_dir=Path("/tmp/karml_run"),
         prep_ladder_dir=PREP_LADDER_SUBDIR,
         cleanup_dir=CLEANUP_SUBDIR,
         no_recovery_artifacts=False,
@@ -64,7 +64,7 @@ def test_recovery_progress_store_writes_journal_and_latest(tmp_path: Path) -> No
     }
 
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.recovery_progress._save_geometry_checkpoint",
+        "karml.interfaces.pycharmmInterface.mlpot.recovery_progress._save_geometry_checkpoint",
         return_value=fake_written,
     ) as save_mock:
         store.record_step("initial", grms_kcalmol_A=42.0, box_side_A=30.0)
@@ -88,7 +88,7 @@ def test_for_prep_ladder_factory_returns_none_without_output_dir() -> None:
 
 
 def test_build_pycharmm_command_forwards_recovery_artifact_flags() -> None:
-    from mmml.cli.run.md_system import build_pycharmm_command
+    from karml.cli.run.md_system import build_pycharmm_command
     from tests.unit.test_md_system_pycharmm_cmd import _pycharmm_args
 
     cmd = build_pycharmm_command(

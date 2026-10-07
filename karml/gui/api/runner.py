@@ -1,7 +1,7 @@
-"""Job runner for launching and streaming ``mmml md-system`` runs.
+"""Job runner for launching and streaming ``karml md-system`` runs.
 
 This module lets the GUI backend act as a *runner*: it launches an
-``mmml md-system`` (or arbitrary ``mmml``) invocation as a subprocess on the
+``karml md-system`` (or arbitrary ``karml``) invocation as a subprocess on the
 host it runs on, captures stdout/stderr line-by-line, watches the job's
 ``--output-dir`` for new/changed files, and broadcasts three kinds of events to
 subscribers so a local UI can stream progress live:
@@ -11,7 +11,7 @@ subscribers so a local UI can stream progress live:
 * ``status`` - the job changed state (running/succeeded/failed/stopped)
 
 The design is transport-agnostic. On an HPC/remote host you run
-``mmml gui --enable-runner`` and reach it from your laptop over an SSH
+``karml gui --enable-runner`` and reach it from your laptop over an SSH
 port-forward; the same code also works locally. Nothing here opens a network
 port or trusts remote input by itself -- the FastAPI layer owns that.
 
@@ -359,7 +359,7 @@ class JobManager:
     """Owns the set of jobs launched by this server process."""
 
     #: allowlist of first-arg commands the runner may spawn
-    ALLOWED_COMMANDS = frozenset({"mmml"})
+    ALLOWED_COMMANDS = frozenset({"karml"})
 
     def __init__(
         self,

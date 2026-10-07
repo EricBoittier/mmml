@@ -7,7 +7,7 @@ from typing import Any
 
 import numpy as np
 
-from mmml.utils.geometry_checks import (
+from karml.utils.geometry_checks import (
     build_bond_exclusion_pairs,
     min_counted_intramonomer_pair,
     monomer_axis_extent,
@@ -43,7 +43,7 @@ class MonomerGeometryLimits:
 
 def psf_bond_pairs_0based(*, exclude_1_3: bool = False) -> list[tuple[int, int]]:
     """PSF 1–2 bond pairs as 0-based atom index pairs."""
-    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+    import karml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
     import pycharmm.psf as psf
 
     nbond = int(psf.get_nbond())
@@ -217,7 +217,7 @@ def compute_monomer_geometry_limits(
     inter_min = float(default_inter_min_A)
     if atomic_numbers is not None:
         z = np.asarray(atomic_numbers, dtype=int).reshape(-1)
-        from mmml.utils.intermonomer_geometry import vdw_contact_hint_A, _element_symbol
+        from karml.utils.intermonomer_geometry import vdw_contact_hint_A, _element_symbol
 
         hints: list[float] = []
         for si, ei in zip(offsets[:-1], offsets[1:], strict=False):
@@ -270,7 +270,7 @@ def resolve_monomer_offsets_for_limits(
     n_monomers: int,
     n_atoms: int,
 ) -> np.ndarray | None:
-    from mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping import (
+    from karml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping import (
         resolve_monomer_offsets_for_ctx,
     )
 
@@ -289,7 +289,7 @@ def resolve_reference_positions_for_limits(mlpot_ctx: Any) -> np.ndarray | None:
         if arr.size and np.all(np.isfinite(arr)):
             return arr
     try:
-        from mmml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
+        from karml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
 
         pos = get_charmm_positions_array()
         if pos is not None:
@@ -320,7 +320,7 @@ def compute_geometry_limits_from_mlpot_ctx(
     bonds_12: list[tuple[int, int]] = []
     excluded = frozenset()
     try:
-        import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+        import karml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
         import pycharmm.psf as psf
 
         nbond = int(psf.get_nbond())
@@ -440,7 +440,7 @@ def restore_monomer_from_template_for_violation(
     restart_path: Any | None = None,
 ) -> bool:
     """Template-restore one monomer before bonded / JAX recovery."""
-    from mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping import (
+    from karml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping import (
         restore_flagged_monomers_from_template,
     )
 

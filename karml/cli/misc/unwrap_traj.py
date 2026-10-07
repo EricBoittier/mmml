@@ -2,9 +2,9 @@
 """Unwrap periodic trajectories and write ASE/XYZ outputs.
 
 Examples:
-  mmml unwrap-traj in.traj -o unwrapped.traj
-  mmml unwrap-traj in.traj -o unwrapped.xyz --format xyz --fast
-  mmml unwrap-traj coords.h5 -o unwrapped.extxyz --reference wrapped.traj --fast
+  karml unwrap-traj in.traj -o unwrapped.traj
+  karml unwrap-traj in.traj -o unwrapped.xyz --format xyz --fast
+  karml unwrap-traj coords.h5 -o unwrapped.extxyz --reference wrapped.traj --fast
 """
 
 from __future__ import annotations
@@ -439,7 +439,7 @@ def _h5_atoms_iter(path: Path, args: argparse.Namespace, override_cell: np.ndarr
 
 def _dcd_atoms_iter(path: Path, args: argparse.Namespace, override_cell: np.ndarray | None) -> Iterator[Any]:
     from ase import Atoms
-    from mmml.utils.dcd_reader import read_dcd_trajectory
+    from karml.utils.dcd_reader import read_dcd_trajectory
 
     if args.reference is None:
         raise ValueError("Reading a .dcd file requires a topology reference file via --reference")
@@ -501,7 +501,7 @@ def _write_frames(output: Path, frames: Iterator[Any], fmt: str, fast: bool) -> 
         return _write_fast_xyz(output, frames, extended=fmt == "extxyz")
 
     if fmt == "dcd":
-        from mmml.utils.dcd_writer import save_trajectory_dcd
+        from karml.utils.dcd_writer import save_trajectory_dcd
         atoms_list = list(frames)
         if not atoms_list:
             return 0

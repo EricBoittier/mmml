@@ -16,7 +16,7 @@ Tests live in `tests/functionality/charmm/test_trialanine_water_box_mm.py`.
 ## System build (`trialanine_water_box.py`)
 
 1. **Tri-alanine** — CGENFF residue ``TRIA`` (TRIALANINE: ACE–ALA×3–CT3) from
-   ``mmml/data/charmm/top_trialanine_cgenff.rtf`` with backbone **CMAP** from
+   ``karml/data/charmm/top_trialanine_cgenff.rtf`` with backbone **CMAP** from
    ``par_trialanine_backbone_cmap.prm``; coordinates via ``ic.build`` /
    ``setupRes.generate_coordinates`` when needed.
 2. **Waters** — TIP3 on a simple cubic grid (~2.85 Å spacing); no Packmol.
@@ -24,7 +24,7 @@ Tests live in `tests/functionality/charmm/test_trialanine_water_box_mm.py`.
 
 Regenerate the peptide RTF after topology changes::
 
-    ./scripts/mmml-charmm-mpirun.sh python scripts/export_trialanine_cgenff_rtf.py
+    ./scripts/karml-charmm-mpirun.sh python scripts/export_trialanine_cgenff_rtf.py
 
 Default smoke: 10 waters in a 28 Å box (~72 atoms).
 
@@ -36,7 +36,7 @@ Default smoke: 10 waters in a 28 Å box (~72 atoms).
 ## Run
 
 ```bash
-./scripts/mmml-charmm-mpirun.sh python -m pytest \
+./scripts/karml-charmm-mpirun.sh python -m pytest \
   tests/functionality/charmm/test_trialanine_water_box_mm.py -m pycharmm -v
 ```
 
@@ -56,9 +56,9 @@ minimum-image convention (MIC) for displacements. This matches the default MLpot
 |-------|-------------|-----------|-------|
 | **Vacuum cluster** | Gas-phase dimers, `setupRes` | MIC off (free space) | Use `nbonds_config.vacuum_nbond_kwargs` in CHARMM |
 | **PBC MIC** (this test) | Solvated boxes, periodic ASE/JAX-MD | `mic_displacement` + switched pairs | Default for periodic peptide/water |
-| **`MMML_LR_SOLVER=mic`** | Regression / no extra deps | All Coulomb in pair loop | Truncated at `cutnb`; no k-space correction |
-| **`MMML_LR_SOLVER=scafacos`** | Large boxes, production PME | Interface ready; subtract SR overlap when wired | See `scafacosInterface/README.md` |
-| **`MMML_LR_SOLVER=jax_pme`** | JAX-native k-space | Reserved (`jax-pme` pinned) | See `mlpot/LONG_RANGE_ELECTROSTATICS.md` |
+| **`KARML_LR_SOLVER=mic`** | Regression / no extra deps | All Coulomb in pair loop | Truncated at `cutnb`; no k-space correction |
+| **`KARML_LR_SOLVER=scafacos`** | Large boxes, production PME | Interface ready; subtract SR overlap when wired | See `scafacosInterface/README.md` |
+| **`KARML_LR_SOLVER=jax_pme`** | JAX-native k-space | Reserved (`jax-pme` pinned) | See `mlpot/LONG_RANGE_ELECTROSTATICS.md` |
 | **`mm_nonbond_mode=periodic_external`** | MLpot PBC with CHARMM IMAGE VDW | ScaFaCoS Coulomb + CHARMM VDW | Hybrid ML/MM workflows |
 
 ### CHARMM nbonds keywords (PBC preset)
@@ -82,6 +82,6 @@ subset of atoms.
 | Topic | Path |
 |-------|------|
 | CGENFF bonded 1:1 (monomers) | `tests/functionality/charmm/test_cgenff_bonded_pycharmm.py` |
-| Long-range electrostatics | `mmml/interfaces/pycharmmInterface/mlpot/LONG_RANGE_ELECTROSTATICS.md` |
-| Monomer-decomposed MM (dimers) | `mmml/interfaces/pycharmmInterface/mm_energy_forces.py` |
-| Packmol solvation (user-run) | `mmml/interfaces/pycharmmInterface/setupBox.py` |
+| Long-range electrostatics | `karml/interfaces/pycharmmInterface/mlpot/LONG_RANGE_ELECTROSTATICS.md` |
+| Monomer-decomposed MM (dimers) | `karml/interfaces/pycharmmInterface/mm_energy_forces.py` |
+| Packmol solvation (user-run) | `karml/interfaces/pycharmmInterface/setupBox.py` |

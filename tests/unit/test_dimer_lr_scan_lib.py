@@ -138,7 +138,7 @@ def test_plot_dimer_lr_scan_compare_on_synthetic(tmp_path: Path):
 def test_add_mlpot_lr_nonbond_args_on_parser():
     import argparse
 
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
         add_calculator_pre_minimize_args,
         add_mlpot_lr_nonbond_args,
     )

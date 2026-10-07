@@ -10,7 +10,7 @@ system:
 seeds: [1, 2, 3]
 
 # Every driver/sampler + ensemble combination reachable through
-# mmml.md.assemble.assemble_and_run today. "backend" here spans both
+# karml.md.assemble.assemble_and_run today. "backend" here spans both
 # RunConfig.backend (only jaxmd exists) and RunConfig.sampler (md | rigid).
 # runtime_min overrides the default SLURM walltime per backend: NPT's
 # fractional<->real coordinate bridge is markedly slower to JIT-compile with a

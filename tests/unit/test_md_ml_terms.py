@@ -26,21 +26,21 @@ def ml_model():
     if not CKPT.exists():
         pytest.skip(f"checkpoint {CKPT.name} not present")
     try:
-        from mmml.interfaces.calculators.simple_inference import (
+        from karml.interfaces.calculators.simple_inference import (
             create_calculator_from_checkpoint,
         )
     except Exception as exc:  # pragma: no cover - env dependent
         pytest.skip(f"cannot import checkpoint loader: {exc}")
     calc = create_calculator_from_checkpoint(str(CKPT))
-    model = getattr(calc, "model", getattr(calc, "_mmml_physnet_model", None))
-    params = getattr(calc, "params", getattr(calc, "_mmml_physnet_params", None))
+    model = getattr(calc, "model", getattr(calc, "_karml_physnet_model", None))
+    params = getattr(calc, "params", getattr(calc, "_karml_physnet_params", None))
     if model is None or params is None:
         pytest.skip("could not extract model/params from calculator")
     return model, params
 
 
 def _two_waters():
-    from mmml.md.system import MolecularSystem
+    from karml.md.system import MolecularSystem
 
     r = np.array([
         [0.00, 0.00, 0.00], [0.96, 0.00, 0.00], [-0.24, 0.93, 0.00],  # water 0
@@ -58,24 +58,24 @@ def _two_waters():
 def _context(system):
     from jax_md import space
 
-    from mmml.md.energy.registry import EnergyContext
+    from karml.md.energy.registry import EnergyContext
 
     disp, _ = space.periodic(np.diag(np.asarray(system.box)))
     return EnergyContext(model=None, params=None, displacement_fn=disp), disp
 
 
 def test_ml_terms_registered():
-    import mmml.md.energy.terms  # noqa: F401  (importing registers the built-ins)
-    from mmml.md.energy import available_terms
+    import karml.md.energy.terms  # noqa: F401  (importing registers the built-ins)
+    from karml.md.energy import available_terms
 
     assert "ml_intra" in available_terms()
     assert "ml_pep_water" in available_terms()
 
 
 def test_ml_intra_matches_factory(ml_model):
-    from mmml.interfaces.jaxmdInterface.hybrid_energy import make_monomer_energy_fn
-    from mmml.md.energy.registry import EnergyContext
-    from mmml.md.energy.terms import MLIntramolecularTerm
+    from karml.interfaces.jaxmdInterface.hybrid_energy import make_monomer_energy_fn
+    from karml.md.energy.registry import EnergyContext
+    from karml.md.energy.terms import MLIntramolecularTerm
 
     model, params = ml_model
     system = _two_waters()
@@ -96,8 +96,8 @@ def test_ml_intra_matches_factory(ml_model):
 
 
 def test_ml_intra_is_jittable(ml_model):
-    from mmml.md.energy.registry import EnergyContext
-    from mmml.md.energy.terms import MLIntramolecularTerm
+    from karml.md.energy.registry import EnergyContext
+    from karml.md.energy.terms import MLIntramolecularTerm
 
     model, params = ml_model
     system = _two_waters()
@@ -109,11 +109,11 @@ def test_ml_intra_is_jittable(ml_model):
 
 
 def test_ml_core_group_matches_factory(ml_model):
-    from mmml.interfaces.jaxmdInterface.hybrid_energy import (
+    from karml.interfaces.jaxmdInterface.hybrid_energy import (
         make_peptide_water_ml_energy_fn,
     )
-    from mmml.md.energy.registry import EnergyContext
-    from mmml.md.energy.terms import MLCoreGroupTerm
+    from karml.md.energy.registry import EnergyContext
+    from karml.md.energy.terms import MLCoreGroupTerm
 
     model, params = ml_model
     system = _two_waters()
@@ -137,8 +137,8 @@ def test_ml_core_group_matches_factory(ml_model):
 
 
 def test_ml_intra_missing_model_raises():
-    from mmml.md.energy.registry import EnergyContext
-    from mmml.md.energy.terms import MLIntramolecularTerm
+    from karml.md.energy.registry import EnergyContext
+    from karml.md.energy.terms import MLIntramolecularTerm
 
     system = _two_waters()
     with pytest.raises(ValueError, match="ML model"):
@@ -147,9 +147,9 @@ def test_ml_intra_missing_model_raises():
 
 def test_hybrid_composes_ml_and_mm(ml_model):
     """ml_intra composes with a bias term through HybridEnergy (jax face)."""
-    from mmml.md.energy import HybridEnergy
-    from mmml.md.energy.registry import EnergyContext
-    from mmml.md.energy.terms import MLIntramolecularTerm, SMDBiasTerm
+    from karml.md.energy import HybridEnergy
+    from karml.md.energy.registry import EnergyContext
+    from karml.md.energy.terms import MLIntramolecularTerm, SMDBiasTerm
 
     model, params = ml_model
     system = _two_waters()

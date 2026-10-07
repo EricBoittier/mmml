@@ -7,12 +7,12 @@
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64G
-#SBATCH --output=/mmhome/boittier/home/mmml/artifacts/lj_scales_des_production/logs/slurm-%j.out
-#SBATCH --error=/mmhome/boittier/home/mmml/artifacts/lj_scales_des_production/logs/slurm-%j.err
+#SBATCH --output=/mmhome/boittier/home/karml/artifacts/lj_scales_des_production/logs/slurm-%j.out
+#SBATCH --error=/mmhome/boittier/home/karml/artifacts/lj_scales_des_production/logs/slurm-%j.err
 
 set -euo pipefail
 
-REPO="${MMML_REPO:-$HOME/mmml}"
+REPO="${KARML_REPO:-$HOME/karml}"
 DATASET="$REPO/artifacts/lj_scales_des/des_dimers_cgenff_all.npz"
 BASE_RUN="$REPO/artifacts/lj_scales_des_full/ckpts/hybrid_mm_fixed_lj_scales_des_full_insample-155c22fe-5788-42c0-9dc2-fcf04ffdd049"
 BASE_CHECKPOINT="$BASE_RUN/epoch-25"
@@ -23,7 +23,7 @@ cd "$REPO"
 source .venv/bin/activate
 export PATH="$HOME/.local/bin:$PATH"
 export JAX_PLATFORMS=cuda
-export MMML_MLPOT_DEVICE=gpu
+export KARML_MLPOT_DEVICE=gpu
 mkdir -p "$RUN_DIR/logs" "$CKPT_DIR" "$REPO/artifacts/lj_scales_des_production/logs"
 
 [[ -s "$DATASET" ]] || { echo "ERROR: missing $DATASET" >&2; exit 2; }
@@ -36,7 +36,7 @@ python -c "import jax; print('JAX devices:', jax.devices())"
 # with objective=valid_loss + best=true the saved epoch was then selected on
 # data the model had already trained on. Empty --valid-data makes
 # physnet-train split --data itself (0-overlap verified on des-hybrid-ws).
-uv run mmml physnet-train \
+uv run karml physnet-train \
   --config examples/lj_scales/train_des_full_production_scaled.yaml \
   --data "$DATASET" \
   --valid-data "" \

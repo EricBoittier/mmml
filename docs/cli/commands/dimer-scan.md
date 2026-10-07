@@ -1,4 +1,4 @@
-# `mmml dimer-scan`
+# `karml dimer-scan`
 
 Reproducible rigid 1D dimer energy/force scan.
 
@@ -6,13 +6,13 @@ Reproducible rigid 1D dimer energy/force scan.
 ## Usage
 
 ```bash
-mmml dimer-scan --help
+karml dimer-scan --help
 ```
 
 ## Options
 
 ```text
-usage: mmml dimer-scan [-h] [--config CONFIG]
+usage: karml dimer-scan [-h] [--config CONFIG]
                        [--calculator {physnet,spookynet,mbd,multipoles,efield,kernnn,metatomic,xtb,dftb3-d4,pyscf}]
                        [--checkpoint CHECKPOINT]
                        [--calculator-config CALCULATOR_CONFIG] [--method METHOD]

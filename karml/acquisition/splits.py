@@ -12,7 +12,7 @@ from typing import Any, Mapping, Sequence
 
 import numpy as np
 
-from mmml.acquisition.ids import (
+from karml.acquisition.ids import (
     composition_key,
     geometry_fingerprint,
     group_key,

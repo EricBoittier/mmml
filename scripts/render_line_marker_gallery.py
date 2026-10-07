@@ -15,7 +15,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 
-from mmml.utils.plotting.styles import (
+from karml.utils.plotting.styles import (
     LINE_STYLE_CYCLE,
     MARKER_CYCLE,
     apply_plot_style,

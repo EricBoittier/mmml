@@ -38,7 +38,7 @@ def _can_import_e3x_nn() -> bool:
 
 
 def _get_ckpt():
-    ckpt_env = os.environ.get("MMML_CKPT")
+    ckpt_env = os.environ.get("KARML_CKPT")
     candidates = []
     if ckpt_env:
         candidates.append(Path(ckpt_env))
@@ -46,9 +46,9 @@ def _get_ckpt():
         [
             PROJECT_ROOT / "examples/ckpts_json/DESdimers_params.json",
             PROJECT_ROOT / "examples/ckpts_json",
-            PROJECT_ROOT / "mmml/models/physnetjax/ckpts/DESdimers",
-            PROJECT_ROOT / "mmml/models/physnetjax/ckpts/DESdimers/epoch-1985",
-            PROJECT_ROOT / "mmml/models/physnetjax/ckpts",
+            PROJECT_ROOT / "karml/models/physnetjax/ckpts/DESdimers",
+            PROJECT_ROOT / "karml/models/physnetjax/ckpts/DESdimers/epoch-1985",
+            PROJECT_ROOT / "karml/models/physnetjax/ckpts",
             PROJECT_ROOT / "ckpts_json/DESdimers_params.json",
             PROJECT_ROOT / "ckpts_json",
         ]
@@ -87,7 +87,7 @@ def _setup_charmm_aco_dimer_pbc(
     import pycharmm
     import pycharmm.generate as gen
     import pycharmm.ic as ic
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import (
+    from karml.interfaces.pycharmmInterface.import_pycharmm import (
         CGENFF_PRM,
         CGENFF_RTF,
         coor,
@@ -96,7 +96,7 @@ def _setup_charmm_aco_dimer_pbc(
         reset_block,
         settings,
     )
-    from mmml.interfaces.pycharmmInterface.utils import get_Z_from_psf
+    from karml.interfaces.pycharmmInterface.utils import get_Z_from_psf
 
     pycharmm.lingo.charmm_script("DELETE ATOM SELE ALL END")
     pycharmm_quiet()
@@ -222,9 +222,9 @@ def test_ase_jaxmd_pbc_energy_forces_consistency():
     from jax import jit
     import ase
 
-    from mmml.interfaces.pycharmmInterface.mmml_calculator import setup_calculator
-    from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
-    from mmml.interfaces.pycharmmInterface.calculator_utils import unpack_factory_result
+    from karml.interfaces.pycharmmInterface.karml_calculator import setup_calculator
+    from karml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
+    from karml.interfaces.pycharmmInterface.calculator_utils import unpack_factory_result
 
     n_monomers = 2
     n_atoms_monomer = 10
@@ -319,9 +319,9 @@ def test_ase_jaxmd_pbc_with_box_and_pairs():
     import ase
     import e3x
 
-    from mmml.interfaces.pycharmmInterface.mmml_calculator import setup_calculator
-    from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
-    from mmml.interfaces.pycharmmInterface.calculator_utils import unpack_factory_result
+    from karml.interfaces.pycharmmInterface.karml_calculator import setup_calculator
+    from karml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
+    from karml.interfaces.pycharmmInterface.calculator_utils import unpack_factory_result
 
     n_monomers = 2
     n_atoms_monomer = 10
@@ -448,9 +448,9 @@ def test_ase_jaxmd_pbc_ml_mm_box_and_jaxmd_pairs():
     import ase
     import pycharmm.param as param
 
-    from mmml.interfaces.pycharmmInterface.mmml_calculator import setup_calculator
-    from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
-    from mmml.interfaces.pycharmmInterface.calculator_utils import unpack_factory_result
+    from karml.interfaces.pycharmmInterface.karml_calculator import setup_calculator
+    from karml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
+    from karml.interfaces.pycharmmInterface.calculator_utils import unpack_factory_result
 
     cell_length = 40.0
     cutoff_params = CutoffParameters()
@@ -551,9 +551,9 @@ def _build_aco_mm_calculator(
 ):
     """Factory + calculator for 2xACO with ML+MM and PBC."""
     import pycharmm.param as param
-    from mmml.interfaces.pycharmmInterface.mmml_calculator import setup_calculator
-    from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
-    from mmml.interfaces.pycharmmInterface.calculator_utils import unpack_factory_result
+    from karml.interfaces.pycharmmInterface.karml_calculator import setup_calculator
+    from karml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
+    from karml.interfaces.pycharmmInterface.calculator_utils import unpack_factory_result
 
     at_codes = _psf_at_codes_override()
     n_types = len(param.get_atc())
@@ -627,9 +627,9 @@ def test_ml_only_jax_autograd_matches_model_forces():
     from jax import jit
     import ase
 
-    from mmml.interfaces.pycharmmInterface.mmml_calculator import setup_calculator
-    from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
-    from mmml.interfaces.pycharmmInterface.calculator_utils import unpack_factory_result
+    from karml.interfaces.pycharmmInterface.karml_calculator import setup_calculator
+    from karml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
+    from karml.interfaces.pycharmmInterface.calculator_utils import unpack_factory_result
 
     ckpt = _get_ckpt()
     if ckpt is None:
@@ -772,7 +772,7 @@ def test_ml_mm_frozen_pair_autograd_matches_analytical():
 def test_box_vectors_from_ase_atoms():
     """Orthorhombic ASE cell is forwarded as (Lx, Ly, Lz) box vectors."""
     import ase
-    from mmml.interfaces.pycharmmInterface.calculator_utils import box_vectors_from_atoms_or_cell
+    from karml.interfaces.pycharmmInterface.calculator_utils import box_vectors_from_atoms_or_cell
 
     cell_length = 40.0
     atoms = ase.Atoms("H2O", positions=[[0, 0, 0], [1, 0, 0], [0, 1, 0]], cell=_cell_matrix(cell_length), pbc=True)
@@ -851,9 +851,9 @@ def test_pbc_lattice_invariance_ml_ase_and_jax():
     from jax import jit
     import ase
 
-    from mmml.interfaces.pycharmmInterface.mmml_calculator import setup_calculator
-    from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
-    from mmml.interfaces.pycharmmInterface.calculator_utils import unpack_factory_result
+    from karml.interfaces.pycharmmInterface.karml_calculator import setup_calculator
+    from karml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
+    from karml.interfaces.pycharmmInterface.calculator_utils import unpack_factory_result
 
     ckpt = _get_ckpt()
     if ckpt is None:

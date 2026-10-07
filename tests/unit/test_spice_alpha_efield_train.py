@@ -8,8 +8,8 @@ import numpy as np
 import optax
 import pytest
 
-from mmml.data.spice_alpha import convert_spice_alpha_hdf5, split_npz
-from mmml.models.efield.training import (
+from karml.data.spice_alpha import convert_spice_alpha_hdf5, split_npz
+from karml.models.efield.training import (
     EFieldPhysNet,
     eval_step,
     load_ef_npz,
@@ -373,7 +373,7 @@ def test_spice_alpha_efield_train_model_one_epoch(tmp_path, capsys):
 def test_polarizability_jacfwd_matches_jacrev(tmp_path):
     """Forward-mode dμ/dEf (3 JVPs) must equal the old reverse-mode result
     (3·B VJPs), both for α itself and for the parameter gradient of the loss."""
-    from mmml.models.efield.model_functions import predicted_polarizability_bohr3
+    from karml.models.efield.model_functions import predicted_polarizability_bohr3
 
     written = _spice_efield_splits(tmp_path)
     train = load_ef_npz(written["train"])

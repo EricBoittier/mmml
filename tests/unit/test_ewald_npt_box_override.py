@@ -8,11 +8,11 @@ import pytest
 jax = pytest.importorskip("jax")
 jnp = pytest.importorskip("jax.numpy")
 
-from mmml.interfaces.pycharmmInterface.ewald_native import (
+from karml.interfaces.pycharmmInterface.ewald_native import (
     EWALD_NPT_KGRID_REBUILD_TOLERANCE_A,
     ewald_npt_kgrid_cache_bin,
 )
-from mmml.models.ewald_hybrid_coulomb import (
+from karml.models.ewald_hybrid_coulomb import (
     ewald_static_params_from_box_length,
     hybrid_ewald_coulomb_energy,
     hybrid_ewald_coulomb_energy_with_cell,

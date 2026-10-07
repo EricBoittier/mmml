@@ -13,7 +13,7 @@ import pytest
 
 from tests.unit.conftest import restart_stub_text, write_minimal_restart
 
-from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+from karml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
     DynamicsOverlapConfig,
     OverlapRescueConfig,
     check_dynamics_overlap,
@@ -21,7 +21,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
     resolve_dynamics_overlap_config,
     resolve_overlap_memory_handoff,
 )
-from mmml.interfaces.pycharmmInterface.mlpot.dynamics import run_dynamics_with_io
+from karml.interfaces.pycharmmInterface.mlpot.dynamics import run_dynamics_with_io
 
 
 def _overlap_mlpot_ctx():
@@ -53,33 +53,33 @@ def _mock_bond_exclusion_pairs_unless_targeted(request):
         nullcontext()
         if skip_segment_mock
         else mock.patch(
-            "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.ensure_segment_restart_checkpoint",
+            "karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.ensure_segment_restart_checkpoint",
             side_effect=lambda p: Path(p).resolve() if p is not None else None,
         )
     )
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard._bond_exclusion_pairs",
+        "karml.interfaces.pycharmmInterface.mlpot.overlap_guard._bond_exclusion_pairs",
         return_value=frozenset(),
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._refresh_restart_write_after_chunk",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._refresh_restart_write_after_chunk",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._ensure_domdec_off_for_mlpot_energy",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._ensure_domdec_off_for_mlpot_energy",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.refresh_mlpot_energy_and_grms",
+        "karml.interfaces.pycharmmInterface.mlpot.cli_common.refresh_mlpot_energy_and_grms",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.probe_and_light_resync_if_desync",
+        "karml.interfaces.pycharmmInterface.mlpot.cli_common.probe_and_light_resync_if_desync",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_chunk_state_corrupt",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_chunk_state_corrupt",
         return_value=False,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.validate_charmm_dynamics_state_after_chunk",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics_validation.validate_charmm_dynamics_state_after_chunk",
     ), segment_patch:
         yield
 
 
 def test_bond_exclusion_pairs_handles_empty_get_ib_jb():
     """PyCHARMM can return ``[]`` (not ``([], [])``) when ``get_nbond()==0``."""
-    import mmml.interfaces.pycharmmInterface.mlpot.overlap_guard as overlap_guard
+    import karml.interfaces.pycharmmInterface.mlpot.overlap_guard as overlap_guard
 
     overlap_guard._bond_exclusion_cache = None
     fake_psf = mock.MagicMock()
@@ -93,7 +93,7 @@ def test_bond_exclusion_pairs_handles_empty_get_ib_jb():
         {
             "pycharmm": fake_pycharmm,
             "pycharmm.psf": fake_psf,
-            "mmml.interfaces.pycharmmInterface.import_pycharmm": fake_import,
+            "karml.interfaces.pycharmmInterface.import_pycharmm": fake_import,
         },
     ):
         pairs = overlap_guard._bond_exclusion_pairs(exclude_1_3=True)
@@ -108,12 +108,12 @@ def test_monomer_offsets_uniform():
 def test_resolve_overlap_monomer_offsets_uses_composition(monkeypatch):
     from types import SimpleNamespace
 
-    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+    from karml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
         resolve_overlap_monomer_offsets,
     )
 
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         lambda: np.zeros((9, 3)),
     )
 
@@ -121,7 +121,7 @@ def test_resolve_overlap_monomer_offsets_uses_composition(monkeypatch):
         raise RuntimeError("psf resid unavailable")
 
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.trimer_scan.atoms_per_monomer_from_psf",
+        "karml.interfaces.pycharmmInterface.mlpot.trimer_scan.atoms_per_monomer_from_psf",
         _boom,
     )
     ctx = SimpleNamespace(
@@ -138,7 +138,7 @@ def test_resolve_overlap_monomer_offsets_uses_composition(monkeypatch):
 
 
 def test_attach_prior_uses_geometry_fallback_ladder(tmp_path):
-    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+    from karml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
         attach_prior_segment_restart,
     )
 
@@ -161,7 +161,7 @@ def test_attach_prior_uses_geometry_fallback_ladder(tmp_path):
 
 
 def test_extent_rescue_succeeds_with_baseline_on_segment_zero(tmp_path):
-    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+    from karml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
         attach_prior_segment_restart,
         check_dynamics_overlap,
     )
@@ -187,7 +187,7 @@ def test_extent_rescue_succeeds_with_baseline_on_segment_zero(tmp_path):
 
 
 def test_overlap_early_abort_recovery_retries_chunk(tmp_path):
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
 
     baseline = tmp_path / "geometry_baseline.res"
     write_minimal_restart(baseline)
@@ -209,38 +209,38 @@ def test_overlap_early_abort_recovery_retries_chunk(tmp_path):
         return mock.Mock()
 
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
         side_effect=fake_chunk,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_chunk_state_corrupt",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_chunk_state_corrupt",
         side_effect=[True, False],
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard.check_dynamics_overlap",
+        "karml.interfaces.pycharmmInterface.mlpot.overlap_guard.check_dynamics_overlap",
         return_value=(5.0, False),
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_chunk_after_restart",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_chunk_after_restart",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.read_restart_last_step",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics_validation.read_restart_last_step",
         side_effect=lambda path: int(Path(path).read_text().split()[1]),
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint.restore_geometry_from_ladder",
+        "karml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint.restore_geometry_from_ladder",
         return_value=baseline,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard.probe_dynamics_geometry_violation",
+        "karml.interfaces.pycharmmInterface.mlpot.overlap_guard.probe_dynamics_geometry_violation",
         return_value=False,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint.attempt_overlap_early_abort_recovery",
+        "karml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint.attempt_overlap_early_abort_recovery",
         return_value=__import__(
-            "mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint",
+            "karml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint",
             fromlist=["GeometryRecoveryResult"],
         ).GeometryRecoveryResult(True, "restart"),
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._materialize_early_abort_restart_handoff",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._materialize_early_abort_restart_handoff",
         side_effect=lambda chunk_io, **kw: chunk_io,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.finalize_overlap_rescue_for_dynamics",
+        "karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.finalize_overlap_rescue_for_dynamics",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_post_rescue_overlap_handoff",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_post_rescue_overlap_handoff",
     ) as post_rescue:
         run_dynamics_with_io(
             {"nstep": 500},
@@ -255,8 +255,8 @@ def test_overlap_early_abort_recovery_retries_chunk(tmp_path):
 
 def test_overlap_early_abort_in_memory_recovery_skips_post_rescue(tmp_path):
     """Single-chunk early abort falls back to in-process continuation (no READYN slot)."""
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
-    from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
+    from karml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
         GeometryRecoveryResult,
     )
 
@@ -277,29 +277,29 @@ def test_overlap_early_abort_in_memory_recovery_skips_post_rescue(tmp_path):
         return mock.Mock()
 
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
         side_effect=fake_chunk,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_chunk_state_corrupt",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_chunk_state_corrupt",
         side_effect=[True, False],
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard.check_dynamics_overlap",
+        "karml.interfaces.pycharmmInterface.mlpot.overlap_guard.check_dynamics_overlap",
         return_value=(5.0, False),
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_chunk_after_restart",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_chunk_after_restart",
     ) as prep_after, mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.read_restart_last_step",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics_validation.read_restart_last_step",
         side_effect=lambda path: int(Path(path).read_text().split()[1]),
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard.probe_dynamics_geometry_violation",
+        "karml.interfaces.pycharmmInterface.mlpot.overlap_guard.probe_dynamics_geometry_violation",
         return_value=False,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint.attempt_overlap_early_abort_recovery",
+        "karml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint.attempt_overlap_early_abort_recovery",
         return_value=GeometryRecoveryResult(True, "memory"),
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.finalize_overlap_rescue_for_dynamics",
+        "karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.finalize_overlap_rescue_for_dynamics",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_post_rescue_overlap_handoff",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_post_rescue_overlap_handoff",
     ) as post_rescue:
         run_dynamics_with_io(
             {"nstep": 500},
@@ -319,8 +319,8 @@ def test_overlap_early_abort_in_memory_recovery_skips_post_rescue(tmp_path):
 
 def test_overlap_early_abort_multi_chunk_cpt_uses_in_memory_handoff(tmp_path, capsys):
     """Multi-chunk CPT early abort must not READYN scratch restarts (barostat EOF)."""
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
-    from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
+    from karml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
         GeometryRecoveryResult,
     )
 
@@ -342,39 +342,39 @@ def test_overlap_early_abort_multi_chunk_cpt_uses_in_memory_handoff(tmp_path, ca
         return mock.Mock()
 
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
         side_effect=fake_chunk,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_chunk_state_corrupt",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_chunk_state_corrupt",
         side_effect=[True, False, False],
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._cpt_stability_chunk_nstep",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._cpt_stability_chunk_nstep",
         return_value=None,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard.check_dynamics_overlap",
+        "karml.interfaces.pycharmmInterface.mlpot.overlap_guard.check_dynamics_overlap",
         return_value=(5.0, False),
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.finalize_overlap_rescue_for_dynamics",
+        "karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.finalize_overlap_rescue_for_dynamics",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_post_rescue_overlap_handoff",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_post_rescue_overlap_handoff",
     ) as post_rescue, mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_chunk_after_restart",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_chunk_after_restart",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.refresh_mlpot_energy_and_grms",
+        "karml.interfaces.pycharmmInterface.mlpot.cli_common.refresh_mlpot_energy_and_grms",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.ensure_segment_restart_checkpoint",
+        "karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.ensure_segment_restart_checkpoint",
         side_effect=lambda p: Path(p).resolve(),
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.read_restart_last_step",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics_validation.read_restart_last_step",
         side_effect=lambda path: int(Path(path).read_text().split()[1]),
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard.probe_dynamics_geometry_violation",
+        "karml.interfaces.pycharmmInterface.mlpot.overlap_guard.probe_dynamics_geometry_violation",
         return_value=False,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint.attempt_overlap_early_abort_recovery",
+        "karml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint.attempt_overlap_early_abort_recovery",
         return_value=GeometryRecoveryResult(True, "restart"),
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._materialize_post_rescue_restart_handoff",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._materialize_post_rescue_restart_handoff",
     ) as materialize:
         run_dynamics_with_io(
             {"nstep": 1000, "cpt": True, "hoover reft": 90.0},
@@ -393,8 +393,8 @@ def test_overlap_early_abort_multi_chunk_cpt_uses_in_memory_handoff(tmp_path, ca
 
 def test_overlap_early_abort_memory_recovery_skips_overlap_check(tmp_path):
     """In-memory echeck abort must not trigger bonded overlap rescue before retry."""
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
-    from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
+    from karml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
         GeometryRecoveryResult,
     )
 
@@ -422,31 +422,31 @@ def test_overlap_early_abort_memory_recovery_skips_overlap_check(tmp_path):
         return (5.0, False)
 
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
         side_effect=fake_chunk,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._cpt_stability_chunk_nstep",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._cpt_stability_chunk_nstep",
         return_value=None,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard.check_dynamics_overlap",
+        "karml.interfaces.pycharmmInterface.mlpot.overlap_guard.check_dynamics_overlap",
         side_effect=track_overlap_check,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.finalize_overlap_rescue_for_dynamics",
+        "karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.finalize_overlap_rescue_for_dynamics",
     ) as finalize, mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_chunk_after_restart",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_chunk_after_restart",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.refresh_mlpot_energy_and_grms",
+        "karml.interfaces.pycharmmInterface.mlpot.cli_common.refresh_mlpot_energy_and_grms",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.ensure_segment_restart_checkpoint",
+        "karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.ensure_segment_restart_checkpoint",
         side_effect=lambda p: Path(p).resolve(),
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.read_restart_last_step",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics_validation.read_restart_last_step",
         side_effect=lambda path: int(Path(path).read_text().split()[1]),
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard.probe_dynamics_geometry_violation",
+        "karml.interfaces.pycharmmInterface.mlpot.overlap_guard.probe_dynamics_geometry_violation",
         return_value=False,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint.attempt_overlap_early_abort_recovery",
+        "karml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint.attempt_overlap_early_abort_recovery",
         return_value=GeometryRecoveryResult(True, "memory"),
     ):
         run_dynamics_with_io(
@@ -464,8 +464,8 @@ def test_overlap_early_abort_memory_recovery_skips_overlap_check(tmp_path):
 
 def test_overlap_early_abort_disk_recovery_cpt_retries_in_memory(tmp_path, capsys):
     """Disk-reloaded CPT early abort must retry in-process, not READYN scratch restarts."""
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
-    from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
+    from karml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
         GeometryRecoveryResult,
     )
 
@@ -495,39 +495,39 @@ def test_overlap_early_abort_disk_recovery_cpt_retries_in_memory(tmp_path, capsy
         return mock.Mock()
 
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
         side_effect=fake_chunk,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_chunk_state_corrupt",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_chunk_state_corrupt",
         side_effect=[False, True, False],
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._cpt_stability_chunk_nstep",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._cpt_stability_chunk_nstep",
         return_value=None,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard.check_dynamics_overlap",
+        "karml.interfaces.pycharmmInterface.mlpot.overlap_guard.check_dynamics_overlap",
         return_value=(5.0, False),
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.finalize_overlap_rescue_for_dynamics",
+        "karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.finalize_overlap_rescue_for_dynamics",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_post_rescue_overlap_handoff",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_post_rescue_overlap_handoff",
     ) as post_rescue, mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_chunk_after_restart",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_chunk_after_restart",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.refresh_mlpot_energy_and_grms",
+        "karml.interfaces.pycharmmInterface.mlpot.cli_common.refresh_mlpot_energy_and_grms",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.ensure_segment_restart_checkpoint",
+        "karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.ensure_segment_restart_checkpoint",
         side_effect=lambda p: Path(p).resolve(),
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.read_restart_last_step",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics_validation.read_restart_last_step",
         side_effect=lambda path: int(Path(path).read_text().split()[1]),
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard.probe_dynamics_geometry_violation",
+        "karml.interfaces.pycharmmInterface.mlpot.overlap_guard.probe_dynamics_geometry_violation",
         return_value=False,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint.attempt_overlap_early_abort_recovery",
+        "karml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint.attempt_overlap_early_abort_recovery",
         return_value=GeometryRecoveryResult(True, "restart"),
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._materialize_post_rescue_restart_handoff",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._materialize_post_rescue_restart_handoff",
     ) as materialize:
         run_dynamics_with_io(
             {
@@ -554,8 +554,8 @@ def test_overlap_early_abort_disk_recovery_cpt_retries_in_memory(tmp_path, capsy
 
 def test_overlap_early_abort_disk_recovery_non_cpt_retries_in_memory(tmp_path):
     """Non-CPT disk reload after echeck abort must not rewrite scratch READYN restarts."""
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
-    from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
+    from karml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
         GeometryRecoveryResult,
     )
 
@@ -584,29 +584,29 @@ def test_overlap_early_abort_disk_recovery_non_cpt_retries_in_memory(tmp_path):
         return mock.Mock()
 
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
         side_effect=fake_chunk,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_chunk_state_corrupt",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_chunk_state_corrupt",
         side_effect=[True, False, False],
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard.check_dynamics_overlap",
+        "karml.interfaces.pycharmmInterface.mlpot.overlap_guard.check_dynamics_overlap",
         return_value=(5.0, False),
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard.probe_dynamics_geometry_violation",
+        "karml.interfaces.pycharmmInterface.mlpot.overlap_guard.probe_dynamics_geometry_violation",
         return_value=False,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.finalize_overlap_rescue_for_dynamics",
+        "karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.finalize_overlap_rescue_for_dynamics",
     ) as finalize, mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_chunk_after_restart",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_chunk_after_restart",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.read_restart_last_step",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics_validation.read_restart_last_step",
         side_effect=lambda path: int(Path(path).read_text().split()[1]),
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint.attempt_overlap_early_abort_recovery",
+        "karml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint.attempt_overlap_early_abort_recovery",
         return_value=GeometryRecoveryResult(True, "restart"),
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._materialize_post_rescue_restart_handoff",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._materialize_post_rescue_restart_handoff",
     ) as materialize:
         run_dynamics_with_io(
             {"nstep": 1280},
@@ -626,7 +626,7 @@ def test_overlap_early_abort_disk_recovery_non_cpt_retries_in_memory(tmp_path):
 
 
 def test_probe_dynamics_geometry_violation_detects_extent():
-    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+    from karml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
         DynamicsOverlapConfig,
         probe_dynamics_geometry_violation,
     )
@@ -639,13 +639,13 @@ def test_probe_dynamics_geometry_violation_detects_extent():
         max_monomer_extent_A=12.0,
     )
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard._extent_check",
+        "karml.interfaces.pycharmmInterface.mlpot.overlap_guard._extent_check",
         side_effect=RuntimeError("fly-off"),
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard._overlap_check",
+        "karml.interfaces.pycharmmInterface.mlpot.overlap_guard._overlap_check",
         return_value=5.0,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard._intramonomer_check",
+        "karml.interfaces.pycharmmInterface.mlpot.overlap_guard._intramonomer_check",
         return_value=2.0,
     ):
         assert probe_dynamics_geometry_violation(cfg, context="probe")
@@ -704,32 +704,32 @@ def test_resolve_overlap_memory_handoff_explicit_and_mpi_default(monkeypatch):
     assert resolve_overlap_memory_handoff(args) is True
 
     args = argparse.Namespace()
-    monkeypatch.delenv("MMML_NO_OVERLAP_MEMORY_HANDOFF", raising=False)
-    monkeypatch.delenv("MMML_OVERLAP_MEMORY_HANDOFF", raising=False)
+    monkeypatch.delenv("KARML_NO_OVERLAP_MEMORY_HANDOFF", raising=False)
+    monkeypatch.delenv("KARML_OVERLAP_MEMORY_HANDOFF", raising=False)
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.charmm_mpi.charmm_lib_links_mpi",
+        "karml.interfaces.pycharmmInterface.charmm_mpi.charmm_lib_links_mpi",
         return_value=True,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.charmm_mpi._under_mpirun",
+        "karml.interfaces.pycharmmInterface.charmm_mpi._under_mpirun",
         return_value=True,
     ):
         assert resolve_overlap_memory_handoff(args) is True
         cfg = resolve_dynamics_overlap_config(args, n_monomers=4, use_pbc=False)
         assert cfg.memory_handoff is True
 
-    monkeypatch.setenv("MMML_NO_OVERLAP_MEMORY_HANDOFF", "1")
+    monkeypatch.setenv("KARML_NO_OVERLAP_MEMORY_HANDOFF", "1")
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.charmm_mpi.charmm_lib_links_mpi",
+        "karml.interfaces.pycharmmInterface.charmm_mpi.charmm_lib_links_mpi",
         return_value=True,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.charmm_mpi._under_mpirun",
+        "karml.interfaces.pycharmmInterface.charmm_mpi._under_mpirun",
         return_value=True,
     ):
         assert resolve_overlap_memory_handoff(args) is False
 
 
 def test_overlap_first_chunk_skips_readyn_mlpot_memory_handoff(tmp_path, monkeypatch):
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         overlap_first_chunk_skips_readyn,
     )
 
@@ -743,7 +743,7 @@ def test_overlap_first_chunk_skips_readyn_mlpot_memory_handoff(tmp_path, monkeyp
     heat = tmp_path / "heat.res"
     heat.write_text("REST 1 4000\n", encoding="ascii")
     mlpot_ctx = object()
-    monkeypatch.delenv("MMML_NO_OVERLAP_MEMORY_HANDOFF", raising=False)
+    monkeypatch.delenv("KARML_NO_OVERLAP_MEMORY_HANDOFF", raising=False)
 
     assert overlap_first_chunk_skips_readyn(
         overlap=cfg,
@@ -772,7 +772,7 @@ def test_overlap_first_chunk_skips_readyn_mlpot_memory_handoff(tmp_path, monkeyp
         memory_handoff_default=False,
     ) is False
 
-    monkeypatch.setenv("MMML_NO_OVERLAP_MEMORY_HANDOFF", "1")
+    monkeypatch.setenv("KARML_NO_OVERLAP_MEMORY_HANDOFF", "1")
     assert overlap_first_chunk_skips_readyn(
         overlap=cfg,
         mlpot_ctx=mlpot_ctx,
@@ -799,7 +799,7 @@ def test_resolve_no_max_extent_disables_extent_guard():
 
 
 def test_infer_prior_restart_from_write_path(tmp_path):
-    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+    from karml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
         attach_prior_segment_restart,
         infer_prior_restart_from_write_path,
     )
@@ -818,7 +818,7 @@ def test_infer_prior_restart_from_write_path(tmp_path):
 
 
 def test_attach_prior_requires_on_disk_checkpoint(tmp_path):
-    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+    from karml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
         attach_prior_segment_restart,
     )
 
@@ -851,7 +851,7 @@ def test_attach_prior_requires_on_disk_checkpoint(tmp_path):
 
 
 def test_refresh_overlap_prior_segment_restart(tmp_path):
-    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+    from karml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
         refresh_overlap_prior_segment_restart,
     )
 
@@ -863,7 +863,7 @@ def test_refresh_overlap_prior_segment_restart(tmp_path):
         max_monomer_extent_A=12.0,
     )
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.ensure_segment_restart_checkpoint",
+        "karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.ensure_segment_restart_checkpoint",
         return_value=valid_path,
     ) as ensure:
         updated = refresh_overlap_prior_segment_restart(base, restart_path=path)
@@ -873,7 +873,7 @@ def test_refresh_overlap_prior_segment_restart(tmp_path):
 
 
 def test_refresh_overlap_prior_segment_restart_rewrites_scratch(tmp_path):
-    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+    from karml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
         refresh_overlap_prior_segment_restart,
     )
 
@@ -885,7 +885,7 @@ def test_refresh_overlap_prior_segment_restart_rewrites_scratch(tmp_path):
         max_monomer_extent_A=12.0,
     )
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.ensure_segment_restart_checkpoint",
+        "karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.ensure_segment_restart_checkpoint",
         return_value=valid,
     ) as ensure:
         updated = refresh_overlap_prior_segment_restart(base, restart_path=scratch)
@@ -895,7 +895,7 @@ def test_refresh_overlap_prior_segment_restart_rewrites_scratch(tmp_path):
 
 
 def test_attach_prior_keeps_staged_prior_when_rerun_attach_fails(tmp_path):
-    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+    from karml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
         attach_prior_segment_restart,
     )
 
@@ -926,7 +926,7 @@ def test_attach_prior_keeps_staged_prior_when_rerun_attach_fails(tmp_path):
 
 
 def test_attach_prior_replaces_invalid_crd_prior(tmp_path):
-    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+    from karml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
         attach_prior_segment_restart,
     )
 
@@ -956,17 +956,17 @@ def test_attach_prior_replaces_invalid_crd_prior(tmp_path):
 
 
 def test_ensure_segment_restart_checkpoint_returns_existing(tmp_path):
-    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+    from karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
         ensure_segment_restart_checkpoint,
     )
 
     path = tmp_path / "heat_dcm_10.0.res"
     valid_path = path.resolve()
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._valid_restart_file",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._valid_restart_file",
         return_value=valid_path,
     ) as valid_fn, mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.rewrite_dynamics_restart_validated",
+        "karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.rewrite_dynamics_restart_validated",
     ) as rewrite:
         out = ensure_segment_restart_checkpoint(path)
     valid_fn.assert_called_once_with(path)
@@ -975,17 +975,17 @@ def test_ensure_segment_restart_checkpoint_returns_existing(tmp_path):
 
 
 def test_ensure_segment_restart_checkpoint_writes_file(tmp_path):
-    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+    from karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
         ensure_segment_restart_checkpoint,
     )
 
     path = tmp_path / "heat_dcm_10.0.res"
     valid_path = path.resolve()
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._valid_restart_file",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._valid_restart_file",
         side_effect=[None, valid_path],
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.rewrite_dynamics_restart_validated",
+        "karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.rewrite_dynamics_restart_validated",
         return_value=True,
     ) as rewrite:
         out = ensure_segment_restart_checkpoint(path)
@@ -1016,7 +1016,7 @@ def test_extent_rescue_fails_clearly_without_prior():
     )
     ctx = mock.MagicMock()
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         return_value=bad_pos,
     ):
         with pytest.raises(RuntimeError, match="geometry baseline / checkpoint ladder"):
@@ -1065,10 +1065,10 @@ def test_extent_rescue_uses_geometry_baseline_when_prior_unset(tmp_path):
     positions = {"current": bad_pos.copy()}
 
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         side_effect=lambda: positions["current"],
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.run_extent_recovery_from_prior_restart",
+        "karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.run_extent_recovery_from_prior_restart",
         side_effect=lambda *a, **k: positions.update(current=good_pos.copy()),
     ) as extent_recovery:
         extent, rescued = check_dynamics_overlap(
@@ -1096,7 +1096,7 @@ def test_resolve_pbc_stores_box_size_fallback():
 
 def test_overlap_cell_uses_fallback_when_pbound_zero():
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env._read_charmm_box_sides_A",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env._read_charmm_box_sides_A",
         return_value=(0.0, 0.0, 0.0),
     ):
         cfg = DynamicsOverlapConfig(
@@ -1118,7 +1118,7 @@ def test_overlap_cell_uses_fallback_when_pbound_zero():
             dtype=float,
         )
         with mock.patch(
-            "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+            "karml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
             return_value=pos,
         ):
             dmin, _ = check_dynamics_overlap(cfg, context="test", step=0)
@@ -1126,17 +1126,17 @@ def test_overlap_cell_uses_fallback_when_pbound_zero():
 
 
 def test_overlap_cell_returns_none_when_vacuum_has_no_box():
-    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import _overlap_cell
+    from karml.interfaces.pycharmmInterface.mlpot.overlap_guard import _overlap_cell
 
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.probe_charmm_cubic_box_side_A",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.probe_charmm_cubic_box_side_A",
         return_value=(None, None),
     ):
         assert _overlap_cell(use_pbc=True, fallback_box_side_A=None) is None
 
 
 def test_prepare_overlap_chunk_after_restart_skips_pbc_sync_in_vacuum():
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _prepare_overlap_chunk_after_restart,
     )
 
@@ -1144,14 +1144,14 @@ def test_prepare_overlap_chunk_after_restart_skips_pbc_sync_in_vacuum():
     mlpot_ctx.use_pbc = False
     mlpot_ctx.pyCModel = mock.MagicMock()
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.run_workflow.sync_mlpot_pbc_cell_from_charmm",
+        "karml.interfaces.pycharmmInterface.mlpot.run_workflow.sync_mlpot_pbc_cell_from_charmm",
     ) as sync:
         _prepare_overlap_chunk_after_restart(mlpot_ctx, restart_read=None)
     sync.assert_not_called()
 
 
 def test_prepare_overlap_chunk_after_restart_syncs_pbc_when_periodic():
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _prepare_overlap_chunk_after_restart,
     )
 
@@ -1160,7 +1160,7 @@ def test_prepare_overlap_chunk_after_restart_syncs_pbc_when_periodic():
     mlpot_ctx.pyCModel = mock.MagicMock()
     mlpot_ctx.cubic_box_side_A = 30.0
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.run_workflow.sync_mlpot_pbc_cell_from_charmm",
+        "karml.interfaces.pycharmmInterface.mlpot.run_workflow.sync_mlpot_pbc_cell_from_charmm",
         return_value=31.5,
     ) as sync:
         _prepare_overlap_chunk_after_restart(mlpot_ctx, restart_read=None)
@@ -1186,7 +1186,7 @@ def test_check_overlap_raises_on_close_contact():
         dtype=float,
     )
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         return_value=pos,
     ):
         with pytest.raises(RuntimeError, match="inter-monomer atom overlap"):
@@ -1235,10 +1235,10 @@ def test_check_extent_rescue_restores_prior_restart(tmp_path):
         return positions["current"]
 
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         side_effect=_get_pos,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.run_extent_recovery_from_prior_restart",
+        "karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.run_extent_recovery_from_prior_restart",
         side_effect=lambda *a, **k: positions.update(current=good_pos.copy()),
     ) as extent_recovery:
         extent, rescued = check_dynamics_overlap(
@@ -1251,7 +1251,7 @@ def test_check_extent_rescue_restores_prior_restart(tmp_path):
 
 
 def test_check_extent_cleanup_rescue_rebuilds_monomer_from_reference(tmp_path):
-    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+    from karml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
         check_dynamics_overlap,
     )
 
@@ -1308,20 +1308,20 @@ def test_check_extent_cleanup_rescue_rebuilds_monomer_from_reference(tmp_path):
         positions["current"] = np.asarray(new_pos, dtype=float)
 
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         side_effect=_get_pos,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
         side_effect=_sync_pos,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.sync_charmm_lists_after_mini",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics.sync_charmm_lists_after_mini",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.invalidate_mlpot_calculator_caches",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics.invalidate_mlpot_calculator_caches",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.extent_repack_recovery.polish_after_extent_repack",
+        "karml.interfaces.pycharmmInterface.mlpot.extent_repack_recovery.polish_after_extent_repack",
         return_value=1.0,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.run_extent_recovery_from_prior_restart",
+        "karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.run_extent_recovery_from_prior_restart",
     ) as flyoff:
         extent, rescued = check_dynamics_overlap(
             cfg, context="HEAT", step=11000, mlpot_ctx=ctx
@@ -1335,7 +1335,7 @@ def test_check_extent_cleanup_rescue_rebuilds_monomer_from_reference(tmp_path):
 
 def test_check_extent_rescue_falls_back_to_repack_when_bonded_sd_leaves_extent(tmp_path):
     """Bonded SD cannot collapse a dissociated monomer; repack from reference should."""
-    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+    from karml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
         check_dynamics_overlap,
     )
 
@@ -1382,25 +1382,25 @@ def test_check_extent_rescue_falls_back_to_repack_when_bonded_sd_leaves_extent(t
         positions["current"] = np.asarray(new_pos, dtype=float)
 
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         side_effect=_get_pos,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
         side_effect=_sync_pos,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.sync_charmm_lists_after_mini",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics.sync_charmm_lists_after_mini",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.invalidate_mlpot_calculator_caches",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics.invalidate_mlpot_calculator_caches",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.extent_repack_recovery.polish_after_extent_repack",
+        "karml.interfaces.pycharmmInterface.mlpot.extent_repack_recovery.polish_after_extent_repack",
         return_value=1.0,
     ), mock.patch(
         # The repack polish is mocked to a clean GRMS; the post-repack hybrid
         # GRMS probe needs live CHARMM, so report the same clean value.
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.measure_hybrid_charmm_grms",
+        "karml.interfaces.pycharmmInterface.mlpot.cli_common.measure_hybrid_charmm_grms",
         return_value=mock.Mock(hybrid=1.0, charmm=1.0, kind="ok"),
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.run_extent_recovery_from_prior_restart",
+        "karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.run_extent_recovery_from_prior_restart",
     ) as flyoff:
         extent, rescued = check_dynamics_overlap(
             cfg, context="HEAT", step=3000, mlpot_ctx=ctx
@@ -1413,7 +1413,7 @@ def test_check_extent_rescue_falls_back_to_repack_when_bonded_sd_leaves_extent(t
 
 def test_all_ml_pbc_extent_rescue_skips_packmol_on_lattice_ready_failure(tmp_path):
     """Certified all-ML liquid: lattice-ready fail → mini/baseline + cold start, never Packmol."""
-    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+    from karml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
         check_dynamics_overlap,
     )
 
@@ -1473,35 +1473,35 @@ def test_all_ml_pbc_extent_rescue_skips_packmol_on_lattice_ready_failure(tmp_pat
         )
 
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         side_effect=_get_pos,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
         side_effect=_sync_pos,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard."
+        "karml.interfaces.pycharmmInterface.mlpot.overlap_guard."
         "_prefer_all_ml_pbc_checkpoint_only_extent_rescue",
         return_value=True,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery."
+        "karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery."
         "run_extent_recovery_from_prior_restart",
         side_effect=_flyoff_fail,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint."
+        "karml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint."
         "try_recovery_from_checkpoint_ladder",
         side_effect=lambda *_a, **_k: positions.update(current=good_pos.copy())
         or mini_crd,
     ) as ladder, mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.extent_repack_recovery."
+        "karml.interfaces.pycharmmInterface.mlpot.extent_repack_recovery."
         "polish_after_extent_repack",
         side_effect=RuntimeError(
             "EQUI after 02_mini.crd: CHARMM PBC crystal is not lattice-ready"
         ),
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard."
+        "karml.interfaces.pycharmmInterface.mlpot.overlap_guard."
         "_handle_extent_cleanup_rescue",
     ) as packmol, mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard."
+        "karml.interfaces.pycharmmInterface.mlpot.overlap_guard."
         "_try_density_prep_ladder_after_extent_failure",
     ) as density:
         extent, rescued = check_dynamics_overlap(
@@ -1559,26 +1559,26 @@ def test_all_ml_pbc_cleanup_mode_refuses_packmol(tmp_path):
     positions = {"current": bad_pos.copy()}
 
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         side_effect=lambda: positions["current"],
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
         side_effect=lambda p: positions.update(current=np.asarray(p, dtype=float)),
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard."
+        "karml.interfaces.pycharmmInterface.mlpot.overlap_guard."
         "_prefer_all_ml_pbc_checkpoint_only_extent_rescue",
         return_value=True,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint."
+        "karml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint."
         "try_recovery_from_checkpoint_ladder",
         side_effect=lambda *_a, **_k: positions.update(current=good_pos.copy())
         or mini_crd,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.extent_repack_recovery."
+        "karml.interfaces.pycharmmInterface.mlpot.extent_repack_recovery."
         "polish_after_extent_repack",
         return_value=1.0,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard."
+        "karml.interfaces.pycharmmInterface.mlpot.overlap_guard."
         "_handle_extent_cleanup_rescue",
     ) as cleanup:
         extent, rescued = check_dynamics_overlap(
@@ -1593,7 +1593,7 @@ def test_all_ml_pbc_cleanup_mode_refuses_packmol(tmp_path):
 
 def test_check_extent_rescue_repack_from_memory_only():
     """Repack works with in-memory mini snapshot when disk ladder is empty."""
-    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+    from karml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
         DynamicsOverlapConfig,
         OverlapRescueConfig,
         check_dynamics_overlap,
@@ -1642,20 +1642,20 @@ def test_check_extent_rescue_repack_from_memory_only():
         positions["current"] = np.asarray(new_pos, dtype=float)
 
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         side_effect=_get_pos,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
         side_effect=_sync_pos,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.sync_charmm_lists_after_mini",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics.sync_charmm_lists_after_mini",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.invalidate_mlpot_calculator_caches",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics.invalidate_mlpot_calculator_caches",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.extent_repack_recovery.polish_after_extent_repack",
+        "karml.interfaces.pycharmmInterface.mlpot.extent_repack_recovery.polish_after_extent_repack",
         return_value=1.0,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.run_extent_recovery_from_prior_restart",
+        "karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.run_extent_recovery_from_prior_restart",
     ) as flyoff:
         extent, rescued = check_dynamics_overlap(
             cfg, context="HEAT", step=3000, mlpot_ctx=ctx
@@ -1683,10 +1683,10 @@ def test_check_intra_monomer_raises_on_close_contact():
     )
     excluded = frozenset({(0, 1), (1, 2)})
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         return_value=pos,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard._bond_exclusion_pairs",
+        "karml.interfaces.pycharmmInterface.mlpot.overlap_guard._bond_exclusion_pairs",
         return_value=excluded,
     ):
         with pytest.raises(RuntimeError, match="intra-monomer close contact"):
@@ -1726,13 +1726,13 @@ def test_check_intra_monomer_rescue_runs_bonded_mini():
         return positions["current"]
 
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         side_effect=_get_pos,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard._bond_exclusion_pairs",
+        "karml.interfaces.pycharmmInterface.mlpot.overlap_guard._bond_exclusion_pairs",
         return_value=excluded,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard._run_intramonomer_bonded_rescue",
+        "karml.interfaces.pycharmmInterface.mlpot.overlap_guard._run_intramonomer_bonded_rescue",
         side_effect=lambda _ctx, _cfg: positions.update(current=pos_ok),
     ) as rescue:
         dmin, rescued = check_dynamics_overlap(cfg, context="heat", step=500, mlpot_ctx=ctx)
@@ -1774,16 +1774,16 @@ def test_check_intra_monomer_template_restore_skips_bonded_mini():
         return positions["current"]
 
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         side_effect=_get_pos,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard._bond_exclusion_pairs",
+        "karml.interfaces.pycharmmInterface.mlpot.overlap_guard._bond_exclusion_pairs",
         return_value=excluded,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.monomer_geometry_limits.restore_monomer_from_template_for_violation",
+        "karml.interfaces.pycharmmInterface.mlpot.monomer_geometry_limits.restore_monomer_from_template_for_violation",
         side_effect=lambda *_args, **_kwargs: positions.update(current=pos_ok) or True,
     ) as restore, mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard._run_intramonomer_bonded_rescue",
+        "karml.interfaces.pycharmmInterface.mlpot.overlap_guard._run_intramonomer_bonded_rescue",
     ) as rescue:
         dmin, rescued = check_dynamics_overlap(cfg, context="heat", step=500, mlpot_ctx=ctx)
 
@@ -1822,19 +1822,19 @@ def test_check_intra_monomer_template_then_separation_skips_bonded_mini():
         positions["current"] = np.asarray(new_pos, dtype=float)
 
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         side_effect=_get_pos,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
         side_effect=_sync_pos,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard._bond_exclusion_pairs",
+        "karml.interfaces.pycharmmInterface.mlpot.overlap_guard._bond_exclusion_pairs",
         return_value=excluded,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.monomer_geometry_limits.restore_monomer_from_template_for_violation",
+        "karml.interfaces.pycharmmInterface.mlpot.monomer_geometry_limits.restore_monomer_from_template_for_violation",
         return_value=True,
     ) as restore, mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard._run_intramonomer_bonded_rescue",
+        "karml.interfaces.pycharmmInterface.mlpot.overlap_guard._run_intramonomer_bonded_rescue",
     ) as rescue:
         dmin, rescued = check_dynamics_overlap(cfg, context="heat", step=500, mlpot_ctx=ctx)
 
@@ -1877,24 +1877,24 @@ def test_all_ml_pbc_intra_template_restore_skips_mlpot_sd():
     positions = {"current": pos_bad}
 
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         side_effect=lambda: positions["current"],
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard._bond_exclusion_pairs",
+        "karml.interfaces.pycharmmInterface.mlpot.overlap_guard._bond_exclusion_pairs",
         return_value=excluded,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard."
+        "karml.interfaces.pycharmmInterface.mlpot.overlap_guard."
         "_prefer_all_ml_pbc_checkpoint_only_extent_rescue",
         return_value=True,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.monomer_geometry_limits."
+        "karml.interfaces.pycharmmInterface.mlpot.monomer_geometry_limits."
         "restore_monomer_from_template_for_violation",
         side_effect=lambda *_a, **_k: positions.update(current=pos_ok) or True,
     ) as restore, mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard."
+        "karml.interfaces.pycharmmInterface.mlpot.overlap_guard."
         "_run_intramonomer_bonded_rescue",
     ) as rescue, mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard."
+        "karml.interfaces.pycharmmInterface.mlpot.overlap_guard."
         "_try_flyoff_checkpoint_ladder_rescue",
     ) as ladder:
         dmin, rescued = check_dynamics_overlap(
@@ -1945,28 +1945,28 @@ def test_all_ml_pbc_intra_falls_back_to_checkpoint_ladder_not_mlpot_sd(tmp_path)
     positions = {"current": pos_bad.copy()}
 
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         side_effect=lambda: positions["current"],
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard._bond_exclusion_pairs",
+        "karml.interfaces.pycharmmInterface.mlpot.overlap_guard._bond_exclusion_pairs",
         return_value=excluded,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard."
+        "karml.interfaces.pycharmmInterface.mlpot.overlap_guard."
         "_prefer_all_ml_pbc_checkpoint_only_extent_rescue",
         return_value=True,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.monomer_geometry_limits."
+        "karml.interfaces.pycharmmInterface.mlpot.monomer_geometry_limits."
         "restore_monomer_from_template_for_violation",
         return_value=False,
     ) as restore, mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard."
+        "karml.interfaces.pycharmmInterface.mlpot.overlap_guard."
         "_try_flyoff_checkpoint_ladder_rescue",
         side_effect=lambda *_a, **_k: positions.update(current=pos_ok.copy()) or 1.05,
     ) as ladder, mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard."
+        "karml.interfaces.pycharmmInterface.mlpot.overlap_guard."
         "_run_intramonomer_bonded_rescue",
     ) as rescue, mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.extent_repack_recovery."
+        "karml.interfaces.pycharmmInterface.mlpot.extent_repack_recovery."
         "polish_after_extent_repack",
     ) as polish:
         dmin, rescued = check_dynamics_overlap(
@@ -2018,10 +2018,10 @@ def test_check_overlap_rescue_runs_minimize_and_rechecks():
         return pos_bad if call_n[0] == 1 else pos_ok
 
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         side_effect=get_pos,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.run_inter_monomer_overlap_rescue",
+        "karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.run_inter_monomer_overlap_rescue",
     ) as rescue:
         dmin, rescued = check_dynamics_overlap(
             cfg, context="test", step=50, mlpot_ctx=ctx
@@ -2073,12 +2073,12 @@ def test_check_overlap_rescue_applies_repack_last_resort():
         return pos_ok.copy()
 
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         side_effect=get_pos,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
     ) as sync_pos, mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.minimize_overlap_rescue",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics.minimize_overlap_rescue",
     ) as rescue:
         dmin, rescued = check_dynamics_overlap(
             cfg, context="test", step=50, mlpot_ctx=ctx
@@ -2090,7 +2090,7 @@ def test_check_overlap_rescue_applies_repack_last_resort():
 
 
 def test_run_dynamics_with_io_chunks_and_checks(tmp_path):
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
 
     cfg = DynamicsOverlapConfig(
         action="error",
@@ -2124,12 +2124,12 @@ def test_run_dynamics_with_io_chunks_and_checks(tmp_path):
         return mock.Mock()
 
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
         side_effect=fake_chunk,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_chunk_after_restart",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_chunk_after_restart",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         return_value=pos_ok,
     ):
         run_dynamics_with_io(
@@ -2161,7 +2161,7 @@ def test_run_dynamics_with_io_chunks_and_checks(tmp_path):
 
 def test_overlap_checks_run_after_each_successful_chunk(tmp_path):
     """Mid-chunk overlap geometry checks must run at every chunk boundary."""
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
 
     cfg = DynamicsOverlapConfig(
         action="error",
@@ -2187,15 +2187,15 @@ def test_overlap_checks_run_after_each_successful_chunk(tmp_path):
         return 5.0, False
 
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
         side_effect=fake_chunk,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard.check_dynamics_overlap",
+        "karml.interfaces.pycharmmInterface.mlpot.overlap_guard.check_dynamics_overlap",
         side_effect=track_overlap,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_chunk_after_restart",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_chunk_after_restart",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.read_restart_last_step",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics_validation.read_restart_last_step",
         side_effect=lambda path: int(Path(path).read_text().split()[1]),
     ):
         run_dynamics_with_io(
@@ -2212,7 +2212,7 @@ def test_overlap_checks_run_after_each_successful_chunk(tmp_path):
 
 def test_overlap_checks_run_when_restart_reports_segment_nstep_only(tmp_path):
     """JHSTRT=0 restarts report NSTEP=500 each chunk; checks must still run."""
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
 
     cfg = DynamicsOverlapConfig(
         action="error",
@@ -2233,15 +2233,15 @@ def test_overlap_checks_run_when_restart_reports_segment_nstep_only(tmp_path):
         return 5.0, False
 
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
         side_effect=fake_chunk,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard.check_dynamics_overlap",
+        "karml.interfaces.pycharmmInterface.mlpot.overlap_guard.check_dynamics_overlap",
         side_effect=track_overlap,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_chunk_after_restart",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_chunk_after_restart",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.read_restart_last_step",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics_validation.read_restart_last_step",
         return_value=500,
     ):
         run_dynamics_with_io(
@@ -2257,8 +2257,8 @@ def test_overlap_checks_run_when_restart_reports_segment_nstep_only(tmp_path):
 
 def test_overlap_restart_header_misread_does_not_trigger_recovery(tmp_path, capsys):
     """Stale scratch restart step below expected_after must not salvage or retry."""
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
-    from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
+    from karml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
         GeometryRecoveryResult,
     )
 
@@ -2285,21 +2285,21 @@ def test_overlap_restart_header_misread_does_not_trigger_recovery(tmp_path, caps
         return mock.Mock()
 
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
         side_effect=fake_chunk,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_chunk_state_corrupt",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_chunk_state_corrupt",
         return_value=False,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard.check_dynamics_overlap",
+        "karml.interfaces.pycharmmInterface.mlpot.overlap_guard.check_dynamics_overlap",
         return_value=(5.0, False),
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_chunk_after_restart",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_chunk_after_restart",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint.attempt_overlap_early_abort_recovery",
+        "karml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint.attempt_overlap_early_abort_recovery",
         return_value=GeometryRecoveryResult(True, "restart"),
     ) as attempt_recovery, mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._salvage_overlap_segment_progress",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._salvage_overlap_segment_progress",
     ) as salvage:
         result = run_dynamics_with_io(
             {"nstep": 639},
@@ -2322,7 +2322,7 @@ def test_overlap_restart_header_misread_does_not_trigger_recovery(tmp_path, caps
 
 
 def test_overlap_skips_check_when_chunk_aborts_early(tmp_path, capsys):
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
 
     cfg = DynamicsOverlapConfig(
         action="error",
@@ -2338,17 +2338,17 @@ def test_overlap_skips_check_when_chunk_aborts_early(tmp_path, capsys):
         return mock.Mock()
 
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
         side_effect=fake_chunk,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_chunk_state_corrupt",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_chunk_state_corrupt",
         return_value=True,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard.check_dynamics_overlap",
+        "karml.interfaces.pycharmmInterface.mlpot.overlap_guard.check_dynamics_overlap",
     ) as check_overlap, mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_chunk_after_restart",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_chunk_after_restart",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.read_restart_last_step",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics_validation.read_restart_last_step",
         return_value=300,
     ):
         with pytest.raises(RuntimeError, match="dynamics aborted after chunk"):
@@ -2370,7 +2370,7 @@ def test_overlap_skips_check_when_chunk_aborts_early(tmp_path, capsys):
 
 def test_overlap_post_rescue_handoff_uses_readyn_restart(tmp_path, capsys):
     """Post-rescue overlap must stabilize MLpot and READYN the next chunk."""
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
 
     cfg = DynamicsOverlapConfig(
         action="rescue",
@@ -2406,37 +2406,37 @@ def test_overlap_post_rescue_handoff_uses_readyn_restart(tmp_path, capsys):
         )
 
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
         side_effect=fake_chunk,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard.check_dynamics_overlap",
+        "karml.interfaces.pycharmmInterface.mlpot.overlap_guard.check_dynamics_overlap",
         side_effect=track_overlap,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._refresh_restart_write_after_chunk",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._refresh_restart_write_after_chunk",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.patch_restart_global_step",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics_validation.patch_restart_global_step",
         return_value=True,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.finalize_overlap_rescue_for_dynamics",
+        "karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.finalize_overlap_rescue_for_dynamics",
     ) as finalize, mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._materialize_post_rescue_restart_handoff",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._materialize_post_rescue_restart_handoff",
         side_effect=fake_materialize,
     ) as materialize, mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_post_rescue_overlap_handoff",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_post_rescue_overlap_handoff",
     ) as post_rescue, mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_chunk_after_restart",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_chunk_after_restart",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.refresh_mlpot_energy_and_grms",
+        "karml.interfaces.pycharmmInterface.mlpot.cli_common.refresh_mlpot_energy_and_grms",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.ensure_segment_restart_checkpoint",
+        "karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.ensure_segment_restart_checkpoint",
         side_effect=lambda p: Path(p).resolve(),
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.read_restart_last_step",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics_validation.read_restart_last_step",
         side_effect=lambda path: int(
             Path(path).read_text().splitlines()[0].split()[2]
         ),
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._valid_overlap_chunk_restart_read",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._valid_overlap_chunk_restart_read",
         side_effect=lambda path, **_kwargs: (
             Path(path) if path and Path(path).is_file() else None
         ),
@@ -2461,9 +2461,9 @@ def test_overlap_post_rescue_handoff_uses_readyn_restart(tmp_path, capsys):
 
 def test_post_rescue_in_memory_handoff_limited_to_next_chunk(tmp_path, monkeypatch):
     """CPT post-rescue memory I/O applies only to the chunk immediately after rescue."""
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
 
-    monkeypatch.setenv("MMML_NO_OVERLAP_MEMORY_HANDOFF", "1")
+    monkeypatch.setenv("KARML_NO_OVERLAP_MEMORY_HANDOFF", "1")
 
     final_res = tmp_path / "heat_cpt.res"
     cfg = DynamicsOverlapConfig(
@@ -2489,27 +2489,27 @@ def test_post_rescue_in_memory_handoff_limited_to_next_chunk(tmp_path, monkeypat
         return (5.0, int(step) == 500)
 
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
         side_effect=fake_chunk,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._cpt_stability_chunk_nstep",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._cpt_stability_chunk_nstep",
         return_value=None,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard.check_dynamics_overlap",
+        "karml.interfaces.pycharmmInterface.mlpot.overlap_guard.check_dynamics_overlap",
         side_effect=track_overlap,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.finalize_overlap_rescue_for_dynamics",
+        "karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.finalize_overlap_rescue_for_dynamics",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_post_rescue_overlap_handoff",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_post_rescue_overlap_handoff",
     ) as post_rescue_prepare, mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_chunk_after_restart",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_chunk_after_restart",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.refresh_mlpot_energy_and_grms",
+        "karml.interfaces.pycharmmInterface.mlpot.cli_common.refresh_mlpot_energy_and_grms",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.ensure_segment_restart_checkpoint",
+        "karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.ensure_segment_restart_checkpoint",
         side_effect=lambda p: Path(p).resolve(),
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.read_restart_last_step",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics_validation.read_restart_last_step",
         side_effect=lambda path: int(Path(path).read_text().split()[1]),
     ):
         run_dynamics_with_io(
@@ -2528,7 +2528,7 @@ def test_post_rescue_in_memory_handoff_limited_to_next_chunk(tmp_path, monkeypat
 
 def test_overlap_post_rescue_single_chunk_patches_without_extra_dyna(tmp_path, capsys):
     """Segment-boundary rescue with one overlap chunk must not require another dyna leg."""
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
 
     cfg = DynamicsOverlapConfig(
         action="rescue",
@@ -2552,20 +2552,20 @@ def test_overlap_post_rescue_single_chunk_patches_without_extra_dyna(tmp_path, c
         return mock.Mock()
 
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
         side_effect=fake_chunk,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard.check_dynamics_overlap",
+        "karml.interfaces.pycharmmInterface.mlpot.overlap_guard.check_dynamics_overlap",
         side_effect=lambda *_a, **kw: (5.0, int(kw.get("step", 0)) == 2500),
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._refresh_restart_write_after_chunk",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._refresh_restart_write_after_chunk",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.patch_restart_global_step",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics_validation.patch_restart_global_step",
         return_value=True,
     ) as patch_step, mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_post_rescue_overlap_handoff",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_post_rescue_overlap_handoff",
     ) as post_rescue, mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._refresh_segment_restart_after_overlap_rescue",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._refresh_segment_restart_after_overlap_rescue",
     ) as refresh_segment:
         run_dynamics_with_io(
             {"nstep": 2500},
@@ -2586,7 +2586,7 @@ def test_overlap_post_rescue_single_chunk_patches_without_extra_dyna(tmp_path, c
 
 def test_mlpot_overlap_memory_handoff_flag_does_not_skip_readyn_between_chunks(tmp_path):
     """``memory_handoff`` on overlap config does not skip scratch READYN between chunks."""
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
 
     cfg = DynamicsOverlapConfig(
         action="error",
@@ -2611,17 +2611,17 @@ def test_mlpot_overlap_memory_handoff_flag_does_not_skip_readyn_between_chunks(t
         return mock.Mock()
 
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
         side_effect=fake_chunk,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard.check_dynamics_overlap",
+        "karml.interfaces.pycharmmInterface.mlpot.overlap_guard.check_dynamics_overlap",
         return_value=(5.0, False),
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_chunk_after_restart",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_chunk_after_restart",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.refresh_mlpot_energy_and_grms",
+        "karml.interfaces.pycharmmInterface.mlpot.cli_common.refresh_mlpot_energy_and_grms",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.ensure_segment_restart_checkpoint",
+        "karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.ensure_segment_restart_checkpoint",
         side_effect=lambda p: Path(p).resolve(),
     ):
         run_dynamics_with_io(
@@ -2640,14 +2640,14 @@ def test_mlpot_overlap_memory_handoff_flag_does_not_skip_readyn_between_chunks(t
 
 def test_mlpot_bussi_overlap_chunks_use_in_memory_handoff(tmp_path, monkeypatch):
     """Bussi heat overlap stays in RAM between chunks (no scratch READYN)."""
-    monkeypatch.setenv("MMML_BUSSI_IASVEL0_CONTINUATION", "1")
-    monkeypatch.setenv("MMML_BUSSI_INIT_VELOCITIES_HANDOFF", "1")
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    monkeypatch.setenv("KARML_BUSSI_IASVEL0_CONTINUATION", "1")
+    monkeypatch.setenv("KARML_BUSSI_INIT_VELOCITIES_HANDOFF", "1")
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         CharmmTrajectoryFiles,
         prepare_bussi_heat_dynamics_kw,
     )
 
-    monkeypatch.delenv("MMML_BUSSI_READYN_OVERLAP", raising=False)
+    monkeypatch.delenv("KARML_BUSSI_READYN_OVERLAP", raising=False)
     cfg = DynamicsOverlapConfig(
         action="error",
         min_distance_A=0.5,
@@ -2677,23 +2677,23 @@ def test_mlpot_bussi_overlap_chunks_use_in_memory_handoff(tmp_path, monkeypatch)
         return mock.Mock()
 
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
         side_effect=fake_chunk,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_bussi_heat_subchunked",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._run_bussi_heat_subchunked",
         side_effect=fake_bussi_sub,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_c_api_available",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_c_api_available",
         return_value=True,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard.check_dynamics_overlap",
+        "karml.interfaces.pycharmmInterface.mlpot.overlap_guard.check_dynamics_overlap",
         return_value=(5.0, False),
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_chunk_after_restart",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_chunk_after_restart",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.refresh_mlpot_energy_and_grms",
+        "karml.interfaces.pycharmmInterface.mlpot.cli_common.refresh_mlpot_energy_and_grms",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.ensure_segment_restart_checkpoint",
+        "karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.ensure_segment_restart_checkpoint",
         side_effect=lambda p: Path(p).resolve(),
     ):
         run_dynamics_with_io(
@@ -2716,8 +2716,8 @@ def test_mlpot_bussi_overlap_chunks_use_in_memory_handoff(tmp_path, monkeypatch)
 
 def test_mlpot_overlap_chunks_use_scratch_restart_handoff(tmp_path, monkeypatch):
     """Default MLpot overlap uses dyna restart on alternating scratch .res files."""
-    monkeypatch.setenv("MMML_NO_OVERLAP_MEMORY_HANDOFF", "1")
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
+    monkeypatch.setenv("KARML_NO_OVERLAP_MEMORY_HANDOFF", "1")
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
 
     cfg = DynamicsOverlapConfig(
         action="error",
@@ -2752,17 +2752,17 @@ def test_mlpot_overlap_chunks_use_scratch_restart_handoff(tmp_path, monkeypatch)
         return mock.Mock()
 
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
         side_effect=fake_chunk,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard.check_dynamics_overlap",
+        "karml.interfaces.pycharmmInterface.mlpot.overlap_guard.check_dynamics_overlap",
         return_value=(5.0, False),
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_chunk_after_restart",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_chunk_after_restart",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._refresh_restart_write_after_chunk",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._refresh_restart_write_after_chunk",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.read_restart_last_step",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics_validation.read_restart_last_step",
         return_value=2,
     ):
         run_dynamics_with_io(
@@ -2782,8 +2782,8 @@ def test_mlpot_overlap_chunks_use_scratch_restart_handoff(tmp_path, monkeypatch)
 
 
 def test_completed_overlap_refresh_repatches_final_restart_step(tmp_path):
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         read_restart_last_step,
     )
 
@@ -2811,13 +2811,13 @@ def test_completed_overlap_refresh_repatches_final_restart_step(tmp_path):
         Path(final_restart).write_text(stale_restart, encoding="utf-8")
 
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
         side_effect=fake_chunk,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard.check_dynamics_overlap",
+        "karml.interfaces.pycharmmInterface.mlpot.overlap_guard.check_dynamics_overlap",
         return_value=(5.0, False),
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._overlap_refresh_or_validate_scratch_restart",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._overlap_refresh_or_validate_scratch_restart",
         side_effect=stale_refresh,
     ):
         result = run_dynamics_with_io(
@@ -2834,7 +2834,7 @@ def test_completed_overlap_refresh_repatches_final_restart_step(tmp_path):
 
 def test_overlap_chunk_readyn_when_restart_jhstrt_zero(tmp_path):
     """Patch JHSTRT=0 scratch restarts so the next chunk READYNs at global step."""
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
 
     cfg = DynamicsOverlapConfig(
         action="error",
@@ -2853,18 +2853,18 @@ def test_overlap_chunk_readyn_when_restart_jhstrt_zero(tmp_path):
         return mock.Mock()
 
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
         side_effect=fake_chunk,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard.check_dynamics_overlap",
+        "karml.interfaces.pycharmmInterface.mlpot.overlap_guard.check_dynamics_overlap",
         return_value=(5.0, False),
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_chunk_after_restart",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_chunk_after_restart",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.read_restart_last_step",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics_validation.read_restart_last_step",
         return_value=0,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.patch_restart_global_step",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics_validation.patch_restart_global_step",
     ) as patch_step:
         run_dynamics_with_io(
             {"nstep": 6, "new": False, "start": False, "restart": False},
@@ -2883,7 +2883,7 @@ def test_overlap_chunk_readyn_when_restart_jhstrt_zero(tmp_path):
 
 
 def test_overlap_memory_handoff_chunks_scratch_restart_handoff(tmp_path):
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
 
     cfg = DynamicsOverlapConfig(
         action="error",
@@ -2912,20 +2912,20 @@ def test_overlap_memory_handoff_chunks_scratch_restart_handoff(tmp_path):
         return mock.Mock()
 
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
         side_effect=fake_chunk,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_chunk_after_restart",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_chunk_after_restart",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.read_restart_last_step",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics_validation.read_restart_last_step",
         return_value=0,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._materialize_overlap_chunk_restart_handoff",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._materialize_overlap_chunk_restart_handoff",
         side_effect=lambda path, *, global_step, **kwargs: _write_test_restart(
             Path(path), int(global_step)
         ),
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         return_value=pos_ok,
     ):
         run_dynamics_with_io(
@@ -2949,7 +2949,7 @@ def test_overlap_memory_handoff_chunks_scratch_restart_handoff(tmp_path):
 
 
 def test_overlap_first_chunk_drops_restart_when_restart_read_is_invalid(tmp_path):
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
 
     cfg = DynamicsOverlapConfig(
         action="error",
@@ -2985,12 +2985,12 @@ def test_overlap_first_chunk_drops_restart_when_restart_read_is_invalid(tmp_path
         return mock.Mock()
 
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
         side_effect=fake_chunk,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_chunk_after_restart",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_chunk_after_restart",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         return_value=pos_ok,
     ):
         run_dynamics_with_io(
@@ -3012,7 +3012,7 @@ def test_overlap_first_chunk_drops_restart_when_restart_read_is_invalid(tmp_path
 
 
 def test_overlap_cleans_stale_slots_at_start(tmp_path):
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         CharmmTrajectoryFiles,
         _overlap_restart_slot_paths,
         _cleanup_overlap_restart_slots,
@@ -3045,12 +3045,12 @@ def test_overlap_cleans_stale_slots_at_start(tmp_path):
         return mock.Mock()
 
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
         side_effect=fake_chunk,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_chunk_after_restart",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_chunk_after_restart",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         return_value=pos_ok,
     ):
         run_dynamics_with_io(
@@ -3065,7 +3065,7 @@ def test_overlap_cleans_stale_slots_at_start(tmp_path):
 
 
 def test_overlap_chunk_io_alternate_scratch_and_final_write(tmp_path):
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         CharmmTrajectoryFiles,
         _overlap_chunk_io,
         _overlap_chunk_restart_paths,
@@ -3107,7 +3107,7 @@ def test_overlap_chunk_io_alternate_scratch_and_final_write(tmp_path):
 
 
 def test_overlap_chunk_io_skips_nonrestartable_scratch_restart(tmp_path):
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         CharmmTrajectoryFiles,
         _overlap_chunk_io,
         _overlap_restart_slot_paths,
@@ -3130,7 +3130,7 @@ def test_overlap_chunk_io_skips_nonrestartable_scratch_restart(tmp_path):
 
 
 def test_overlap_chunk_io_skips_negative_restart_header(tmp_path):
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         CharmmTrajectoryFiles,
         _overlap_chunk_io,
         _overlap_restart_slot_paths,
@@ -3150,7 +3150,7 @@ def test_overlap_chunk_io_skips_negative_restart_header(tmp_path):
 
 
 def test_overlap_aborts_before_charmm_when_scratch_restart_is_invalid(tmp_path):
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         CharmmTrajectoryFiles,
         _overlap_restart_slot_paths,
     )
@@ -3185,15 +3185,15 @@ def test_overlap_aborts_before_charmm_when_scratch_restart_is_invalid(tmp_path):
         return mock.Mock()
 
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
         side_effect=fake_chunk,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._refresh_overlap_scratch_restart",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._refresh_overlap_scratch_restart",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._materialize_overlap_chunk_restart_handoff",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._materialize_overlap_chunk_restart_handoff",
         side_effect=RuntimeError("mock: non-restartable scratch"),
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         return_value=pos_ok,
     ):
         with pytest.raises(RuntimeError, match="scratch restart.*is not restartable after chunk 1"):
@@ -3208,14 +3208,14 @@ def test_overlap_aborts_before_charmm_when_scratch_restart_is_invalid(tmp_path):
 
 
 def test_run_dynamics_rejects_nstep_zero():
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import run_dynamics
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import run_dynamics
 
     with pytest.raises(ValueError, match="nstep must be >= 1"):
         run_dynamics({"nstep": 0, "timestep": 0.00025})
 
 
 def test_assign_velocities_at_temperature_raises():
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         assign_velocities_at_temperature,
     )
 
@@ -3224,7 +3224,7 @@ def test_assign_velocities_at_temperature_raises():
 
 
 def test_overlap_config_for_stage_heat_uses_mid_segment_checks_by_default():
-    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+    from karml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
         DynamicsOverlapConfig,
         overlap_config_for_stage,
     )
@@ -3250,7 +3250,7 @@ def test_overlap_config_for_stage_heat_uses_mid_segment_checks_by_default():
 def test_overlap_config_for_stage_heat_segment_boundary_only():
     from dataclasses import replace
 
-    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+    from karml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
         DynamicsOverlapConfig,
         overlap_config_for_stage,
     )
@@ -3272,12 +3272,12 @@ def test_hoover_heat_forces_segment_boundary_overlap(monkeypatch):
     """Hoover CPT heat uses one overlap chunk per segment unless opted out."""
     from dataclasses import replace
 
-    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+    from karml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
         DynamicsOverlapConfig,
         overlap_config_for_stage,
     )
 
-    monkeypatch.delenv("MMML_HEAT_MID_SEGMENT_CHECKS", raising=False)
+    monkeypatch.delenv("KARML_HEAT_MID_SEGMENT_CHECKS", raising=False)
     cfg = DynamicsOverlapConfig(
         action="rescue",
         check_interval=250,
@@ -3296,7 +3296,7 @@ def test_hoover_heat_forces_segment_boundary_overlap(monkeypatch):
 
 
 def test_overlap_should_split_trajectory_limits_chunk_dcd_count():
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _overlap_should_split_trajectory,
     )
 
@@ -3313,8 +3313,8 @@ def test_overlap_should_split_trajectory_limits_chunk_dcd_count():
 
 
 def test_overlap_chunk_continues_velocity_scaling_heat_ramp(tmp_path, monkeypatch):
-    monkeypatch.setenv("MMML_NO_OVERLAP_MEMORY_HANDOFF", "1")
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
+    monkeypatch.setenv("KARML_NO_OVERLAP_MEMORY_HANDOFF", "1")
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
 
     cfg = DynamicsOverlapConfig(
         action="error",
@@ -3347,19 +3347,19 @@ def test_overlap_chunk_continues_velocity_scaling_heat_ramp(tmp_path, monkeypatc
         return mock.Mock()
 
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
         side_effect=fake_chunk,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard.check_dynamics_overlap",
+        "karml.interfaces.pycharmmInterface.mlpot.overlap_guard.check_dynamics_overlap",
         return_value=(5.0, False),
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_chunk_after_restart",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_chunk_after_restart",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.validate_charmm_dynamics_state_after_chunk",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics_validation.validate_charmm_dynamics_state_after_chunk",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._refresh_restart_write_after_chunk",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._refresh_restart_write_after_chunk",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.read_restart_last_step",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics_validation.read_restart_last_step",
         side_effect=lambda path: 500 * len(calls),
     ):
         run_dynamics_with_io(
@@ -3388,7 +3388,7 @@ def test_overlap_chunk_continues_velocity_scaling_heat_ramp(tmp_path, monkeypatc
 
 
 def test_apply_overlap_chunk_restart_read_forces_iasvel_zero():
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import _apply_overlap_chunk_dynamics_kw
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import _apply_overlap_chunk_dynamics_kw
 
     kw = {
         "start": True,
@@ -3406,7 +3406,7 @@ def test_apply_overlap_chunk_restart_read_forces_iasvel_zero():
 
 
 def test_apply_overlap_chunk_restart_read_preserves_cpt_npt_fresh_barostat():
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import _apply_overlap_chunk_dynamics_kw
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import _apply_overlap_chunk_dynamics_kw
 
     kw = {
         "cpt": True,
@@ -3426,7 +3426,7 @@ def test_apply_overlap_chunk_restart_read_preserves_cpt_npt_fresh_barostat():
 
 
 def test_apply_overlap_chunk_restart_read_cpt_npt_only_chunk_zero():
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import _apply_overlap_chunk_dynamics_kw
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import _apply_overlap_chunk_dynamics_kw
 
     kw = {
         "cpt": True,
@@ -3443,7 +3443,7 @@ def test_apply_overlap_chunk_restart_read_cpt_npt_only_chunk_zero():
 
 
 def test_apply_overlap_chunk_hoover_chunk0_preserves_cold_start():
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import _apply_overlap_chunk_dynamics_kw
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import _apply_overlap_chunk_dynamics_kw
 
     kw = {
         "start": True,
@@ -3461,7 +3461,7 @@ def test_apply_overlap_chunk_hoover_chunk0_preserves_cold_start():
 
 def test_apply_overlap_chunk_clears_start_for_scale_heat_chunk_zero():
     """Overlap chunk 0 scale heat preserves cold start (start=True) and ihtfrq."""
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import _apply_overlap_chunk_dynamics_kw
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import _apply_overlap_chunk_dynamics_kw
 
     kw = {
         "start": True,
@@ -3479,7 +3479,7 @@ def test_apply_overlap_chunk_clears_start_for_scale_heat_chunk_zero():
 
 
 def test_apply_overlap_chunk_preserves_heat_cold_start_kw():
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import _apply_overlap_chunk_dynamics_kw
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import _apply_overlap_chunk_dynamics_kw
 
     kw = {
         "start": False,
@@ -3526,7 +3526,7 @@ def test_apply_overlap_chunk_preserves_heat_cold_start_kw():
 
 
 def test_apply_overlap_chunk_hoover_cpt_preserves_cold_start_on_chunk_zero():
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import _apply_overlap_chunk_dynamics_kw
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import _apply_overlap_chunk_dynamics_kw
 
     kw = {
         "start": True,
@@ -3544,7 +3544,7 @@ def test_apply_overlap_chunk_hoover_cpt_preserves_cold_start_on_chunk_zero():
 
 
 def test_apply_overlap_chunk_scale_heat_chunk_one_keeps_iasvel_one():
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import _apply_overlap_chunk_dynamics_kw
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import _apply_overlap_chunk_dynamics_kw
 
     kw = {
         "start": False,
@@ -3562,7 +3562,7 @@ def test_apply_overlap_chunk_scale_heat_chunk_one_keeps_iasvel_one():
 
 
 def test_apply_overlap_chunk_hoover_cpt_continuation_zeros_iasvel_after_chunk_zero():
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import _apply_overlap_chunk_dynamics_kw
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import _apply_overlap_chunk_dynamics_kw
 
     kw = {
         "start": False,
@@ -3578,7 +3578,7 @@ def test_apply_overlap_chunk_hoover_cpt_continuation_zeros_iasvel_after_chunk_ze
 
 
 def test_apply_overlap_chunk_cpt_npt_keeps_iasvel_one_after_boltzmann():
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import _apply_overlap_chunk_dynamics_kw
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import _apply_overlap_chunk_dynamics_kw
 
     kw = {
         "start": False,
@@ -3594,7 +3594,7 @@ def test_apply_overlap_chunk_cpt_npt_keeps_iasvel_one_after_boltzmann():
 
 
 def test_run_dynamics_with_io_mlpot_overlap_chunks_use_readyn_handoff(tmp_path):
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         CharmmTrajectoryFiles,
         run_dynamics_with_io,
     )
@@ -3621,13 +3621,13 @@ def test_run_dynamics_with_io_mlpot_overlap_chunks_use_readyn_handoff(tmp_path):
         return mock.Mock()
 
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
         side_effect=fake_chunk,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard.check_dynamics_overlap",
+        "karml.interfaces.pycharmmInterface.mlpot.overlap_guard.check_dynamics_overlap",
         return_value=(5.0, False),
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_chunk_after_restart",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_chunk_after_restart",
     ):
         run_dynamics_with_io(
             {"nstep": 6, "new": False, "start": False, "restart": False, "iasvel": 0},
@@ -3644,7 +3644,7 @@ def test_run_dynamics_with_io_mlpot_overlap_chunks_use_readyn_handoff(tmp_path):
 
 
 def test_ensure_valid_overlap_scratch_restart_raises_on_rest_minus_one(tmp_path):
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _ensure_valid_overlap_scratch_restart,
         _overlap_restart_slot_paths,
     )
@@ -3653,7 +3653,7 @@ def test_ensure_valid_overlap_scratch_restart_raises_on_rest_minus_one(tmp_path)
     slot_a, _ = _overlap_restart_slot_paths(final)
     slot_a.write_text("REST    48    -1                \n", encoding="utf-8")
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._refresh_overlap_scratch_restart",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._refresh_overlap_scratch_restart",
     ):
         with pytest.raises(RuntimeError, match="REST step field='-1'"):
             _ensure_valid_overlap_scratch_restart(
@@ -3666,7 +3666,7 @@ def test_ensure_valid_overlap_scratch_restart_raises_on_rest_minus_one(tmp_path)
 
 
 def test_overlap_refresh_scratch_restart_fixes_invalid_handoff(tmp_path):
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         CharmmTrajectoryFiles,
         _overlap_restart_slot_paths,
     )
@@ -3708,18 +3708,18 @@ def test_overlap_refresh_scratch_restart_fixes_invalid_handoff(tmp_path):
             refreshed.append(p)
 
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
         side_effect=fake_chunk,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._refresh_overlap_scratch_restart",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._refresh_overlap_scratch_restart",
         side_effect=fake_refresh,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._materialize_overlap_chunk_restart_handoff",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._materialize_overlap_chunk_restart_handoff",
         side_effect=RuntimeError("mock: non-restartable scratch"),
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_chunk_after_restart",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_chunk_after_restart",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         return_value=pos_ok,
     ):
         run_dynamics_with_io(
@@ -3734,7 +3734,7 @@ def test_overlap_refresh_scratch_restart_fixes_invalid_handoff(tmp_path):
 
 
 def test_overlap_multi_chunk_splits_dcd_per_chunk(tmp_path):
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         CharmmTrajectoryFiles,
         _overlap_chunk_trajectory_path,
     )
@@ -3763,7 +3763,7 @@ def test_overlap_multi_chunk_splits_dcd_per_chunk(tmp_path):
     written_restarts: list[Path] = []
 
     def fake_numbered_restart(**kwargs):
-        from mmml.interfaces.pycharmmInterface.mlpot.artifact_paths import (
+        from karml.interfaces.pycharmmInterface.mlpot.artifact_paths import (
             overlap_chunk_restart_path,
         )
 
@@ -3778,7 +3778,7 @@ def test_overlap_multi_chunk_splits_dcd_per_chunk(tmp_path):
         chunk_paths.append(_io.trajectory if _io is not None else None)
         if _io is not None and _io.restart_write is not None:
             Path(_io.restart_write).write_text("REST\n", encoding="utf-8")
-        from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
             _maybe_write_numbered_restart_after_dyna,
         )
 
@@ -3786,18 +3786,18 @@ def test_overlap_multi_chunk_splits_dcd_per_chunk(tmp_path):
         return mock.Mock()
 
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
         side_effect=fake_chunk,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_chunk_after_restart",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_chunk_after_restart",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         return_value=pos_ok,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._write_overlap_chunk_numbered_restart",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._write_overlap_chunk_numbered_restart",
         side_effect=fake_numbered_restart,
     ), mock.patch(
-        "mmml.utils.dcd_writer.concat_dcd_files",
+        "karml.utils.dcd_writer.concat_dcd_files",
     ) as merge:
         run_dynamics_with_io(
             {"nstep": 6, "nsavc": 1},
@@ -3812,7 +3812,7 @@ def test_overlap_multi_chunk_splits_dcd_per_chunk(tmp_path):
 
 
 def test_overlap_single_chunk_uses_stage_dcd_directly(tmp_path):
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
 
     cfg = DynamicsOverlapConfig(
         action="error",
@@ -3840,12 +3840,12 @@ def test_overlap_single_chunk_uses_stage_dcd_directly(tmp_path):
         return mock.Mock()
 
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
         side_effect=fake_chunk,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_chunk_after_restart",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_chunk_after_restart",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         return_value=pos_ok,
     ):
         run_dynamics_with_io(
@@ -3858,7 +3858,7 @@ def test_overlap_single_chunk_uses_stage_dcd_directly(tmp_path):
 
 
 def test_effective_overlap_check_interval_divides_nstep():
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         effective_overlap_check_interval,
     )
 
@@ -3870,7 +3870,7 @@ def test_effective_overlap_check_interval_divides_nstep():
 
 
 def test_effective_overlap_check_interval_ignores_nsavc_for_guard_cadence():
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         effective_overlap_check_interval,
     )
 
@@ -3881,7 +3881,7 @@ def test_effective_overlap_check_interval_ignores_nsavc_for_guard_cadence():
 
 
 def test_effective_overlap_check_interval_cpt_ignores_large_nsavc():
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         effective_overlap_check_interval,
     )
 
@@ -3891,7 +3891,7 @@ def test_effective_overlap_check_interval_cpt_ignores_large_nsavc():
 
 
 def test_apply_cpt_restart_continuation_kw():
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _apply_cpt_restart_continuation_kw,
     )
 
@@ -3917,7 +3917,7 @@ def test_apply_cpt_restart_continuation_kw():
 
 
 def test_apply_cpt_in_memory_continuation_kw():
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _apply_cpt_in_memory_continuation_kw,
     )
 
@@ -3944,7 +3944,7 @@ def test_apply_cpt_in_memory_continuation_kw():
 
 
 def test_apply_cpt_in_memory_continuation_keeps_velocities_when_piston_is_live():
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _apply_cpt_in_memory_continuation_kw,
     )
 
@@ -3966,7 +3966,7 @@ def test_apply_cpt_in_memory_continuation_keeps_velocities_when_piston_is_live()
 
 
 def test_later_overlap_chunk_appends_pressure_log(tmp_path: Path):
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         CharmmTrajectoryFiles,
         _overlap_chunk_io,
     )
@@ -3981,7 +3981,7 @@ def test_later_overlap_chunk_appends_pressure_log(tmp_path: Path):
 
 
 def test_lock_pure_mm_npt_segment_continuation():
-    from mmml.interfaces.pycharmmInterface.mlpot.staged_workflow import (
+    from karml.interfaces.pycharmmInterface.mlpot.staged_workflow import (
         lock_pure_mm_npt_segment_continuation,
     )
 
@@ -4011,7 +4011,7 @@ def _write_test_restart(path: Path, global_step: int) -> None:
 
 
 def test_run_dynamics_with_io_cpt_overlap_subchunks(tmp_path):
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
 
     cfg = DynamicsOverlapConfig(
         action="error",
@@ -4053,21 +4053,21 @@ def test_run_dynamics_with_io_cpt_overlap_subchunks(tmp_path):
         return Path(path)
 
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
         side_effect=fake_chunk,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._materialize_cpt_subchunk_restart_handoff",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._materialize_cpt_subchunk_restart_handoff",
         side_effect=fake_materialize,
     ) as materialize, mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_chunk_after_restart",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_chunk_after_restart",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_chunk_state_corrupt",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_chunk_state_corrupt",
         return_value=False,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         return_value=pos_ok,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._refresh_restart_write_after_chunk",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._refresh_restart_write_after_chunk",
     ):
         run_dynamics_with_io(
             {"nstep": 1000, "nsavc": 10000, "cpt": True},
@@ -4086,7 +4086,7 @@ def test_run_dynamics_with_io_cpt_overlap_subchunks(tmp_path):
 
 
 def test_run_dynamics_with_io_uses_even_overlap_chunks(tmp_path):
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
 
     cfg = DynamicsOverlapConfig(
         action="error",
@@ -4111,12 +4111,12 @@ def test_run_dynamics_with_io_uses_even_overlap_chunks(tmp_path):
         return mock.Mock()
 
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
         side_effect=fake_chunk,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_chunk_after_restart",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_chunk_after_restart",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         return_value=pos_ok,
     ):
         run_dynamics_with_io(
@@ -4132,7 +4132,7 @@ def test_run_dynamics_with_io_uses_even_overlap_chunks(tmp_path):
 
 
 def test_harmonize_dynamics_frequency_for_remainder_chunk():
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _harmonize_dynamics_frequency,
         _harmonize_nsavc_frequency,
         _harmonize_overlap_chunk_frequencies,
@@ -4189,7 +4189,7 @@ def test_harmonize_dynamics_frequency_for_remainder_chunk():
     assert kw_mismatch["inbfrq"] == 301
     assert kw_mismatch["imgfrq"] % kw_mismatch["inbfrq"] == 0
 
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _align_inbfrq_with_imgfrq,
         _prepare_dynamics_list_frequencies,
     )
@@ -4238,7 +4238,7 @@ def test_harmonize_dynamics_frequency_for_remainder_chunk():
 
 
 def test_apply_overlap_chunk_heat_ramp_chunk_zero():
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _apply_overlap_chunk_heat_ramp,
     )
 
@@ -4257,7 +4257,7 @@ def test_apply_overlap_chunk_heat_ramp_chunk_zero():
 
 def test_disabled_image_frequency_does_not_collapse_inbfrq_to_every_step():
     """Loose PBC sets imgfrq = nstep + 1. A prime value must not force inbfrq = 1."""
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _align_inbfrq_with_imgfrq,
     )
 
@@ -4272,7 +4272,7 @@ def test_disabled_image_frequency_does_not_collapse_inbfrq_to_every_step():
 
 
 def test_prepare_dynamics_list_frequencies_aligns_stale_imgfrq():
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _align_inbfrq_with_imgfrq,
     )
 
@@ -4283,7 +4283,7 @@ def test_prepare_dynamics_list_frequencies_aligns_stale_imgfrq():
     assert kw["ilbfrq"] == 200
 
     block = (
-        Path("mmml/interfaces/pycharmmInterface/mlpot/dynamics.py")
+        Path("karml/interfaces/pycharmmInterface/mlpot/dynamics.py")
         .read_text(encoding="utf-8")
         .split("def _prepare_dynamics_list_frequencies(")[1]
         .split("\ndef ")[0]
@@ -4295,7 +4295,7 @@ def test_prepare_dynamics_list_frequencies_aligns_stale_imgfrq():
 def test_apply_dyn_imgfrq_from_args_sets_pbc_list_freqs():
     from argparse import Namespace
 
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         apply_dyn_imgfrq_from_args,
     )
 
@@ -4311,7 +4311,7 @@ def test_apply_dyn_imgfrq_from_args_sets_pbc_list_freqs():
 
 
 def test_apply_loose_pbc_dyn_freq_kwargs_above_nstep():
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         apply_loose_pbc_dyn_freq_kwargs,
     )
 
@@ -4334,7 +4334,7 @@ def test_apply_loose_pbc_dyn_freq_kwargs_above_nstep():
 
 
 def test_ensure_ntrfrq_above_nstep_for_non_loose_pbc():
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _ensure_ntrfrq_above_nstep,
     )
 
@@ -4356,7 +4356,7 @@ def test_ensure_ntrfrq_above_nstep_for_non_loose_pbc():
 
 
 def test_harmonize_overlap_chunk_non_loose_pbc_lifts_ntrfrq():
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _harmonize_overlap_chunk_frequencies,
     )
 
@@ -4366,7 +4366,7 @@ def test_harmonize_overlap_chunk_non_loose_pbc_lifts_ntrfrq():
 
 
 def test_harmonize_overlap_chunk_fixed_volume_lifts_ixtfrq():
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _harmonize_overlap_chunk_frequencies,
     )
 
@@ -4376,7 +4376,7 @@ def test_harmonize_overlap_chunk_fixed_volume_lifts_ixtfrq():
 
 
 def test_harmonize_overlap_chunk_fixed_volume_lifts_interior_list_freqs():
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _harmonize_overlap_chunk_frequencies,
     )
 
@@ -4399,7 +4399,7 @@ def test_harmonize_overlap_chunk_fixed_volume_lifts_interior_list_freqs():
 
 
 def test_harmonize_overlap_chunk_cadence_sets_print_not_interior_lists():
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _harmonize_overlap_chunk_frequencies,
     )
 
@@ -4430,7 +4430,7 @@ def test_harmonize_overlap_chunk_cadence_sets_print_not_interior_lists():
 
 
 def test_harmonize_overlap_chunk_npt_keeps_interior_list_freqs():
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _harmonize_overlap_chunk_frequencies,
     )
 
@@ -4449,7 +4449,7 @@ def test_harmonize_overlap_chunk_npt_keeps_interior_list_freqs():
 
 
 def test_harmonize_overlap_chunk_npt_keeps_ixtfrq():
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _harmonize_overlap_chunk_frequencies,
     )
 
@@ -4466,7 +4466,7 @@ def test_harmonize_overlap_chunk_npt_keeps_ixtfrq():
 
 
 def test_harmonize_overlap_chunk_loose_pbc_disables_image_freqs():
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _harmonize_overlap_chunk_frequencies,
     )
 
@@ -4492,7 +4492,7 @@ def test_harmonize_overlap_chunk_loose_pbc_disables_image_freqs():
 
 
 def test_sync_dynamics_io_units_keeps_explicit_iunrea_minus_one():
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import _sync_dynamics_io_units
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import _sync_dynamics_io_units
 
     kw = {"iunrea": -1, "nstep": 50, "restart": False}
     _sync_dynamics_io_units(kw, {"iunwri": 2, "iuncrd": 1})
@@ -4502,7 +4502,7 @@ def test_sync_dynamics_io_units_keeps_explicit_iunrea_minus_one():
 
 def test_sync_dynamics_io_units_forces_iuncrd_minus_one_without_dcd():
     """Deferred-DCD chunks must not leave IUNCRD aliased to IUNWRI (FORMATTED crash)."""
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import _sync_dynamics_io_units
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import _sync_dynamics_io_units
 
     kw = {
         "iunrea": -1,
@@ -4519,14 +4519,14 @@ def test_sync_dynamics_io_units_forces_iuncrd_minus_one_without_dcd():
 
 
 def test_dynamics_writes_dcd_false_when_iuncrd_disabled():
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import _dynamics_writes_dcd
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import _dynamics_writes_dcd
 
     assert _dynamics_writes_dcd({"iuncrd": -1, "nsavc": 249}) is False
     assert _dynamics_writes_dcd({"iuncrd": 51, "nsavc": 249}) is True
 
 
 def test_run_dynamics_chunk_keeps_iunrea_minus_one_for_dynamics():
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         CharmmTrajectoryFiles,
         _run_dynamics_chunk,
     )
@@ -4543,13 +4543,13 @@ def test_run_dynamics_chunk_keeps_iunrea_minus_one_for_dynamics():
         "open_for_run",
         return_value=([], {"iunwri": 2}, []),
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.run_dynamics",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics.run_dynamics",
         side_effect=fake_run,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.charmm_levels.charmm_relaxed_bomlev",
+        "karml.interfaces.pycharmmInterface.charmm_levels.charmm_relaxed_bomlev",
         return_value=nullcontext(),
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._refresh_charmm_dynamics_rng",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._refresh_charmm_dynamics_rng",
     ):
         _run_dynamics_chunk(
             {"nstep": 50, "restart": False, "iunrea": -1},
@@ -4561,7 +4561,7 @@ def test_run_dynamics_chunk_keeps_iunrea_minus_one_for_dynamics():
 
 
 def test_run_dynamics_chunk_clears_iunrea_from_io_when_not_restart():
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         CharmmTrajectoryFiles,
         _run_dynamics_chunk,
     )
@@ -4581,13 +4581,13 @@ def test_run_dynamics_chunk_clears_iunrea_from_io_when_not_restart():
         "open_for_run",
         return_value=([], {"iunwri": "/tmp/stage/out.res", "iunrea": "/tmp/stage/in.res"}, []),
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.run_dynamics",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics.run_dynamics",
         side_effect=fake_run,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.charmm_levels.charmm_relaxed_bomlev",
+        "karml.interfaces.pycharmmInterface.charmm_levels.charmm_relaxed_bomlev",
         return_value=nullcontext(),
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._refresh_charmm_dynamics_rng",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._refresh_charmm_dynamics_rng",
     ):
         _run_dynamics_chunk({"nstep": 50, "restart": False}, io)
 
@@ -4597,7 +4597,7 @@ def test_run_dynamics_chunk_clears_iunrea_from_io_when_not_restart():
 def test_run_dynamics_chunk_uses_bomlev_minus_two():
     from contextlib import contextmanager
 
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         CharmmTrajectoryFiles,
         _run_dynamics_chunk,
     )
@@ -4611,13 +4611,13 @@ def test_run_dynamics_chunk_uses_bomlev_minus_two():
 
     io = CharmmTrajectoryFiles(restart_write=__import__("pathlib").Path("/tmp/out.res"))
     with mock.patch.object(io, "open_for_run", return_value=([], {}, [])), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.run_dynamics",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics.run_dynamics",
         return_value=None,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.charmm_levels.charmm_relaxed_bomlev",
+        "karml.interfaces.pycharmmInterface.charmm_levels.charmm_relaxed_bomlev",
         side_effect=track_bomlev,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._refresh_charmm_dynamics_rng",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._refresh_charmm_dynamics_rng",
     ):
         _run_dynamics_chunk({"nstep": 50, "restart": False}, io)
 
@@ -4625,7 +4625,7 @@ def test_run_dynamics_chunk_uses_bomlev_minus_two():
 
 
 def test_ensure_nsavc_below_nstep_clamps_full_run():
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import _ensure_nsavc_below_nstep
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import _ensure_nsavc_below_nstep
 
     kw = {"nstep": 50, "nsavc": 50}
     _ensure_nsavc_below_nstep(kw)
@@ -4633,7 +4633,7 @@ def test_ensure_nsavc_below_nstep_clamps_full_run():
 
 
 def test_resolve_dcd_nsavc_strictly_below_nstep():
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import resolve_dcd_nsavc
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import resolve_dcd_nsavc
 
     assert resolve_dcd_nsavc(dcd_nsavc=100, nstep=50) == 49
     assert resolve_dcd_nsavc(dcd_nsavc=10, nstep=50) == 10
@@ -4644,7 +4644,7 @@ def test_resolve_dcd_nsavc_strictly_below_nstep():
 def test_resolve_dcd_nsavc_for_args_interval_needs_timestep():
     import argparse
 
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
         resolve_dcd_nsavc_for_args,
     )
 
@@ -4672,17 +4672,17 @@ def test_overlap_reseeds_rng_before_each_chunk():
         dtype=float,
     )
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._refresh_charmm_dynamics_rng",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._refresh_charmm_dynamics_rng",
     ) as refresh, mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.run_dynamics",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics.run_dynamics",
         return_value=mock.Mock(),
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.charmm_levels.charmm_relaxed_bomlev",
+        "karml.interfaces.pycharmmInterface.charmm_levels.charmm_relaxed_bomlev",
         return_value=nullcontext(),
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_chunk_after_restart",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_chunk_after_restart",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         return_value=pos_ok,
     ):
         run_dynamics_with_io(
@@ -4702,7 +4702,7 @@ def test_overlap_reseeds_rng_before_each_chunk():
 def test_refresh_charmm_dynamics_rng_uses_salt_with_base():
     import sys
 
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _refresh_charmm_dynamics_rng,
     )
 
@@ -4723,7 +4723,7 @@ def test_refresh_charmm_dynamics_rng_uses_salt_with_base():
 
 
 def test_run_dynamics_chunk_strips_stale_iunwri(tmp_path):
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         CharmmTrajectoryFiles,
         _run_dynamics_chunk,
     )
@@ -4739,12 +4739,12 @@ def test_run_dynamics_chunk_strips_stale_iunwri(tmp_path):
         return mock.Mock()
 
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._refresh_charmm_dynamics_rng",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._refresh_charmm_dynamics_rng",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.run_dynamics",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics.run_dynamics",
         side_effect=fake_run,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.charmm_levels.charmm_relaxed_bomlev",
+        "karml.interfaces.pycharmmInterface.charmm_levels.charmm_relaxed_bomlev",
         return_value=nullcontext(),
     ), mock.patch.object(
         CharmmTrajectoryFiles,
@@ -4760,10 +4760,10 @@ def test_run_dynamics_chunk_strips_stale_iunwri(tmp_path):
 
 
 def test_prepare_overlap_chunk_skips_upinb_when_mlpot_active(tmp_path: Path):
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _prepare_overlap_chunk_after_restart,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
+    from karml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
 
     scratch = tmp_path / "heat.a.res"
     scratch.write_text("REST\n")
@@ -4771,9 +4771,9 @@ def test_prepare_overlap_chunk_skips_upinb_when_mlpot_active(tmp_path: Path):
     ctx.pyCModel = mock.Mock()
     ctx.cubic_box_side_A = 50.0
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._import_pycharmm_modules",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._import_pycharmm_modules",
     ) as imp, mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.run_workflow.sync_mlpot_pbc_cell_from_charmm",
+        "karml.interfaces.pycharmmInterface.mlpot.run_workflow.sync_mlpot_pbc_cell_from_charmm",
         return_value=50.0,
     ) as sync_mic:
         _prepare_overlap_chunk_after_restart(ctx, restart_read=scratch)
@@ -4789,7 +4789,7 @@ def test_prepare_overlap_chunk_skips_upinb_when_mlpot_active(tmp_path: Path):
 
 
 def test_prepare_post_rescue_overlap_handoff_sets_single_dyna_start():
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _prepare_post_rescue_overlap_handoff,
     )
 
@@ -4807,9 +4807,9 @@ def test_prepare_post_rescue_overlap_handoff_sets_single_dyna_start():
         _overlap_post_rescue_cold_start=False,
     )
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.ensure_charmm_crystal_for_cpt",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.ensure_charmm_crystal_for_cpt",
     ) as ensure_crystal, mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.probe_charmm_cubic_box_side_A",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.probe_charmm_cubic_box_side_A",
         return_value=(None, None),
     ):
         _prepare_post_rescue_overlap_handoff(chunk_kw, mlpot_ctx=ctx)
@@ -4825,7 +4825,7 @@ def test_prepare_post_rescue_overlap_handoff_sets_single_dyna_start():
 
 def test_prepare_post_rescue_bath_prefers_live_npt_cell_over_stale_ctx():
     """Post-rescue must not snap NPT L back to the certified-handoff ctx side."""
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _prepare_post_rescue_bath_and_crystal,
     )
 
@@ -4836,9 +4836,9 @@ def test_prepare_post_rescue_bath_prefers_live_npt_cell_over_stale_ctx():
         cubic_box_side_A=30.307,
     )
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.ensure_charmm_crystal_for_cpt",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.ensure_charmm_crystal_for_cpt",
     ) as ensure_crystal, mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.probe_charmm_cubic_box_side_A",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.probe_charmm_cubic_box_side_A",
         return_value=(30.280, "pbound"),
     ):
         _prepare_post_rescue_bath_and_crystal(chunk_kw, mlpot_ctx=ctx)
@@ -4850,7 +4850,7 @@ def test_prepare_post_rescue_bath_prefers_live_npt_cell_over_stale_ctx():
 
 def test_prepare_post_rescue_velocity_redraw_uses_ase_cold_start():
     """Velocity-redraw must not use start+iasvel=0 (COMP coords → T~1e12)."""
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _prepare_post_rescue_overlap_handoff,
         _requires_init_velocities_handoff,
         prepare_bussi_heat_dynamics_kw,
@@ -4876,12 +4876,12 @@ def test_prepare_post_rescue_velocity_redraw_uses_ase_cold_start():
         _overlap_velocity_redraw_memory_handoff=True,
     )
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.ensure_charmm_crystal_for_cpt",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.ensure_charmm_crystal_for_cpt",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.probe_charmm_cubic_box_side_A",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.probe_charmm_cubic_box_side_A",
         return_value=(None, None),
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities."
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities."
         "assign_maxwell_boltzmann_velocities_via_ase",
     ) as assign_mb:
         _prepare_post_rescue_overlap_handoff(chunk_kw, mlpot_ctx=ctx)
@@ -4896,7 +4896,7 @@ def test_prepare_post_rescue_velocity_redraw_uses_ase_cold_start():
 
 
 def test_post_rescue_bath_target_prefers_hoover_reft_for_cpt_prod():
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _post_rescue_bath_target_K,
         _prepare_post_rescue_overlap_handoff,
     )
@@ -4916,9 +4916,9 @@ def test_post_rescue_bath_target_prefers_hoover_reft_for_cpt_prod():
         _overlap_post_rescue_cold_start=False,
     )
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.ensure_charmm_crystal_for_cpt",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.ensure_charmm_crystal_for_cpt",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.probe_charmm_cubic_box_side_A",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.probe_charmm_cubic_box_side_A",
         return_value=(None, None),
     ):
         _prepare_post_rescue_overlap_handoff(chunk_kw, mlpot_ctx=ctx)
@@ -4930,10 +4930,10 @@ def test_post_rescue_bath_target_prefers_hoover_reft_for_cpt_prod():
 
 
 def test_mlpot_cpt_overlap_uses_scratch_restart_handoff(tmp_path, monkeypatch):
-    """CPT overlap uses scratch READYN only when MMML_CPT_READYN_SUBCHUNK=1."""
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
+    """CPT overlap uses scratch READYN only when KARML_CPT_READYN_SUBCHUNK=1."""
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
 
-    monkeypatch.setenv("MMML_CPT_READYN_SUBCHUNK", "1")
+    monkeypatch.setenv("KARML_CPT_READYN_SUBCHUNK", "1")
 
     cfg = DynamicsOverlapConfig(
         action="rescue",
@@ -4956,20 +4956,20 @@ def test_mlpot_cpt_overlap_uses_scratch_restart_handoff(tmp_path, monkeypatch):
         return Path(path)
 
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
         side_effect=fake_chunk,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._materialize_cpt_subchunk_restart_handoff",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._materialize_cpt_subchunk_restart_handoff",
         side_effect=fake_materialize,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard.check_dynamics_overlap",
+        "karml.interfaces.pycharmmInterface.mlpot.overlap_guard.check_dynamics_overlap",
         return_value=(5.0, False),
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_chunk_after_restart",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_chunk_after_restart",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._refresh_restart_write_after_chunk",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._refresh_restart_write_after_chunk",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.ensure_segment_restart_checkpoint",
+        "karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.ensure_segment_restart_checkpoint",
         side_effect=lambda p: Path(p).resolve(),
     ):
         run_dynamics_with_io(
@@ -4991,9 +4991,9 @@ def test_mlpot_cpt_overlap_uses_scratch_restart_handoff(tmp_path, monkeypatch):
 
 def test_mlpot_cpt_overlap_uses_readyn_between_chunks(tmp_path, monkeypatch):
     """Default CPT overlap stays in RAM between chunks and sub-chunks (no READYN)."""
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
 
-    monkeypatch.delenv("MMML_CPT_READYN_SUBCHUNK", raising=False)
+    monkeypatch.delenv("KARML_CPT_READYN_SUBCHUNK", raising=False)
 
     cfg = DynamicsOverlapConfig(
         action="rescue",
@@ -5012,19 +5012,19 @@ def test_mlpot_cpt_overlap_uses_readyn_between_chunks(tmp_path, monkeypatch):
         return mock.Mock()
 
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
         side_effect=fake_chunk,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._materialize_cpt_subchunk_restart_handoff",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._materialize_cpt_subchunk_restart_handoff",
     ) as materialize, mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard.check_dynamics_overlap",
+        "karml.interfaces.pycharmmInterface.mlpot.overlap_guard.check_dynamics_overlap",
         return_value=(5.0, False),
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_chunk_after_restart",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_chunk_after_restart",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._refresh_restart_write_after_chunk",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._refresh_restart_write_after_chunk",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.ensure_segment_restart_checkpoint",
+        "karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.ensure_segment_restart_checkpoint",
         side_effect=lambda p: Path(p).resolve(),
     ):
         run_dynamics_with_io(
@@ -5048,7 +5048,7 @@ def test_mlpot_cpt_overlap_uses_readyn_between_chunks(tmp_path, monkeypatch):
 def test_valid_overlap_chunk_restart_read_rejects_handoff_seed_by_default(
     tmp_path, monkeypatch
 ):
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _overlap_chunk_uses_memory_handoff,
         _valid_overlap_chunk_restart_read,
     )
@@ -5057,7 +5057,7 @@ def test_valid_overlap_chunk_restart_read_rejects_handoff_seed_by_default(
     handoff.parent.mkdir()
     handoff.write_text("seed\n", encoding="utf-8")
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._valid_restart_file",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._valid_restart_file",
         lambda path: Path(path),
     )
     assert _valid_overlap_chunk_restart_read(handoff) is None
@@ -5087,7 +5087,7 @@ def test_valid_overlap_chunk_restart_read_rejects_handoff_seed_by_default(
 def test_overlap_chunk_uses_memory_handoff_for_adumb_rc_guard():
     from types import SimpleNamespace
 
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _overlap_chunk_uses_memory_handoff,
     )
 
@@ -5107,12 +5107,12 @@ def test_overlap_chunk_uses_memory_handoff_for_adumb_rc_guard():
 
 def test_apply_overlap_chunk_adumb_uses_safe_iasvel_one_not_comp(monkeypatch):
     """ADUMB must not take iasvel=0 (COMP-as-positions → T≃10¹³ K)."""
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _apply_overlap_chunk_dynamics_kw,
         prepare_bussi_heat_dynamics_kw,
     )
 
-    monkeypatch.setenv("MMML_ADUMB_IASVEL1_T_CAP", "250")
+    monkeypatch.setenv("KARML_ADUMB_IASVEL1_T_CAP", "250")
     kw = {
         "start": False,
         "firstt": 100.0,
@@ -5135,7 +5135,7 @@ def test_apply_overlap_chunk_adumb_uses_safe_iasvel_one_not_comp(monkeypatch):
 
 
 def test_apply_bussi_iasvel_zero_blocked_for_adumb():
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _apply_bussi_iasvel_zero_continuation,
         prepare_bussi_heat_dynamics_kw,
     )
@@ -5155,7 +5155,7 @@ def test_apply_bussi_iasvel_zero_blocked_for_adumb():
 
 
 def test_overlap_chunk_zero_preserves_explicit_handoff_velocities():
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _apply_overlap_chunk_dynamics_kw,
     )
 

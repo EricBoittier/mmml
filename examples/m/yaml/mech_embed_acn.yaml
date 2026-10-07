@@ -1,5 +1,5 @@
 # Mechanical embedding: AMM1+CH3CL in acetonitrile (ACN).
-#   uv run mmml md-system --config examples/m/yaml/mech_embed_acn.yaml --run-all
+#   uv run karml md-system --config examples/m/yaml/mech_embed_acn.yaml --run-all
 
 defaults:
   composition: "AMM1:1,CH3CL:1,ACN:12"

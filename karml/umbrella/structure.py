@@ -19,7 +19,7 @@ def load_structure(
 
     Supports:
     - ASE formats (``.xyz``, ``.pdb``, …)
-    - MMML NPZ with ``R`` / ``Z`` (optionally multi-frame; ``index`` selects frame)
+    - KARML NPZ with ``R`` / ``Z`` (optionally multi-frame; ``index`` selects frame)
     """
     path = Path(path).expanduser().resolve()
     if not path.is_file():
@@ -274,7 +274,7 @@ def pack_window_seeds(
     only sufficient for plain-distance CVs. For reactive systems, prefer
     ``seed_mode="frames"`` with geometries from a scan or NEB path.
     """
-    from mmml.umbrella.energy import pack_positions
+    from karml.umbrella.energy import pack_positions
 
     pairs = tuple((int(i), int(j)) for i, j in atom_pairs)
     targets = [tuple(float(x) for x in row) for row in targets_per_cv]
@@ -315,7 +315,7 @@ def pack_window_seeds(
 
     resolved = None
     if cvs is not None:
-        from mmml.md.restraints import DihedralCV, LinearDistanceCV, cv_from_spec
+        from karml.md.restraints import DihedralCV, LinearDistanceCV, cv_from_spec
 
         resolved = [cv_from_spec(cv) for cv in cvs]
         if any(isinstance(cv, DihedralCV) for cv in resolved):

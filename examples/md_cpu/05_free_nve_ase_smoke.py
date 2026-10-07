@@ -31,9 +31,9 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    from mmml.interfaces.pycharmmInterface.calculator_utils import unpack_factory_result
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import resolve_checkpoint
-    from mmml.interfaces.pycharmmInterface.mmml_calculator import setup_calculator
+    from karml.interfaces.pycharmmInterface.calculator_utils import unpack_factory_result
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import resolve_checkpoint
+    from karml.interfaces.pycharmmInterface.karml_calculator import setup_calculator
 
     z, r = aco_dimer_cluster(n_monomers=2, spacing=5.0)
     ckpt = resolve_checkpoint(args.checkpoint)

@@ -5,8 +5,8 @@ import ctypes
 
 charmm_script("""
 bomlev -5
-read rtf card name /Users/ericboittier/mmml/mmml/data/charmm/top_all36_cgenff.rtf
-read param card flex name /Users/ericboittier/mmml/mmml/data/charmm/par_all36_cgenff.prm
+read rtf card name /Users/ericboittier/karml/karml/data/charmm/top_all36_cgenff.rtf
+read param card flex name /Users/ericboittier/karml/karml/data/charmm/par_all36_cgenff.prm
 bomlev 0
 
 read sequence card

@@ -5,10 +5,10 @@ Writes metrics tables, JSON, and matplotlib plots — not just scalar deltas.
 
 Examples (CHARMM node)::
 
-    ./scripts/mmml-charmm-mpirun.sh python scripts/diagnose_trialanine_nb_mismatch.py \\
+    ./scripts/karml-charmm-mpirun.sh python scripts/diagnose_trialanine_nb_mismatch.py \\
       -o artifacts/trialanine_nb_parity
 
-    ./scripts/mmml-charmm-mpirun.sh python scripts/diagnose_trialanine_nb_mismatch.py \\
+    ./scripts/karml-charmm-mpirun.sh python scripts/diagnose_trialanine_nb_mismatch.py \\
       -o /tmp/tria_diag --perturb-seed 31 --no-build --workdir /tmp/tria_box
 """
 
@@ -71,7 +71,7 @@ def _parse_args() -> argparse.Namespace:
         action="store_true",
         help=(
             "Run CHARMM segment BLOCK per-category VDW/force breakdown. "
-            "Can hang under mpirun unless MMML_ALLOW_SELECTIVE_BONDED_BLOCK=1."
+            "Can hang under mpirun unless KARML_ALLOW_SELECTIVE_BONDED_BLOCK=1."
         ),
     )
     parser.add_argument(
@@ -90,14 +90,14 @@ def _parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = _parse_args()
-    os.environ.setdefault("MMML_LR_SOLVER", "mic")
+    os.environ.setdefault("KARML_LR_SOLVER", "mic")
 
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import ensure_pycharmm_loaded
-    from mmml.interfaces.pycharmmInterface.trialanine_nb_parity import (
+    from karml.interfaces.pycharmmInterface.import_pycharmm import ensure_pycharmm_loaded
+    from karml.interfaces.pycharmmInterface.trialanine_nb_parity import (
         collect_and_render_trialanine_nb_parity,
         render_markdown_report,
     )
-    from mmml.interfaces.pycharmmInterface.trialanine_water_box import (
+    from karml.interfaces.pycharmmInterface.trialanine_water_box import (
         build_trialanine_water_box_in_charmm,
         have_trialanine_cgenff,
     )
@@ -113,7 +113,7 @@ def main() -> int:
     workdir = (args.workdir or out_dir / "charmm_work").resolve()
 
     if args.no_build:
-        from mmml.interfaces.pycharmmInterface.trialanine_water_box import (
+        from karml.interfaces.pycharmmInterface.trialanine_water_box import (
             reload_trialanine_water_box_in_charmm,
             trialanine_water_box_coords_path,
         )
@@ -130,7 +130,7 @@ def main() -> int:
             print(
                 f"Workdir {workdir} has PSF only (no .crd/.npy). "
                 "Re-run once without --no-build to write coordinates:\n"
-                f"  ./scripts/mmml-charmm-mpirun.sh python {Path(__file__).name} "
+                f"  ./scripts/karml-charmm-mpirun.sh python {Path(__file__).name} "
                 f"-o {out_dir} --workdir {workdir}",
                 file=sys.stderr,
             )

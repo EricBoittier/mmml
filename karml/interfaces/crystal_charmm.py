@@ -10,21 +10,21 @@ from typing import TYPE_CHECKING, Any, Sequence
 
 import numpy as np
 
-from mmml.interfaces.pyxtal_placement import (
+from karml.interfaces.pyxtal_placement import (
     _match_atoms_to_template_names,
     _match_molecule_blocks_to_psf_order,
     ase_supercell,
     crystal_mass_density_g_cm3,
     write_psf_order_mapping_pdb,
 )
-from mmml.paths import (
+from karml.paths import (
     default_acetone_crystal_cif,
     default_benzene_crystal_cif,
     default_dcm_crystal_cif,
 )
 
 if TYPE_CHECKING:
-    from mmml.interfaces.crystal_reference import CrystalMetrics
+    from karml.interfaces.crystal_reference import CrystalMetrics
 
 MonomerTemplate = tuple[np.ndarray, list[str], np.ndarray]
 
@@ -105,7 +105,7 @@ class CharmmLiteratureCrystalResult:
 
 def default_make_res_monomer_pdb(residue: str) -> Path:
     """Bundled CHARMM monomer PDB (``make-res``-style atom names)."""
-    from mmml.paths import bundled_file, default_aco_template_pdb
+    from karml.paths import bundled_file, default_aco_template_pdb
 
     key = residue.strip().upper()
     if key == "ACO":
@@ -137,7 +137,7 @@ def resolve_make_res_monomer_pdb(
             return candidate.resolve()
     raise FileNotFoundError(
         f"No monomer PDB for residue {res!r}. Run "
-        f"'mmml make-res --res {res} --skip-energy-show' or pass --monomer-pdb."
+        f"'karml make-res --res {res} --skip-energy-show' or pass --monomer-pdb."
     )
 
 
@@ -267,7 +267,7 @@ def write_charmm_crystal_pdb(
             rebuilt.append(cryst1)
         elif line.startswith("REMARK"):
             rebuilt.append(
-                "REMARK   mmml literature CIF + make-res atom names (simulation supercell)"
+                "REMARK   karml literature CIF + make-res atom names (simulation supercell)"
             )
         else:
             rebuilt.append(line)
@@ -345,7 +345,7 @@ def build_charmm_literature_supercell(
     the cell for simulation box size; when omitted, repeats are chosen from
     *min_box_side_a* (default 28 Å ≈ 2× typical CHARMM ``cutnb``).
     """
-    from mmml.interfaces.pyxtal_placement import scale_atoms_cell_to_density
+    from karml.interfaces.pyxtal_placement import scale_atoms_cell_to_density
 
     res_key = residue.strip().upper()
     unit_atoms, _, ordered_names, template, monomer_path = map_cif_to_charmm_blocks(
@@ -448,7 +448,7 @@ def charmm_crystal_metrics_from_preset(
     supercell_reps: tuple[int, int, int] = (1, 1, 1),
 ) -> "CrystalMetrics":
     """Unit-cell metrics for literature preset after CHARMM mapping."""
-    from mmml.interfaces.crystal_reference import metrics_from_atoms
+    from karml.interfaces.crystal_reference import metrics_from_atoms
 
     result = build_literature_charmm_supercell(
         preset,
@@ -501,7 +501,7 @@ def _ensure_crystal_image_str_cwd() -> None:
     dst = Path("crystal_image.str")
     if dst.exists():
         return
-    from mmml.paths import crystal_image_str_source
+    from karml.paths import crystal_image_str_source
 
     src = crystal_image_str_source()
     if src.exists():
@@ -545,19 +545,19 @@ def write_crystal_charmm_topology(
     out_json = Path(f"{stem}_box.json").resolve()
 
     try:
-        from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
-        from mmml.interfaces.pycharmmInterface.import_pycharmm import (
+        from karml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
+        from karml.interfaces.pycharmmInterface.import_pycharmm import (
             pycharmm_quiet,
             safe_energy_show,
         )
-        from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import prepare_charmm_pbc
-        from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+        from karml.interfaces.pycharmmInterface.mlpot.pbc_env import prepare_charmm_pbc
+        from karml.interfaces.pycharmmInterface.mlpot.setup import (
             _parse_pdb_atoms_whitespace,
             _residue_sequence_from_pdb,
             sync_charmm_positions,
         )
-        from mmml.interfaces.pycharmmInterface.nbonds_config import read_cgenff_toppar
-        from mmml.interfaces.pycharmmInterface.pycharmmCommands import CLEAR_CHARMM
+        from karml.interfaces.pycharmmInterface.nbonds_config import read_cgenff_toppar
+        from karml.interfaces.pycharmmInterface.pycharmmCommands import CLEAR_CHARMM
         import pycharmm.generate as generate
         import pycharmm.read as read
         import pycharmm.write as write
@@ -590,7 +590,7 @@ def write_crystal_charmm_topology(
             raise RuntimeError(
                 f"GENERATE SYS failed for {pdb_path} (status={status}; "
                 f"sequence={res_seq}). Check CGenFF residue names and "
-                "MMML_CGENFF_EXTRA_RTF."
+                "KARML_CGENFF_EXTRA_RTF."
             )
     sync_charmm_positions(np.asarray(pdb_xyz, dtype=float))
     prepare_charmm_pbc(side)

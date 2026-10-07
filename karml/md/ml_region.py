@@ -11,7 +11,7 @@ from typing import Any, Sequence
 
 import numpy as np
 
-from mmml.md.system import MolecularSystem
+from karml.md.system import MolecularSystem
 
 __all__ = [
     "apply_ml_resnames_mechanical_embedding",
@@ -145,9 +145,9 @@ def apply_ml_resnames_mechanical_embedding(
     """Restrict ``ml_intra`` to the solute complex and drop solute–solute MM pairs.
 
     Returns ``(system, term_kwargs, ml_indices)`` where ``term_kwargs`` is suitable
-    for :func:`mmml.md.assemble.assemble_and_run`.
+    for :func:`karml.md.assemble.assemble_and_run`.
     """
-    from mmml.md.builders._topology import monomer_indices_from_mol_id
+    from karml.md.builders._topology import monomer_indices_from_mol_id
 
     resnames = per_atom_residue_names(system)
     ml_indices = resolve_ml_region_indices(resnames, ml_resnames)

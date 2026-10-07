@@ -8,8 +8,8 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from mmml.interfaces.pycharmmInterface.cgenff_bonded import bonded_energy_and_forces
-from mmml.interfaces.pycharmmInterface.cgenff_bonded_reference import (
+from karml.interfaces.pycharmmInterface.cgenff_bonded import bonded_energy_and_forces
+from karml.interfaces.pycharmmInterface.cgenff_bonded_reference import (
     charmm_positions_xyz_array,
     compare_bonded_to_charmm,
     read_pdb_file,
@@ -18,7 +18,7 @@ from mmml.interfaces.pycharmmInterface.cgenff_bonded_reference import (
     set_charmm_positions,
     setup_bonded_only_charmm,
 )
-from mmml.interfaces.pycharmmInterface.cgenff_topology import (
+from karml.interfaces.pycharmmInterface.cgenff_topology import (
     load_cgenff_bonded_from_psf,
     parse_psf_ext,
 )
@@ -48,8 +48,8 @@ def _perturb_positions(positions: np.ndarray, seed: int = 7) -> np.ndarray:
 def _load_psf_and_positions_from_charmm(residue: str) -> tuple[Path, np.ndarray]:
     import pycharmm.write as write
 
-    from mmml.interfaces.pycharmmInterface import setupRes
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import (
+    from karml.interfaces.pycharmmInterface import setupRes
+    from karml.interfaces.pycharmmInterface.import_pycharmm import (
         reset_block,
         reset_block_no_internal,
     )
@@ -90,8 +90,8 @@ def test_committed_aco_psf_matches_pycharmm_after_charmm_load(pycharmm_workdir) 
     Runs before setupRes-based cases so mpirun smoke sees a clean CHARMM session.
     """
     import pycharmm.read as read
-    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_PRM, CGENFF_RTF
+    from karml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
+    from karml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_PRM, CGENFF_RTF
 
     assert ACO_PSF.is_file(), f"missing fixture PSF: {ACO_PSF}"
     assert ACO_PDB.is_file(), f"missing fixture PDB: {ACO_PDB}"

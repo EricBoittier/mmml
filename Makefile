@@ -1,7 +1,7 @@
 .PHONY: help install install-native install-full doctor install-gpu install-dev install-all install-all-offline-cuda13 install-all-offline-cuda12 install-jupyter-kernel clean test test-unit test-extra test-data-loading docker-build docker-run micromamba-create micromamba-create-gpu micromamba-create-gpu-cuda13 micromamba-create-full micromamba-update micromamba-remove docker-clean lfs-summary lfs-audit lfs-setup-symlinks lfs-remove-hooks install-hooks docs-build docs-strict docs-pdf docs-serve docs-check docs-refresh lint-dupes merge-check test-ci coverage-gate check-prs-landed
 
 help:
-	@echo "MMML - Makefile Commands"
+	@echo "KARML - Makefile Commands"
 	@echo "========================"
 	@echo ""
 	@echo "Installation (from a fresh clone: make install-full):"
@@ -17,7 +17,7 @@ help:
 	@echo "  make install-all      - Install all optional dependencies"
 	@echo "  make install-all-offline-cuda13 - Offline install, all extras, CUDA 13 (dedupes cuda12 plugin)"
 	@echo "  make install-all-offline-cuda12 - Offline install, all extras, CUDA 12 (dedupes cuda13 plugin)"
-	@echo "  make install-jupyter-kernel - Register this venv as a Jupyter kernel (name: mmml)"
+	@echo "  make install-jupyter-kernel - Register this venv as a Jupyter kernel (name: karml)"
 	@echo ""
 	@echo "Micromamba:"
 	@echo "  make micromamba-create     - Create micromamba environment (CPU)"
@@ -55,7 +55,7 @@ help:
 	@echo "  make docs-refresh      - Rewrite generated CLI/architecture/crystal tables"
 	@echo "  make docs-build        - Build MkDocs HTML site"
 	@echo "  make docs-strict       - Build MkDocs HTML site with strict checks"
-	@echo "  make docs-pdf          - Build PDF docs at site/mmml-docs.pdf"
+	@echo "  make docs-pdf          - Build PDF docs at site/karml-docs.pdf"
 	@echo "  make docs-serve        - Serve docs locally with MkDocs"
 	@echo ""
 	@echo "Benchmarks (airspeed velocity; manual, GPU node -- not in CI):"
@@ -102,7 +102,7 @@ install:
 
 # The native half: libcharmm (CMake/Fortran) + packmol. uv cannot build these --
 # they are not Python packages -- so they get their own door.
-# No env vars are needed afterwards: mmml auto-discovers setup/charmm.
+# No env vars are needed afterwards: karml auto-discovers setup/charmm.
 install-native:
 	./scripts/rebuild_charmm_mlpot.sh
 	@echo ""
@@ -111,9 +111,9 @@ install-native:
 # Everything, from a fresh clone.
 install-full: install install-native
 
-# Is this machine ready to run MMML?
+# Is this machine ready to run KARML?
 doctor:
-	uv run mmml doctor
+	uv run karml doctor
 
 install-md-cpu:
 	uv sync --extra md-cpu
@@ -166,29 +166,29 @@ micromamba-update:
 	micromamba env update -f setup/environment.yml --prune
 
 micromamba-remove:
-	micromamba env remove -n mmml -y
+	micromamba env remove -n karml -y
 
 # ==============================================================================
 # Docker
 # ==============================================================================
 
 docker-build-cpu:
-	docker build --target runtime-cpu -t mmml:cpu .
+	docker build --target runtime-cpu -t karml:cpu .
 
 docker-build-gpu:
-	docker build --target runtime-gpu -t mmml:gpu .
+	docker build --target runtime-gpu -t karml:gpu .
 
 docker-build-gpu-cuda13:
-	docker build --target runtime-gpu-cuda13 -t mmml:gpu-cuda13 .
+	docker build --target runtime-gpu-cuda13 -t karml:gpu-cuda13 .
 
 docker-run-cpu:
-	docker run -it --rm -v $$(pwd):/workspace/mmml mmml:cpu
+	docker run -it --rm -v $$(pwd):/workspace/karml karml:cpu
 
 docker-run-gpu:
-	docker run -it --rm --gpus all -v $$(pwd):/workspace/mmml mmml:gpu
+	docker run -it --rm --gpus all -v $$(pwd):/workspace/karml karml:gpu
 
 docker-run-gpu-cuda13:
-	docker run -it --rm --gpus all -v $$(pwd):/workspace/mmml mmml:gpu-cuda13
+	docker run -it --rm --gpus all -v $$(pwd):/workspace/karml karml:gpu-cuda13
 
 docker-compose-up:
 	docker-compose up -d
@@ -197,12 +197,12 @@ docker-compose-down:
 	docker-compose down
 
 docker-jupyter:
-	docker-compose up -d mmml-jupyter
+	docker-compose up -d karml-jupyter
 	@echo "Jupyter Lab is running at http://localhost:8888"
 
 docker-clean:
 	docker-compose down -v
-	docker rmi mmml:cpu mmml:gpu mmml:gpu-cuda13 mmml:jupyter 2>/dev/null || true
+	docker rmi karml:cpu karml:gpu karml:gpu-cuda13 karml:jupyter 2>/dev/null || true
 
 # ==============================================================================
 # Testing
@@ -231,10 +231,10 @@ test-all:
 	uv run pytest tests
 
 test-quick:
-	uv run pytest -q tests/functionality/mmml_tests/test_mmml_calc.py::test_ev2kcalmol_constant
+	uv run pytest -q tests/functionality/karml_tests/test_karml_calc.py::test_ev2kcalmol_constant
 
 test-coverage:
-	uv run pytest --cov=mmml --cov-report=html --cov-report=term tests/
+	uv run pytest --cov=karml --cov-report=html --cov-report=term tests/
 
 # The same coverage floor CI enforces, runnable before you push. It is a floor,
 # not a target: ~35k of the uncovered statements need live CHARMM, plotting, or
@@ -242,7 +242,7 @@ test-coverage:
 # the number sliding backwards. Measured 2026-08-01: 45.81%, 55706/121608
 # lines. Run: make coverage-gate
 coverage-gate:
-	uv run pytest tests/ -q -p no:cacheprovider --cov=mmml --cov-report=xml || true
+	uv run pytest tests/ -q -p no:cacheprovider --cov=karml --cov-report=xml || true
 	uv run python scripts/ci/check_coverage_floor.py coverage.xml \
 	  --label "local coverage" --min-percent 42 --min-covered-lines 52000
 
@@ -260,11 +260,11 @@ test-shape:
 	  --label "local suite" --min-passed 3000 --max-skipped-frac 0.25
 
 test-data:
-	@if [ -z "$(MMML_DATA)" ] || [ -z "$(MMML_CKPT)" ]; then \
-		echo "Error: MMML_DATA and MMML_CKPT must be set"; \
+	@if [ -z "$(KARML_DATA)" ] || [ -z "$(KARML_CKPT)" ]; then \
+		echo "Error: KARML_DATA and KARML_CKPT must be set"; \
 		exit 1; \
 	fi
-	uv run pytest tests/functionality/mmml_tests/test_mmml_calc.py::test_ml_energy_matches_reference_when_data_available
+	uv run pytest tests/functionality/karml_tests/test_karml_calc.py::test_ml_energy_matches_reference_when_data_available
 
 # ==============================================================================
 # Code quality
@@ -274,14 +274,14 @@ lint:
 	# Pin the repo config. c52a1 ships its own [tool.ruff] under
 	# setup/charmm/tool/pycharmm, and ruff would otherwise judge that tree
 	# by upstream's rule set instead of this project's.
-	uv run ruff check --config pyproject.toml mmml/ scripts/ setup/charmm/tool/pycharmm/pycharmm/
+	uv run ruff check --config pyproject.toml karml/ scripts/ setup/charmm/tool/pycharmm/pycharmm/
 
 # Duplicated definitions / dead imports / syntax breakage, repo-wide.
 # A bad merge that concatenates two versions of a file shows up here as F811
 # "Redefinition of unused X" -- which is exactly how three duplicated blocks
 # (mm_bonded.py, linear_distance.py, umbrella/energy.py) reached main after the
 # PR #140 merge. Two of them were not cosmetic: a duplicate @register_term made
-# `import mmml.md.energy.terms` raise, and a duplicated block was the only home
+# `import karml.md.energy.terms` raise, and a duplicated block was the only home
 # of a helper that was still being called. Unlike `make lint` this also covers
 # shipped code (`make lint` covers the same dirs, so this is the same verdict)
 # and, advisory-only, the dirs lint never sees. tests/ examples/ workflows/ carry
@@ -289,7 +289,7 @@ lint:
 # a gate that is red on day one gets ignored. Conflict markers are always fatal.
 # Run: make lint-dupes
 lint-dupes:
-	@uv run ruff check --config pyproject.toml --select F811 mmml/ scripts/ setup/charmm/tool/pycharmm/pycharmm/
+	@uv run ruff check --config pyproject.toml --select F811 karml/ scripts/ setup/charmm/tool/pycharmm/pycharmm/
 	@if git grep -nE '^(<<<<<<< |>>>>>>> )' -- '*.py' '*.sh' '*.yaml' '*.yml' '*.toml' '*.md'; then \
 	  echo "lint-dupes: unresolved conflict markers above" >&2; exit 1; \
 	fi
@@ -303,36 +303,36 @@ lint-dupes:
 # CHARMM exit, truncating the run long before the real failures. Hiding the
 # library reproduces CI's skip behaviour and gives an honest signal.
 #
-# MMML_DISABLE_CHARMM is the *only* reliable way to do that: pointing
+# KARML_DISABLE_CHARMM is the *only* reliable way to do that: pointing
 # CHARMM_LIB_DIR at /nonexistent used to leave `resolve_charmm_paths()` still
 # returning the real setup/charmm tree (a lib-less explicit override is treated
 # as stale and discarded), so this target only half-hid the build and did not
 # reproduce CI. See charmm_paths.charmm_disabled.
 # Run: make test-ci
 test-ci:
-	MMML_DISABLE_CHARMM=1 \
+	KARML_DISABLE_CHARMM=1 \
 	  uv run pytest tests/unit tests/functionality tests/misc tests/integration tests/charmm_mpi \
 	    -q -p no:cacheprovider -m "not pycharmm"
 
 # Pre-merge gate: lint plus generated-docs check, in the order CI fails first.
 # Run: make merge-check
 merge-check: lint-dupes lint
-	uv run python -c "import mmml.md.energy.terms; print('energy terms import ok')"
+	uv run python -c "import karml.md.energy.terms; print('energy terms import ok')"
 	uv run python scripts/ci/refresh_generated_docs.py --check
 	@echo "merge-check: OK -- now run 'make test-unit' / 'make test-ci' for tests"
 
 format:
-	uv run ruff format mmml/ scripts/
+	uv run ruff format karml/ scripts/
 
 type-check:
-	uv run mypy mmml/
+	uv run mypy karml/
 
 deadcode:
-	uv run ruff check --config pyproject.toml --select F401,F841,F541 mmml/ scripts/ setup/charmm/tool/pycharmm/pycharmm/
-	uvx vulture mmml scripts setup/charmm/tool/pycharmm/pycharmm --min-confidence 80
+	uv run ruff check --config pyproject.toml --select F401,F841,F541 karml/ scripts/ setup/charmm/tool/pycharmm/pycharmm/
+	uvx vulture karml scripts setup/charmm/tool/pycharmm/pycharmm --min-confidence 80
 
 deadcode-fix:
-	uv run ruff check --fix --select F401,F841,F541 mmml/ scripts/
+	uv run ruff check --fix --select F401,F841,F541 karml/ scripts/
 
 # ==============================================================================
 # Documentation
@@ -417,7 +417,7 @@ clean:
 
 clean-all: clean
 	rm -rf .venv/
-	rm -rf mmml.egg-info/
+	rm -rf karml.egg-info/
 
 # ==============================================================================
 # Development
@@ -431,11 +431,11 @@ notebook:
 	uv run jupyter lab
 
 # Register this venv as a Jupyter kernel (e.g. for a cluster-wide JupyterHub)
-# so it shows up as "mmml" in the kernel picker without activating the venv.
+# so it shows up as "karml" in the kernel picker without activating the venv.
 install-jupyter-kernel:
 	uv sync --extra notebooks
-	.venv/bin/python -m ipykernel install --user --name mmml --display-name "mmml (.venv)"
-	@echo "Registered kernel 'mmml (.venv)' — refresh Jupyter's kernel list to see it."
+	.venv/bin/python -m ipykernel install --user --name karml --display-name "karml (.venv)"
+	@echo "Registered kernel 'karml (.venv)' — refresh Jupyter's kernel list to see it."
 
 # ==============================================================================
 # CHARMM setup
@@ -515,7 +515,7 @@ install-hooks:
 
 split-8-1-1:
 	@echo "split-8-1-1 is deprecated: scripts/split_npz_8_1_1.py was removed."
-	@echo "Use the dataset split commands in mmml.cli.misc.split_dataset instead."
+	@echo "Use the dataset split commands in karml.cli.misc.split_dataset instead."
 
 # ==============================================================================
 # PySCF/GPU4PySCF examples
@@ -527,7 +527,7 @@ pyscf-example:
 	$(PY) examples/pyscf4gpu/water_energy.py
 
 pyscf-dft:
-	$(PY) -m mmml.cli pyscf-dft --mol $(PYSCF_MOL) --energy --output pyscf_water_output
+	$(PY) -m karml.cli pyscf-dft --mol $(PYSCF_MOL) --energy --output pyscf_water_output
 
 # Diagnose CuPy/CUDA compatibility (run on GPU node if using pyscf-dft)
 pyscf-check-gpu:
@@ -555,10 +555,10 @@ BATCH_SHAPE ?= 512
 NBLEN ?= 16384
 
 physnet-train:
-	@echo "Use: uv run mmml physnet-train --help"
+	@echo "Use: uv run karml physnet-train --help"
 
 physnet-train-adv:
-	@echo "Use: uv run mmml physnet-train --config your.yaml"
+	@echo "Use: uv run karml physnet-train --config your.yaml"
 
 physnet-train-chg:
-	@echo "Use: uv run mmml physnet-train with --dipole-weight / --charges-weight"
+	@echo "Use: uv run karml physnet-train with --dipole-weight / --charges-weight"

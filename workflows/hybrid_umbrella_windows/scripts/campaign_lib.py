@@ -12,7 +12,7 @@ import yaml
 def load_config(path: Path | str | None = None) -> dict[str, Any]:
     cfg_path = Path(
         path
-        or os.environ.get("MMML_WORKFLOW_CONFIG")
+        or os.environ.get("KARML_WORKFLOW_CONFIG")
         or Path(__file__).resolve().parents[1] / "config.yaml"
     )
     data = yaml.safe_load(cfg_path.read_text(encoding="utf-8"))

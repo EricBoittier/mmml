@@ -7,7 +7,7 @@ import pytest
 
 
 def test_resolve_system_builder_defaults_and_overrides():
-    from mmml.interfaces.pycharmmInterface.grid_placement import resolve_system_builder
+    from karml.interfaces.pycharmmInterface.grid_placement import resolve_system_builder
 
     assert resolve_system_builder(composition=None) == "gas"
     assert resolve_system_builder(composition="DCM:8") == "liquid"
@@ -19,7 +19,7 @@ def test_resolve_system_builder_defaults_and_overrides():
 
 
 def test_grid_centers_cube_stay_inside_centered_cube():
-    from mmml.interfaces.pycharmmInterface.grid_placement import grid_centers_cube
+    from karml.interfaces.pycharmmInterface.grid_placement import grid_centers_cube
 
     centers = grid_centers_cube(
         8,
@@ -38,7 +38,7 @@ def test_grid_centers_cube_stay_inside_centered_cube():
 
 
 def test_grid_centers_sphere_stay_inside_radius():
-    from mmml.interfaces.pycharmmInterface.grid_placement import grid_centers_sphere
+    from karml.interfaces.pycharmmInterface.grid_placement import grid_centers_sphere
 
     center = np.array([1.0, -2.0, 0.5], dtype=float)
     centers = grid_centers_sphere(12, center=tuple(center), radius=5.0, seed=7)

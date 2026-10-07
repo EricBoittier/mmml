@@ -15,8 +15,8 @@ from _common import (
     print_header,
     print_pass,
 )
-from mmml.interfaces.pycharmmInterface.nl_gpu import gpu_nl_path_available, rebuild_vesin_pairs_gpu
-from mmml.interfaces.pycharmmInterface.nl_reference import (
+from karml.interfaces.pycharmmInterface.nl_gpu import gpu_nl_path_available, rebuild_vesin_pairs_gpu
+from karml.interfaces.pycharmmInterface.nl_reference import (
     compare_pair_sets,
     extract_valid_pairs,
     filter_vesin_half_list_vectorized,
@@ -94,7 +94,7 @@ def main() -> int:
             print_fail(f"GPU path mismatch: {cmp_gpu.summary()}")
             return 1
     else:
-        print("SKIP: GPU Vesin path (set MMML_MM_NL_DEVICE=gpu + cupy + vesin on CUDA node)")
+        print("SKIP: GPU Vesin path (set KARML_MM_NL_DEVICE=gpu + cupy + vesin on CUDA node)")
 
     return 0
 

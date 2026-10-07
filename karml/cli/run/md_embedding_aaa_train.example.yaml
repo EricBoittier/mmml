@@ -1,5 +1,5 @@
 # Small PhysNet smoke for aaa.ama peptide (34 atoms).
-# Used by: mmml md-embedding train -o artifacts/md_embedding/aaa
+# Used by: karml md-embedding train -o artifacts/md_embedding/aaa
 data: artifacts/md_embedding/aaa/train.npz
 valid_data: artifacts/md_embedding/aaa/valid.npz
 ckpt_dir: artifacts/md_embedding/aaa/checkpoints

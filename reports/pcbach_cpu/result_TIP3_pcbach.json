@@ -7,7 +7,7 @@
   "dry_run": false,
   "methods_evaluated": [
     "MM",
-    "MMML"
+    "KARML"
   ],
   "status": "SUCCESS",
   "metrics": {

@@ -8,12 +8,12 @@ LOG_DIR="$WORKFLOW_ROOT/logs"
 mkdir -p "$LOG_DIR"
 
 CKPT_ENV=""
-if [[ -n "${MMML_CKPT:-}" ]]; then
-  CKPT_ENV="MMML_CKPT=${MMML_CKPT} "
+if [[ -n "${KARML_CKPT:-}" ]]; then
+  CKPT_ENV="KARML_CKPT=${KARML_CKPT} "
 fi
 CRON_LINE="0 * * * * PATH=${HOME}/.local/bin:${HOME}/.cargo/bin:\$PATH ${CKPT_ENV}JAX_ENABLE_X64=1 ${MONITOR} --react >> ${LOG_DIR}/monitor.log 2>&1"
 
-MARKER="# mmml-pbc-liquid-density-monitor"
+MARKER="# karml-pbc-liquid-density-monitor"
 TMP="$(mktemp)"
 ( crontab -l 2>/dev/null | grep -v "$MARKER" | grep -v "monitor_health.sh" || true ) > "$TMP"
 echo "$CRON_LINE $MARKER" >> "$TMP"

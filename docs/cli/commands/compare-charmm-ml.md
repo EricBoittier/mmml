@@ -1,4 +1,4 @@
-# `mmml compare-charmm-ml`
+# `karml compare-charmm-ml`
 
 CHARMM PSF charges vs joint ML dipoles/ESP.
 
@@ -6,13 +6,13 @@ CHARMM PSF charges vs joint ML dipoles/ESP.
 ## Usage
 
 ```bash
-mmml compare-charmm-ml --help
+karml compare-charmm-ml --help
 ```
 
 ## Options
 
 ```text
-usage: mmml compare-charmm-ml [-h] --checkpoint CHECKPOINT --valid-efd VALID_EFD
+usage: karml compare-charmm-ml [-h] --checkpoint CHECKPOINT --valid-efd VALID_EFD
                               --valid-esp VALID_ESP --pdb PDB
                               [--n-samples N_SAMPLES] [--out-dir OUT_DIR]
                               [--cutoff CUTOFF] [--subtract-atom-energies]

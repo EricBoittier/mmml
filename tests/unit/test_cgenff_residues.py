@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from mmml.interfaces.pycharmmInterface.cgenff_residues import (
+from karml.interfaces.pycharmmInterface.cgenff_residues import (
     format_cgenff_residue_list,
     is_cgenff_residue_name,
     normalize_cgenff_residue_name,
@@ -42,7 +42,7 @@ def test_parse_cgenff_residues_includes_aco() -> None:
 
 
 def test_format_cgenff_residue_list_columns() -> None:
-    from mmml.interfaces.pycharmmInterface.cgenff_residues import CgenffResidue
+    from karml.interfaces.pycharmmInterface.cgenff_residues import CgenffResidue
 
     text = format_cgenff_residue_list(
         [
@@ -54,7 +54,7 @@ def test_format_cgenff_residue_list_columns() -> None:
     assert "RESIDUE" in text
     assert "ACO" in text
     assert "Acetone" in text
-    assert "mmml make-res --res RESIDUE" in text
+    assert "karml make-res --res RESIDUE" in text
 
 
 def test_normalize_and_require_cgenff_names() -> None:
@@ -66,7 +66,7 @@ def test_normalize_and_require_cgenff_names() -> None:
 
 
 def test_extra_rtf_env_registers_ch3cl(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    from mmml.interfaces.pycharmmInterface import cgenff_residues as cr
+    from karml.interfaces.pycharmmInterface import cgenff_residues as cr
 
     extra = tmp_path / "extra.rtf"
     extra.write_text(
@@ -74,22 +74,22 @@ def test_extra_rtf_env_registers_ch3cl(monkeypatch: pytest.MonkeyPatch, tmp_path
         encoding="utf-8",
     )
     cr.cgenff_residue_name_set.cache_clear()
-    monkeypatch.setenv("MMML_CGENFF_EXTRA_RTF", str(extra))
+    monkeypatch.setenv("KARML_CGENFF_EXTRA_RTF", str(extra))
     paths = cr.extra_cgenff_rtf_paths()
     assert extra.resolve() in paths
     assert is_cgenff_residue_name("CH3CL")
     assert require_cgenff_residue_name("ch3cl") == "CH3CL"
-    monkeypatch.delenv("MMML_CGENFF_EXTRA_RTF", raising=False)
+    monkeypatch.delenv("KARML_CGENFF_EXTRA_RTF", raising=False)
     cr.cgenff_residue_name_set.cache_clear()
     # Bundled examples/m/top_ch3cl.rtf still registers CH3CL when present.
     assert is_cgenff_residue_name("CH3CL")
 
 
 def test_bundled_examples_m_ch3cl_without_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    from mmml.interfaces.pycharmmInterface import cgenff_residues as cr
+    from karml.interfaces.pycharmmInterface import cgenff_residues as cr
 
-    monkeypatch.delenv("MMML_CGENFF_EXTRA_RTF", raising=False)
-    monkeypatch.delenv("MMML_CGENFF_EXTRA_PRM", raising=False)
+    monkeypatch.delenv("KARML_CGENFF_EXTRA_RTF", raising=False)
+    monkeypatch.delenv("KARML_CGENFF_EXTRA_PRM", raising=False)
     cr.cgenff_residue_name_set.cache_clear()
     bundled = cr._repo_root() / "examples" / "m" / "top_ch3cl.rtf"
     assert bundled.is_file()
@@ -101,14 +101,14 @@ def test_bundled_examples_m_ch3cl_without_env(monkeypatch: pytest.MonkeyPatch) -
 
 
 def test_extra_prm_env_resolves_paths(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    from mmml.interfaces.pycharmmInterface import cgenff_residues as cr
+    from karml.interfaces.pycharmmInterface import cgenff_residues as cr
 
     prm = tmp_path / "extra.prm"
     prm.write_text("* test\n*\nBONDS\nEND\n", encoding="utf-8")
-    monkeypatch.setenv("MMML_CGENFF_EXTRA_PRM", str(prm))
+    monkeypatch.setenv("KARML_CGENFF_EXTRA_PRM", str(prm))
     paths = cr.extra_cgenff_prm_paths()
     assert prm.resolve() in paths
-    monkeypatch.delenv("MMML_CGENFF_EXTRA_PRM", raising=False)
+    monkeypatch.delenv("KARML_CGENFF_EXTRA_PRM", raising=False)
     # Bundled examples/m/par_ch3cl.prm remains when present.
     assert any(p.name == "par_ch3cl.prm" for p in cr.extra_cgenff_prm_paths())
 
@@ -116,7 +116,7 @@ def test_extra_prm_env_resolves_paths(monkeypatch: pytest.MonkeyPatch, tmp_path:
 def test_make_res_validate_args_list_residues() -> None:
     import argparse
 
-    from mmml.cli.make.make_res import validate_args
+    from karml.cli.make.make_res import validate_args
 
     validate_args(argparse.Namespace(list_residues=True, res=None))
 
@@ -124,16 +124,16 @@ def test_make_res_validate_args_list_residues() -> None:
 def test_make_res_validate_args_requires_res() -> None:
     import argparse
 
-    from mmml.cli.make.make_res import validate_args
+    from karml.cli.make.make_res import validate_args
 
     with pytest.raises(SystemExit):
         validate_args(argparse.Namespace(list_residues=False, res=None))
 
 
 def test_make_res_list_residues_cli(capsys, monkeypatch: pytest.MonkeyPatch) -> None:
-    from mmml.cli.misc import make_res_cli
+    from karml.cli.misc import make_res_cli
 
-    monkeypatch.setattr("sys.argv", ["mmml make-res", "--list-residues", "--no-pager"])
+    monkeypatch.setattr("sys.argv", ["karml make-res", "--list-residues", "--no-pager"])
     rc = make_res_cli.main()
     assert rc == 0
     out = capsys.readouterr().out

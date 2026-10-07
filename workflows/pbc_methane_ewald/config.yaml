@@ -103,8 +103,8 @@ ml_batch_size: 512
 ml_compute_dtype: float64
 
 warmup_mlpot_jax: true
-mpirun_wrapper: ../../scripts/mmml-charmm-mpirun.sh
-MMML_MPI_NP: 1
+mpirun_wrapper: ../../scripts/karml-charmm-mpirun.sh
+KARML_MPI_NP: 1
 
 slurm_partition: gpu
 slurm_nodes: 1

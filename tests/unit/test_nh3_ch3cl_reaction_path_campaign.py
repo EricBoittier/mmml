@@ -109,7 +109,7 @@ def test_require_umbrella_products(tmp_path: Path) -> None:
 
 def test_job_mbar_cli_has_no_output_dir_flag() -> None:
     """Regression: umbrella-mbar rejects --output-dir (broke mbar_gas on studix)."""
-    from mmml.cli.misc.umbrella_mbar import build_parser
+    from karml.cli.misc.umbrella_mbar import build_parser
 
     parser = build_parser()
     with __import__("pytest").raises(SystemExit):

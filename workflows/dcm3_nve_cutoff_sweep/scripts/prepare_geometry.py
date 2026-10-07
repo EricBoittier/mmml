@@ -44,16 +44,16 @@ def main() -> int:
     out.mkdir(parents=True, exist_ok=True)
     tag = composition_tag(cfg)
 
-    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+    import karml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
         build_cluster_from_args_with_tag,
         print_cluster_geometry_summary,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+    from karml.interfaces.pycharmmInterface.mlpot.setup import (
         save_cluster_topology_for_vmd,
         sync_charmm_positions,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.trimer_scan import (
+    from karml.interfaces.pycharmmInterface.mlpot.trimer_scan import (
         atoms_per_monomer_from_psf,
         com_distances,
         distance_report,

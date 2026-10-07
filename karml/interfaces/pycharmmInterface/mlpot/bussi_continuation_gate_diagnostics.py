@@ -28,7 +28,7 @@ BUSSI_GATE_MONOMER_GRMS_OUTLIER_FLOOR_KCALMOL_A = 5.0
 # Restart-vs-live: treat coords as unchanged below this RMSD (Å).
 BUSSI_GATE_RESTART_LIVE_RMSD_EQUAL_A = 1.0e-4
 
-DIAGNOSTICS_SCHEMA = "mmml.bussi_continuation_gate_diagnostics.v1"
+DIAGNOSTICS_SCHEMA = "karml.bussi_continuation_gate_diagnostics.v1"
 
 
 def bond_type_from_atomic_numbers(z_a: int, z_b: int) -> str:
@@ -189,7 +189,7 @@ def build_monomer_grms_outlier_records(
     floor_kcalmol_A: float = BUSSI_GATE_MONOMER_GRMS_OUTLIER_FLOOR_KCALMOL_A,
 ) -> dict[str, Any]:
     """Per-monomer GRMS vs median; list monomers well above the bulk."""
-    from mmml.interfaces.pycharmmInterface.mlpot.grms_thresholds import (
+    from karml.interfaces.pycharmmInterface.mlpot.grms_thresholds import (
         per_monomer_fmax_from_forces,
         per_monomer_grms_from_forces,
     )
@@ -352,7 +352,7 @@ def resolve_bussi_gate_diagnostics_path(
     global_step: int,
 ) -> Path | None:
     """``<cleanup>/bussi_continuation_gate_step{N}.json`` or ``None`` if disabled."""
-    from mmml.interfaces.pycharmmInterface.mlpot.recovery_progress import (
+    from karml.interfaces.pycharmmInterface.mlpot.recovery_progress import (
         resolve_cleanup_dir,
         resolve_output_dir,
     )
@@ -406,7 +406,7 @@ def dump_bussi_continuation_gate_diagnostics(
         return None
 
     try:
-        from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+        from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
             charmm_grms_after_ener_force,
             charmm_positions_angstrom,
             charmm_total_forces_kcalmol_A,
@@ -433,7 +433,7 @@ def dump_bussi_continuation_gate_diagnostics(
 
     bond_pairs: list[tuple[int, int]] = []
     try:
-        from mmml.interfaces.pycharmmInterface.mlpot.monomer_geometry_limits import (
+        from karml.interfaces.pycharmmInterface.mlpot.monomer_geometry_limits import (
             psf_bond_pairs_0based,
         )
 
@@ -444,7 +444,7 @@ def dump_bussi_continuation_gate_diagnostics(
     restart_pos = None
     if restart_path is not None:
         try:
-            from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+            from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
                 read_restart_coordinates,
             )
 
@@ -502,7 +502,7 @@ def sample_bussi_microchunk_metrics(
         "energy_kcalmol": None,
     }
     try:
-        from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+        from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
             charmm_energy_row,
             charmm_system_is_evaluable,
             charmm_grms,
@@ -521,7 +521,7 @@ def sample_bussi_microchunk_metrics(
     except Exception:
         pass
     try:
-        from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+        from karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
             charmm_masses_amu,
             charmm_velocities_akma_for_thermostat,
             estimate_kinetic_temperature_k,

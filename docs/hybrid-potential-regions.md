@@ -1,6 +1,6 @@
 # Hybrid potential: cutoffs, regions, and long-range solvers
 
-Visual guide to how MMML splits a periodic liquid or cluster into **monomers**,
+Visual guide to how KARML splits a periodic liquid or cluster into **monomers**,
 which **physics layer** acts on each interaction, and how **long-range Coulomb**
 backends extend beyond the switched pair loop.
 
@@ -118,7 +118,7 @@ CLI / YAML examples and solver sweeps: [long-range-solver-tutorial.md](long-rang
 
 ## 5. CHARMM vs JAX list radii (do not conflate)
 
-Two independent neighbor systems run each step ([NONBOND_LISTS.md](https://github.com/EricBoittier/mmml/blob/main/mmml/interfaces/pycharmmInterface/mlpot/NONBOND_LISTS.md)):
+Two independent neighbor systems run each step ([NONBOND_LISTS.md](https://github.com/EricBoittier/karml/blob/main/karml/interfaces/pycharmmInterface/mlpot/NONBOND_LISTS.md)):
 
 | List | Owner | Outer radius (typical) |
 |------|-------|------------------------|
@@ -153,9 +153,9 @@ Liquid DCM boxes also need `L/2` safely above CHARMM `cutnb` — see [liquid-box
 Rigid COM-distance scans for **DCM:2** and **ACO:2** compare `mic`, **jax-pme** (ewald/pme/p3m), and `periodic_external` backends (jax-pme, nvalchemiops, ScaFaCoS):
 
 ```bash
-export MMML_CKPT=/path/to/checkpoint
+export KARML_CKPT=/path/to/checkpoint
 ./scripts/run_dcm_aco_dimer_lr_scans.sh
 uv run python scripts/plot_dimer_lr_scan_compare.py --root artifacts/dimer_lr_scans
 ```
 
-Full tables and single-scan examples: [tests/functionality/dimer_scans/README.md](https://github.com/EricBoittier/mmml/blob/main/tests/functionality/dimer_scans/README.md).
+Full tables and single-scan examples: [tests/functionality/dimer_scans/README.md](https://github.com/EricBoittier/karml/blob/main/tests/functionality/dimer_scans/README.md).

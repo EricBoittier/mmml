@@ -5,14 +5,14 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from mmml.md.ml_region import (
+from karml.md.ml_region import (
     apply_ml_resnames_mechanical_embedding,
     merge_ml_region_mol_id,
     parse_ml_resnames,
     per_atom_residue_names,
     resolve_ml_region_indices,
 )
-from mmml.md.system import MolecularSystem
+from karml.md.system import MolecularSystem
 
 
 def _toy_solute_solvent() -> MolecularSystem:

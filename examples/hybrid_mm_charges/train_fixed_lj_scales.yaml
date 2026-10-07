@@ -2,7 +2,7 @@
 #   σ_eff[t] = master_σ[t] * s_σ[t]
 #   ε_eff[t] = master_ε[t] * s_ε[t]
 #
-#   mmml physnet-train --config examples/hybrid_mm_charges/train_fixed_lj_scales.yaml
+#   karml physnet-train --config examples/hybrid_mm_charges/train_fixed_lj_scales.yaml
 #
 # MIC only (ewald / nvalchemiops_pme force LJ off). Scales land in
 # hybrid_mm.json next to the run for MD --mm-lj-scales-file / auto-load.

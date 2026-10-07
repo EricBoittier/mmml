@@ -17,7 +17,7 @@ Coordinates via the Crystallography Open Database.
 
 ## The bundled structures
 
-All five structures from the paper ship in `mmml/data/structures/`:
+All five structures from the paper ship in `karml/data/structures/`:
 
 | `ACO_PHASE` | COD | Space group | a, b, c (Å) | Conditions | Z |
 |---|---|---|---|---|---|
@@ -28,7 +28,7 @@ All five structures from the paper ship in `mmml/data/structures/`:
 | `cmcm_15kbar` | 7110462 | Cmcm | 6.1219, 5.2029, 10.244 | 293 K, 15 kbar | 4 |
 
 ```python
-from mmml.analysis.acetone_crystal import read_acetone_phase
+from karml.analysis.acetone_crystal import read_acetone_phase
 
 atoms = read_acetone_phase("pbca_150k")   # 160 atoms, symmetry already applied
 ```
@@ -40,7 +40,7 @@ structure has rotationally disordered methyls — 12 half-occupancy hydrogens pe
 molecule — so it carries `usable_for_mm = False` and the force-field steps refuse
 it rather than building a nonsense topology.
 
-`mmml build-crystal --literature aco` maps a phase onto CHARMM `ACO` atom names
+`karml build-crystal --literature aco` maps a phase onto CHARMM `ACO` atom names
 and writes a PDB with a correct `CRYST1`; see
 [`build-crystal`](cli/commands/build-crystal.md).
 
@@ -52,7 +52,7 @@ face. The check that catches this is recomputing the intermolecular contacts the
 authors measured:
 
 ```python
-from mmml.analysis.acetone_crystal import carbonyl_contacts, ch_o_contacts
+from karml.analysis.acetone_crystal import carbonyl_contacts, ch_o_contacts
 
 for contact in carbonyl_contacts(atoms, max_distance_A=3.8):
     print(contact.distance_A, contact.angle_deg, contact.motif)
@@ -72,7 +72,7 @@ method rather than temperature.
 ## Lattice energy
 
 ```python
-from mmml.analysis.lattice_energy import crystal_lattice_energy
+from karml.analysis.lattice_energy import crystal_lattice_energy
 
 result = crystal_lattice_energy(
     atoms.get_positions(), atoms.get_atomic_numbers(), atoms.cell.array,
@@ -81,7 +81,7 @@ result = crystal_lattice_energy(
 print(result.e_lattice, result.sublimation_enthalpy(150.0))   # kcal/mol
 ```
 
-`mmml.analysis.lattice_energy` sums the CGenFF **intermolecular** energy over
+`karml.analysis.lattice_energy` sums the CGenFF **intermolecular** energy over
 explicit lattice translations, carrying the full 3×3 cell throughout. Three
 choices are worth knowing about:
 
@@ -151,7 +151,7 @@ ACO_SCALES=artifacts/lj_scales/ckpts/.../hybrid_mm.json \
 
 ## Limitation: no crystal MD
 
-These cells are orthorhombic but strongly non-cubic, and mmml's periodic MD paths
+These cells are orthorhombic but strongly non-cubic, and karml's periodic MD paths
 are cubic-only:
 
 - `prepare_charmm_pbc` installs a cubic CHARMM IMAGE via `crystal.define_cubic`;

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Export NEB / umbrella / DMC endpoint XYZ files from the bundled NPZ.
 
-Atom order matches the dataset and :mod:`mmml.neb` defaults:
+Atom order matches the dataset and :mod:`karml.neb` defaults:
 ``Cl, N, C, H×3(N), H×3(C)`` (indices 0–8).
 
 Writes under ``examples/m/neb/`` by default:

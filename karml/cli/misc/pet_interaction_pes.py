@@ -6,8 +6,8 @@ are internal-axis H-bonds (linear OH···O vs acceptor–acceptor), not COM cop
 
 Example::
 
-    JAX_PLATFORMS=cpu MMML_METATOMIC_DEVICE=cpu \\
-      mmml pet-interaction-pes --checkpoint /tmp/mmml-metatomic-models/pet-mad-xs-v1.5.0.pt
+    JAX_PLATFORMS=cpu KARML_METATOMIC_DEVICE=cpu \\
+      karml pet-interaction-pes --checkpoint /tmp/karml-metatomic-models/pet-mad-xs-v1.5.0.pt
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ import argparse
 import os
 from pathlib import Path
 
-from mmml.analysis.interaction_pes import (
+from karml.analysis.interaction_pes import (
     DEFAULT_ETOH_XYZ,
     DEFAULT_N_R_1D,
     DEFAULT_N_R_2D,
@@ -42,21 +42,21 @@ DEFAULT_NPZ_NAME = "interaction_pes.npz"
 
 
 def _default_checkpoint() -> Path | None:
-    env = os.environ.get("PET_MAD_CKPT", "").strip() or os.environ.get("MMML_CKPT", "").strip()
+    env = os.environ.get("PET_MAD_CKPT", "").strip() or os.environ.get("KARML_CKPT", "").strip()
     if env:
         return Path(env).expanduser()
-    model_dir = os.environ.get("MMML_METATOMIC_MODEL_DIR", "").strip()
+    model_dir = os.environ.get("KARML_METATOMIC_MODEL_DIR", "").strip()
     if model_dir:
         candidate = Path(model_dir).expanduser() / "pet-mad-xs-v1.5.0.pt"
         if candidate.is_file():
             return candidate
-    fallback = Path("/tmp/mmml-metatomic-models/pet-mad-xs-v1.5.0.pt")
+    fallback = Path("/tmp/karml-metatomic-models/pet-mad-xs-v1.5.0.pt")
     return fallback if fallback.is_file() else None
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="mmml pet-interaction-pes",
+        prog="karml pet-interaction-pes",
         description=(
             "Rigid OH···O interaction slices/surfaces and trimer many-body leftover "
             "for a metatomic PET checkpoint (CHARMM-free single points)."
@@ -135,7 +135,7 @@ def _write_report(path: Path, payload: dict) -> None:
 
 
 def _grid_or_default(n: int, start: float, stop: float, default_fn):
-    from mmml.analysis.interaction_pes import linspace_angstrom
+    from karml.analysis.interaction_pes import linspace_angstrom
 
     if int(n) >= 2:
         return linspace_angstrom(start, stop, int(n))
@@ -148,8 +148,8 @@ def main(argv: list[str] | None = None) -> int:
     json_out = (args.json_out or (output_dir / DEFAULT_JSON_NAME)).expanduser()
 
     if args.from_json is not None:
-        from mmml.analysis.interaction_pes import load_interaction_pes_json
-        from mmml.analysis.interaction_pes_plot import write_interaction_pes_figures
+        from karml.analysis.interaction_pes import load_interaction_pes_json
+        from karml.analysis.interaction_pes_plot import write_interaction_pes_figures
 
         document = load_interaction_pes_json(args.from_json)
         figures = write_interaction_pes_figures(document, output_dir, prefix=args.prefix)
@@ -175,8 +175,8 @@ def main(argv: list[str] | None = None) -> int:
             _write_report(json_out, payload)
         return 2
 
-    from mmml.analysis.dimer_scans import centered_atoms
-    from mmml.analysis.interaction_pes import (
+    from karml.analysis.dimer_scans import centered_atoms
+    from karml.analysis.interaction_pes import (
         dump_interaction_pes_json,
         dump_interaction_pes_npz,
         default_dha_deg,
@@ -188,8 +188,8 @@ def main(argv: list[str] | None = None) -> int:
         run_interaction_pes_campaign,
         sha256_file,
     )
-    from mmml.analysis.interaction_pes_plot import write_interaction_pes_figures
-    from mmml.interfaces.calculators.metatomic import load_metatomic_calculator
+    from karml.analysis.interaction_pes_plot import write_interaction_pes_figures
+    from karml.interfaces.calculators.metatomic import load_metatomic_calculator
 
     ckpt = Path(checkpoint).expanduser().resolve()
     systems = {
@@ -198,7 +198,7 @@ def main(argv: list[str] | None = None) -> int:
     }
     slice_systems = [SYSTEM_WATER, SYSTEM_ETHANOL]
     if args.include_acetone:
-        from mmml.distill.acetone_pool import load_acetone_monomer
+        from karml.distill.acetone_pool import load_acetone_monomer
 
         systems[SYSTEM_ACETONE] = centered_atoms(load_acetone_monomer(), center="com")
         slice_systems.append(SYSTEM_ACETONE)

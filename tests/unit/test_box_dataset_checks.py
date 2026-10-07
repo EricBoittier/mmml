@@ -1,4 +1,4 @@
-"""Collapse guards in ``mmml pet-box-dataset``: intact molecules and FIRE-end energy outliers."""
+"""Collapse guards in ``karml pet-box-dataset``: intact molecules and FIRE-end energy outliers."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ import json
 import numpy as np
 from ase import Atoms
 
-from mmml.distill.box_dataset import (
+from karml.distill.box_dataset import (
     REJECTED_TRAJ_NAME,
     TRAJ_NAME,
     flag_energy_outliers,

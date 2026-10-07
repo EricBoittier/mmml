@@ -10,16 +10,16 @@ INBFRQ="${2:-}"
 
 cd "$REPO_ROOT"
 
-# shellcheck source=../../../scripts/resolve_mmml_env.sh
-source "$REPO_ROOT/scripts/resolve_mmml_env.sh"
-mmml_resolve_env "$REPO_ROOT"
-PY="${MMML_PYTHON}"
+# shellcheck source=../../../scripts/resolve_karml_env.sh
+source "$REPO_ROOT/scripts/resolve_karml_env.sh"
+karml_resolve_env "$REPO_ROOT"
+PY="${KARML_PYTHON}"
 
 echo "=== dcm_nve_scaling: DCM:${N_MONOMERS} inbfrq=${INBFRQ:-config} ===" >&2
 echo "REPO_ROOT=${REPO_ROOT}" >&2
 echo "PY=${PY}" >&2
-echo "MMML_BIN=${MMML_BIN:-<python -m mmml.cli.__main__>}" >&2
-echo "MMML_CKPT=${MMML_CKPT:-<unset>}" >&2
+echo "KARML_BIN=${KARML_BIN:-<python -m karml.cli.__main__>}" >&2
+echo "KARML_CKPT=${KARML_CKPT:-<unset>}" >&2
 
 "$PY" -c "
 import sys

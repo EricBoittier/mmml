@@ -1,6 +1,6 @@
 configfile: "config.yaml"
 
-# Use Snakemake's loaded config only — do not import mmml/benchmark_lib here
+# Use Snakemake's loaded config only — do not import karml/benchmark_lib here
 # (Snakemake may run with a Python that lacks the repo on sys.path).
 _JOB_IDS = list(config["jobs"].keys())
 _OPTIONAL_JOBS = set(config.get("optional_jobs") or [])

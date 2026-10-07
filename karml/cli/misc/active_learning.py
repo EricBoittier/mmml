@@ -3,12 +3,12 @@
 CLI to extract frames from MD trajectories for active learning.
 
 Filters frames by temperature (e.g. T < 300 K) and saves to NPZ format
-compatible with mmml pyscf-evaluate for extending the training set.
+compatible with karml pyscf-evaluate for extending the training set.
 
 Usage:
-    mmml active-learning -i out/physnet_md/physnet_ase.traj -o md_sampled.npz
-    mmml active-learning -i traj1.traj traj2.traj -o md_sampled.npz --max-temp 300
-    mmml active-learning -i "out/*.traj" -o md_sampled.npz --stride 5
+    karml active-learning -i out/physnet_md/physnet_ase.traj -o md_sampled.npz
+    karml active-learning -i traj1.traj traj2.traj -o md_sampled.npz --max-temp 300
+    karml active-learning -i "out/*.traj" -o md_sampled.npz --stride 5
 """
 
 import argparse
@@ -216,7 +216,7 @@ def main() -> int:
 
     print(f"Saved {len(R_arr)} frames to {args.output}")
     print(f"  R: {R_arr.shape}, Z: {Z.shape}, N: {N.shape}")
-    print("Next: mmml pyscf-evaluate -i", args.output, "-o md_evaluated.npz")
+    print("Next: karml pyscf-evaluate -i", args.output, "-o md_evaluated.npz")
     return 0
 
 

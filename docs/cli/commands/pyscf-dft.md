@@ -1,4 +1,4 @@
-# `mmml pyscf-dft`
+# `karml pyscf-dft`
 
 GPU DFT (energy, gradient, hessian, …).
 
@@ -6,13 +6,13 @@ GPU DFT (energy, gradient, hessian, …).
 ## Usage
 
 ```bash
-mmml pyscf-dft --help
+karml pyscf-dft --help
 ```
 
 ## Options
 
 ```text
-usage: mmml pyscf-dft [-h] --mol MOL [--output OUTPUT] [--log_file LOG_FILE]
+usage: karml pyscf-dft [-h] --mol MOL [--output OUTPUT] [--log_file LOG_FILE]
                       [--monomer_a MONOMER_A] [--monomer_b MONOMER_B]
                       [--basis BASIS] [--xc XC] [--spin SPIN] [--charge CHARGE]
                       [--energy] [--optimize] [--gradient] [--hessian]

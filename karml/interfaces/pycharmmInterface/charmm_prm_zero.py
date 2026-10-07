@@ -163,7 +163,7 @@ def nonbond_only_prm_text(text: str) -> str:
             continue
     if not saw_nonbond:
         return ""
-    return "! MMML: VDW term removed from PRM patch\n"
+    return "! KARML: VDW term removed from PRM patch\n"
 
 
 def zero_prm_text(text: str, *, bonded_only: bool = False) -> str:
@@ -301,7 +301,7 @@ def write_prm_policy_overlay(
     if not body.strip():
         raise ValueError("prm policy overlay is empty (no sections selected)")
     header = (
-        "*  MMML energy-policy overlay (READ PARAM APPEND)\n"
+        "*  KARML energy-policy overlay (READ PARAM APPEND)\n"
         f"*  Source: {src.name}\n"
         f"*  zero_bonded={zero_bonded} zero_nonbond={zero_nonbond}\n"
     )
@@ -395,7 +395,7 @@ def write_zeroed_psf_ready_prm(
         body = bonded_only_prm_text(text, zero_constants=True)
         nb_desc = "NONBONDED/NBFIX/HBOND omitted (initial-load mode)"
     header = (
-        f"*  MMML PSF-ready overlay: bonded constants zeroed, {nb_desc}\n"
+        f"*  KARML PSF-ready overlay: bonded constants zeroed, {nb_desc}\n"
         "*  Load via READ PARAM (APPEND) before MLpot registration to keep VDW=0 / IMNB=0\n"
         f"*  Source: {src.name}\n"
     )

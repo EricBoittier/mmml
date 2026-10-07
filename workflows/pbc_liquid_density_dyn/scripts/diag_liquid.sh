@@ -9,14 +9,14 @@
 #   bash scripts/diag_liquid.sh trajectory dcm_277_t300_l32 --config config.yaml
 #
 # Shorthand (production config):
-#   MMML_WORKFLOW_CONFIG=config.yaml bash scripts/diag_liquid.sh matrix -v --plot-dir results/plots
+#   KARML_WORKFLOW_CONFIG=config.yaml bash scripts/diag_liquid.sh matrix -v --plot-dir results/plots
 set -euo pipefail
 
 WORKFLOW_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 REPO_ROOT="$(cd "$WORKFLOW_ROOT/../.." && pwd)"
 cd "$REPO_ROOT"
 
-CFG="${MMML_WORKFLOW_CONFIG:-config.yaml}"
+CFG="${KARML_WORKFLOW_CONFIG:-config.yaml}"
 EXTRA_ARGS=()
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -39,12 +39,12 @@ else
   CFG_PATH="${WORKFLOW_ROOT}/${CFG}"
 fi
 
-# shellcheck source=../../../scripts/resolve_mmml_env.sh
-source "$REPO_ROOT/scripts/resolve_mmml_env.sh"
-mmml_resolve_env "$REPO_ROOT"
+# shellcheck source=../../../scripts/resolve_karml_env.sh
+source "$REPO_ROOT/scripts/resolve_karml_env.sh"
+karml_resolve_env "$REPO_ROOT"
 
 export JAX_ENABLE_X64="${JAX_ENABLE_X64:-1}"
 
-exec "${MMML_PYTHON}" "$WORKFLOW_ROOT/scripts/collect_diagnostics.py" \
+exec "${KARML_PYTHON}" "$WORKFLOW_ROOT/scripts/collect_diagnostics.py" \
   --config "$CFG_PATH" \
   "${EXTRA_ARGS[@]}"

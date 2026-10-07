@@ -22,7 +22,7 @@ from typing import Any
 # jax / jax_md import so empty CUDA nodes do not abort import.
 os.environ.setdefault("JAX_ENABLE_X64", "1")
 os.environ["JAX_PLATFORMS"] = os.environ.get("JAX_PLATFORMS_COMPARE", "cpu")
-os.environ.setdefault("MMML_ALLOW_SELECTIVE_BONDED_BLOCK", "0")
+os.environ.setdefault("KARML_ALLOW_SELECTIVE_BONDED_BLOCK", "0")
 
 import jax.numpy as jnp
 import numpy as np
@@ -36,7 +36,7 @@ _REPO = _WORKFLOW.parents[1]
 CASES: dict[str, dict[str, Any]] = {
     "DCM": {
         "psf": _REPO / "examples/psf/dcm-1.psf",
-        "pdb": _REPO / "mmml/data/molecules/dcm_monomer.pdb",
+        "pdb": _REPO / "karml/data/molecules/dcm_monomer.pdb",
         "n_atoms": 5,
         "smoke_min_pdb": (
             _REPO
@@ -114,9 +114,9 @@ def _prepare_workdir(workdir: Path, psf: Path, pdb: Path) -> tuple[Path, Path]:
 def _init_charmm(psf_path: Path) -> None:
     import pycharmm.read as read
 
-    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
-    from mmml.interfaces.pycharmmInterface.cgenff_bonded_reference import read_psf_card_file
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_PRM, CGENFF_RTF
+    from karml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
+    from karml.interfaces.pycharmmInterface.cgenff_bonded_reference import read_psf_card_file
+    from karml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_PRM, CGENFF_RTF
 
     with charmm_relaxed_bomlev():
         read.rtf(CGENFF_RTF)
@@ -130,12 +130,12 @@ def compare_bonded(
     psf: Path,
     positions: np.ndarray,
 ) -> dict[str, Any]:
-    from mmml.interfaces.pycharmmInterface.cgenff_bonded_reference import (
+    from karml.interfaces.pycharmmInterface.cgenff_bonded_reference import (
         charmm_bonded_energy_components_kcalmol,
         run_charmm_bonded_ener_force,
         set_charmm_positions,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.jax_mm_spoof import (
+    from karml.interfaces.pycharmmInterface.mlpot.jax_mm_spoof import (
         load_monomer_bonded_components_from_psf,
     )
 
@@ -224,21 +224,21 @@ def compare_full_mm_vacuum(
     positions: np.ndarray,
 ) -> dict[str, Any]:
     """Full bonded+nonbonded MM vs CHARMM for a vacuum monomer (large MIC box)."""
-    from mmml.interfaces.pycharmmInterface.cgenff_bonded_reference import (
+    from karml.interfaces.pycharmmInterface.cgenff_bonded_reference import (
         compare_mm_system_to_charmm,
         run_charmm_bonded_ener_force,
         set_charmm_positions,
         summarize_mm_system_charmm_delta,
     )
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_PRM
-    from mmml.interfaces.pycharmmInterface.mlpot.block_terms import apply_charmm_mm_block
-    from mmml.interfaces.pycharmmInterface.mm_system_energy import (
+    from karml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_PRM
+    from karml.interfaces.pycharmmInterface.mlpot.block_terms import apply_charmm_mm_block
+    from karml.interfaces.pycharmmInterface.mm_system_energy import (
         CharmmNbondSettings,
         load_bonded_system_from_psf,
         load_nonbonded_system_from_charmm,
         mm_system_energy_and_forces,
     )
-    from mmml.interfaces.pycharmmInterface.nbonds_config import (
+    from karml.interfaces.pycharmmInterface.nbonds_config import (
         VACUUM_CTOFNB,
         VACUUM_CTONNB,
         VACUUM_CUTNB,
@@ -283,11 +283,11 @@ def compare_full_mm_vacuum(
         passed = False
         err = str(exc)
 
-    from mmml.interfaces.pycharmmInterface.cgenff_bonded_reference import (
+    from karml.interfaces.pycharmmInterface.cgenff_bonded_reference import (
         charmm_mm_component_totals_kcalmol,
         charmm_nonbonded_energy_components_kcalmol,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
         charmm_total_forces_kcalmol_A,
     )
 
@@ -464,7 +464,7 @@ def main() -> int:
         "errors": [],
     }
 
-    py = os.environ.get("MMML_PYTHON", sys.executable)
+    py = os.environ.get("KARML_PYTHON", sys.executable)
     env = os.environ.copy()
     env["PYTHONPATH"] = str(_REPO) + (
         os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else ""

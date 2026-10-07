@@ -17,7 +17,7 @@ from pathlib import Path
 import numpy as np
 from ase import Atoms as ASEAtoms
 
-from mmml.generate.sample.compare_ensemble_entropy import (
+from karml.generate.sample.compare_ensemble_entropy import (
     DEFAULT_L_MAX,
     DEFAULT_N_MAX,
     DEFAULT_R_CUT,
@@ -119,7 +119,7 @@ def main() -> None:
     row = {k: v for k, v in r.items() if k != "soap_array"}
 
     # Human-readable summary
-    from mmml.utils.rich_report import print_colored_json
+    from karml.utils.rich_report import print_colored_json
 
     print_colored_json(row, default=str)
 

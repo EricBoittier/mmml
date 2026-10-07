@@ -1,8 +1,8 @@
 """
-Unified data module for MMML.
+Unified data module for KARML.
 
 Provides standardized data loading, conversion, and preparation for all models
-(DCMNet, PhysNetJAX, etc.) in the MMML ecosystem.
+(DCMNet, PhysNetJAX, etc.) in the KARML ecosystem.
 
 Main API:
     - load_molpro_xml: Load Molpro XML files

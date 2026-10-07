@@ -11,7 +11,7 @@ import pytest
 
 def test_orbax_to_json_cli_help() -> None:
     proc = subprocess.run(
-        [sys.executable, "-m", "mmml.cli.__main__", "orbax-to-json", "--help"],
+        [sys.executable, "-m", "karml.cli.__main__", "orbax-to-json", "--help"],
         capture_output=True,
         text=True,
         check=False,
@@ -26,7 +26,7 @@ def test_orbax_to_json_cli_roundtrip(tmp_path: Path) -> None:
 
     import orbax.checkpoint as ocp
 
-    from mmml.utils.model_checkpoint import json_to_params, to_jsonable
+    from karml.utils.model_checkpoint import json_to_params, to_jsonable
 
     params = {
         "embedding": np.array([[0.1, 0.2], [0.3, 0.4]], dtype=np.float32),
@@ -43,7 +43,7 @@ def test_orbax_to_json_cli_roundtrip(tmp_path: Path) -> None:
         [
             sys.executable,
             "-m",
-            "mmml.cli.__main__",
+            "karml.cli.__main__",
             "orbax-to-json",
             str(orbax_dir),
             "-o",
@@ -66,7 +66,7 @@ def test_orbax_to_json_cli_roundtrip(tmp_path: Path) -> None:
 
 
 def test_orbax_to_json_cli_rejects_json_checkpoint(tmp_path: Path) -> None:
-    from mmml.utils.model_checkpoint import to_jsonable
+    from karml.utils.model_checkpoint import to_jsonable
 
     json_path = tmp_path / "already.json"
     with open(json_path, "w") as f:
@@ -76,7 +76,7 @@ def test_orbax_to_json_cli_rejects_json_checkpoint(tmp_path: Path) -> None:
         [
             sys.executable,
             "-m",
-            "mmml.cli.__main__",
+            "karml.cli.__main__",
             "orbax-to-json",
             str(json_path),
             "-o",
@@ -93,7 +93,7 @@ def test_orbax_to_json_cli_rejects_json_checkpoint(tmp_path: Path) -> None:
 def test_orbax_to_json_merges_model_attributes_into_training_config(tmp_path: Path) -> None:
     import orbax.checkpoint as ocp
 
-    from mmml.utils.model_checkpoint import orbax_to_json
+    from karml.utils.model_checkpoint import orbax_to_json
 
     checkpoint = tmp_path / "epoch-0002"
     ocp.PyTreeCheckpointer().save(
@@ -124,7 +124,7 @@ def test_orbax_to_json_merges_model_attributes_into_training_config(tmp_path: Pa
 def test_orbax_to_json_prefers_ema_params(tmp_path: Path) -> None:
     import orbax.checkpoint as ocp
 
-    from mmml.utils.model_checkpoint import orbax_to_json
+    from karml.utils.model_checkpoint import orbax_to_json
 
     checkpoint = tmp_path / "epoch-0003"
     ocp.PyTreeCheckpointer().save(

@@ -9,8 +9,8 @@ import numpy as np
 import pytest
 from ase.calculators.calculator import Calculator, all_changes
 
-from mmml.data.units import EV_TO_KCAL_MOL
-from mmml.interfaces.pycharmmInterface.mlpot.metatomic_mlpot import (
+from karml.data.units import EV_TO_KCAL_MOL
+from karml.interfaces.pycharmmInterface.mlpot.metatomic_mlpot import (
     MetatomicMlpotCalculator,
     MetatomicMlpotModel,
     build_metatomic_mlpot_model,
@@ -131,7 +131,7 @@ def test_build_metatomic_mlpot_model_injected_calculator(tmp_path: Path) -> None
 
 
 def test_link_atom_calculator_keeps_the_full_atomic_numbers() -> None:
-    from mmml.interfaces.calculators.link_atoms import LinkAtom
+    from karml.interfaces.calculators.link_atoms import LinkAtom
 
     model = MetatomicMlpotModel(
         DummyAseCalculator(),
@@ -152,7 +152,7 @@ def test_link_atom_calculator_keeps_the_full_atomic_numbers() -> None:
 def test_build_decomposed_mlpot_metatomic_early_return(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from mmml.interfaces.pycharmmInterface.mlpot import hybrid_mlpot
+    from karml.interfaces.pycharmmInterface.mlpot import hybrid_mlpot
 
     sentinel = object()
 
@@ -160,7 +160,7 @@ def test_build_decomposed_mlpot_metatomic_early_return(
         return sentinel
 
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.metatomic_mlpot.build_metatomic_mlpot_model",
+        "karml.interfaces.pycharmmInterface.mlpot.metatomic_mlpot.build_metatomic_mlpot_model",
         _fake_build,
     )
     ckpt = tmp_path / "export.pt"
@@ -176,7 +176,7 @@ def test_build_decomposed_mlpot_metatomic_early_return(
 
 
 def test_warmup_decomposed_mlpot_skips_metatomic_model(tmp_path: Path) -> None:
-    from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
+    from karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
         warmup_decomposed_mlpot,
     )
 
@@ -195,7 +195,7 @@ def test_warmup_decomposed_mlpot_skips_metatomic_model(tmp_path: Path) -> None:
 
 
 def test_md_system_parser_accepts_metatomic() -> None:
-    from mmml.cli.run.md_system import build_parser, build_pycharmm_command
+    from karml.cli.run.md_system import build_parser, build_pycharmm_command
 
     from tests.unit.test_md_system_pycharmm_cmd import _pycharmm_args
 
@@ -214,7 +214,7 @@ def test_md_system_parser_accepts_metatomic() -> None:
     assert "metatomic" in cmd
     assert "--metatomic-eval-mode" in cmd
     assert "fragments" in cmd
-    from mmml.cli.run.md_pbc_suite import pycharmm_mlpot
+    from karml.cli.run.md_pbc_suite import pycharmm_mlpot
 
     parsed = pycharmm_mlpot.parse_args(cmd)
     assert parsed.ml_potential_mode == "metatomic"
@@ -250,7 +250,7 @@ def test_maybe_build_metatomic_returns_adapter(
         return sentinel
 
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.metatomic_mlpot.build_metatomic_mlpot_model",
+        "karml.interfaces.pycharmmInterface.mlpot.metatomic_mlpot.build_metatomic_mlpot_model",
         _fake_build,
     )
     ckpt = tmp_path / "export.pt"
@@ -266,7 +266,7 @@ def test_maybe_build_metatomic_returns_adapter(
 
 
 def test_resolve_hybrid_ml_backend_mode_metatomic(tmp_path: Path) -> None:
-    from mmml.interfaces.pycharmmInterface.mmml_calculator import (
+    from karml.interfaces.pycharmmInterface.karml_calculator import (
         MetatomicMmOnlyStub,
         metatomic_mm_only_model_bundle,
         resolve_hybrid_ml_backend_mode,
@@ -296,8 +296,8 @@ def test_resolve_hybrid_ml_backend_mode_metatomic(tmp_path: Path) -> None:
 
 
 def test_single_monomer_metatomic_honors_no_include_mm(monkeypatch: pytest.MonkeyPatch) -> None:
-    from mmml.interfaces.pycharmmInterface.mlpot import metatomic_mlpot as meta
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import load_physnet_mlpot_bundle
+    from karml.interfaces.pycharmmInterface.mlpot import metatomic_mlpot as meta
+    from karml.interfaces.pycharmmInterface.mlpot.setup import load_physnet_mlpot_bundle
 
     captured: dict[str, object] = {}
 
@@ -332,7 +332,7 @@ def test_setup_calculator_metatomic_rejects_do_ml() -> None:
     except Exception as exc:
         pytest.skip(f"jax_md import unavailable ({exc})")
     del _jax_md_space
-    from mmml.interfaces.pycharmmInterface.mmml_calculator import setup_calculator
+    from karml.interfaces.pycharmmInterface.karml_calculator import setup_calculator
 
     with pytest.raises(ValueError, match="MetatomicMlpotCalculator"):
         setup_calculator(
@@ -347,8 +347,8 @@ def test_setup_calculator_metatomic_rejects_do_ml() -> None:
 
 
 def test_ic_scan_and_dimer_scan_parsers_include_metatomic() -> None:
-    from mmml.cli.misc.dimer_scan import build_parser as dimer_parser
-    from mmml.cli.misc.ic_scan import SUPPORTED_CALCULATORS
+    from karml.cli.misc.dimer_scan import build_parser as dimer_parser
+    from karml.cli.misc.ic_scan import SUPPORTED_CALCULATORS
 
     dimer_action = next(item for item in dimer_parser()._actions if item.dest == "calculator")
     assert "metatomic" in set(dimer_action.choices)

@@ -4,10 +4,10 @@
 # Writes one NPZ per configuration under:
 #   ${OUT_ROOT}/<checkpoint>/<composition_tag>/<scan_tag>/scan_1d.npz
 #
-# Prerequisites: MMML_CKPT, OpenMPI, libcharmm (scripts/mmml-charmm-mpirun.sh).
+# Prerequisites: KARML_CKPT, OpenMPI, libcharmm (scripts/karml-charmm-mpirun.sh).
 #
 # Examples:
-#   export MMML_CKPT=/path/to/dcm_ckpt
+#   export KARML_CKPT=/path/to/dcm_ckpt
 #   ./scripts/run_dcm_aco_dimer_lr_scans.sh
 #
 #   COMPOSITIONS="DCM:2" SKIP_PERIODIC=1 ./scripts/run_dcm_aco_dimer_lr_scans.sh
@@ -18,12 +18,12 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 
-if [[ -z "${MMML_CKPT:-}" ]]; then
-  echo "Set MMML_CKPT to a DCM/ACO PhysNet checkpoint." >&2
+if [[ -z "${KARML_CKPT:-}" ]]; then
+  echo "Set KARML_CKPT to a DCM/ACO PhysNet checkpoint." >&2
   exit 1
 fi
 
-MPIRUN="${MMML_MPIRUN_WRAPPER:-$REPO_ROOT/scripts/mmml-charmm-mpirun.sh}"
+MPIRUN="${KARML_MPIRUN_WRAPPER:-$REPO_ROOT/scripts/karml-charmm-mpirun.sh}"
 OUT_ROOT="${OUT_ROOT:-artifacts/dimer_lr_scans}"
 BOX_SIZE="${BOX_SIZE:-36.0}"
 SCAN_MIN="${SCAN_MIN:-3.5}"
@@ -44,7 +44,7 @@ fi
 SKIP_PERIODIC="${SKIP_PERIODIC:-0}"
 
 _common_scan_args=(
-  --checkpoint "$MMML_CKPT"
+  --checkpoint "$KARML_CKPT"
   --output-dir "$OUT_ROOT"
   --scan-1d
   --scan-2d-min "$SCAN_MIN"
@@ -74,11 +74,11 @@ _run_scan() {
 }
 
 _have_nvalchemiops() {
-  uv run python -c "from mmml.interfaces.pycharmmInterface.long_range_backend import have_nvalchemiops_pme; raise SystemExit(0 if have_nvalchemiops_pme() else 1)" 2>/dev/null
+  uv run python -c "from karml.interfaces.pycharmmInterface.long_range_backend import have_nvalchemiops_pme; raise SystemExit(0 if have_nvalchemiops_pme() else 1)" 2>/dev/null
 }
 
 _have_scafacos() {
-  uv run python -c "from mmml.interfaces.pycharmmInterface.long_range_backend import have_scafacos; raise SystemExit(0 if have_scafacos() else 1)" 2>/dev/null
+  uv run python -c "from karml.interfaces.pycharmmInterface.long_range_backend import have_scafacos; raise SystemExit(0 if have_scafacos() else 1)" 2>/dev/null
 }
 
 for comp in "${COMPOSITIONS[@]}"; do

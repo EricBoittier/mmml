@@ -7,7 +7,7 @@ Canonical entry points:
 - :func:`build_psf_and_attach_hybrid` — vacuum hybrid ML/MM with live CHARMM PSF
 
 This package covers **monomers and dimers (and small n-mers)**. Rigid
-interaction-energy COM scans remain under :mod:`mmml.dimer_scan`.
+interaction-energy COM scans remain under :mod:`karml.dimer_scan`.
 """
 
 from __future__ import annotations

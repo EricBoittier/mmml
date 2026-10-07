@@ -9,13 +9,13 @@
 #SBATCH --error=artifacts/jaxmd_cgenff_spoof_smoke/charmm_compare/slurm-%j.err
 
 set -euo pipefail
-cd /mmhome/boittier/home/mmml_cursor
+cd /mmhome/boittier/home/karml_cursor
 mkdir -p artifacts/jaxmd_cgenff_spoof_smoke/charmm_compare
 
 export JAX_ENABLE_X64=1
-export MMML_PYTHON="${MMML_PYTHON:-/mmhome/boittier/home/mmml/.venv/bin/python}"
-export PYTHONPATH="/mmhome/boittier/home/mmml_cursor${PYTHONPATH:+:$PYTHONPATH}"
-export MMML_ALLOW_SELECTIVE_BONDED_BLOCK=0
+export KARML_PYTHON="${KARML_PYTHON:-/mmhome/boittier/home/karml/.venv/bin/python}"
+export PYTHONPATH="/mmhome/boittier/home/karml_cursor${PYTHONPATH:+:$PYTHONPATH}"
+export KARML_ALLOW_SELECTIVE_BONDED_BLOCK=0
 
 MODE="${1:-compare}"
 if [[ "$MODE" == "native" || "$MODE" == "all" ]]; then
@@ -31,6 +31,6 @@ if [[ "$MODE" == "compare" || "$MODE" == "all" ]]; then
   if [[ "${COMPARE_INCLUDE_MM:-0}" != "1" ]]; then
     COMPARE_ARGS+=(--no-mm)
   fi
-  "$MMML_PYTHON" -u workflows/jaxmd_cgenff_spoof_smoke/scripts/compare_to_charmm.py "${COMPARE_ARGS[@]}"
-  "$MMML_PYTHON" -u workflows/jaxmd_cgenff_spoof_smoke/scripts/report_charmm_compare.py || true
+  "$KARML_PYTHON" -u workflows/jaxmd_cgenff_spoof_smoke/scripts/compare_to_charmm.py "${COMPARE_ARGS[@]}"
+  "$KARML_PYTHON" -u workflows/jaxmd_cgenff_spoof_smoke/scripts/report_charmm_compare.py || true
 fi

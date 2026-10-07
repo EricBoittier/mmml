@@ -5,7 +5,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 from ase.units import Bohr, Hartree
-from mmml.utils.rotations import rotate_batched_vectors, sample_random_rotations
+from karml.utils.rotations import rotate_batched_vectors, sample_random_rotations
 
 # Constants
 HARTREE_PER_BOHR_TO_EV_PER_ANGSTROM = Hartree / Bohr

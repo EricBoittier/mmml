@@ -29,11 +29,11 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
-from mmml.utils.plotting.styles import apply_plot_style
+from karml.utils.plotting.styles import apply_plot_style
 
 REPO = Path(__file__).resolve().parents[1]
 TRACES = Path(
-    "/private/tmp/claude-501/-Users-ericboittier-mmml/"
+    "/private/tmp/claude-501/-Users-ericboittier-karml/"
     "d26d1e6f-2ebb-49af-be1f-980af3b27acb/scratchpad/npt_traces.txt"
 )
 OUT = REPO / "docs" / "images" / "des-so3lr-dimers" / "npt_diagnosis.png"

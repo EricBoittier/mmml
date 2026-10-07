@@ -6,7 +6,7 @@ import numpy as np
 
 
 def _fn():
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import is_exact_sd_plateau
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import is_exact_sd_plateau
 
     return is_exact_sd_plateau
 

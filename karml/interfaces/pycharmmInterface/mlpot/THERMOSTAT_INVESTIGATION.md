@@ -34,7 +34,7 @@ Inspect generated scripts (requires CHARMM for `_cpt_mass_kwargs`, which reads m
 
 ```python
 import pycharmm
-from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
     build_heat_dynamics,
     build_cpt_equilibration_dynamics,
 )
@@ -315,7 +315,7 @@ dynamics ... new start -
 
 ```bash
 python3 -c "
-from mmml.interfaces.pycharmmInterface.mlpot.dynamics import build_heat_dynamics
+from karml.interfaces.pycharmmInterface.mlpot.dynamics import build_heat_dynamics
 # See investigation script in repo history or replicate CommandScript logic
 import numbers
 

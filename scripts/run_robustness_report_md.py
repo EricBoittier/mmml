@@ -36,10 +36,10 @@ from ase.md.verlet import VelocityVerlet
 from ase.neighborlist import neighbor_list
 from ase.optimize import BFGS
 
-from mmml.interfaces.calculators.checkpoint_loading import create_calculator_from_checkpoint
+from karml.interfaces.calculators.checkpoint_loading import create_calculator_from_checkpoint
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-CKPT = REPO_ROOT / "mmml/models/physnetjax/defaults/hf_json/test-b4064dca-8cbd-471c-9871-08887107a1d8_epoch-550_portable.json"
+CKPT = REPO_ROOT / "karml/models/physnetjax/defaults/hf_json/test-b4064dca-8cbd-471c-9871-08887107a1d8_epoch-550_portable.json"
 OUT_DIR = REPO_ROOT / "artifacts" / "robustness_report" / "ethanol_nve"
 
 MOLECULE_NAME = "CH3CH2OH"  # ethanol, ASE's g2 reference geometry

@@ -27,7 +27,7 @@ PES selection rationale and CLI: [`docs/bayesian-pes-design.md`](../../docs/baye
 | [`05_train.sh`](05_train.sh) | enriched NPZ, GPU | hours | `physnet-train` with `learn_mm_lj_scales` → writes `hybrid_mm.json` |
 | [`06_inspect_scales.py`](06_inspect_scales.py) | trained run | 5 s | Reports which types moved, flags implausible values, shows the ATC remap |
 | [`07_deploy_md.sh`](07_deploy_md.sh) | trained run | ~1–2 h GPU | DCM jaxmd ladder: settle → NVT 10 ps → NpT 2 ps → NVE (`jax_mic`); `LJ_MD_PROD=1` → 20 ps NVT |
-| [`12_analyze_liquid.sh`](12_analyze_liquid.sh) | campaign HDF5 | seconds | density / RDF / MSD / T·E plots via `mmml analyze-liquid` |
+| [`12_analyze_liquid.sh`](12_analyze_liquid.sh) | campaign HDF5 | seconds | density / RDF / MSD / T·E plots via `karml analyze-liquid` |
 
 Steps **00, 03, 04 are self-contained** — no dataset, no CHARMM, no GPU. Run them
 first; they are where the concepts live.
@@ -54,9 +54,9 @@ flowchart TD
 | [`09_submit_orca_rimp2.sh`](09_submit_orca_rimp2.sh) | cluster ORCA | `LJ_ORCA_MODE=submit` then `collect`; keywords `RI-MP2 def2-TZVP def2-TZVP/C def2/J RIJCOSX TightSCF EnGrad` |
 | [`10_merge_prepare_joint.sh`](10_merge_prepare_joint.sh) | labeled splits | pad-merge to 20 atoms + `prepare-mm-dataset` |
 | [`05_train.sh`](05_train.sh) | joint enriched NPZ | same trainer; tag `hybrid_mm_fixed_lj_scales_aco_dcm` |
-| [`11_liquid_boxes.sh`](11_liquid_boxes.sh) | PyCHARMM | `mmml liquid-box` pure DCM + pure ACO |
+| [`11_liquid_boxes.sh`](11_liquid_boxes.sh) | PyCHARMM | `karml liquid-box` pure DCM + pure ACO |
 | [`07_deploy_md.sh`](07_deploy_md.sh) | ckpt + boxes | campaign [`md_lj_scales_liquid_campaign.yaml`](../hybrid_mm_charges/md_lj_scales_liquid_campaign.yaml) (`LJ_MD_PROD=1` → `.prod.yaml`) |
-| [`12_analyze_liquid.sh`](12_analyze_liquid.sh) | campaign HDF5 | `mmml analyze-liquid` → `*/analysis/{metrics.json,rdf.png,…}` |
+| [`12_analyze_liquid.sh`](12_analyze_liquid.sh) | campaign HDF5 | `karml analyze-liquid` → `*/analysis/{metrics.json,rdf.png,…}` |
 
 ```bash
 export LJ_JOINT=1
@@ -108,7 +108,7 @@ monomers, biased pair windows, dimers, clusters, and condensed-phase snapshots.
 Screen a large candidate pool with MM/GFN2/existing ML, then compress it with:
 
 ```bash
-mmml pes-design \
+karml pes-design \
   --input candidate_pool.npz \
   --output selected_for_qm.npz \
   --n-select 20000 \
@@ -155,7 +155,7 @@ The 2 ps NpT leg is a density-response probe on the under-dense 120@30 Å box.
 | `LJ_GEOM_SOURCE` | `examples/mp2_nms15_train.npz` | Monomer bank with `res_name` + CGenFF |
 | `LJ_BOX_SIZE` / `LJ_BULK_DENSITY_FRACTION` | `28` / `0.5` | Liquid-box smoke sizing |
 
-An explicitly set `LJ_DEVICE` beats an inherited `JAX_PLATFORMS` / `MMML_MLPOT_DEVICE`,
+An explicitly set `LJ_DEVICE` beats an inherited `JAX_PLATFORMS` / `KARML_MLPOT_DEVICE`,
 so a stale `export JAX_PLATFORMS=cpu` in a login profile cannot silently downgrade
 a GPU run.
 
@@ -188,7 +188,7 @@ does exactly that on purpose. Forces and a range of separations break the tie,
 which is why a distance scan beats a pile of equilibrium structures.
 
 **3. `periodic_external` deploys once per CHARMM process.** The JAX switched-MM
-pair loop is off in this mode, so MMML writes scaled CGenFF parameter copies and
+pair loop is off in this mode, so KARML writes scaled CGenFF parameter copies and
 loads them into CHARMM IMAGE VDW. Reusing the same sidecar is a guarded no-op;
 changing sidecars requires a fresh process because a second non-append parameter
 read can zero CHARMM VDW. Prefer `jax_mic` for iterative work.
@@ -198,11 +198,11 @@ read can zero CHARMM VDW. Prefer `jax_mic` for iterative work.
 If you use the notebook rather than these scripts, register the venv kernel once:
 
 ```bash
-.venv/bin/python -m ipykernel install --user --name mmml-venv --display-name "mmml venv"
+.venv/bin/python -m ipykernel install --user --name karml-venv --display-name "karml venv"
 ```
 
 Otherwise Jupyter's default `python3` kernel may launch a conda interpreter and
-every `import mmml...` dies with `TypeError: 'type' object is not subscriptable`.
+every `import karml...` dies with `TypeError: 'type' object is not subscriptable`.
 That is kernel selection, not broken code.
 
 ## Honest limitations
@@ -215,7 +215,7 @@ That is kernel selection, not broken code.
   `lr_solver=ewald --mm-include-lj`, or the deprecated full-box
   `periodic_external` path with one scaled CHARMM deployment per process. Parity:
   `scripts/check_ewald_train_md_pme_parity.py --include-lj`
-  ([#139](https://github.com/EricBoittier/mmml/issues/139)).
+  ([#139](https://github.com/EricBoittier/karml/issues/139)).
 - Exhaustive geometry + RI-MP2 is **cluster work**; steps 08–09 prepare/submit/collect
   only. Rigid grids without NMS undertrain intramolecular degrees of freedom.
 - Pure-liquid MD does not need TIP3; hetero **ACO–DCM** frames are still required

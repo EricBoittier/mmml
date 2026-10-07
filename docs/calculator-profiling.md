@@ -1,6 +1,6 @@
 # Hybrid calculator profiling
 
-Guide to measuring **JAX compile time** vs **steady-state run time** for the MMML hybrid calculator stack: MLpot PhysNet, switched MM pairs, jax-pme long-range corrections, and the CHARMM callback forward path.
+Guide to measuring **JAX compile time** vs **steady-state run time** for the KARML hybrid calculator stack: MLpot PhysNet, switched MM pairs, jax-pme long-range corrections, and the CHARMM callback forward path.
 
 No PyCHARMM is required for the jax-pme benchmarks. Full `md-system` mini/SD profiling needs a CHARMM-ready machine.
 
@@ -8,7 +8,7 @@ No PyCHARMM is required for the jax-pme benchmarks. Full `md-system` mini/SD pro
 
 Three layers of work landed; profiling numbers below are from
 `tests/functionality/long_range/11_calculator_primitive_benchmark.py` on **CPU**,
-**18 monomers × 3 atoms**, **Ewald**, `MMML_JAX_PME_INTRA_MODE=cross`, after COM-switch JIT fix.
+**18 monomers × 3 atoms**, **Ewald**, `KARML_JAX_PME_INTRA_MODE=cross`, after COM-switch JIT fix.
 
 ### What is fast now (steady-state, per hybrid LR eval)
 
@@ -27,7 +27,7 @@ Three layers of work landed; profiling numbers below are from
 | COM switch `value_and_grad` | ~4.5 | `@lru_cache` + `jax.jit`; amortize via `warmup_jax_pme_hybrid_host` |
 | `cross_monomer_*` kernels | ~0.5–0.8 each | Per exponent / JIT key |
 | `hybrid_mm_lr_total_cross` (cold) | ~4.5 | Dominated by COM switch compile on first hybrid call |
-| `spherical_cutoff` (full MLpot) | minutes on CPU | Pre-warm with `mmml warmup-mlpot-jax` on GPU box |
+| `spherical_cutoff` (full MLpot) | minutes on CPU | Pre-warm with `karml warmup-mlpot-jax` on GPU box |
 
 ### Regressions fixed
 
@@ -61,7 +61,7 @@ Profile rows are **nested** (e.g. `hybrid_coulomb_total` ⊃ `coulomb_cross_tota
 Reproduce:
 
 ```bash
-JAX_PLATFORMS=cpu MMML_JAX_COMPILE_TIMERS=1 \
+JAX_PLATFORMS=cpu KARML_JAX_COMPILE_TIMERS=1 \
   uv run python tests/functionality/long_range/11_calculator_primitive_benchmark.py --steady-reps 3
 ```
 
@@ -189,7 +189,7 @@ Guards: `_jax_warmup_done`, `_forward_cache_key`, deferred GPU promote (`defer_j
 
 ## Primitive map (reference)
 
-### JAX warmup labels (`MMML_JAX_COMPILE_TIMERS`)
+### JAX warmup labels (`KARML_JAX_COMPILE_TIMERS`)
 
 These are recorded by `run_jax_warmup_passes` during `warmup_decomposed_mlpot` and related warmup:
 
@@ -205,9 +205,9 @@ These are recorded by `run_jax_warmup_passes` during `warmup_decomposed_mlpot` a
 | `cross_monomer_dispersion` | Fused cross-monomer dispersion kernel |
 | `hybrid_mm_lr_total_cross` | Combined hybrid LR correction (cross mode) |
 
-**Compile vs run:** the first warmup pass is compile+run; the second pass is mostly run. MMML estimates `compile ≈ pass1 − pass2`, `run ≈ pass2`.
+**Compile vs run:** the first warmup pass is compile+run; the second pass is mostly run. KARML estimates `compile ≈ pass1 − pass2`, `run ≈ pass2`.
 
-### Hybrid component labels (`MMML_JAX_PME_PROFILE`)
+### Hybrid component labels (`KARML_JAX_PME_PROFILE`)
 
 Steady-state host timings inside `hybrid_jax_pme_mm_lr_correction` (no per-component compile split):
 
@@ -224,7 +224,7 @@ Steady-state host timings inside `hybrid_jax_pme_mm_lr_correction` (no per-compo
 | `cross_monomer_sf` | Structure-factor k-space kernel |
 | `cross_monomer_masked` | Masked mesh kernel (PME/P3M cross path) |
 
-### MLpot callback split (`MMML_MLPOT_PROFILE`)
+### MLpot callback split (`KARML_MLPOT_PROFILE`)
 
 On full `md-system` runs, logs time between MLpot Python callback entry and CHARMM `ENER` return — useful for spotting CHARMM vs JAX overhead outside the kernels above.
 
@@ -232,25 +232,25 @@ On full `md-system` runs, logs time between MLpot Python callback entry and CHAR
 
 | Variable | Purpose |
 |----------|---------|
-| `MMML_JAX_COMPILE_TIMERS=1` | Per-label compile/run warmup table |
-| `MMML_JAX_PME_PROFILE=1` | jax-pme component means at exit; `per_call` logs each call |
-| `MMML_MLPOT_PROFILE=1` | MLpot callback timing |
+| `KARML_JAX_COMPILE_TIMERS=1` | Per-label compile/run warmup table |
+| `KARML_JAX_PME_PROFILE=1` | jax-pme component means at exit; `per_call` logs each call |
+| `KARML_MLPOT_PROFILE=1` | MLpot callback timing |
 | `JAX_COMPILATION_CACHE_DIR` | Persistent XLA cache across processes |
-| `MMML_JAX_PME_INTRA_MODE` | `cross` (default) or `full_minus_intra` |
-| `MMML_JAX_PME_CROSS_KERNEL` | `auto`, `structure_factor`, `masked` |
+| `KARML_JAX_PME_INTRA_MODE` | `cross` (default) or `full_minus_intra` |
+| `KARML_JAX_PME_CROSS_KERNEL` | `auto`, `structure_factor`, `masked` |
 | `JAX_PLATFORMS=cpu` | CPU-only benchmarks (CI friendly) |
-| `MMML_MLPOT_ETERM_SPLIT_SOURCE` | Source of the MM split routed into CHARMM VDW/ELEC/IMNB/IMEL. `charmm` (default): CHARMM's live q/ε; free in all-ML runs (live params are zeroed, so VDW/ELEC report 0 and all MM stays in USER). `hybrid`: the hybrid JAX MM's own split, giving true VDW/ELEC/IMNB/IMEL at the cost of one extra MM forward (no grad) per force call |
-| `MMML_MLPOT_ROUTE_MM_ETERMS=0` | Disable the split entirely (all hybrid energy in USER) |
+| `KARML_MLPOT_ETERM_SPLIT_SOURCE` | Source of the MM split routed into CHARMM VDW/ELEC/IMNB/IMEL. `charmm` (default): CHARMM's live q/ε; free in all-ML runs (live params are zeroed, so VDW/ELEC report 0 and all MM stays in USER). `hybrid`: the hybrid JAX MM's own split, giving true VDW/ELEC/IMNB/IMEL at the cost of one extra MM forward (no grad) per force call |
+| `KARML_MLPOT_ROUTE_MM_ETERMS=0` | Disable the split entirely (all hybrid energy in USER) |
 
-`MMML_MLPOT_PROFILE=1` also enables JAX compile timers.
+`KARML_MLPOT_PROFILE=1` also enables JAX compile timers.
 
 ## Benchmark script (recommended first step)
 
-[`tests/functionality/long_range/11_calculator_primitive_benchmark.py`](https://github.com/EricBoittier/mmml/blob/main/tests/functionality/long_range/11_calculator_primitive_benchmark.py) times all jax-pme host primitives and hybrid sub-components on a synthetic cluster, and optionally runs full MLpot warmup when a checkpoint is provided.
+[`tests/functionality/long_range/11_calculator_primitive_benchmark.py`](https://github.com/EricBoittier/karml/blob/main/tests/functionality/long_range/11_calculator_primitive_benchmark.py) times all jax-pme host primitives and hybrid sub-components on a synthetic cluster, and optionally runs full MLpot warmup when a checkpoint is provided.
 
 ```bash
 # jax-pme + hybrid primitives (CPU)
-JAX_PLATFORMS=cpu MMML_JAX_COMPILE_TIMERS=1 \
+JAX_PLATFORMS=cpu KARML_JAX_COMPILE_TIMERS=1 \
   uv run python tests/functionality/long_range/11_calculator_primitive_benchmark.py
 
 # Include legacy full_minus_intra comparison
@@ -263,7 +263,7 @@ JAX_PLATFORMS=cpu uv run python tests/functionality/long_range/11_calculator_pri
   --n-monomers 12 --json artifacts/calculator_primitive_benchmark.json
 ```
 
-Do not pipe through `tail` — output is buffered and long CPU compiles look hung. For MLpot warmup only, use `mmml warmup-mlpot-jax` instead.
+Do not pipe through `tail` — output is buffered and long CPU compiles look hung. For MLpot warmup only, use `karml warmup-mlpot-jax` instead.
 
 Output columns: `compile_s`, `run_s` (from two-pass warmup), `steady_ms` (mean of extra reps).
 
@@ -287,7 +287,7 @@ Warmup: `warmup_jax_pme_hybrid_host` JIT-warms COM switch (`counts["com_switch_j
 | CPU `_finalize_jax_factory` then GPU promote | `defer_jax_until_after_sd` + skip CPU finalize when deferring |
 | New `_get_spherical_forward_fn` every eval | `_forward_cache_key` caches `jit` wrapper on model |
 | `CutoffParameters` / dtype / box changes | Keep static args stable across mini legs; see [md-system-configs](md-system-configs.md) |
-| First `spherical_cutoff` compile | `mmml warmup-mlpot-jax` or `warmup_decomposed_mlpot` once before timed MD |
+| First `spherical_cutoff` compile | `karml warmup-mlpot-jax` or `warmup_decomposed_mlpot` once before timed MD |
 
 `spherical_cutoff_calculator` itself is `@jax.jit(static_argnames=[...])` — cost is **one** large XLA compile per distinct shape/cutoff key, not per MD step.
 
@@ -304,7 +304,7 @@ Warmup: `warmup_jax_pme_hybrid_host` JIT-warms COM switch (`counts["com_switch_j
 ## cProfile (Python hot path)
 
 ```bash
-python -m cProfile -o md.prof -m mmml.cli md-system --config your.yaml
+python -m cProfile -o md.prof -m karml.cli md-system --config your.yaml
 python -c "import pstats; p=pstats.Stats('md.prof'); p.sort_stats('cumulative'); p.print_stats(40)"
 ```
 
@@ -318,12 +318,12 @@ JAX_PLATFORMS=cpu uv run python tests/functionality/long_range/10_hybrid_jax_pro
 tensorboard --logdir /tmp/jax_trace_hybrid
 ```
 
-On GPU production runs, wrap steady-state dynamics steps the same way (`jax.profiler.start_trace` / `stop_trace`). See also [`mlpot/README.md`](https://github.com/EricBoittier/mmml/blob/main/mmml/interfaces/pycharmmInterface/mlpot/README.md).
+On GPU production runs, wrap steady-state dynamics steps the same way (`jax.profiler.start_trace` / `stop_trace`). See also [`mlpot/README.md`](https://github.com/EricBoittier/karml/blob/main/karml/interfaces/pycharmmInterface/mlpot/README.md).
 
 ## Pre-warm without CHARMM
 
 ```bash
-mmml warmup-mlpot-jax --checkpoint /path/to/params.json \
+karml warmup-mlpot-jax --checkpoint /path/to/params.json \
   --composition DCM:60 --box-side 32
 ```
 
@@ -334,23 +334,23 @@ Logs the same `spherical_cutoff` and `mlpot_spherical_forward` compile timer lin
 On a CHARMM-ready host:
 
 ```bash
-export MMML_MLPOT_PROFILE=1 MMML_JAX_COMPILE_TIMERS=1 MMML_JAX_PME_PROFILE=1
-./scripts/mmml-charmm-mpirun.sh python -m cProfile -o md_system.prof -m mmml.cli \
+export KARML_MLPOT_PROFILE=1 KARML_JAX_COMPILE_TIMERS=1 KARML_JAX_PME_PROFILE=1
+./scripts/karml-charmm-mpirun.sh python -m cProfile -o md_system.prof -m karml.cli \
   md-system --config md_system.yaml --mlpot-profile
 ```
 
 **Compile churn tips** (see [md-system-configs](md-system-configs.md)):
 
-- Do not change `MMML_JAX_PME_INTRA_MODE`, `ml_compute_dtype`, or cutoffs between mini legs.
+- Do not change `KARML_JAX_PME_INTRA_MODE`, `ml_compute_dtype`, or cutoffs between mini legs.
 - `calculator_pre_minimize` + deferred JAX avoids duplicate CPU→GPU recompiles.
 - Set `JAX_COMPILATION_CACHE_DIR` for repeatable cold-start measurements.
 
 ## API helpers
 
 ```python
-from mmml.utils.jax_gpu_warmup import summarize_jax_compile_timers, reset_jax_compile_timers
-from mmml.interfaces.pycharmmInterface.jax_pme_hybrid_coulomb import consume_hybrid_jax_pme_profile
-from mmml.interfaces.pycharmmInterface.jax_pme_cross_monomer import consume_cross_monomer_profile
+from karml.utils.jax_gpu_warmup import summarize_jax_compile_timers, reset_jax_compile_timers
+from karml.interfaces.pycharmmInterface.jax_pme_hybrid_coulomb import consume_hybrid_jax_pme_profile
+from karml.interfaces.pycharmmInterface.jax_pme_cross_monomer import consume_cross_monomer_profile
 ```
 
 Reset timers before a benchmark block, run warmup passes, then read summaries.

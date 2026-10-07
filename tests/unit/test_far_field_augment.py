@@ -1,5 +1,5 @@
 """Tests for synthetic far-field composite construction (size-extensivity
-training augmentation) -- see mmml/models/physnetjax/physnetjax/training/
+training augmentation) -- see karml/models/physnetjax/physnetjax/training/
 far_field_augment.py for the physics rationale.
 """
 
@@ -11,7 +11,7 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from mmml.models.physnetjax.physnetjax.training.far_field_augment import (
+from karml.models.physnetjax.physnetjax.training.far_field_augment import (
     append_far_field_composites_to_data,
     build_far_field_composites,
     build_one_far_field_composite,

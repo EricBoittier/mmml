@@ -8,13 +8,13 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 
-from mmml.utils.plotting.styles import comparison_colors, default_cmap, legend_outside
+from karml.utils.plotting.styles import comparison_colors, default_cmap, legend_outside
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 OUT_DIR = REPO_ROOT / "docs" / "images" / "mlpot-settings"
 STYLE_NAME = "icml"
 
-from mmml.interfaces.pycharmmInterface.cutoffs import (  # noqa: E402
+from karml.interfaces.pycharmmInterface.cutoffs import (  # noqa: E402
     DEFAULT_ML_SWITCH_WIDTH,
     DEFAULT_MM_SWITCH_ON,
     DEFAULT_MM_SWITCH_WIDTH,
@@ -244,7 +244,7 @@ def plot_heat_segments() -> Path:
 
 def plot_cutoff_radius_ladder() -> Path:
     """COM-distance ladder: ML handoff, JAX MM pair reach, CHARMM IMAGE, jax-pme SR."""
-    from mmml.interfaces.pycharmmInterface.nbonds_config import PBC_CUTNB
+    from karml.interfaces.pycharmmInterface.nbonds_config import PBC_CUTNB
 
     cp = CutoffParameters()
     handoff_start = float(cp.mm_switch_on) - float(cp.ml_switch_width)
@@ -302,7 +302,7 @@ def plot_cutoff_radius_ladder() -> Path:
 def plot_system_monomer_regions() -> Path:
     """Top-down cluster: monomers colored by residue; highlight one dimer's COM zones."""
     from matplotlib.patches import Circle
-    from mmml.interfaces.crystal_charmm import default_make_res_monomer_pdb
+    from karml.interfaces.crystal_charmm import default_make_res_monomer_pdb
 
     try:
         from ase.io import read
@@ -416,8 +416,8 @@ def _element_key(z: int) -> str:
 def _load_monomer_template(residue: str) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     from ase.io import read
 
-    from mmml.interfaces.crystal_charmm import default_make_res_monomer_pdb
-    from mmml.paths import default_aco_template_pdb
+    from karml.interfaces.crystal_charmm import default_make_res_monomer_pdb
+    from karml.paths import default_aco_template_pdb
 
     res = residue.strip().upper()
     path = (
@@ -812,7 +812,7 @@ def plot_lr_energy_split() -> Path:
 
 
 def main() -> None:
-    from mmml.utils.plotting.styles import apply_plot_style
+    from karml.utils.plotting.styles import apply_plot_style
 
     apply_plot_style(STYLE_NAME)
     OUT_DIR.mkdir(parents=True, exist_ok=True)

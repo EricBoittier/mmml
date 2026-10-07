@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import os
 
-from mmml.interfaces.pycharmmInterface.mlpot.ml_profile import (
+from karml.interfaces.pycharmmInterface.mlpot.ml_profile import (
     enable_mlpot_profiling,
     get_mlpot_profile_stats,
     mlpot_profiling_enabled,
@@ -16,7 +16,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.ml_profile import (
 
 
 def test_mlpot_profile_accumulates(monkeypatch):
-    monkeypatch.setenv("MMML_MLPOT_PROFILE", "1")
+    monkeypatch.setenv("KARML_MLPOT_PROFILE", "1")
     assert mlpot_profiling_enabled()
     reset_mlpot_profile_stats()
     stats = get_mlpot_profile_stats()
@@ -29,7 +29,7 @@ def test_mlpot_profile_accumulates(monkeypatch):
 
 
 def test_ase_calculate_and_chunk_profile(monkeypatch, tmp_path):
-    monkeypatch.setenv("MMML_MLPOT_PROFILE", "1")
+    monkeypatch.setenv("KARML_MLPOT_PROFILE", "1")
     reset_mlpot_profile_stats()
     stats = get_mlpot_profile_stats()
     stats.record_calculate(0.020)
@@ -58,11 +58,11 @@ def test_ase_calculate_and_chunk_profile(monkeypatch, tmp_path):
 
 
 def test_enable_mlpot_profiling_sets_env(monkeypatch):
-    monkeypatch.delenv("MMML_MLPOT_PROFILE", raising=False)
-    monkeypatch.delenv("MMML_JAX_COMPILE_TIMERS", raising=False)
+    monkeypatch.delenv("KARML_MLPOT_PROFILE", raising=False)
+    monkeypatch.delenv("KARML_JAX_COMPILE_TIMERS", raising=False)
     enable_mlpot_profiling()
-    assert os.environ["MMML_MLPOT_PROFILE"] == "1"
-    assert os.environ["MMML_JAX_COMPILE_TIMERS"] == "1"
+    assert os.environ["KARML_MLPOT_PROFILE"] == "1"
+    assert os.environ["KARML_JAX_COMPILE_TIMERS"] == "1"
     assert mlpot_profiling_enabled()
 
 

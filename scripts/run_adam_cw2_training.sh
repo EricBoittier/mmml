@@ -1,5 +1,5 @@
 #!/bin/bash
-cd /mmhome/boittier/home/mmml
+cd /mmhome/boittier/home/karml
 source .venv/bin/activate
 nohup python scripts/train_so3lr_spooky_extxyz.py \
   --mode train \
@@ -26,8 +26,8 @@ nohup python scripts/train_so3lr_spooky_extxyz.py \
   --save-every 1 --save-every-steps 20000 \
   --seed 0 \
   --log-every 10000 --log-every-steps 200 \
-  > /mmhome/boittier/home/mmml/train_adam_cw2.log 2>&1 &
+  > /mmhome/boittier/home/karml/train_adam_cw2.log 2>&1 &
 disown
 echo "launched with PID $!"
 sleep 3
-tail -5 /mmhome/boittier/home/mmml/train_adam_cw2.log 2>&1
+tail -5 /mmhome/boittier/home/karml/train_adam_cw2.log 2>&1

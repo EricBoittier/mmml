@@ -29,7 +29,7 @@ _REPO = Path(__file__).resolve().parents[3]
 if str(_REPO) not in sys.path:
     sys.path.insert(0, str(_REPO))
 
-from mmml.analysis.dimer_scans import (  # noqa: E402
+from karml.analysis.dimer_scans import (  # noqa: E402
     DEFAULT_ORIENT_MIN_CONTACT_A,
     intermolecular_min_distance,
 )
@@ -542,9 +542,9 @@ class HybridFrameEval:
     ):
         import jax
         import jax.numpy as jnp
-        from mmml.cli.misc.physnet_evaluate import _load_physnet_checkpoint
-        from mmml.models.hybrid_energy import HYBRID_MM_BATCH_KEYS, hybrid_forward
-        from mmml.models.physnetjax.physnetjax.data.batches import prepare_batches_jit
+        from karml.cli.misc.physnet_evaluate import _load_physnet_checkpoint
+        from karml.models.hybrid_energy import HYBRID_MM_BATCH_KEYS, hybrid_forward
+        from karml.models.physnetjax.physnetjax.data.batches import prepare_batches_jit
 
         self.jax = jax
         self.jnp = jnp

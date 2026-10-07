@@ -18,7 +18,7 @@ def main() -> int:
         return 0
 
     try:
-        from mmml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_PRM
+        from karml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_PRM
     except Exception:
         CGENFF_PRM = None
     if CGENFF_PRM is None:
@@ -26,7 +26,7 @@ def main() -> int:
         return 0
 
     from tests.functionality.neighbor_lists._common import setup_charmm_composition_cluster
-    from mmml.interfaces.pycharmmInterface.mm_energy_forces import build_mm_energy_forces_fn
+    from karml.interfaces.pycharmmInterface.mm_energy_forces import build_mm_energy_forces_fn
 
     positions, cell, offsets, _mid, _z = setup_charmm_composition_cluster(
         "ACO:2",
@@ -62,7 +62,7 @@ def main() -> int:
 
     ok = True
     for method in ("ewald", "pme", "p3m"):
-        os.environ["MMML_LR_SOLVER"] = "jax_pme"
+        os.environ["KARML_LR_SOLVER"] = "jax_pme"
         os.environ["JAX_PME_METHOD"] = method
         try:
             pme_result = build_mm_energy_forces_fn(

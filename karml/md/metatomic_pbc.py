@@ -1,6 +1,6 @@
 """CHARMM-free metatomic ASE MD helpers (cubic liquid box + NVE stats).
 
-Used by ``mmml metatomic-pbc-md`` and ``examples/pet_mad_etoh_pbc``. Does not
+Used by ``karml metatomic-pbc-md`` and ``examples/pet_mad_etoh_pbc``. Does not
 import torch or metatomic at module import time.
 """
 
@@ -66,7 +66,7 @@ def n_molecules_for_residue_box(
     density_g_cm3: float | None = None,
 ) -> int:
     """Molecule count for ``residue`` in a fixed cube at the given (or bulk) density."""
-    from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import (
+    from karml.interfaces.pycharmmInterface.mlpot.box_sizing import (
         SOLVENT_BULK_PROPS,
         n_molecules_for_target_density_in_fixed_box,
     )
@@ -88,7 +88,7 @@ def n_molecules_for_residue_box(
 
 
 def mass_density_g_cm3(residue: str, n_molecules: int, box_side_A: float) -> float:
-    from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import (
+    from karml.interfaces.pycharmmInterface.mlpot.box_sizing import (
         total_mass_g_for_composition,
     )
 
@@ -105,7 +105,7 @@ def build_tiled_cubic_liquid(
     seed: int,
 ) -> Atoms:
     """Grid-place ``n_molecules`` copies of ``monomer_xyz`` in a cubic PBC cell."""
-    from mmml.utils.geometry_checks import tile_monomer_in_cubic_cell
+    from karml.utils.geometry_checks import tile_monomer_in_cubic_cell
 
     monomer = ase_read(str(monomer_xyz))
     z_mono = np.asarray(monomer.get_atomic_numbers(), dtype=int)
@@ -151,7 +151,7 @@ def append_training_frame(
     Energy and forces are the calculator's cached results for the current
     positions, so logging after an MD step costs no extra model call. The
     cell and pbc go with the frame; metatrain reads this file directly, and
-    ``mmml pet-physnet-distill --from-box-extxyz`` cuts clusters from it.
+    ``karml pet-physnet-distill --from-box-extxyz`` cuts clusters from it.
     """
     from ase.calculators.singlepoint import SinglePointCalculator
     from ase.io import write as ase_write
@@ -187,7 +187,7 @@ def plot_nve_energy(rows: list[dict[str, float]], path: Path) -> None:
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
-    from mmml.utils.plotting.styles import apply_plot_style
+    from karml.utils.plotting.styles import apply_plot_style
 
     apply_plot_style("icml")
     time_fs = [row["time_fs"] for row in rows]
@@ -206,7 +206,7 @@ def plot_nve_energy(rows: list[dict[str, float]], path: Path) -> None:
 
 
 def default_etoh_monomer_xyz() -> Path:
-    """Repo ``examples/pet_mad_etoh_pbc/etoh.xyz`` (``mmml/md/`` → parents[2] is root)."""
+    """Repo ``examples/pet_mad_etoh_pbc/etoh.xyz`` (``karml/md/`` → parents[2] is root)."""
     return (
         Path(__file__).resolve().parents[2]
         / "examples"

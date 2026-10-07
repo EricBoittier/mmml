@@ -1,23 +1,23 @@
-# Diffusion Monte Carlo (`mmml dmc`)
+# Diffusion Monte Carlo (`karml dmc`)
 
 Estimate vibrational ground-state energies with diffusion Monte Carlo on a
 PhysNetJax potential. Walker energies are evaluated in parallel via
 `jax.vmap` (chunked by `--max-batch`).
 
-CLI reference: [`mmml dmc`](cli/commands/dmc.md).
+CLI reference: [`karml dmc`](cli/commands/dmc.md).
 
 ## Quick example (acetone dimer)
 
 The repo ships a 20-atom acetone dimer geometry at
-`mmml/generate/dmc/examples/acetone_dmc.extxyz`.
+`karml/generate/dmc/examples/acetone_dmc.extxyz`.
 
 ```bash
-# Resolve a PhysNetJax checkpoint path (sets hints for $MMML_CKPT)
-mmml env
+# Resolve a PhysNetJax checkpoint path (sets hints for $KARML_CKPT)
+karml env
 
 mkdir -p runs/dmc_acetone_smoke
 
-mmml dmc \
+karml dmc \
   --natm 20 \
   --nwalker 64 \
   --stepsize 5e-4 \
@@ -26,15 +26,15 @@ mmml dmc \
   --alpha 1200.0 \
   --max-batch 64 \
   --seed 0 \
-  --checkpoint "$MMML_CKPT" \
-  --input mmml/generate/dmc/examples/acetone_dmc.extxyz \
+  --checkpoint "$KARML_CKPT" \
+  --input karml/generate/dmc/examples/acetone_dmc.extxyz \
   --output-dir runs/dmc_acetone_smoke
 ```
 
 For a longer production-style run:
 
 ```bash
-mmml dmc \
+karml dmc \
   --natm 20 \
   --nwalker 512 \
   --stepsize 5e-4 \
@@ -43,8 +43,8 @@ mmml dmc \
   --alpha 1200.0 \
   --max-batch 512 \
   --seed 0 \
-  --checkpoint "$MMML_CKPT" \
-  --input mmml/generate/dmc/examples/acetone_dmc.extxyz \
+  --checkpoint "$KARML_CKPT" \
+  --input karml/generate/dmc/examples/acetone_dmc.extxyz \
   --output-dir runs/dmc_acetone
 ```
 
@@ -91,5 +91,5 @@ stem (e.g. `acetone_dmc`):
 
 ## See also
 
-- Package README: `mmml/generate/dmc/README.md`
-- [`mmml physnet-md`](cli/commands/physnet-md.md) — classical MD sampling on the same potential
+- Package README: `karml/generate/dmc/README.md`
+- [`karml physnet-md`](cli/commands/physnet-md.md) — classical MD sampling on the same potential

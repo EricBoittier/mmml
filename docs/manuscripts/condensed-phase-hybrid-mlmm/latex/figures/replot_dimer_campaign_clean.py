@@ -18,7 +18,7 @@ import numpy as np
 import pandas as pd
 
 CSV = Path(
-    "/mmhome/boittier/home/mmml/results/dimer_scan_campaign/"
+    "/mmhome/boittier/home/karml/results/dimer_scan_campaign/"
     "mbd_checkpoint_comparison/scan_results_clean.csv"
 )
 OUT = Path(__file__).resolve().parent

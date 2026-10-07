@@ -10,7 +10,7 @@ do not explicitly shape contact-ok soft wells.  This module is the real lever:
   DCM window ``[-5, -3]`` kcal/mol, with a hard floor against deep wells.
 
 Units: hybrid forward returns eV; lit targets are kcal/mol.  Convert with
-:data:`mmml.data.units.EV_TO_KCAL_MOL`.
+:data:`karml.data.units.EV_TO_KCAL_MOL`.
 """
 
 from __future__ import annotations
@@ -21,11 +21,11 @@ from typing import Any, Mapping
 
 import numpy as np
 
-from mmml.analysis.dimer_scans import (
+from karml.analysis.dimer_scans import (
     DEFAULT_ORIENT_MIN_CONTACT_A,
     intermolecular_min_distance,
 )
-from mmml.data.units import EV_TO_KCAL_MOL
+from karml.data.units import EV_TO_KCAL_MOL
 
 # Lit DCM soft-well window (kcal/mol). Matches eval_lever2_on5_* gates.
 DEFAULT_TARGET_LO_KCAL = -5.0
@@ -281,10 +281,10 @@ class SoftWellGeometryPool:
         Returns the number of geometries retained.
         """
         import jax
-        from mmml.data.units import EV_TO_KCAL_MOL as _EV2K
-        from mmml.models.hybrid_energy import HYBRID_MM_BATCH_KEYS
-        from mmml.models.physnetjax.physnetjax.data.batches import prepare_batches_jit
-        from mmml.models.physnetjax.physnetjax.training.trainstep import _forward
+        from karml.data.units import EV_TO_KCAL_MOL as _EV2K
+        from karml.models.hybrid_energy import HYBRID_MM_BATCH_KEYS
+        from karml.models.physnetjax.physnetjax.data.batches import prepare_batches_jit
+        from karml.models.physnetjax.physnetjax.training.trainstep import _forward
 
         max_e = float(
             self.cfg.pool_max_e_int_kcal if max_e_int_kcal is None else max_e_int_kcal
@@ -352,8 +352,8 @@ class SoftWellGeometryPool:
     def next_batch(self, batch_size: int | None = None) -> dict:
         """Return one prepared hybrid batch (JAX arrays)."""
         import jax
-        from mmml.models.hybrid_energy import HYBRID_MM_BATCH_KEYS
-        from mmml.models.physnetjax.physnetjax.data.batches import prepare_batches_jit
+        from karml.models.hybrid_energy import HYBRID_MM_BATCH_KEYS
+        from karml.models.physnetjax.physnetjax.data.batches import prepare_batches_jit
 
         bs = int(batch_size or self.cfg.batch_size)
         if bs > self.n:
@@ -399,7 +399,7 @@ class SoftWellGeometryPool:
 
 def restore_mm_lj_scales(params, sigma_scale, epsilon_scale):
     """Hard-freeze LJ scale leaves after an optimizer step."""
-    from mmml.models.mm_lj_scales import (
+    from karml.models.mm_lj_scales import (
         MM_LJ_EPSILON_SCALE_KEY,
         MM_LJ_SIGMA_SCALE_KEY,
     )
@@ -469,8 +469,8 @@ if jax is not None and jnp is not None and optax is not None and otu is not None
         frozen_epsilon_scale=None,
     ):
         """One optimizer step on soft-well ``E_int`` window loss."""
-        from mmml.models.mm_lj_scales import clip_mm_lj_scale_params
-        from mmml.models.physnetjax.physnetjax.training.trainstep import _forward
+        from karml.models.mm_lj_scales import clip_mm_lj_scale_params
+        from karml.models.physnetjax.physnetjax.training.trainstep import _forward
 
         def loss_fn(p):
             out = _forward(model_apply, p, batch, batch_size, hybrid_mm=hybrid_mm)

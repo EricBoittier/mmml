@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Iterable, Sequence
 
-from mmml.interfaces.pycharmmInterface.mlpot.artifact_paths import (
+from karml.interfaces.pycharmmInterface.mlpot.artifact_paths import (
     CLEANUP_SUBDIR,
     PREP_LADDER_SUBDIR,
     SNAPSHOTS_JSON,
@@ -222,15 +222,15 @@ def probe_hybrid_grms_at_certified_box(
     """Measure hybrid GRMS for each ``lr_solver`` at fixed certified-box coordinates."""
     import numpy as np
 
-    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+    import karml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
         mlpot_hybrid_grms_from_calculator,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.run_workflow import (
+    from karml.interfaces.pycharmmInterface.mlpot.run_workflow import (
         _register_mlpot_context,
         setup_charmm_environment,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+    from karml.interfaces.pycharmmInterface.mlpot.setup import (
         get_charmm_positions_array,
         load_cluster_from_artifacts,
         reconcile_n_monomers_with_psf,

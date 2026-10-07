@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from mmml.cli.run.md_stage_summary import (
+from karml.cli.run.md_stage_summary import (
     MdJobSummary,
     MdStageSummary,
     build_pycharmm_plan_rows,

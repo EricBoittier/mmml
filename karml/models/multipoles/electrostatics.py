@@ -37,9 +37,9 @@ except ModuleNotFoundError as exc:  # pragma: no cover - exercised only without 
         "QCML multipole electrostatics prototype requires ASE."
     ) from exc
 
-from mmml.models.multipoles.model import E3xMultipoleModel
-from mmml.models.multipoles.config import TrainConfig
-from mmml.models.multipoles.representations import irrep_blocks_to_traceless
+from karml.models.multipoles.model import E3xMultipoleModel
+from karml.models.multipoles.config import TrainConfig
+from karml.models.multipoles.representations import irrep_blocks_to_traceless
 
 ANGSTROM_TO_BOHR = 1.0 / Bohr
 BOHR_TO_ANGSTROM = Bohr
@@ -85,14 +85,14 @@ def load_multipole_model(checkpoint: str | Path) -> tuple[E3xMultipoleModel, Any
 
     Accepts either an Orbax checkpoint directory (with a sibling
     ``model_config.json``) or a portable JSON file produced by
-    :func:`mmml.utils.model_checkpoint.orbax_to_json` (params + config bundled
+    :func:`karml.utils.model_checkpoint.orbax_to_json` (params + config bundled
     together, no sibling file needed). A JSON export that shipped params only
     (no ``config``) is rebuilt from the weight shapes with a warning.
     """
     checkpoint = Path(checkpoint).expanduser()
     valid = {field.name for field in fields(TrainConfig)}
     if checkpoint.is_file() and checkpoint.suffix == ".json":
-        from mmml.utils.model_checkpoint import json_to_params
+        from karml.utils.model_checkpoint import json_to_params
 
         restored = json_to_params(checkpoint)
         raw_config = restored.get("config")

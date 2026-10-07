@@ -10,7 +10,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from mmml.interfaces.pycharmmInterface.cgenff_bonded_reference import (
+from karml.interfaces.pycharmmInterface.cgenff_bonded_reference import (
     charmm_positions_xyz_array,
     set_charmm_positions,
 )
@@ -33,8 +33,8 @@ def _build_acetone() -> np.ndarray:
     9999 placeholder coordinates, which give a ~1e65 kcal/mol energy and make finite
     differences meaningless.
     """
-    from mmml.interfaces.pycharmmInterface import setupRes
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import (
+    from karml.interfaces.pycharmmInterface import setupRes
+    from karml.interfaces.pycharmmInterface.import_pycharmm import (
         reset_block,
         reset_block_no_internal,
     )
@@ -75,7 +75,7 @@ def perturbed_acetone(pycharmm_workdir) -> np.ndarray:
 
 
 def test_get_forces_pycharmm_returns_forces_not_positions(perturbed_acetone) -> None:
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import get_forces_pycharmm
+    from karml.interfaces.pycharmmInterface.import_pycharmm import get_forces_pycharmm
 
     positions = perturbed_acetone
     forces = np.asarray(get_forces_pycharmm(), dtype=float)
@@ -89,7 +89,7 @@ def test_get_forces_pycharmm_returns_forces_not_positions(perturbed_acetone) -> 
 
 
 def test_get_forces_pycharmm_matches_finite_difference(perturbed_acetone) -> None:
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import get_forces_pycharmm
+    from karml.interfaces.pycharmmInterface.import_pycharmm import get_forces_pycharmm
 
     positions = perturbed_acetone
     forces = np.asarray(get_forces_pycharmm(), dtype=float)

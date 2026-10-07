@@ -1,19 +1,19 @@
-# ORCA + MMML external tool (smoke workflow)
+# ORCA + KARML external tool (smoke workflow)
 
-Manual verification for `mmml orca-server` / `mmml orca-client` with ORCA 6.
-Do not run in agent sessions; use your GPU node with ORCA + MMML venv.
+Manual verification for `karml orca-server` / `karml orca-client` with ORCA 6.
+Do not run in agent sessions; use your GPU node with ORCA + KARML venv.
 
-**Note:** ExtOpt is ORCA → MMML (ORCA drives Opt/GOAT using an ML potential). For ORCA as a **QM reference** to cross-check PySCF/ML, use `mmml cross-check --backend orca` instead — see [docs/qc-cross-check.md](../../../docs/qc-cross-check.md).
+**Note:** ExtOpt is ORCA → KARML (ORCA drives Opt/GOAT using an ML potential). For ORCA as a **QM reference** to cross-check PySCF/ML, use `karml cross-check --backend orca` instead — see [docs/qc-cross-check.md](../../../docs/qc-cross-check.md).
 
-## 1. Start the MMML server (terminal 1)
+## 1. Start the KARML server (terminal 1)
 
 ```bash
-cd ~/mmml
+cd ~/karml
 source .venv/bin/activate
 
-export MMML_CHECKPOINT=~/mmml/mmml/models/physnetjax/defaults/hf_json/test-f41c04c0-62e3-4785-9018-351ffdc161c4_epoch-251_portable.json
+export KARML_CHECKPOINT=~/karml/karml/models/physnetjax/defaults/hf_json/test-f41c04c0-62e3-4785-9018-351ffdc161c4_epoch-251_portable.json
 
-mmml orca-server --checkpoint "$MMML_CHECKPOINT" --warmup -b 127.0.0.1:8888
+karml orca-server --checkpoint "$KARML_CHECKPOINT" --warmup -b 127.0.0.1:8888
 ```
 
 For GOAT / multi-worker ORCA runs, enable GPU micro-batching (default: up to 16
@@ -21,7 +21,7 @@ requests, 10 ms collect window). ORCA temp files are read immediately on each
 client request, before batching waits, so parallel GOAT workers are safe.
 
 ```bash
-mmml orca-server --checkpoint "$MMML_CHECKPOINT" --warmup \
+karml orca-server --checkpoint "$KARML_CHECKPOINT" --warmup \
   -b 127.0.0.1:8888 --batch-size 16 --batch-wait-ms 10
 ```
 
@@ -33,12 +33,12 @@ Leave this running. First request after `--warmup` should be fast (JAX already l
 
 ORCA `ProgExt` must be a single executable path that exists on disk.
 
-**Bundled wrapper** (after `git pull`): `examples/orca/mmml-orca-client` — resolves
-`~/mmml/.venv/bin/mmml orca-client` from the repo root. Make it executable once:
+**Bundled wrapper** (after `git pull`): `examples/orca/karml-orca-client` — resolves
+`~/karml/.venv/bin/karml orca-client` from the repo root. Make it executable once:
 
 ```bash
-chmod +x ~/mmml/examples/orca/mmml-orca-client
-~/mmml/examples/orca/mmml-orca-client -h
+chmod +x ~/karml/examples/orca/karml-orca-client
+~/karml/examples/orca/karml-orca-client -h
 ```
 
 Point `ProgExt` at the **absolute** path to that script (see `water_opt.inp`).
@@ -47,16 +47,16 @@ Point `ProgExt` at the **absolute** path to that script (see `water_opt.inp`).
 
 ```bash
 mkdir -p ~/bin
-ln -sf ~/mmml/examples/orca/mmml-orca-client ~/bin/mmml-orca-client
+ln -sf ~/karml/examples/orca/karml-orca-client ~/bin/karml-orca-client
 ```
 
 **Alternative:** `ProgExt` can be the venv entry point directly:
 
 ```text
-ProgExt "/home/boittier/mmml/.venv/bin/mmml-orca-client"
+ProgExt "/home/boittier/karml/.venv/bin/karml-orca-client"
 ```
 
-(after `uv sync` in `~/mmml`). Or set `export EXTOPTEXE=...` and omit `ProgExt`.
+(after `uv sync` in `~/karml`). Or set `export EXTOPTEXE=...` and omit `ProgExt`.
 
 ## 3. Example files (`examples/orca/water_opt/`)
 
@@ -77,7 +77,7 @@ H   0.000000  -0.757200  -0.469200
 %maxcore 2000
 
 %method
-  ProgExt "/home/boittier/mmml/examples/orca/mmml-orca-client"
+  ProgExt "/home/boittier/karml/examples/orca/karml-orca-client"
   Ext_Params "-b 127.0.0.1:8888"
 end
 
@@ -93,7 +93,7 @@ Replace `/home/boittier` with your username/path.
 ## 4. Run ORCA (terminal 2)
 
 ```bash
-cd ~/mmml/examples/orca/water_opt   # or any directory containing water.xyz
+cd ~/karml/examples/orca/water_opt   # or any directory containing water.xyz
 orca water_opt.inp
 ```
 
@@ -104,7 +104,7 @@ ORCA will write `water_EXT.extinp.tmp`, `water_EXT.xyz`, call the client, read `
 Mimics one external-tool call:
 
 ```bash
-cd ~/mmml/examples/orca/water_opt
+cd ~/karml/examples/orca/water_opt
 
 cat > water_EXT.extinp.tmp <<'EOF'
 water_EXT.xyz
@@ -122,7 +122,7 @@ H   0.000000   0.757200  -0.469200
 H   0.000000  -0.757200  -0.469200
 EOF
 
-mmml orca-client -b 127.0.0.1:8888 --checkpoint "$MMML_CHECKPOINT" water_EXT.extinp.tmp
+karml orca-client -b 127.0.0.1:8888 --checkpoint "$KARML_CHECKPOINT" water_EXT.extinp.tmp
 ls -l water_EXT.engrad
 head water_EXT.engrad
 ```
@@ -142,7 +142,7 @@ Geometry optimization (`examples/orca/water_opt/water_opt.inp`), or single-point
 ```text
 ! ExtOpt EnGrad
 %method
-  ProgExt "/home/boittier/mmml/examples/orca/mmml-orca-client"
+  ProgExt "/home/boittier/karml/examples/orca/karml-orca-client"
   Ext_Params "-b 127.0.0.1:8888"
 end
 * xyzfile 0 1 water.xyz
@@ -152,21 +152,21 @@ end
 
 See `examples/orca/goat_ethanol/` for a global optimization example using
 [ORCA GOAT](https://www.faccts.de/docs/orca/6.0/manual/contents/typical/GOAT.html)
-with MMML as the external PES. Start the server first, then:
+with KARML as the external PES. Start the server first, then:
 
 ```bash
-cd ~/mmml/examples/orca/goat_ethanol
+cd ~/karml/examples/orca/goat_ethanol
 orca ethanol_goat.inp
 ```
 
-GOAT performs many gradient calls — keep `mmml-orca-server` warm and use `!PAL` /
+GOAT performs many gradient calls — keep `karml-orca-server` warm and use `!PAL` /
 `%GOAT NWORKERS` to parallelize workers.
 
 Standalone (no server; slow — reloads JAX each call):
 
 ```text
 %method
-  ProgExt "/home/boittier/mmml/.venv/bin/mmml"
+  ProgExt "/home/boittier/karml/.venv/bin/karml"
   Ext_Params "orca-external --checkpoint /path/to/epoch.pkl water_EXT.extinp.tmp"
 end
 ```

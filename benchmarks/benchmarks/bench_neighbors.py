@@ -37,7 +37,7 @@ class PairListBackends:
 
     def setup(self, n_waters):
         try:
-            from mmml.interfaces.pycharmmInterface.mm_system_energy import (
+            from karml.interfaces.pycharmmInterface.mm_system_energy import (
                 _build_pair_indices,
                 _build_pair_indices_vectorized,
             )
@@ -75,7 +75,7 @@ class IntermolecularPairs:
 
     def setup(self, n_waters):
         try:
-            from mmml.interfaces.jaxmdInterface.hybrid_energy import (
+            from karml.interfaces.jaxmdInterface.hybrid_energy import (
                 get_intermolecular_pairs,
             )
         except Exception as exc:  # pragma: no cover - environment-dependent
@@ -106,9 +106,9 @@ class NeighborRefresh:
 
     def setup(self, n_waters):
         try:
-            from mmml.md.neighbors import make_intermolecular_neighbor_fn
+            from karml.md.neighbors import make_intermolecular_neighbor_fn
         except Exception as exc:  # pragma: no cover - environment-dependent
-            raise skip(f"mmml.md.neighbors unavailable: {exc}") from exc
+            raise skip(f"karml.md.neighbors unavailable: {exc}") from exc
 
         system, box = synthetic_system(int(n_waters))
         self.system = system
@@ -149,9 +149,9 @@ class VerletSkinCache:
 
     def setup(self, skin_A):
         try:
-            from mmml.md.neighbors import make_intermolecular_neighbor_fn
+            from karml.md.neighbors import make_intermolecular_neighbor_fn
         except Exception as exc:  # pragma: no cover - environment-dependent
-            raise skip(f"mmml.md.neighbors unavailable: {exc}") from exc
+            raise skip(f"karml.md.neighbors unavailable: {exc}") from exc
 
         require_jax()  # with_verlet_skin uploads results with jnp.asarray
 
@@ -202,7 +202,7 @@ class NeighborCapacitySizing:
 
     def setup(self, n_pairs):
         try:
-            from mmml.md.energy.capacity import pad_indices
+            from karml.md.energy.capacity import pad_indices
         except Exception as exc:  # pragma: no cover - environment-dependent
             raise skip(f"capacity module unavailable: {exc}") from exc
 

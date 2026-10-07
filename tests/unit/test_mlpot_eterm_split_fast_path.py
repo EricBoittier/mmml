@@ -7,13 +7,13 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 import pytest
 
-from mmml.interfaces.pycharmmInterface.mlpot import charmm_eterm_routing as routing
-from mmml.interfaces.pycharmmInterface.mm_energy_forces import (
+from karml.interfaces.pycharmmInterface.mlpot import charmm_eterm_routing as routing
+from karml.interfaces.pycharmmInterface.mm_energy_forces import (
     decompose_mlpot_mm_nb_eterms_kcalmol,
 )
 
-_LIVE = "mmml.interfaces.pycharmmInterface.mm_system_energy._live_charmm_nonbonded_arrays"
-_DECOMPOSE = "mmml.interfaces.pycharmmInterface.mm_energy_forces.decompose_mlpot_mm_nb_eterms_kcalmol"
+_LIVE = "karml.interfaces.pycharmmInterface.mm_system_energy._live_charmm_nonbonded_arrays"
+_DECOMPOSE = "karml.interfaces.pycharmmInterface.mm_energy_forces.decompose_mlpot_mm_nb_eterms_kcalmol"
 
 
 class _NoHostCopy:
@@ -41,7 +41,7 @@ def _calc(n_mono: int, atoms_per: int):
 
 
 def test_zero_live_params_skip_pair_pass(monkeypatch):
-    monkeypatch.setenv("MMML_MLPOT_ROUTE_MM_ETERMS", "1")
+    monkeypatch.setenv("KARML_MLPOT_ROUTE_MM_ETERMS", "1")
     n = 18
     calc = _calc(2, 9)
     pushed = []
@@ -79,7 +79,7 @@ def test_zero_live_params_skip_pair_pass(monkeypatch):
 
 @pytest.mark.parametrize("which", ["charges", "eps"])
 def test_any_nonzero_live_param_keeps_full_split(which, monkeypatch):
-    monkeypatch.setenv("MMML_MLPOT_ROUTE_MM_ETERMS", "1")
+    monkeypatch.setenv("KARML_MLPOT_ROUTE_MM_ETERMS", "1")
     n = 18
     calc = _calc(2, 9)
     q = np.zeros(n)
@@ -136,11 +136,11 @@ def test_fast_path_matches_full_split_on_zeroed_params():
 
 @pytest.mark.parametrize("source", [None, "charmm", "hybrid"])
 def test_hybrid_split_only_when_opted_in(source, monkeypatch):
-    monkeypatch.setenv("MMML_MLPOT_ROUTE_MM_ETERMS", "1")
+    monkeypatch.setenv("KARML_MLPOT_ROUTE_MM_ETERMS", "1")
     if source is None:
-        monkeypatch.delenv("MMML_MLPOT_ETERM_SPLIT_SOURCE", raising=False)
+        monkeypatch.delenv("KARML_MLPOT_ETERM_SPLIT_SOURCE", raising=False)
     else:
-        monkeypatch.setenv("MMML_MLPOT_ETERM_SPLIT_SOURCE", source)
+        monkeypatch.setenv("KARML_MLPOT_ETERM_SPLIT_SOURCE", source)
     calc = _calc(2, 9)
     calc._cached_update_fn = MagicMock(mm_eterm_split=lambda *a: np.array([-1.0, -0.5, 2.0, 0.25]))
     zeros = np.zeros(18)

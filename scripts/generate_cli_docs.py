@@ -11,8 +11,8 @@ updates the ``# CLI_NAV_START: <group>`` … ``# CLI_NAV_END: <group>`` blocks i
 
 One marker block per group, so hand-written guides can sit next to the generated
 command pages inside the same nav section without being clobbered. Group names
-track ``mmml.cli.help_text.COMMAND_GROUPS`` so the sidebar reads like
-``mmml commands``.
+track ``karml.cli.help_text.COMMAND_GROUPS`` so the sidebar reads like
+``karml commands``.
 """
 
 from __future__ import annotations
@@ -39,14 +39,14 @@ INDEX_MD = REPO_ROOT / "docs" / "index.md"
 EXAMPLES_MD = REPO_ROOT / "docs" / "examples.md"
 NAV_START = "# CLI_NAV_START"
 NAV_END = "# CLI_NAV_END"
-HELP_START = "MMML_TOP_HELP_START"
-HELP_END = "MMML_TOP_HELP_END"
+HELP_START = "KARML_TOP_HELP_START"
+HELP_END = "KARML_TOP_HELP_END"
 
 # Sidebar groups (order matters). Every registry command must land in exactly one
 # group; unassigned commands are reported as an error rather than silently pooled,
 # so a new subcommand cannot quietly disappear into an "Other" bucket.
 #
-# The first five names mirror ``mmml.cli.help_text.COMMAND_GROUPS`` — see
+# The first five names mirror ``karml.cli.help_text.COMMAND_GROUPS`` — see
 # ``tests/unit/test_generate_cli_docs.py`` for the drift guard.
 CLI_NAV_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
     (
@@ -191,7 +191,7 @@ RELATED_DOCS: dict[str, list[tuple[str, str]]] = {
         ("Scientific code policy", "../../scientific-code.md"),
     ],
     "pet-interaction-pes": [
-        ("Metatomic in MMML", "../../metatomic.md"),
+        ("Metatomic in KARML", "../../metatomic.md"),
         ("PET-MAD ethanol PBC example", "../../examples/pet-mad-etoh-pbc.md"),
         ("Plotting style guide", "../../plotting-style-guide.md"),
     ],
@@ -216,14 +216,14 @@ RELATED_DOCS: dict[str, list[tuple[str, str]]] = {
         ("Bayesian PES design", "../../bayesian-pes-design.md"),
     ],
     "pet-box-dataset": [
-        ("Metatomic in MMML", "../../metatomic.md"),
+        ("Metatomic in KARML", "../../metatomic.md"),
     ],
     "pet-physnet-distill": [
-        ("Metatomic in MMML", "../../metatomic.md"),
+        ("Metatomic in KARML", "../../metatomic.md"),
         ("Bayesian PES design", "../../bayesian-pes-design.md"),
     ],
     "metatomic-pbc-md": [
-        ("Metatomic in MMML", "../../metatomic.md"),
+        ("Metatomic in KARML", "../../metatomic.md"),
         ("PET-MAD ethanol PBC example", "../../examples/pet-mad-etoh-pbc.md"),
         ("Liquid box workflow", "../../liquid-box-workflow.md"),
     ],
@@ -376,8 +376,8 @@ ICML style and are reproducible from the written JSON.
 
 ```bash
 export PET_MAD_CKPT=/path/to/pet-mad-xs-v1.5.0.pt
-JAX_PLATFORMS=cpu MMML_METATOMIC_DEVICE=cpu \\
-  mmml pet-interaction-pes --checkpoint "$PET_MAD_CKPT"
+JAX_PLATFORMS=cpu KARML_METATOMIC_DEVICE=cpu \\
+  karml pet-interaction-pes --checkpoint "$PET_MAD_CKPT"
 ```
 
 Worked example: [PET-MAD ethanol PBC](../../examples/pet-mad-etoh-pbc.md).
@@ -390,37 +390,37 @@ conservation path.
 
 ```bash
 export PET_MAD_CKPT=/path/to/pet-mad-xs-v1.5.0.pt
-mmml metatomic-pbc-md --ensemble nve --minimize-steps 60 --n-steps 400
+karml metatomic-pbc-md --ensemble nve --minimize-steps 60 --n-steps 400
 ```
 
 Worked example: [PET-MAD ethanol PBC](../../examples/pet-mad-etoh-pbc.md).
 """,
     "commands": """
-`mmml commands` lists every subcommand grouped by task area — a browsable
-alternative to the compact top-level `mmml -h`.
+`karml commands` lists every subcommand grouped by task area — a browsable
+alternative to the compact top-level `karml -h`.
 
 ```bash
-mmml commands
-mmml commands --audit    # deprecated/legacy + tab-completion coverage
+karml commands
+karml commands --audit    # deprecated/legacy + tab-completion coverage
 ```
 
-The grouped list is defined in `mmml/cli/help_text.py` and kept in sync with
-`mmml/cli/registry.py`.
+The grouped list is defined in `karml/cli/help_text.py` and kept in sync with
+`karml/cli/registry.py`.
 """,
     "examples": """
-`mmml examples` prints copy-paste invocations for common workflows (boxes, MD
-campaigns, QM pipelines). For interactive YAML setup, use `mmml configure`.
+`karml examples` prints copy-paste invocations for common workflows (boxes, MD
+campaigns, QM pipelines). For interactive YAML setup, use `karml configure`.
 
 ```bash
-mmml examples
+karml examples
 ```
 """,
     "completion": """
 See the dedicated [Tab completion](../completion.md) page for bash/zsh/fish setup.
 
 ```bash
-mmml completion bash
-eval "$(mmml completion bash)"
+karml completion bash
+eval "$(karml completion bash)"
 ```
 """,
     "configure": """
@@ -428,9 +428,9 @@ Interactive wizard for `md-system` YAML, Snakemake scaffolds, and bundled
 `cpu_tests` presets.
 
 ```bash
-mmml configure
-mmml configure --list-presets
-mmml configure --non-interactive
+karml configure
+karml configure --list-presets
+karml configure --non-interactive
 ```
 """,
     "env": """
@@ -438,8 +438,8 @@ Resolve checkpoints, CHARMM paths, and shell export hints without importing
 PyCHARMM.
 
 ```bash
-mmml env
-mmml env --json
+karml env
+karml env --json
 ```
 """,
     "build-crystal": """
@@ -448,10 +448,10 @@ literature CIF + `make-res` atom names (`--literature`) — exact experimental u
 cell, tiled to a simulation supercell (≥28 Å edges by default) at literature ρ.
 
 ```bash
-mmml make-res --res DCM --skip-energy-show
-mmml build-crystal --literature dcm --monomer-pdb pdb/dcm.pdb -o pdb/dcm_crystal.pdb
-mmml build-crystal --literature dcm --supercell 4,4,3 -o dcm_super.extxyz
-mmml build-crystal --literature aco -o acetone_pbca_150k.pdb
+karml make-res --res DCM --skip-energy-show
+karml build-crystal --literature dcm --monomer-pdb pdb/dcm.pdb -o pdb/dcm_crystal.pdb
+karml build-crystal --literature dcm --supercell 4,4,3 -o dcm_super.extxyz
+karml build-crystal --literature aco -o acetone_pbca_150k.pdb
 ```
 
 PyXtal (`uv sync --extra chem`) is optional for random placement in the same
@@ -493,13 +493,13 @@ relaxing to ambient pressure and for the H···Cl versus Cl···Cl decompositi
     `--write-charmm` installs a **cubic** CHARMM IMAGE. The acetone Pbca cell is
     9.17 × 7.53 × 21.25 Å, which no cubic box represents, so MD started that way
     would run a differently shaped cell than the one you built. For a static
-    periodic energy on the true cell use `mmml.analysis.lattice_energy` instead.
+    periodic energy on the true cell use `karml.analysis.lattice_energy` instead.
 
 ```bash
-mmml build-crystal \\
-  -m "$(python -c 'from mmml.paths import default_dcm_molecule_xyz; print(default_dcm_molecule_xyz())')" \\
+karml build-crystal \\
+  -m "$(python -c 'from karml.paths import default_dcm_molecule_xyz; print(default_dcm_molecule_xyz())')" \\
   --spg 60 --z 4 --target-density-g-cm3 1.972 -o dcm_pyxtal.extxyz
-mmml build-crystal -m benzene --spg 14 --z 2 --target-density-g-cm3 1.202 -o benzene.extxyz
+karml build-crystal -m benzene --spg 14 --z 2 --target-density-g-cm3 1.202 -o benzene.extxyz
 ```
 
 Liquid DCM boxes use **1.326 g/cm³** (`liquid-box`, `md-system`).
@@ -513,14 +513,14 @@ in parallel with `jax.vmap` (chunked by `--max-batch`).
 
 ## Example (acetone dimer)
 
-Bundled geometry: `mmml/generate/dmc/examples/acetone_dmc.extxyz` (20 atoms).
+Bundled geometry: `karml/generate/dmc/examples/acetone_dmc.extxyz` (20 atoms).
 
 Smoke run (short equilibration, few production steps):
 
 ```bash
-mmml env   # resolve $MMML_CKPT if you use the bundled checkpoint
+karml env   # resolve $KARML_CKPT if you use the bundled checkpoint
 
-mmml dmc \\
+karml dmc \\
   --natm 20 \\
   --nwalker 64 \\
   --stepsize 5e-4 \\
@@ -529,15 +529,15 @@ mmml dmc \\
   --alpha 1200.0 \\
   --max-batch 64 \\
   --seed 0 \\
-  --checkpoint "$MMML_CKPT" \\
-  --input mmml/generate/dmc/examples/acetone_dmc.extxyz \\
+  --checkpoint "$KARML_CKPT" \\
+  --input karml/generate/dmc/examples/acetone_dmc.extxyz \\
   --output-dir runs/dmc_acetone_smoke
 ```
 
 Production-style settings (more walkers / longer averaging):
 
 ```bash
-mmml dmc \\
+karml dmc \\
   --natm 20 \\
   --nwalker 512 \\
   --stepsize 5e-4 \\
@@ -546,8 +546,8 @@ mmml dmc \\
   --alpha 1200.0 \\
   --max-batch 512 \\
   --seed 0 \\
-  --checkpoint "$MMML_CKPT" \\
-  --input mmml/generate/dmc/examples/acetone_dmc.extxyz \\
+  --checkpoint "$KARML_CKPT" \\
+  --input karml/generate/dmc/examples/acetone_dmc.extxyz \\
   --output-dir runs/dmc_acetone
 ```
 
@@ -568,7 +568,7 @@ BFGS-minimized). That mode needs `evaluate: energy` and cannot be combined with
 `--prepare-only`.
 
 ```bash
-mmml ic-scan \\
+karml ic-scan \\
   --config examples/ic_scan/acem_dihedrals_relaxed.yaml \\
   --output artifacts/ic_scan/acem_xtb_relaxed \\
   --overwrite
@@ -582,23 +582,23 @@ evaluation metrics; it is **not** a model checkpoint. Export the trained Orbax
 epoch separately:
 
 ```bash
-uv run mmml orbax-to-json \\
-  ~/mmml/artifacts/spooky_so3lr/epoch-0002 \\
-  --output ~/mmml/artifacts/spooky_so3lr/epoch-0002_params.json
+uv run karml orbax-to-json \\
+  ~/karml/artifacts/spooky_so3lr/epoch-0002 \\
+  --output ~/karml/artifacts/spooky_so3lr/epoch-0002_params.json
 ```
 
 The exporter combines the checkpoint's training `config` with its
 `model_attributes`. The latter identifies the model as `spooky` and records
 constructor values such as `features`, `cutoff`, and `max_padded_atoms`.
 
-Use the resulting JSON anywhere MMML accepts `--checkpoint`. For the JAX-MD
+Use the resulting JSON anywhere KARML accepts `--checkpoint`. For the JAX-MD
 backend (the `cg_jaxmd` path):
 
 ```bash
-uv run mmml md-system \\
+uv run karml md-system \\
   --backend jaxmd \\
   --setup free_nvt \\
-  --checkpoint ~/mmml/artifacts/spooky_so3lr/epoch-0002_params.json \\
+  --checkpoint ~/karml/artifacts/spooky_so3lr/epoch-0002_params.json \\
   --composition "RES:1" \\
   --template-pdb /path/to/monomer.pdb \\
   --temperature 300 \\
@@ -610,10 +610,10 @@ For periodic MD, use a periodic setup such as `pbc_nvt`, provide the normal
 box/build inputs, and keep the same JSON checkpoint:
 
 ```bash
-uv run mmml md-system \\
+uv run karml md-system \\
   --backend jaxmd \\
   --setup pbc_nvt \\
-  --checkpoint ~/mmml/artifacts/spooky_so3lr/epoch-0002_params.json \\
+  --checkpoint ~/karml/artifacts/spooky_so3lr/epoch-0002_params.json \\
   --composition "RES:20" \\
   --template-pdb /path/to/monomer.pdb \\
   --box-size 30 \\
@@ -630,8 +630,8 @@ CLI.
 To check that the portable file restores as SpookyPhysNet before a long run:
 
 ```bash
-uv run mmml health-check \\
-  --checkpoint ~/mmml/artifacts/spooky_so3lr/epoch-0002_params.json
+uv run karml health-check \\
+  --checkpoint ~/karml/artifacts/spooky_so3lr/epoch-0002_params.json
 ```
 """,
 }
@@ -639,8 +639,8 @@ uv run mmml health-check \\
 
 def _import_registry():
     sys.path.insert(0, str(REPO_ROOT))
-    from mmml.cli.registry import COMMAND_REGISTRY, command_by_name
-    from mmml.cli.parser_utils import get_subcommand_parser, parser_available
+    from karml.cli.registry import COMMAND_REGISTRY, command_by_name
+    from karml.cli.parser_utils import get_subcommand_parser, parser_available
 
     return COMMAND_REGISTRY, command_by_name, get_subcommand_parser, parser_available
 
@@ -651,11 +651,11 @@ def _parser_help(command: str, get_subcommand_parser) -> str | None:
     parser = get_subcommand_parser(command)
     if parser is None:
         return None
-    parser.prog = f"mmml {command}"
+    parser.prog = f"karml {command}"
     parser.formatter_class = lambda prog: argparse.HelpFormatter(prog, width=80)
     # md-system defaults to a short category index for -h; docs need the full dump.
-    if hasattr(parser, "_mmml_help_mode"):
-        parser._mmml_help_mode = "all"
+    if hasattr(parser, "_karml_help_mode"):
+        parser._karml_help_mode = "all"
     buf = io.StringIO()
     parser.print_help(buf)
     return buf.getvalue().rstrip()
@@ -664,7 +664,7 @@ def _parser_help(command: str, get_subcommand_parser) -> str | None:
 def _status_banner(spec) -> str:
     if spec.status == "active":
         return ""
-    rep = f" Prefer **`mmml {spec.replacement}`**." if spec.replacement else ""
+    rep = f" Prefer **`karml {spec.replacement}`**." if spec.replacement else ""
     note = f" {spec.note}" if spec.note else ""
     return f"!!! warning \"{spec.status}\"\n    {spec.status.capitalize()} command.{rep}{note}\n\n"
 
@@ -697,7 +697,7 @@ def _related_section(name: str) -> str:
 def _render_command_page(spec, *, get_subcommand_parser, parser_available) -> str:
     name = spec.name
     lines = [
-        f"# `mmml {name}`",
+        f"# `karml {name}`",
         "",
         spec.summary + ".",
         "",
@@ -711,13 +711,13 @@ def _render_command_page(spec, *, get_subcommand_parser, parser_available) -> st
     has_parser = parser_available(name, import_module=False)
     help_text = _parser_help(name, get_subcommand_parser)
 
-    usage_lines = [f"mmml {name} --help"]
+    usage_lines = [f"karml {name} --help"]
     if name == "md-system":
         usage_lines = [
-            "mmml md-system -h              # category index",
-            "mmml md-system -h4             # category by number",
-            "mmml md-system -hpycharmm      # same via alias",
-            "mmml md-system --help-all      # full option dump",
+            "karml md-system -h              # category index",
+            "karml md-system -h4             # category by number",
+            "karml md-system -hpycharmm      # same via alias",
+            "karml md-system --help-all      # full option dump",
         ]
     lines.extend(
         [
@@ -738,7 +738,7 @@ def _render_command_page(spec, *, get_subcommand_parser, parser_available) -> st
                 "!!! note",
                 "    This command defines `build_parser()` but help could not be loaded "
                 "(optional deps missing in the doc build environment). Run "
-                f"`mmml {name} --help` locally for flags.",
+                f"`karml {name} --help` locally for flags.",
                 "",
             ]
         )
@@ -765,18 +765,18 @@ def _render_command_page(spec, *, get_subcommand_parser, parser_available) -> st
 
 
 def _render_examples_page() -> str:
-    """``docs/examples.md`` — the ``mmml examples`` output, verbatim."""
-    from mmml.cli.help_text import EXAMPLE_BLOCKS
+    """``docs/examples.md`` — the ``karml examples`` output, verbatim."""
+    from karml.cli.help_text import EXAMPLE_BLOCKS
 
     lines = [
         "# Examples",
         "",
-        "Copy-paste invocations, grouped the same way as `mmml examples`.",
-        "Run `mmml <command> --help` for the full flag list of any of these.",
+        "Copy-paste invocations, grouped the same way as `karml examples`.",
+        "Run `karml <command> --help` for the full flag list of any of these.",
         "",
         "!!! note",
-        "    This page is generated from `mmml.cli.help_text.EXAMPLE_BLOCKS`,",
-        "    so it always matches what `mmml examples` prints.",
+        "    This page is generated from `karml.cli.help_text.EXAMPLE_BLOCKS`,",
+        "    so it always matches what `karml examples` prints.",
         "",
     ]
     for title, examples in EXAMPLE_BLOCKS:
@@ -786,15 +786,15 @@ def _render_examples_page() -> str:
         lines.extend(examples)
         lines.append("```")
         lines.append("")
-    lines.append("Interactive setup for YAML and Snakemake scaffolds: `mmml configure`.")
+    lines.append("Interactive setup for YAML and Snakemake scaffolds: `karml configure`.")
     lines.append("")
     lines.append("See also: [How the CLI is organized](cli/index.md).")
     return "\n".join(lines).rstrip() + "\n"
 
 
 def _update_top_level_help(text: str) -> str:
-    """Refresh the ``mmml -h`` transcript embedded in ``docs/index.md``."""
-    from mmml.cli.help_text import format_top_level_help
+    """Refresh the ``karml -h`` transcript embedded in ``docs/index.md``."""
+    from karml.cli.help_text import format_top_level_help
 
     pattern = re.compile(
         rf"^([ \t]*)<!-- {HELP_START} -->$.*?^[ \t]*<!-- {HELP_END} -->$\n",
@@ -810,7 +810,7 @@ def _update_top_level_help(text: str) -> str:
         [
             f"{indent}<!-- {HELP_START} -->",
             f"{indent}```console",
-            f"{indent}$ mmml -h",
+            f"{indent}$ karml -h",
             *(f"{indent}{line}".rstrip() for line in format_top_level_help().splitlines()),
             f"{indent}```",
             f"{indent}<!-- {HELP_END} -->",
@@ -932,7 +932,7 @@ def generate(*, check: bool = False) -> int:
 
 
 def main() -> int:
-    from mmml.cli.help_style import install_colored_argparse
+    from karml.cli.help_style import install_colored_argparse
 
     install_colored_argparse()
     parser = argparse.ArgumentParser(description=__doc__)
@@ -956,7 +956,7 @@ def _hard_exit(code: int) -> None:
     gates (``physnet-train.md`` had been missing two real flags since
     63b549073).
 
-    Mirrors ``mmml.cli.__main__._hard_exit``: ``os._exit`` only on the
+    Mirrors ``karml.cli.__main__._hard_exit``: ``os._exit`` only on the
     failure path, so a clean run still shuts down normally and lets OpenMPI
     finalize -- ``os._exit(0)`` skips ``MPI_Finalize`` and PRRTE then often
     returns 1 for a run that actually succeeded.

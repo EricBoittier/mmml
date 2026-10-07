@@ -6,7 +6,7 @@ from types import ModuleType, SimpleNamespace
 
 
 def test_select_atoms_cls_falls_back_to_submodule(monkeypatch) -> None:
-    from mmml.interfaces.pycharmmInterface.mlpot import setup as setup_mod
+    from karml.interfaces.pycharmmInterface.mlpot import setup as setup_mod
 
     class _FakeSelectAtoms:
         def __init__(self, *args, **kwargs):
@@ -29,7 +29,7 @@ def test_select_atoms_cls_falls_back_to_submodule(monkeypatch) -> None:
 
 
 def test_select_atoms_cls_prefers_package_attribute(monkeypatch) -> None:
-    from mmml.interfaces.pycharmmInterface.mlpot import setup as setup_mod
+    from karml.interfaces.pycharmmInterface.mlpot import setup as setup_mod
 
     class _PkgSelectAtoms:
         pass

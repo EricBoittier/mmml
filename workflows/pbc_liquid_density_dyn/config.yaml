@@ -2,7 +2,7 @@
 #
 # Sibling: workflows/pbc_solvent_burst/ (heat + JAX-MD alternation).
 # This workflow targets equilibration + production MD at ρ ≈ bulk liquid using:
-#   liquid_prep + density_prep_ladder, cleanup ladder, mmml-charmm-mpirun, warmup-mlpot-jax
+#   liquid_prep + density_prep_ladder, cleanup ladder, karml-charmm-mpirun, warmup-mlpot-jax
 #
 # Matrix: solvents × bulk_density_fractions × temperatures × box_sizes
 # Output: artifacts/pbc_liquid_density_dyn/{solvent}_{n}_t{T}_l{L}/
@@ -12,7 +12,7 @@ bulk_density_fractions: [0.9, 1.0]
 bulk_density_n_min: 10
 temperatures: [300.0]
 box_sizes: [28.0, 32.0]
-checkpoint: ${MMML_CKPT}
+checkpoint: ${KARML_CKPT}
 output_root: artifacts/pbc_liquid_density_dyn
 seed_base: 4242
 
@@ -32,7 +32,7 @@ pressure: 1.0
 spacing: 4.0
 packmol_tolerance: 1.5
 
-# Resilient liquid-density prep (maps to mmml liquid-prep-dense preset knobs)
+# Resilient liquid-density prep (maps to karml liquid-prep-dense preset knobs)
 liquid_prep: true
 density_prep_ladder: true
 density_prep_ladder_max_rounds: 5
@@ -83,8 +83,8 @@ ml_batch_size: 2048
 warmup_mlpot_jax: true
 warmup_do_mm: false
 
-mpirun_wrapper: ../../scripts/mmml-charmm-mpirun.sh
-MMML_MPI_NP: 1
+mpirun_wrapper: ../../scripts/karml-charmm-mpirun.sh
+KARML_MPI_NP: 1
 
 slurm_small_cluster_max_n: 30
 slurm_max_concurrent_fast: 10

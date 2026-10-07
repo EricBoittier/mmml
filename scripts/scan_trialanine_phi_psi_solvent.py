@@ -26,12 +26,12 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from mmml.interfaces.pycharmmInterface.cgenff_bonded_reference import set_charmm_positions
-from mmml.interfaces.pycharmmInterface.import_pycharmm import (
+from karml.interfaces.pycharmmInterface.cgenff_bonded_reference import set_charmm_positions
+from karml.interfaces.pycharmmInterface.import_pycharmm import (
     ensure_pycharmm_loaded,
     pycharmm,
 )
-from mmml.interfaces.pycharmmInterface.trialanine_water_box import (
+from karml.interfaces.pycharmmInterface.trialanine_water_box import (
     build_trialanine_water_box_in_charmm,
     n_peptide_atoms_in_trialanine_box,
 )

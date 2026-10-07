@@ -6,12 +6,12 @@
 #   Snakemake flags may be passed without a leading job count, e.g.:
 #     bash scripts/snakemake_slurm.sh --forcerun run_setup_compare
 #
-# Prep sweep (must export config to compute jobs via MMML_WORKFLOW_CONFIG):
-#   MMML_WORKFLOW_CONFIG=config.prep_sweep.yaml bash scripts/snakemake_slurm.sh
+# Prep sweep (must export config to compute jobs via KARML_WORKFLOW_CONFIG):
+#   KARML_WORKFLOW_CONFIG=config.prep_sweep.yaml bash scripts/snakemake_slurm.sh
 #   bash scripts/snakemake_prep_sweep.sh
 #
 # From pc-studix login node (no OpenCL on login — jobs run on GPU compute nodes):
-#   export MMML_CKPT=/path/to/checkpoint.json
+#   export KARML_CKPT=/path/to/checkpoint.json
 #   nohup bash scripts/snakemake_slurm.sh > snakemake_slurm.log 2>&1 &
 set -euo pipefail
 
@@ -19,25 +19,25 @@ WORKFLOW_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$WORKFLOW_ROOT"
 
 REPO_ROOT="$(cd "$WORKFLOW_ROOT/../.." && pwd)"
-# shellcheck source=../../../scripts/resolve_mmml_env.sh
-source "$REPO_ROOT/scripts/resolve_mmml_env.sh"
-mmml_resolve_env "$REPO_ROOT"
-PY="${MMML_PYTHON}"
+# shellcheck source=../../../scripts/resolve_karml_env.sh
+source "$REPO_ROOT/scripts/resolve_karml_env.sh"
+karml_resolve_env "$REPO_ROOT"
+PY="${KARML_PYTHON}"
 
 # Forwarded to Slurm jobs via profiles/slurm/config.yaml envvars — must exist on driver start.
 # shellcheck source=ckpt_defaults.sh
 source "$WORKFLOW_ROOT/scripts/ckpt_defaults.sh"
-export MMML_CKPT="${MMML_CKPT:-$(default_mmml_ckpt "$REPO_ROOT")}"
-if [[ ! -f "${MMML_CKPT}" ]]; then
-  echo "ERROR: checkpoint not found: ${MMML_CKPT}" >&2
-  echo "  export MMML_CKPT=/path/to/checkpoint.json" >&2
+export KARML_CKPT="${KARML_CKPT:-$(default_karml_ckpt "$REPO_ROOT")}"
+if [[ ! -f "${KARML_CKPT}" ]]; then
+  echo "ERROR: checkpoint not found: ${KARML_CKPT}" >&2
+  echo "  export KARML_CKPT=/path/to/checkpoint.json" >&2
   exit 1
 fi
-export MMML_CKPT="$(readlink -f "${MMML_CKPT}")"
+export KARML_CKPT="$(readlink -f "${KARML_CKPT}")"
 export JAX_ENABLE_X64="${JAX_ENABLE_X64:-1}"
-echo "snakemake_slurm.sh: MMML_CKPT=${MMML_CKPT}" >&2
+echo "snakemake_slurm.sh: KARML_CKPT=${KARML_CKPT}" >&2
 
-_cfg_raw="${MMML_WORKFLOW_CONFIG:-config.yaml}"
+_cfg_raw="${KARML_WORKFLOW_CONFIG:-config.yaml}"
 if [[ "$_cfg_raw" = /* ]]; then
   CFG_PATH="$_cfg_raw"
 elif [[ "$_cfg_raw" == */* ]]; then
@@ -45,7 +45,7 @@ elif [[ "$_cfg_raw" == */* ]]; then
 else
   CFG_PATH="${WORKFLOW_ROOT}/${_cfg_raw}"
 fi
-export MMML_WORKFLOW_CONFIG="$CFG_PATH"
+export KARML_WORKFLOW_CONFIG="$CFG_PATH"
 CONFIG_ARGS=(--configfile "$CFG_PATH")
 
 IFS=$'\t' read -r DEFAULT_JOBS DEFAULT_RES <<EOF
@@ -70,7 +70,7 @@ if [[ $# -gt 0 && "$1" =~ ^[0-9]+$ ]]; then
   shift || true
 fi
 
-if [[ "${MMML_SNAKEMAKE_FORCE:-}" != "1" ]]; then
+if [[ "${KARML_SNAKEMAKE_FORCE:-}" != "1" ]]; then
   _existing=()
   while IFS= read -r _pid; do
     _cwd="$(readlink -f "/proc/${_pid}/cwd" 2>/dev/null || true)"
@@ -82,7 +82,7 @@ if [[ "${MMML_SNAKEMAKE_FORCE:-}" != "1" ]]; then
     echo "snakemake_slurm.sh: driver already running in ${WORKFLOW_ROOT} (PIDs: ${_existing[*]})." >&2
     echo "  bash scripts/stop_snakemake.sh" >&2
     echo "  uv run --with snakemake --with snakemake-executor-plugin-slurm snakemake --profile profiles/slurm --unlock" >&2
-    echo "  Or force a second driver: MMML_SNAKEMAKE_FORCE=1 bash scripts/snakemake_slurm.sh ..." >&2
+    echo "  Or force a second driver: KARML_SNAKEMAKE_FORCE=1 bash scripts/snakemake_slurm.sh ..." >&2
     exit 1
   fi
 fi

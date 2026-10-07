@@ -2,7 +2,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from mmml.interfaces.jaxmdInterface.hybrid_energy import make_monomer_energy_fn
+from karml.interfaces.jaxmdInterface.hybrid_energy import make_monomer_energy_fn
 
 
 class DummyModel:

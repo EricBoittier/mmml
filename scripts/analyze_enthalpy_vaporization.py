@@ -21,7 +21,7 @@ energies are strongly autocorrelated and the naive SEM understates the
 uncertainty by roughly sqrt(2 tau / dt), which for a liquid box is an order of
 magnitude.
 
-Trajectory format is the one ``mmml md-system`` writes (see
+Trajectory format is the one ``karml md-system`` writes (see
 ``scripts/analyze_jaxmd_nve_energy.py``): HDF5 with ``potential_energy`` in eV
 and an ``n_atoms`` attribute.
 

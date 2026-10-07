@@ -81,7 +81,7 @@ def _f(x):
 
 
 def _run(batch):
-    from mmml.models.hybrid_energy import hybrid_forward
+    from karml.models.hybrid_energy import hybrid_forward
 
     return hybrid_forward(_fake_model_apply, {}, batch, 1, SIG, EPS, **KW)
 
@@ -106,7 +106,7 @@ def _e_monomers(batch):
     Includes the intra-monomer pair terms, so this is the true 'monomers alone'
     energy -- not just the per-atom contributions.
     """
-    from mmml.models.hybrid_energy import _monomer_restricted_masks
+    from karml.models.hybrid_energy import _monomer_restricted_masks
 
     total = 0.0
     for which in (0, 1):
@@ -169,7 +169,7 @@ def test_handoff_interpolates_the_interaction_only():
 
 def test_forces_match_autodiff_of_the_assembled_energy():
     """The gate: F_total == -dE_total/dR, including the ds/dR product-rule term."""
-    from mmml.models.hybrid_energy import hybrid_forward
+    from karml.models.hybrid_energy import hybrid_forward
 
     for sep in (4.0, 6.8, 7.2, 7.9, 9.0, 14.0):
         b = _batch(sep)
@@ -197,7 +197,7 @@ def test_padding_carries_no_force():
 
 
 def test_monomer_restricted_masks_isolate_each_monomer():
-    from mmml.models.hybrid_energy import _monomer_restricted_masks
+    from karml.models.hybrid_energy import _monomer_restricted_masks
 
     b = _batch(6.0)
     am, bm = _monomer_restricted_masks(b, 0)
@@ -215,7 +215,7 @@ def test_hybrid_forward_never_passes_cgenff_to_the_model():
     default to None. hybrid_forward adds E_MM itself, so it must NOT hand those
     to the model, or MM would be counted twice. Pin the forward's kwargs.
     """
-    from mmml.models.hybrid_energy import hybrid_forward
+    from karml.models.hybrid_energy import hybrid_forward
 
     seen = []
 
@@ -255,7 +255,7 @@ def _charged_model(dq):
 
 def test_charge_correction_is_off_by_default():
     """Default MM electrostatics uses the CGenFF charges alone."""
-    from mmml.models.hybrid_energy import hybrid_forward
+    from karml.models.hybrid_energy import hybrid_forward
 
     b = _batch(9.0)
     dq = jnp.array([0.2, -0.1, 0.3, -0.05, 0.0])
@@ -270,7 +270,7 @@ def test_charge_correction_is_off_by_default():
 
 def test_latent_mode_changes_e_mm_vs_fixed():
     """Mode B replaces CGenFF charges; energy must differ from Mode A."""
-    from mmml.models.hybrid_energy import hybrid_forward
+    from karml.models.hybrid_energy import hybrid_forward
 
     b = _batch(9.0)
     dq = jnp.array([0.2, -0.1, 0.3, -0.05, 0.0])
@@ -299,7 +299,7 @@ def test_ewald_monomer_ml_plus_mm_fixed_and_latent():
     modes actually run with the native Ewald solver and give distinct, finite
     ``e_mm``.
     """
-    from mmml.models.hybrid_energy import hybrid_forward
+    from karml.models.hybrid_energy import hybrid_forward
 
     sep = KW["mm_switch_on"] + KW["mm_switch_width"] + 10.0  # well past the tail
     b = _batch(sep)
@@ -323,7 +323,7 @@ def test_ewald_monomer_ml_plus_mm_fixed_and_latent():
 
 def test_charge_correction_requires_a_charge_head():
     """A model without charges=True must fail loudly, not silently no-op."""
-    from mmml.models.hybrid_energy import hybrid_forward
+    from karml.models.hybrid_energy import hybrid_forward
 
     with pytest.raises(ValueError, match="charges=True"):
         hybrid_forward(
@@ -343,7 +343,7 @@ def test_correction_is_projected_net_zero_per_monomer():
     Unprojected, a net monomer charge turns the far-field MM electrostatics into
     monopole-monopole (~1/r) instead of dipole-dipole (~1/r^3).
     """
-    from mmml.models.cgenff_mm import neutralize_per_monomer
+    from karml.models.cgenff_mm import neutralize_per_monomer
 
     mol_id = jnp.array([0, 0, 1, 1, -1])
     dq = jnp.array([0.7, 0.1, -0.4, 0.2, 99.0])   # net charge on both monomers
@@ -357,7 +357,7 @@ def test_correction_is_projected_net_zero_per_monomer():
 
 def test_uniform_correction_is_a_no_op():
     """A constant shift carries no information -> projected away entirely."""
-    from mmml.models.cgenff_mm import neutralize_per_monomer
+    from karml.models.cgenff_mm import neutralize_per_monomer
 
     mol_id = jnp.array([0, 0, 1, 1, -1])
     out = neutralize_per_monomer(jnp.array([0.5, 0.5, 0.5, 0.5, 0.0]), mol_id)
@@ -366,7 +366,7 @@ def test_uniform_correction_is_a_no_op():
 
 def test_corrected_charges_keep_the_dimer_neutral_in_the_mm_term():
     """End-to-end: with the correction on, monomers stay neutral."""
-    from mmml.models.cgenff_mm import neutralize_per_monomer
+    from karml.models.cgenff_mm import neutralize_per_monomer
 
     b = _batch(9.0)
     dq = jnp.array([0.4, -0.1, 0.25, 0.05, 7.0])
@@ -383,7 +383,7 @@ def test_corrected_charges_keep_the_dimer_neutral_in_the_mm_term():
 # --------------------------------------------------------------------------
 
 def _cfg(**over):
-    from mmml.models.hybrid_energy import HybridMMConfig
+    from karml.models.hybrid_energy import HybridMMConfig
 
     kw = dict(
         master_sigmas=tuple(float(x) for x in SIG),
@@ -401,7 +401,7 @@ def test_charge_correction_survives_jit():
     Only a test that goes through jit can catch this -- the eager tests all
     passed while training died on step 1.
     """
-    from mmml.models.physnetjax.physnetjax.training.evalstep import _eval_forward
+    from karml.models.physnetjax.physnetjax.training.evalstep import _eval_forward
 
     dq = jnp.array([0.2, -0.1, 0.3, -0.05, 0.0])
     model = _charged_model(dq)
@@ -429,7 +429,7 @@ def test_config_is_hashable_so_it_can_be_a_static_argument():
 
 def test_config_coerces_a_plain_kwargs_dict():
     """The CLI builds a dict; coerce() is the jit-boundary adapter."""
-    from mmml.models.hybrid_energy import HybridMMConfig
+    from karml.models.hybrid_energy import HybridMMConfig
 
     d = dict(master_sigmas=SIG, master_epsilons=EPS, charge_correction=True, **KW)
     cfg = HybridMMConfig.coerce(d)

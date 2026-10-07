@@ -12,12 +12,12 @@ TIP3_PDB = Path("tests/functionality/pycharmmETC/pdb/initial.pdb")
 
 @pytest.mark.skipif(not TIP3_PDB.is_file(), reason="TIP3 fixture PDB missing")
 def test_mm_bonded_term_tip3_energy_positive_when_strained():
-    from mmml.interfaces.pycharmmInterface.cgenff_topology import (
+    from karml.interfaces.pycharmmInterface.cgenff_topology import (
         load_cgenff_bonded_from_charmm_files,
     )
-    from mmml.md.energy.registry import EnergyContext
-    from mmml.md.energy.terms.mm_bonded import MMBondedTerm
-    from mmml.md.system import MolecularSystem
+    from karml.md.energy.registry import EnergyContext
+    from karml.md.energy.terms.mm_bonded import MMBondedTerm
+    from karml.md.system import MolecularSystem
 
     cgenff = load_cgenff_bonded_from_charmm_files(TIP3_PDB, residue_name="TIP3")
     R = np.asarray(cgenff.positions, dtype=np.float64).copy()
@@ -42,14 +42,14 @@ def test_mm_bonded_term_tip3_energy_positive_when_strained():
 
 
 def test_mm_bonded_registered():
-    import mmml.md.energy.terms  # noqa: F401
-    from mmml.md.energy.registry import get_term
+    import karml.md.energy.terms  # noqa: F401
+    from karml.md.energy.registry import get_term
 
     assert get_term("mm_bonded") is not None
 
 
 def test_mm_bonded_accepts_ml_atom_indices_alias():
-    from mmml.md.energy.terms.mm_bonded import MMBondedTerm
+    from karml.md.energy.terms.mm_bonded import MMBondedTerm
 
     term = MMBondedTerm(ml_atom_indices=[0, 1, 2])
     assert term.ml_atoms == frozenset({0, 1, 2})

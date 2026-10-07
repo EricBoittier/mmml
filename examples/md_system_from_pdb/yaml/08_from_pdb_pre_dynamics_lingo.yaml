@@ -1,6 +1,6 @@
 # 08 — Full-system PDB → PyCHARMM NVE with pre-dynamics CHARMM lingo
 #
-#   uv run mmml md-system --config examples/md_system_from_pdb/yaml/08_from_pdb_pre_dynamics_lingo.yaml
+#   uv run karml md-system --config examples/md_system_from_pdb/yaml/08_from_pdb_pre_dynamics_lingo.yaml
 #   bash examples/md_system_from_pdb/08_from_pdb_pre_dynamics_lingo.sh
 #
 # Pass checks:
@@ -12,7 +12,7 @@
 
 setup: free_nve
 backend: pycharmm
-from_pdb: mmml/generate/sample/pdb/aco_monomer.pdb
+from_pdb: karml/generate/sample/pdb/aco_monomer.pdb
 checkpoint: examples/ckpts_json/DESdimers_params.json
 flat_bottom_radius: 20.0
 ps: 0.1

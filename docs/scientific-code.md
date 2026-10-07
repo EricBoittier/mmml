@@ -5,11 +5,11 @@ reproducible merely because the code is available: another person must be able
 to identify the inputs, method, units, software state, failures, and outputs
 without reconstructing an undocumented shell session.
 
-This page defines the default expectations for supported MMML functionality.
+This page defines the default expectations for supported KARML functionality.
 
 ## Canonical implementation
 
-- Put reusable, supported behavior in `mmml/`.
+- Put reusable, supported behavior in `karml/`.
 - Keep `scripts/` as thin developer/operational entry points and `workflows/`
   as reproducible campaign definitions. Neither is a library API.
 - Never import production functionality from `scripts/`, `workflows/`,
@@ -94,7 +94,7 @@ Concrete case that established this rule: `SpookyPhysNet`/`PhysNet`/
 distances (`switch_start=1.0`, `switch_end=10.0`, and an `off_dist` window
 `8.0`/`10.0`) as bare literals, completely decoupled from the model's own
 configurable `cutoff` field. A downstream tool
-(`mmml/models/physnetjax/physnetjax/training/far_field_augment.py`, which
+(`karml/models/physnetjax/physnetjax/training/far_field_augment.py`, which
 needs to know the exact distance beyond which electrostatics and
 message-passing are both provably zero) had no way to discover this
 relationship except by reading the model source and hardcoding a *third*,
@@ -115,7 +115,7 @@ For a computational result, record enough metadata to identify:
 - resolved inputs and configuration;
 - checkpoint and parameter-file content digests, preferably SHA-256;
 - dataset/template/orientation versions or digests;
-- MMML git commit and dirty-worktree state;
+- KARML git commit and dirty-worktree state;
 - relevant package versions, backend/device, and numeric precision;
 - seed, timestamps, and calculator/method type;
 - result schema version and canonical units.
@@ -196,7 +196,7 @@ Before considering scientific functionality complete, verify:
 
 - [ ] Existing related tools were located and either reused or explicitly
       superseded.
-- [ ] Supported logic lives in `mmml/` behind a public Python API.
+- [ ] Supported logic lives in `karml/` behind a public Python API.
 - [ ] CLI/workflow code is a thin caller of that API.
 - [ ] Inputs, defaults, units, conventions, and failure policy are explicit.
 - [ ] Every requested item produces a success or failure record.

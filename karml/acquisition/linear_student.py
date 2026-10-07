@@ -22,7 +22,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from mmml.acquisition.pooling import pool_species_aware
+from karml.acquisition.pooling import pool_species_aware
 
 jax.config.update("jax_enable_x64", True)
 

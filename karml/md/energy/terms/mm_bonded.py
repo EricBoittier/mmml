@@ -2,12 +2,12 @@
 
 ``mm_nonbonded`` is intermolecular-only and ``ml_intra`` covers just the atoms
 the ML model owns, so without this term every MM molecule in a unified
-``mmml.md`` run has *no* intramolecular energy at all and comes apart within a
+``karml.md`` run has *no* intramolecular energy at all and comes apart within a
 few hundred femtoseconds. That is fine for the rigid-water-free peptide setups
 the stack grew up on, but not for an explicit-solvent reactive run.
 
 Thin wrapper over the existing JAX CGenFF implementation in
-:mod:`mmml.interfaces.pycharmmInterface.cgenff_bonded`; the topology and
+:mod:`karml.interfaces.pycharmmInterface.cgenff_bonded`; the topology and
 parameters come from the PSF the builder already wrote.
 
 ``ml_atoms``
@@ -29,10 +29,10 @@ from typing import Any, Sequence
 
 import numpy as np
 
-from mmml.data.units import KCAL_MOL_TO_EV
-from mmml.md.energy.registry import EnergyContext, TermFns, register_term
-from mmml.md.energy.terms._common import ase_contribution_from_jax, resolve_displacement_fn
-from mmml.md.system import MolecularSystem
+from karml.data.units import KCAL_MOL_TO_EV
+from karml.md.energy.registry import EnergyContext, TermFns, register_term
+from karml.md.energy.terms._common import ase_contribution_from_jax, resolve_displacement_fn
+from karml.md.system import MolecularSystem
 
 __all__ = ["MMBondedTerm"]
 
@@ -201,7 +201,7 @@ class MMBondedTerm:
         )
 
     def _resolve_prm(self, ctx: EnergyContext) -> tuple[Path, tuple[Path, ...]]:
-        from mmml.interfaces.pycharmmInterface.cgenff_topology import default_cgenff_paths
+        from karml.interfaces.pycharmmInterface.cgenff_topology import default_cgenff_paths
 
         options = dict(getattr(ctx, "options", {}) or {})
         prm = options.get("cgenff_prm")
@@ -300,10 +300,10 @@ class MMBondedTerm:
 
         import jax.numpy as jnp
 
-        from mmml.interfaces.pycharmmInterface.cgenff_bonded import (
+        from karml.interfaces.pycharmmInterface.cgenff_bonded import (
             bonded_energy_components,
         )
-        from mmml.interfaces.pycharmmInterface.mm_system_energy import (
+        from karml.interfaces.pycharmmInterface.mm_system_energy import (
             load_bonded_system_from_psf,
         )
 

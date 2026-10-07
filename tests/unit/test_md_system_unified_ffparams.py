@@ -61,8 +61,8 @@ def test_end_to_end_builds_ffparams():
     # every build except pc-studix distorted monomers during the cluster ABNR;
     # that was the sticky READ PARAM APPEND in api_read.F90 zeroing the VDW
     # table, fixed at the source. See docs/packmol-monomer-geometry-gate.md.
-    from mmml.cli.run.md_system_unified import build_packmol_system_with_ffparams
-    from mmml.md.lowering import runconfig_from_md_system_args
+    from karml.cli.run.md_system_unified import build_packmol_system_with_ffparams
+    from karml.md.lowering import runconfig_from_md_system_args
 
     run_config = runconfig_from_md_system_args(_args(setup="pbc_nve", seed=23))
     system = build_packmol_system_with_ffparams(run_config.system)

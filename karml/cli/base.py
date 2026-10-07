@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Base functionality for MMML demo scripts.
+"""Base functionality for KARML demo scripts.
 
 This module contains common utilities and functions used across different
-demo scripts for the MMML package.
+demo scripts for the KARML package.
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ from typing import Any, Dict, Tuple
 
 import numpy as np
 
-from mmml.interfaces.pycharmmInterface.cutoffs import (
+from karml.interfaces.pycharmmInterface.cutoffs import (
     DEFAULT_MM_SWITCH_ON,
     DEFAULT_MM_SWITCH_WIDTH,
 )
@@ -25,12 +25,12 @@ _BUNDLED_LEGACY_MEOH_PATH = (
     _PKG_ROOT / "models" / "physnetjax" / "defaults" / "meoh_dimer_portable.json"
 )
 # Stable path for argparse help / generated CLI docs (not machine-specific).
-BUNDLED_LEGACY_MEOH_REL_PATH = "mmml/models/physnetjax/defaults/meoh_dimer_portable.json"
+BUNDLED_LEGACY_MEOH_REL_PATH = "karml/models/physnetjax/defaults/meoh_dimer_portable.json"
 try:
-    from mmml.models.physnetjax.defaults import resolve_hf_physnet_checkpoint
+    from karml.models.physnetjax.defaults import resolve_hf_physnet_checkpoint
 
     # General MM/ML default: manifest checkpoint with the lowest validation force MAE.
-    BUNDLED_PORTABLE_SMALL_MOLECULE_PATH = resolve_hf_physnet_checkpoint("mmml-default")
+    BUNDLED_PORTABLE_SMALL_MOLECULE_PATH = resolve_hf_physnet_checkpoint("karml-default")
 except Exception:
     BUNDLED_PORTABLE_SMALL_MOLECULE_PATH = _BUNDLED_LEGACY_MEOH_PATH
 
@@ -42,15 +42,15 @@ BUNDLED_PORTABLE_MEOH_PATH = _BUNDLED_LEGACY_MEOH_PATH
 def parse_base_args() -> argparse.Namespace:
     """Parse common command line arguments used across demo scripts."""
     parser = argparse.ArgumentParser(
-        description="Base arguments for MMML demo scripts"
+        description="Base arguments for KARML demo scripts"
     )
     parser.add_argument(
         "--dataset",
         type=Path,
         default=None,
         help=(
-            "Path to the acetone dataset (.npz). Defaults to $MMML_DATA or "
-            "mmml/data/fixed-acetone-only_MP2_21000.npz."
+            "Path to the acetone dataset (.npz). Defaults to $KARML_DATA or "
+            "karml/data/fixed-acetone-only_MP2_21000.npz."
         ),
     )
     parser.add_argument(
@@ -58,8 +58,8 @@ def parse_base_args() -> argparse.Namespace:
         type=Path,
         default=None,
         help=(
-            "Checkpoint directory used for the ML model. Defaults to $MMML_CKPT "
-            "or mmml/models/physnetjax/ckpts."
+            "Checkpoint directory used for the ML model. Defaults to $KARML_CKPT "
+            "or karml/models/physnetjax/ckpts."
         ),
     )
     parser.add_argument(
@@ -149,7 +149,7 @@ def parse_base_args() -> argparse.Namespace:
 
 def resolve_dataset_path(arg: Path | None) -> Path:
     """Resolve the dataset path from argument or environment variable."""
-    candidate = arg or Path(os.environ.get("MMML_DATA", "mmml/data/fixed-acetone-only_MP2_21000.npz"))
+    candidate = arg or Path(os.environ.get("KARML_DATA", "karml/data/fixed-acetone-only_MP2_21000.npz"))
     if not candidate.exists():
         sys.exit(f"Dataset not found: {candidate}")
     return candidate
@@ -158,7 +158,7 @@ def resolve_dataset_path(arg: Path | None) -> Path:
 def _try_resolve_bundled_hf_checkpoint(arg: Path | str) -> Path | None:
     """Map manifest aliases (e.g. best-forces, neutral_best_forces) to a portable .json path."""
     try:
-        from mmml.models.physnetjax.defaults import resolve_hf_physnet_checkpoint
+        from karml.models.physnetjax.defaults import resolve_hf_physnet_checkpoint
 
         return resolve_hf_physnet_checkpoint(str(arg))
     except (ImportError, KeyError, OSError):
@@ -169,18 +169,18 @@ def resolve_checkpoint_paths(arg: Path | str | None) -> Tuple[Path, Path]:
     """Return (factory_base_dir, epoch_dir) for the supplied checkpoint.
 
     Supports orbax checkpoints (manifest.ocdbt), JSON checkpoints (params.json
-    or a portable .json file), and bundled HF aliases (best-forces, mmml-default,
-    neutral_best_forces, etc. — see mmml.models.physnetjax.defaults).
+    or a portable .json file), and bundled HF aliases (best-forces, karml-default,
+    neutral_best_forces, etc. — see karml.models.physnetjax.defaults).
     """
     # Convert string to Path if needed
     if arg is None:
-        ckpt_env = os.environ.get("MMML_CKPT")
+        ckpt_env = os.environ.get("KARML_CKPT")
         if ckpt_env:
             candidate = Path(ckpt_env)
         elif BUNDLED_PORTABLE_SMALL_MOLECULE_PATH.is_file():
             candidate = BUNDLED_PORTABLE_SMALL_MOLECULE_PATH
         else:
-            candidate = Path("mmml/models/physnetjax/ckpts")
+            candidate = Path("karml/models/physnetjax/ckpts")
     elif isinstance(arg, str):
         candidate = Path(arg)
     else:
@@ -195,7 +195,7 @@ def resolve_checkpoint_paths(arg: Path | str | None) -> Tuple[Path, Path]:
             sys.exit(
                 f"Checkpoint not found: {candidate}. "
                 "For bundled HF portable weights use an alias such as "
-                "best-forces, mmml-default, or neutral_best_forces, "
+                "best-forces, karml-default, or neutral_best_forces, "
                 "or pass a path to a .json / Orbax directory."
             )
 
@@ -281,7 +281,7 @@ def load_physnet_params_and_ef_model(
     """
     p = resolved_checkpoint
     if p.is_file() and p.suffix == ".json":
-        from mmml.utils.model_checkpoint import (
+        from karml.utils.model_checkpoint import (
             build_physnet_from_config,
             load_model_checkpoint,
             normalize_flax_params_for_apply,
@@ -297,7 +297,7 @@ def load_physnet_params_and_ef_model(
         raise ValueError(
             "orbax_epoch_dir is required when resolved_checkpoint is not a .json file"
         )
-    from mmml.models.physnetjax.physnetjax.restart.restart import get_params_model
+    from karml.models.physnetjax.physnetjax.restart.restart import get_params_model
 
     return get_params_model(
         str(orbax_epoch_dir), natoms=natoms, prefer_ema=prefer_ema
@@ -306,15 +306,15 @@ def load_physnet_params_and_ef_model(
 
 def resolve_desdimers_checkpoint(script_file: str | Path | None = None) -> Path:
     """Resolve a default DES-family checkpoint path without hardcoding."""
-    ckpt_env = os.environ.get("MMML_CKPT")
+    ckpt_env = os.environ.get("KARML_CKPT")
     if ckpt_env:
         return Path(ckpt_env).expanduser().resolve()
 
     # Prefer installed package location when available.
     try:
-        import mmml as mmml_pkg
+        import karml as karml_pkg
 
-        package_root = Path(mmml_pkg.__file__).resolve().parent
+        package_root = Path(karml_pkg.__file__).resolve().parent
         for rel_root in (
             ("models", "physnetjax", "ckpts"),
             ("physnetjax", "ckpts"),
@@ -340,8 +340,8 @@ def resolve_desdimers_checkpoint(script_file: str | Path | None = None) -> Path:
             continue
         seen.add(root)
         for rel_root in (
-            ("mmml", "models", "physnetjax", "ckpts"),
-            ("mmml", "physnetjax", "ckpts"),
+            ("karml", "models", "physnetjax", "ckpts"),
+            ("karml", "physnetjax", "ckpts"),
         ):
             for ckpt_name in ("DES", "DESdimers"):
                 candidate = root.joinpath(*rel_root, ckpt_name)
@@ -349,7 +349,7 @@ def resolve_desdimers_checkpoint(script_file: str | Path | None = None) -> Path:
                     return candidate.resolve()
 
     raise FileNotFoundError(
-        "Could not locate checkpoint. Set MMML_CKPT to a valid checkpoint path."
+        "Could not locate checkpoint. Set KARML_CKPT to a valid checkpoint path."
     )
 
 
@@ -382,12 +382,12 @@ def load_model_parameters(epoch_dir: Path, natoms: int):
 
     if is_json:
         try:
-            from mmml.models.physnetjax.physnetjax.models.model import PhysNet
-            from mmml.models.physnetjax.physnetjax.models.spooky_model import SpookyPhysNet
+            from karml.models.physnetjax.physnetjax.models.model import PhysNet
+            from karml.models.physnetjax.physnetjax.models.spooky_model import SpookyPhysNet
         except ModuleNotFoundError:
-            from mmml.models.physnetjax.physnetjax.models.model import PhysNet
-            from mmml.models.physnetjax.physnetjax.models.spooky_model import SpookyPhysNet
-        from mmml.utils.model_checkpoint import load_model_checkpoint, physnet_constructor_kwargs
+            from karml.models.physnetjax.physnetjax.models.model import PhysNet
+            from karml.models.physnetjax.physnetjax.models.spooky_model import SpookyPhysNet
+        from karml.utils.model_checkpoint import load_model_checkpoint, physnet_constructor_kwargs
 
         checkpoint = load_model_checkpoint(
             epoch_path, use_orbax=False, load_params=True, load_config=True
@@ -430,9 +430,9 @@ def load_model_parameters(epoch_dir: Path, natoms: int):
         return params, model
 
     try:
-        from mmml.models.physnetjax.physnetjax.restart.restart import get_params_model
+        from karml.models.physnetjax.physnetjax.restart.restart import get_params_model
     except ModuleNotFoundError:
-        from mmml.models.physnetjax.physnetjax.restart.restart import get_params_model
+        from karml.models.physnetjax.physnetjax.restart.restart import get_params_model
 
     params, model = get_params_model(str(epoch_dir), natoms=natoms)
     if model is None:
@@ -465,21 +465,21 @@ def setup_ase_imports():
         sys.exit(f"ASE is required for this example: {exc}")
 
 
-def setup_mmml_imports():
-    """Setup MMML imports with error handling."""
+def setup_karml_imports():
+    """Setup KARML imports with error handling."""
     try:
-        from mmml.interfaces.pycharmmInterface.mmml_calculator import (
+        from karml.interfaces.pycharmmInterface.karml_calculator import (
             CutoffParameters,
             ev2kcalmol,
             setup_calculator,
         )
         try:
-            from mmml.models.physnetjax.physnetjax.calc.helper_mlp import get_ase_calc
+            from karml.models.physnetjax.physnetjax.calc.helper_mlp import get_ase_calc
         except ModuleNotFoundError:
-            from mmml.models.physnetjax.physnetjax.calc.helper_mlp import get_ase_calc
+            from karml.models.physnetjax.physnetjax.calc.helper_mlp import get_ase_calc
         return CutoffParameters, ev2kcalmol, setup_calculator, get_ase_calc
     except ModuleNotFoundError as exc:
-        sys.exit(f"Required MMML modules not available: {exc}")
+        sys.exit(f"Required KARML modules not available: {exc}")
 
 
 def get_conversion_factors(units: str):
@@ -488,7 +488,7 @@ def get_conversion_factors(units: str):
         energy_factor = 1.0
         force_factor = 1.0
     else:
-        _, ev2kcalmol, _, _ = setup_mmml_imports()
+        _, ev2kcalmol, _, _ = setup_karml_imports()
         energy_factor = ev2kcalmol
         force_factor = ev2kcalmol
     return energy_factor, force_factor

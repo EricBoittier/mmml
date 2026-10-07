@@ -7,19 +7,19 @@
 # call). fragments would score 338 isolated monomers plus dimers.
 #
 #   export PET_MAD_CKPT=/path/to/pet-mad-xs-v1.5.0.pt
-#   mmml md-system --config examples/pet_mad_etoh_pbc/yaml/pbc_nvt.yaml \
+#   karml md-system --config examples/pet_mad_etoh_pbc/yaml/pbc_nvt.yaml \
 #     --job-id nve_smoke --checkpoint "$PET_MAD_CKPT"
-#   mmml md-system --config examples/pet_mad_etoh_pbc/yaml/pbc_nvt.yaml \
+#   karml md-system --config examples/pet_mad_etoh_pbc/yaml/pbc_nvt.yaml \
 #     --job-id nve --checkpoint "$PET_MAD_CKPT"
-#   mmml md-system --config examples/pet_mad_etoh_pbc/yaml/pbc_nvt.yaml \
+#   karml md-system --config examples/pet_mad_etoh_pbc/yaml/pbc_nvt.yaml \
 #     --job-id nvt --checkpoint "$PET_MAD_CKPT"
 #
 # Prefer a certified MM box first (Packmol + CHARMM MM, no MLpot):
-#   mmml liquid-box --composition ETOH:338 --box-size 32 \
+#   karml liquid-box --composition ETOH:338 --box-size 32 \
 #     --target-density-g-cm3 0.789 -o boxes/etoh338_32A
 # then pass --from-psf / --from-crd for the jobs below.
 #
-# CHARMM-free ASE smoke (no Packmol): mmml metatomic-pbc-md
+# CHARMM-free ASE smoke (no Packmol): karml metatomic-pbc-md
 #   (examples/pet_mad_etoh_pbc/ase_pbc_md.py is a thin wrapper)
 # Docs: docs/examples/pet-mad-etoh-pbc.md
 

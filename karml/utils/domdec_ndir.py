@@ -7,7 +7,7 @@ import os
 import re
 from pathlib import Path
 
-# ALL c47 builds (including MMML native) enforce this in domdec.F90:
+# ALL c47 builds (including KARML native) enforce this in domdec.F90:
 # each NDIR axis must be 1 or >= 8 (values 2–7 are rejected at runtime).
 # Confirmed by runtime error: "x-direction must have (a) 1 node or (b) at least 8 nodes"
 _MIN_AXIS_NODES = 8
@@ -20,7 +20,7 @@ _DOMDEC_NP_HINT = (
     "CHARMM c47 domdec.F90 requires each NDIR axis to be 1 or >=8. "
     "Minimum useful MPI count is 8 (NDIR 8 1 1). "
     "Required box: L >= 2·RCUT·8/7 ≈ 43 Å for RCUT≈19 Å (cutnb=15 + group_radius≈4). "
-    "For liquid-density MLPot scaling use MMML spatial MPI instead of DOMDEC."
+    "For liquid-density MLPot scaling use KARML spatial MPI instead of DOMDEC."
 )
 
 
@@ -43,7 +43,7 @@ def suggest_domdec_ndir(n_ranks: int, *, strict_c47_axis_rule: bool = True) -> t
     """Return ``(nx, ny, nz)`` for ``energy domdec ndir nx ny nz``.
 
     ``strict_c47_axis_rule`` defaults to ``True`` because ALL c47 builds (including
-    MMML native) enforce the "1 or >=8 per axis" rule in ``domdec.F90``.
+    KARML native) enforce the "1 or >=8 per axis" rule in ``domdec.F90``.
     Pass ``strict_c47_axis_rule=False`` only for non-c47 custom builds.
     """
     n = int(n_ranks)

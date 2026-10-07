@@ -14,7 +14,7 @@ import numpy as np
 from ase import Atoms
 from PIL import Image
 
-from mmml.utils.plotting.styles import apply_plot_style, default_cmap
+from karml.utils.plotting.styles import apply_plot_style, default_cmap
 from render_povray_style_catalog import scene, vec
 
 

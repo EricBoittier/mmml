@@ -1,4 +1,4 @@
-"""ICML-style plots for ``mmml.analysis.interaction_pes`` JSON documents."""
+"""ICML-style plots for ``karml.analysis.interaction_pes`` JSON documents."""
 
 from __future__ import annotations
 
@@ -10,15 +10,15 @@ import numpy as np
 from matplotlib.colors import LinearSegmentedColormap, TwoSlopeNorm
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 
-from mmml.analysis.interaction_pes import (
+from karml.analysis.interaction_pes import (
     ORIENTATION_ACCEPTOR_ACCEPTOR,
     ORIENTATION_CARBONYL,
     ORIENTATION_LINEAR_OH_O,
     ORIENTATION_METHYL,
     PET_MAD_XS_RECEPTIVE_FIELD_A,
 )
-from mmml.analysis.interaction_pes_geom import MOTIF_CYCLIC, MOTIF_LINEAR, ORIENTATION_LABELS
-from mmml.utils.plotting.styles import apply_plot_style, comparison_colors
+from karml.analysis.interaction_pes_geom import MOTIF_CYCLIC, MOTIF_LINEAR, ORIENTATION_LABELS
+from karml.utils.plotting.styles import apply_plot_style, comparison_colors
 
 OKABE_DIVERGING = LinearSegmentedColormap.from_list(
     "okabe_int",

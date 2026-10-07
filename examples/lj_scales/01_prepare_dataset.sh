@@ -23,7 +23,7 @@ fi
 if [[ -f "${LJ_ENRICHED}" && "${LJ_FORCE_PREP:-0}" != "1" ]]; then
   echo "reusing ${LJ_ENRICHED}  (LJ_FORCE_PREP=1 to redo)"
 else
-  uv run mmml prepare-mm-dataset \
+  uv run karml prepare-mm-dataset \
     --data "${LJ_DATASET}" \
     --output "${LJ_ENRICHED}" \
     --num-workers "${LJ_WORKERS:-4}" \

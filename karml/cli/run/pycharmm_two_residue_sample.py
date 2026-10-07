@@ -7,7 +7,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from mmml.cli.run.pycharmm_sampling_args import add_two_residue_sampling_args
+from karml.cli.run.pycharmm_sampling_args import add_two_residue_sampling_args
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -59,17 +59,17 @@ def run(args: argparse.Namespace):
     import pycharmm
     import pycharmm.write as write
 
-    from mmml.cli.run.pycharmm_runner import (
+    from karml.cli.run.pycharmm_runner import (
         NBONDS_SCRIPT,
         run_two_residue_harmonic_sampling,
     )
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import (
+    from karml.interfaces.pycharmmInterface.import_pycharmm import (
         coor,
         pycharmm_quiet,
         pycharmm_soft,
         reset_block,
     )
-    from mmml.interfaces.pycharmmInterface.setupBox import setup_box_generic
+    from karml.interfaces.pycharmmInterface.setupBox import setup_box_generic
 
     atoms = setup_box_generic(
         str(args.pdbfile),

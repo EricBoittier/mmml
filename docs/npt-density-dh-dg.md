@@ -77,8 +77,8 @@ The tractable target is **hydration free energy** of a solute in the TIP3 box,
 by alchemical decoupling. The repository already has the pieces:
 
 - `--setup lambda_ti` — alchemical TI with per-window minimisation
-- `mmml lambda-mbar` — MBAR over the windows
-- `mmml umbrella-sample` / `umbrella-mbar` — the restrained-sampling path
+- `karml lambda-mbar` — MBAR over the windows
+- `karml umbrella-sample` / `umbrella-mbar` — the restrained-sampling path
 
 What is missing is a defined λ schedule for *decoupling* rather than the
 existing reaction-coordinate use, and the soft-core treatment that keeps the

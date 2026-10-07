@@ -1,11 +1,11 @@
 # Cross-check functionality smoke tests
 
-Manual verification for `mmml cross-check` on a GPU/QC node. Do not run in agent sessions.
+Manual verification for `karml cross-check` on a GPU/QC node. Do not run in agent sessions.
 
 ## Prerequisites
 
 ```bash
-cd ~/mmml && source .venv/bin/activate
+cd ~/karml && source .venv/bin/activate
 # Optional extras:
 # uv sync --extra quantum-gpu      # pyscf reference
 # uv sync --extra quantum-crosscheck  # tblite xTB
@@ -15,7 +15,7 @@ cd ~/mmml && source .venv/bin/activate
 ## Smoke: reference NPZ + xTB backend
 
 ```bash
-mmml cross-check \
+karml cross-check \
   -i tests/fixtures/cross_check/water_frames.npz \
   --reference-npz tests/fixtures/cross_check/water_frames.npz \
   --backend xtb \
@@ -28,7 +28,7 @@ Pass: `cross_check_summary.json` exists; xTB energy MAE is finite.
 ## Smoke: ORCA QM backend (requires ORCA)
 
 ```bash
-mmml cross-check \
+karml cross-check \
   -i tests/fixtures/cross_check/water_frames.npz \
   --reference-npz tests/fixtures/cross_check/water_frames.npz \
   --backend orca --functional PBE --basis def2-SVP \

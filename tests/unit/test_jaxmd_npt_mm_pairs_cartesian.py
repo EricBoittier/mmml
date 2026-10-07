@@ -8,7 +8,7 @@ import numpy as np
 
 os.environ.setdefault("JAX_PLATFORMS", "cpu")
 
-from mmml.interfaces.pycharmmInterface.mm_energy_forces import (
+from karml.interfaces.pycharmmInterface.mm_energy_forces import (
     mm_pair_fractional_to_cartesian,
     mm_pair_positions_for_update,
     refresh_mm_pairs,
@@ -139,7 +139,7 @@ def test_mm_pair_positions_for_update_both_directions() -> None:
 
 def test_nl_valid_pair_count_always_returns_a_bound_value() -> None:
     """Mask-sum failures must keep the fallback, not leave the name unset."""
-    from mmml.cli.run.jaxmd_runner import _nl_valid_pair_count
+    from karml.cli.run.jaxmd_runner import _nl_valid_pair_count
 
     assert _nl_valid_pair_count(np.array([1, 0, 1, 1])) == 3
     assert _nl_valid_pair_count(None, fallback=7) == 7
@@ -157,7 +157,7 @@ def test_jaxmd_npt_init_refreshes_from_fractional_integrator_state() -> None:
     from pathlib import Path
 
     src = (
-        Path(__file__).resolve().parents[2] / "mmml/cli/run/jaxmd_runner.py"
+        Path(__file__).resolve().parents[2] / "karml/cli/run/jaxmd_runner.py"
     ).read_text(encoding="utf-8")
     block = src.split("md_pos_frac = as_jaxmd_dtype", 1)[1]
     block = block.split("state = init_fn", 1)[0]

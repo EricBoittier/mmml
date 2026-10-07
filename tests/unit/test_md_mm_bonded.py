@@ -66,7 +66,7 @@ def _system():
 
 
 def test_rows_touching_the_ml_region_are_dropped():
-    from mmml.md.energy.terms.mm_bonded import _drop_ml_rows
+    from karml.md.energy.terms.mm_bonded import _drop_ml_rows
 
     topo, params = _system()
     new_topo, new_params, report = _drop_ml_rows(topo, params, frozenset({0, 1, 2}))
@@ -79,7 +79,7 @@ def test_rows_touching_the_ml_region_are_dropped():
 
 
 def test_parameters_stay_aligned_with_their_topology_rows():
-    from mmml.md.energy.terms.mm_bonded import _drop_ml_rows
+    from karml.md.energy.terms.mm_bonded import _drop_ml_rows
 
     topo, params = _system()
     new_topo, new_params, _ = _drop_ml_rows(topo, params, frozenset({0, 1, 2}))
@@ -91,7 +91,7 @@ def test_parameters_stay_aligned_with_their_topology_rows():
 
 
 def test_angles_torsions_and_impropers_are_filtered_too():
-    from mmml.md.energy.terms.mm_bonded import _drop_ml_rows
+    from karml.md.energy.terms.mm_bonded import _drop_ml_rows
 
     topo, params = _system()
     new_topo, new_params, _ = _drop_ml_rows(topo, params, frozenset({0, 1, 2}))
@@ -103,7 +103,7 @@ def test_angles_torsions_and_impropers_are_filtered_too():
 
 
 def test_empty_ml_region_keeps_everything():
-    from mmml.md.energy.terms.mm_bonded import _drop_ml_rows
+    from karml.md.energy.terms.mm_bonded import _drop_ml_rows
 
     topo, params = _system()
     new_topo, new_params, report = _drop_ml_rows(topo, params, frozenset())
@@ -120,7 +120,7 @@ def test_the_reactive_c_cl_bond_is_removed():
     CGenFF gives CH3CL a harmonic C1-CL1 bond (k ~ 220 kcal/mol/A^2). If it
     survives alongside PhysNet, the chloride cannot leave and there is no SN2.
     """
-    from mmml.md.energy.terms.mm_bonded import _drop_ml_rows
+    from karml.md.energy.terms.mm_bonded import _drop_ml_rows
 
     # Solute atoms 0..8 (Cl, N, C, H*6); solvent water at 9, 10, 11.
     topo = _Topo(
@@ -154,7 +154,7 @@ def test_the_reactive_c_cl_bond_is_removed():
 
 def test_urey_bradley_arrays_follow_the_angle_mask():
     """UB terms ride on angle rows, so a stale UB array would misalign."""
-    from mmml.md.energy.terms.mm_bonded import _drop_ml_rows
+    from karml.md.energy.terms.mm_bonded import _drop_ml_rows
 
     topo, params = _system()
     urey_k = np.array([100.0, 200.0, 300.0])
@@ -165,18 +165,18 @@ def test_urey_bradley_arrays_follow_the_angle_mask():
 
 
 def test_term_is_registered():
-    import mmml.md.energy.terms  # noqa: F401
-    from mmml.md.energy.registry import available_terms, get_term
-    from mmml.md.energy.terms.mm_bonded import MMBondedTerm
+    import karml.md.energy.terms  # noqa: F401
+    from karml.md.energy.registry import available_terms, get_term
+    from karml.md.energy.terms.mm_bonded import MMBondedTerm
 
     assert "mm_bonded" in available_terms()
     assert get_term("mm_bonded") is MMBondedTerm
 
 
 def test_missing_psf_is_reported_clearly():
-    from mmml.md.energy.registry import EnergyContext
-    from mmml.md.energy.terms.mm_bonded import MMBondedTerm
-    from mmml.md.system import MolecularSystem
+    from karml.md.energy.registry import EnergyContext
+    from karml.md.energy.terms.mm_bonded import MMBondedTerm
+    from karml.md.system import MolecularSystem
 
     system = MolecularSystem(
         R=np.zeros((3, 3)),

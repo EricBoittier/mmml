@@ -10,7 +10,7 @@ from unittest.mock import MagicMock
 import numpy as np
 import pytest
 
-from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
     DEFAULT_MIN_MONOMER_EXTENT_A,
     validate_cluster_geometry,
 )
@@ -66,43 +66,43 @@ def test_load_cluster_from_artifacts_uses_xplor_psf_reader(tmp_path: Path, monke
         calls.append(str(path))
 
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.cgenff_bonded_reference.read_psf_card_file",
+        "karml.interfaces.pycharmmInterface.cgenff_bonded_reference.read_psf_card_file",
         _fake_read_psf,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.nbonds_config.read_cgenff_toppar",
+        "karml.interfaces.pycharmmInterface.nbonds_config.read_cgenff_toppar",
         lambda **_kw: None,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup._import_pycharmm",
+        "karml.interfaces.pycharmmInterface.mlpot.setup._import_pycharmm",
         lambda: MagicMock(),
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.resolve_topology_psf_for_mlpot_reload",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.resolve_topology_psf_for_mlpot_reload",
         lambda p, **_: Path(p).resolve(),
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.load_minimized_coordinates",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics.load_minimized_coordinates",
         lambda _p: None,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.utils.get_Z_from_psf",
+        "karml.interfaces.pycharmmInterface.utils.get_Z_from_psf",
         lambda: np.array([6, 1, 1, 17, 17], dtype=int),
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         lambda: np.ones((5, 3), dtype=float),
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.report_charmm_topology_summary",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.report_charmm_topology_summary",
         lambda **_kw: True,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.reconcile_n_monomers_with_psf",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.reconcile_n_monomers_with_psf",
         lambda _a, _z, n: (1, [5]),
     )
 
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import load_cluster_from_artifacts
+    from karml.interfaces.pycharmmInterface.mlpot.setup import load_cluster_from_artifacts
 
     args = SimpleNamespace(
         from_psf=str(psf),
@@ -121,7 +121,7 @@ def test_load_cluster_from_artifacts_uses_xplor_psf_reader(tmp_path: Path, monke
 
 
 def test_reconcile_n_monomers_uses_mixed_composition_when_psf_resids_unavailable():
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import reconcile_n_monomers_with_psf
+    from karml.interfaces.pycharmmInterface.mlpot.setup import reconcile_n_monomers_with_psf
 
     args = SimpleNamespace(
         composition="MEOH:1,TIP3:1",
@@ -141,10 +141,10 @@ def test_load_physnet_mlpot_uses_mixed_composition_when_psf_resids_unavailable(
     tmp_path: Path,
     monkeypatch,
 ):
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import load_physnet_mlpot_bundle
+    from karml.interfaces.pycharmmInterface.mlpot.setup import load_physnet_mlpot_bundle
 
     calls: list[tuple[list[int], int]] = []
-    fake_hybrid = ModuleType("mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot")
+    fake_hybrid = ModuleType("karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot")
 
     def _fake_build(_ckpt, _z, atoms_per_monomer, n_monomers, **_kwargs):
         calls.append((list(atoms_per_monomer), int(n_monomers)))
@@ -153,7 +153,7 @@ def test_load_physnet_mlpot_uses_mixed_composition_when_psf_resids_unavailable(
     fake_hybrid.build_decomposed_mlpot_model = _fake_build  # type: ignore[attr-defined]
     monkeypatch.setitem(
         sys.modules,
-        "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot",
+        "karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot",
         fake_hybrid,
     )
 

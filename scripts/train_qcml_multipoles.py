@@ -18,9 +18,9 @@ import optax
 import orbax.checkpoint as ocp
 from flax.training import train_state
 
-from mmml.data.orbax_shards import partition_shards
-from mmml.models.multipoles import E3xDegreeMultipoleModel, E3xMultipoleModel
-from mmml.models.multipoles.config import TrainConfig
+from karml.data.orbax_shards import partition_shards
+from karml.models.multipoles import E3xDegreeMultipoleModel, E3xMultipoleModel
+from karml.models.multipoles.config import TrainConfig
 
 
 def degree_slices(max_degree: int = 3) -> dict[str, tuple[int, int]]:

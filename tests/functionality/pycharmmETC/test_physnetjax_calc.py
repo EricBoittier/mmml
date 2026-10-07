@@ -26,7 +26,7 @@ def _can_import_e3x_nn() -> bool:
 
 def _resolve_ckpt_path() -> Path | None:
     candidates = []
-    if ckpt_env := os.environ.get("MMML_CKPT"):
+    if ckpt_env := os.environ.get("KARML_CKPT"):
         env_path = Path(ckpt_env)
         candidates.append(env_path if env_path.is_absolute() else PROJECT_ROOT / env_path)
     candidates.extend(
@@ -36,7 +36,7 @@ def _resolve_ckpt_path() -> Path | None:
             PROJECT_ROOT / "examples/ckpts_json",
             PROJECT_ROOT / "ckpts_json/DESdimers_params.json",
             PROJECT_ROOT / "ckpts_json",
-            PROJECT_ROOT / "mmml/models/physnetjax/ckpts/DESdimers",
+            PROJECT_ROOT / "karml/models/physnetjax/ckpts/DESdimers",
         ]
     )
     for ckpt in candidates:
@@ -66,9 +66,9 @@ def test_physnetjax_calculator_smoke():
 
     import ase
     from ase.io import read
-    from mmml.interfaces.pycharmmInterface.mmml_calculator import setup_calculator
-    from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
-    from mmml.interfaces.pycharmmInterface.calculator_utils import unpack_factory_result
+    from karml.interfaces.pycharmmInterface.karml_calculator import setup_calculator
+    from karml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
+    from karml.interfaces.pycharmmInterface.calculator_utils import unpack_factory_result
 
     atoms_in = read(str(pdb_path))
     R = np.asarray(atoms_in.get_positions()[:20])

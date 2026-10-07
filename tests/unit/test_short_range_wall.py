@@ -15,7 +15,7 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from mmml.models.short_range_wall import (
+from karml.models.short_range_wall import (
     DEFAULT_WALL_R_ON_A,
     inter_monomer_wall_energy,
     pair_wall_energy,

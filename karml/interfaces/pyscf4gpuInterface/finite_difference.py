@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from mmml.data.units import EV_ANGSTROM_TO_HARTREE_BOHR, HARTREE_TO_EV
+from karml.data.units import EV_ANGSTROM_TO_HARTREE_BOHR, HARTREE_TO_EV
 
 
 def central_difference_gradient(

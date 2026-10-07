@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from mmml.models.physnetjax.physnetjax.training.epoch_timing import (
+from karml.models.physnetjax.physnetjax.training.epoch_timing import (
     EpochTiming,
     EpochTimingSummary,
 )

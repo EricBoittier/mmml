@@ -9,7 +9,7 @@ cd "${ROOT}"
 OUT="${ARTIFACTS_DIR}/free_nve_jaxmd"
 
 echo "=== md-system free_nve (jaxmd backend, 0.1 ps) ==="
-uv run mmml md-system \
+uv run karml md-system \
   --setup free_nve \
   --backend jaxmd \
   --composition ACO:2 \

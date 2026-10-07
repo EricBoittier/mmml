@@ -1,4 +1,4 @@
-"""Unit tests for ``mmml md-system`` YAML config parsing."""
+"""Unit tests for ``karml md-system`` YAML config parsing."""
 
 from __future__ import annotations
 
@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from mmml.cli.run.md_config import apply_mapping_to_namespace, load_yaml_config
-from mmml.cli.run.md_system import parse_md_system_args
+from karml.cli.run.md_config import apply_mapping_to_namespace, load_yaml_config
+from karml.cli.run.md_system import parse_md_system_args
 
 
 def test_namespace_from_yaml_keys(tmp_path: Path) -> None:
@@ -107,7 +107,7 @@ runs:
 
 
 def test_md_system_parser_single_box_size_flag() -> None:
-    from mmml.cli.run.md_system import build_parser, parse_args
+    from karml.cli.run.md_system import build_parser, parse_args
 
     parser = build_parser()
     box_actions = [
@@ -123,7 +123,7 @@ def test_md_system_parser_single_box_size_flag() -> None:
 
 
 def test_md_system_forwards_nve_start_force_gate_to_jaxmd() -> None:
-    from mmml.cli.run.md_system import build_command, parse_args
+    from karml.cli.run.md_system import build_command, parse_args
 
     args = parse_args(
         [
@@ -143,7 +143,7 @@ def test_md_system_forwards_nve_start_force_gate_to_jaxmd() -> None:
 
 
 def test_md_system_forwards_nve_etot_drift_rescue_flags() -> None:
-    from mmml.cli.run.md_system import build_command, parse_args
+    from karml.cli.run.md_system import build_command, parse_args
 
     args = parse_args(
         [
@@ -165,7 +165,7 @@ def test_md_system_forwards_nve_etot_drift_rescue_flags() -> None:
 
 
 def test_apply_mapping_hyphen_keys() -> None:
-    from mmml.cli.run.md_system import parse_args
+    from karml.cli.run.md_system import parse_args
 
     args = parse_args([])
     apply_mapping_to_namespace(
@@ -178,7 +178,7 @@ def test_apply_mapping_hyphen_keys() -> None:
 
 
 def test_apply_mapping_hybrid_assembly_camelcase_aliases() -> None:
-    from mmml.cli.run.md_system import parse_args
+    from karml.cli.run.md_system import parse_args
 
     args = parse_args([])
     apply_mapping_to_namespace(
@@ -192,7 +192,7 @@ def test_apply_mapping_hybrid_assembly_camelcase_aliases() -> None:
 
 
 def test_apply_mapping_skip_ml_dimers_forces_do_ml_dimer_false() -> None:
-    from mmml.cli.run.md_system import parse_args
+    from karml.cli.run.md_system import parse_args
 
     args = parse_args([])
     apply_mapping_to_namespace(
@@ -205,7 +205,7 @@ def test_apply_mapping_skip_ml_dimers_forces_do_ml_dimer_false() -> None:
 
 
 def test_apply_mapping_conflicting_include_mm_and_doMM_raises() -> None:
-    from mmml.cli.run.md_system import parse_args
+    from karml.cli.run.md_system import parse_args
 
     args = parse_args([])
     with pytest.raises(ValueError, match="conflicting include_mm / doMM"):
@@ -217,7 +217,7 @@ def test_apply_mapping_conflicting_include_mm_and_doMM_raises() -> None:
 
 
 def test_apply_mapping_no_scale_max_grms() -> None:
-    from mmml.cli.run.md_system import parse_args
+    from karml.cli.run.md_system import parse_args
 
     args = parse_args([])
     apply_mapping_to_namespace(
@@ -230,8 +230,8 @@ def test_apply_mapping_no_scale_max_grms() -> None:
 
 
 def test_apply_mapping_monomer_physnet_mini_passthrough_prefix() -> None:
-    from mmml.cli.run.md_config import CONFIG_PASSTHROUGH_PREFIXES, apply_mapping_to_namespace
-    from mmml.cli.run.md_system import parse_args
+    from karml.cli.run.md_config import CONFIG_PASSTHROUGH_PREFIXES, apply_mapping_to_namespace
+    from karml.cli.run.md_system import parse_args
 
     args = parse_args([])
     apply_mapping_to_namespace(
@@ -252,8 +252,8 @@ def test_apply_mapping_monomer_physnet_mini_passthrough_prefix() -> None:
 
 
 def test_apply_mapping_geometry_packing_passthrough_prefix() -> None:
-    from mmml.cli.run.md_config import CONFIG_PASSTHROUGH_PREFIXES, apply_mapping_to_namespace
-    from mmml.cli.run.md_system import parse_args
+    from karml.cli.run.md_config import CONFIG_PASSTHROUGH_PREFIXES, apply_mapping_to_namespace
+    from karml.cli.run.md_system import parse_args
 
     args = parse_args([])
     apply_mapping_to_namespace(
@@ -266,8 +266,8 @@ def test_apply_mapping_geometry_packing_passthrough_prefix() -> None:
 
 
 def test_apply_mapping_liquid_prep_passthrough_prefix() -> None:
-    from mmml.cli.run.md_config import CONFIG_PASSTHROUGH_PREFIXES, apply_mapping_to_namespace
-    from mmml.cli.run.md_system import parse_args
+    from karml.cli.run.md_config import CONFIG_PASSTHROUGH_PREFIXES, apply_mapping_to_namespace
+    from karml.cli.run.md_system import parse_args
 
     args = parse_args([])
     apply_mapping_to_namespace(
@@ -301,7 +301,7 @@ runs:
 
 
 def test_apply_mapping_prep_gate_keys() -> None:
-    from mmml.cli.run.md_system import parse_args
+    from karml.cli.run.md_system import parse_args
 
     args = parse_args([])
     apply_mapping_to_namespace(
@@ -359,7 +359,7 @@ pycharmm_pre_dynamics_lingo:
 
 
 def test_validate_packmol_skips_certified_box_handoff() -> None:
-    from mmml.cli.run.md_system import _validate_packmol_args, parse_args
+    from karml.cli.run.md_system import _validate_packmol_args, parse_args
 
     args = parse_args(
         [

@@ -19,13 +19,13 @@ h5py = pytest.importorskip("h5py")
 jax = pytest.importorskip("jax")
 e3x = pytest.importorskip("e3x")
 
-from mmml.models.physnetjax.physnetjax.data.read_h5 import (
+from karml.models.physnetjax.physnetjax.data.read_h5 import (
     _concatenate_flat_data_dicts,
     _subset_flat_dataset,
     load_h5_flat,
     prepare_h5_datasets_flat,
 )
-from mmml.models.physnetjax.physnetjax.training.spooky_training import (
+from karml.models.physnetjax.physnetjax.training.spooky_training import (
     build_spooky_batch_from_flat_data,
 )
 

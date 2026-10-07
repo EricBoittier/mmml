@@ -1,11 +1,11 @@
-# MMML MCP server
+# KARML MCP server
 
-Natural-language orchestration over the `mmml` CLI for Cursor and other MCP clients.
+Natural-language orchestration over the `karml` CLI for Cursor and other MCP clients.
 
 ## Install
 
 ```bash
-cd /path/to/mmml
+cd /path/to/karml
 uv sync --extra mcp
 # or: uv pip install --python .venv/bin/python 'mcp>=1.0.0'
 ```
@@ -13,8 +13,8 @@ uv sync --extra mcp
 ## Run (stdio)
 
 ```bash
-mmml-mcp
-# or: python -m mmml.mcp
+karml-mcp
+# or: python -m karml.mcp
 ```
 
 ## Cursor
@@ -27,11 +27,11 @@ in Cursor after checkout.
 | Tool | Purpose |
 |------|---------|
 | `list_capabilities` | Recipes, presets, allowlisted commands |
-| `health_check` | Wraps `mmml health-check` |
+| `health_check` | Wraps `karml health-check` |
 | `configure_run_tool` | Create `artifacts/mcp_runs/<run_id>/` + manifest |
 | `run_recipe_stage_tool` | Run one stage of a recipe |
-| `submit_mmml_command` | Allowlisted `mmml` subcommand |
-| `submit_console_script` | e.g. `mmml-spectra-md` |
+| `submit_karml_command` | Allowlisted `karml` subcommand |
+| `submit_console_script` | e.g. `karml-spectra-md` |
 | `get_run_status_tool` | Manifest + artifacts + `squeue` |
 | `list_runs_tool` | All MCP runs |
 | `describe_recipe` | Recipe YAML |
@@ -51,7 +51,7 @@ In Cursor (with MCP connected), ask the agent:
 
 Smoke mode skips QM/training and uses `examples/ckpts_json/DESdimers_params.json`
 (PhysNet, `charges=False`). IR uses **classical CGENFF dipole** autocorrelation — not
-`mmml-spectra-md` / EFieldPhysNet (incompatible with this checkpoint).
+`karml-spectra-md` / EFieldPhysNet (incompatible with this checkpoint).
 
 Default smoke MD: **20.0 ps** at **0.1 fs** (200k steps), **record every step**
 (frame spacing **0.1 fs**). IR uses centered dipole fluctuations and a non-negative
@@ -75,16 +75,16 @@ Or via MCP tools: `configure_run_tool` with `recipe="build_smoke"`, then stages
 
 Hybrid vacuum configs use `packmol_radius` for cluster placement (required for
 `free_nve` + JAX-MD, which omits `--box-size` from the subprocess argv). See
-[`mmml/mcp/examples/README.md`](examples/README.md) for direct `mmml md-system` usage
+[`karml/mcp/examples/README.md`](examples/README.md) for direct `karml md-system` usage
 and programmatic `setup_calculator` examples.
 
 | Stage | Command | Outputs |
 |-------|---------|---------|
-| `make_res` | `mmml make-res` | `residue/` |
-| `box_build` | `mmml liquid-box` | `boxes/liquid/` |
-| `hybrid_md_ase` | `mmml md-system` (ASE) | `results/hybrid_ase/` |
-| `hybrid_md_jaxmd` | `mmml md-system` (JAX-MD) | `results/hybrid_jaxmd/` |
-| `hybrid_md_pycharmm` | `mmml md-system` (PyCHARMM) | `results/hybrid_pycharmm/` |
+| `make_res` | `karml make-res` | `residue/` |
+| `box_build` | `karml liquid-box` | `boxes/liquid/` |
+| `hybrid_md_ase` | `karml md-system` (ASE) | `results/hybrid_ase/` |
+| `hybrid_md_jaxmd` | `karml md-system` (JAX-MD) | `results/hybrid_jaxmd/` |
+| `hybrid_md_pycharmm` | `karml md-system` (PyCHARMM) | `results/hybrid_pycharmm/` |
 
 ## Layout
 
@@ -108,7 +108,7 @@ artifacts/mcp_runs/<run_id>/
 
 ## Security
 
-- Only allowlisted `mmml` subcommands may run
+- Only allowlisted `karml` subcommands may run
 - CLI args reject shell metacharacters
 - Writes restricted to `artifacts/mcp_runs/` (except read-only status tools)
 
@@ -116,7 +116,7 @@ artifacts/mcp_runs/<run_id>/
 
 | Variable | Default |
 |----------|---------|
-| `MMML_REPO_ROOT` | auto-detected from package path |
-| `MMML_MCP_RUNS_ROOT` | `$REPO/artifacts/mcp_runs` |
-| `MMML_BIN` / `MMML_PYTHON` | `.venv/bin/mmml` / `.venv/bin/python` |
-| `MMML_CKPT` | `examples/ckpts_json/DESdimers_params.json` |
+| `KARML_REPO_ROOT` | auto-detected from package path |
+| `KARML_MCP_RUNS_ROOT` | `$REPO/artifacts/mcp_runs` |
+| `KARML_BIN` / `KARML_PYTHON` | `.venv/bin/karml` / `.venv/bin/python` |
+| `KARML_CKPT` | `examples/ckpts_json/DESdimers_params.json` |

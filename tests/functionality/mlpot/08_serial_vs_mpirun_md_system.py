@@ -15,22 +15,22 @@ python tests/functionality/mlpot/08_serial_vs_mpirun_md_system.py --dry-run
 **Cluster A/B test (GPU node with PyCHARMM + checkpoint):**
 
 ```bash
-export MMML_CKPT=/path/to/checkpoint.json
+export KARML_CKPT=/path/to/checkpoint.json
 python tests/functionality/mlpot/08_serial_vs_mpirun_md_system.py --run-both \\
-  --checkpoint "$MMML_CKPT" \\
+  --checkpoint "$KARML_CKPT" \\
   --output-dir artifacts/serial_vs_mpirun_$(date +%Y%m%d_%H%M%S)
 ```
 
 **Interpretation:**
 
 - Both exit 0 → serial path is OK on this node; mpirun still recommended for production.
-- Serial SIGSEGV / exit 139, mpirun OK → use ``mmml-charmm-mpirun.sh`` on this stack.
+- Serial SIGSEGV / exit 139, mpirun OK → use ``karml-charmm-mpirun.sh`` on this stack.
 - Both fail → unrelated setup issue (checkpoint, GPU, etc.).
 
 Re-run after OpenMPI / module / ``libcharmm.so`` changes or on a new node.
 
-Serial run sets ``MMML_NO_MPI_RERUN=1`` so ``md-system`` does **not** auto re-exec under mpirun.
-The JSON report records hostname, timestamp, and env snapshot (``MMML_MLPOT_DEVICE``,
+Serial run sets ``KARML_NO_MPI_RERUN=1`` so ``md-system`` does **not** auto re-exec under mpirun.
+The JSON report records hostname, timestamp, and env snapshot (``KARML_MLPOT_DEVICE``,
 ``OMP_NUM_THREADS``, ``JAX_PLATFORMS``, ``CUDA_VISIBLE_DEVICES``) plus per-run elapsed time.
 """
 
@@ -50,13 +50,13 @@ from pathlib import Path
 
 
 _ENV_KEYS = (
-    "MMML_MLPOT_DEVICE",
+    "KARML_MLPOT_DEVICE",
     "JAX_PLATFORMS",
     "OMP_NUM_THREADS",
-    "MMML_CHARMM_OMP_THREADS",
+    "KARML_CHARMM_OMP_THREADS",
     "CUDA_VISIBLE_DEVICES",
-    "MMML_MPI_NP",
-    "MMML_NO_MPI_RERUN",
+    "KARML_MPI_NP",
+    "KARML_NO_MPI_RERUN",
     "CHARMM_LIB_DIR",
 )
 
@@ -78,7 +78,7 @@ def _repo_root() -> Path:
 
 
 def _default_config() -> Path:
-    return _repo_root() / "mmml/cli/run/md_system.serial_mpi_probe.example.yaml"
+    return _repo_root() / "karml/cli/run/md_system.serial_mpi_probe.example.yaml"
 
 
 @dataclass
@@ -106,7 +106,7 @@ def _parse_args() -> argparse.Namespace:
         default=_default_config(),
         help="Probe YAML (default: md_system.serial_mpi_probe.example.yaml)",
     )
-    parser.add_argument("--checkpoint", default=None, help="Override checkpoint (or MMML_CKPT)")
+    parser.add_argument("--checkpoint", default=None, help="Override checkpoint (or KARML_CKPT)")
     parser.add_argument("--output-dir", default=None, help="Override output_dir in YAML")
     parser.add_argument(
         "--dry-run",
@@ -116,12 +116,12 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--run-serial",
         action="store_true",
-        help="Run serial python md-system (MMML_NO_MPI_RERUN=1)",
+        help="Run serial python md-system (KARML_NO_MPI_RERUN=1)",
     )
     parser.add_argument(
         "--run-mpirun",
         action="store_true",
-        help="Run MMML_MPI_NP=1 mmml-charmm-mpirun.sh md-system",
+        help="Run KARML_MPI_NP=1 karml-charmm-mpirun.sh md-system",
     )
     parser.add_argument(
         "--run-both",
@@ -138,11 +138,11 @@ def _parse_args() -> argparse.Namespace:
 
 
 def _resolve_checkpoint(raw: str | None, *, required: bool = True) -> str:
-    value = raw or os.environ.get("MMML_CKPT") or os.environ.get("MMML_CHECKPOINT")
+    value = raw or os.environ.get("KARML_CKPT") or os.environ.get("KARML_CHECKPOINT")
     if not value:
         if required:
-            raise SystemExit("08_serial_vs_mpirun: set --checkpoint or MMML_CKPT")
-        return "<MMML_CKPT>"
+            raise SystemExit("08_serial_vs_mpirun: set --checkpoint or KARML_CKPT")
+        return "<KARML_CKPT>"
     path = Path(value).expanduser()
     if not path.exists():
         if required:
@@ -197,16 +197,16 @@ def _run_subprocess(
 def _dry_run(config: Path, checkpoint: str, output_dir: str | None) -> int:
     root = _repo_root()
     py = sys.executable
-    mpi_sh = root / "scripts/mmml-charmm-mpirun.sh"
+    mpi_sh = root / "scripts/karml-charmm-mpirun.sh"
     md_argv = _md_system_argv(config, checkpoint, output_dir)
 
-    serial_cmd = [py, "-m", "mmml.cli.__main__", *md_argv]
+    serial_cmd = [py, "-m", "karml.cli.__main__", *md_argv]
     mpirun_cmd = [str(mpi_sh), "md-system", *md_argv[1:]]
 
-    print("Serial (MMML_NO_MPI_RERUN=1, OMP_NUM_THREADS=1):")
+    print("Serial (KARML_NO_MPI_RERUN=1, OMP_NUM_THREADS=1):")
     print("  " + _format_cmd(serial_cmd))
-    print("\nMPI np=1 (mmml-charmm-mpirun.sh):")
-    print("  MMML_MPI_NP=1 " + _format_cmd(mpirun_cmd))
+    print("\nMPI np=1 (karml-charmm-mpirun.sh):")
+    print("  KARML_MPI_NP=1 " + _format_cmd(mpirun_cmd))
     print("\nPass: compare exit codes with --run-both on a GPU CHARMM node.")
     return 0
 
@@ -227,7 +227,7 @@ def main() -> int:
 
     root = _repo_root()
     py = sys.executable
-    mpi_sh = root / "scripts/mmml-charmm-mpirun.sh"
+    mpi_sh = root / "scripts/karml-charmm-mpirun.sh"
     if not mpi_sh.is_file():
         print(f"FAIL: missing {mpi_sh}", file=sys.stderr)
         return 1
@@ -237,17 +237,17 @@ def main() -> int:
 
     if args.run_serial or args.run_both:
         env = os.environ.copy()
-        env["MMML_NO_MPI_RERUN"] = "1"
+        env["KARML_NO_MPI_RERUN"] = "1"
         env.setdefault("OMP_NUM_THREADS", "1")
         serial_overrides = {
-            "MMML_NO_MPI_RERUN": "1",
+            "KARML_NO_MPI_RERUN": "1",
             "OMP_NUM_THREADS": env["OMP_NUM_THREADS"],
-            "MMML_MPI_NP": None,
+            "KARML_MPI_NP": None,
         }
         outcomes.append(
             _run_subprocess(
                 "serial_python",
-                [py, "-m", "mmml.cli.__main__", *md_argv],
+                [py, "-m", "karml.cli.__main__", *md_argv],
                 env,
                 env_snapshot=_environment_snapshot(overrides=serial_overrides),
             )
@@ -255,10 +255,10 @@ def main() -> int:
 
     if args.run_mpirun or args.run_both:
         env = os.environ.copy()
-        env["MMML_MPI_NP"] = "1"
+        env["KARML_MPI_NP"] = "1"
         mpi_overrides = {
-            "MMML_MPI_NP": "1",
-            "MMML_NO_MPI_RERUN": env.get("MMML_NO_MPI_RERUN"),
+            "KARML_MPI_NP": "1",
+            "KARML_NO_MPI_RERUN": env.get("KARML_NO_MPI_RERUN"),
         }
         outcomes.append(
             _run_subprocess(
@@ -295,7 +295,7 @@ def main() -> int:
             print("RESULT: both paths succeeded — serial md-system OK on this node.", flush=True)
         elif not serial.ok and mpi.ok:
             print(
-                "RESULT: serial failed, mpirun OK — supports using mmml-charmm-mpirun.sh.",
+                "RESULT: serial failed, mpirun OK — supports using karml-charmm-mpirun.sh.",
                 flush=True,
             )
         elif serial.ok and not mpi.ok:

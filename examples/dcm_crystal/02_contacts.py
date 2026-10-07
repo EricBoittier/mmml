@@ -21,7 +21,7 @@ import warnings
 
 warnings.filterwarnings("ignore", message=".*crystal system.*")
 
-from mmml.analysis.dcm_crystal import (  # noqa: E402
+from karml.analysis.dcm_crystal import (  # noqa: E402
     DCM_CRYSTAL_PHASES,
     h_cl_contacts,
     halogen_contacts,

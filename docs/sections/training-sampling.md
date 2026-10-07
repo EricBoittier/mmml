@@ -11,28 +11,28 @@ the file is already eV ([SPICE-α](../spice-alpha.md),
 `pet-physnet-distill`).
 
 ```bash
-mmml fix-and-split --efd data.npz --output-dir ./splits
-mmml physnet-train --config train.yaml
-mmml physnet-evaluate --checkpoint ckpts/run --test splits/test.npz
+karml fix-and-split --efd data.npz --output-dir ./splits
+karml physnet-train --config train.yaml
+karml physnet-evaluate --checkpoint ckpts/run --test splits/test.npz
 ```
 
 To distill a small PhysNet from a metatomic PET-MAD teacher on acetone
 (dataset + synthetic noise/scans):
 
 ```bash
-mmml pet-physnet-distill --checkpoint pet-mad.pt --out-dir ./acetone_pet_distill
-mmml physnet-train --config ./acetone_pet_distill/physnet-train.yaml
+karml pet-physnet-distill --checkpoint pet-mad.pt --out-dir ./acetone_pet_distill
+karml physnet-train --config ./acetone_pet_distill/physnet-train.yaml
 ```
 
-See [Metatomic in MMML](../metatomic.md).
+See [Metatomic in KARML](../metatomic.md).
 
 Then sample with the trained model:
 
 ```bash
-mmml neb --config examples/m/yaml/neb.yaml --overwrite
-mmml dmc --natm 20 --nwalker 512 --stepsize 5e-4 --nstep 5000 --eqstep 1000 \
-  --alpha 1200.0 --checkpoint "$MMML_CKPT" \
-  --input mmml/generate/dmc/examples/acetone_dmc.extxyz
+karml neb --config examples/m/yaml/neb.yaml --overwrite
+karml dmc --natm 20 --nwalker 512 --stepsize 5e-4 --nstep 5000 --eqstep 1000 \
+  --alpha 1200.0 --checkpoint "$KARML_CKPT" \
+  --input karml/generate/dmc/examples/acetone_dmc.extxyz
 ```
 
 ## What's here
@@ -43,7 +43,7 @@ mmml dmc --natm 20 --nwalker 512 --stepsize 5e-4 --nstep 5000 --eqstep 1000 \
   vs interaction, `--hybrid-mm` extras.
 - [Bayesian design of compact PES datasets](../bayesian-pes-design.md) — the
   four intermolecular regions, physical candidate generation, RDF/SOAP
-  compression, D-optimal acquisition, and `mmml pes-design` validation.
+  compression, D-optimal acquisition, and `karml pes-design` validation.
 - [Nudged elastic band (NEB)](../neb.md) — PhysNet minimum-energy paths and
   barrier sampling.
 - [Diffusion Monte Carlo (DMC)](../dmc.md) — batched PhysNetJax walkers, with a
@@ -56,9 +56,9 @@ the `efield-*` and `kernnn-*` families, `neb`, `dmc`, `active-learning`,
 
 ## Before you trust a checkpoint
 
-`mmml physnet-evaluate` reports test-set error, which is necessary but not
+`karml physnet-evaluate` reports test-set error, which is necessary but not
 sufficient — a model can fit its split and still be unusable in MD. The
-diagnostics that catch that live elsewhere: `mmml mode-check` (finite
+diagnostics that catch that live elsewhere: `karml mode-check` (finite
 differences, vibrations, kick tests) in [QM & data](qm-data.md), and the
 parity reports in [Hybrid ML/MM potentials](hybrid-potentials.md).
 

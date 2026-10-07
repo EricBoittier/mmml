@@ -9,7 +9,7 @@ from typing import Any, Optional, Sequence, Union
 import numpy as np
 import pandas as pd
 
-from mmml.interfaces.pycharmmInterface.mlpot.mlpot_eterms import (
+from karml.interfaces.pycharmmInterface.mlpot.mlpot_eterms import (
     MLPOT_ETERM_KEYS,
     mlpot_eterm_kcal_from_terms,
     read_mlpot_eterm_kcal,
@@ -169,11 +169,11 @@ class MlpotContext:
 
     def unset(self) -> None:
         self.mlpot.unset_mlpot()
-        from mmml.interfaces.pycharmmInterface.mlpot.block_terms import (
+        from karml.interfaces.pycharmmInterface.mlpot.block_terms import (
             apply_charmm_mm_block,
             clear_mlpot_energy_block,
         )
-        from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
             charmm_dynamics_state_is_finite,
         )
 
@@ -181,7 +181,7 @@ class MlpotContext:
             clear_mlpot_energy_block(self.ml_selection, block_tag=self.block_tag)
         if not charmm_dynamics_state_is_finite():
             print(
-                "MMML: skip CGENFF param restore on unset (unsafe coordinates after dynamics)",
+                "KARML: skip CGENFF param restore on unset (unsafe coordinates after dynamics)",
                 flush=True,
             )
             return
@@ -230,7 +230,7 @@ class MlpotContext:
             )
 
         pycharmm = _import_pycharmm()
-        from mmml.interfaces.pycharmmInterface.mlpot.callback_failstop import mlmm_elec_func
+        from karml.interfaces.pycharmmInterface.mlpot.callback_failstop import mlmm_elec_func
 
         pycharmm.lib.charmm.mlpot_set_func(self.mlpot.energy_func, mlmm_elec_func(self.mlpot))
         ml_indices = np.asarray(self.mlpot.ml_indices, dtype=int)
@@ -262,11 +262,11 @@ def _fortran_mlpot_callback_active() -> bool | None:
 def _probe_mlpot_hybrid_energy_kcal(ctx: MlpotContext) -> float | None:
     """Best-effort hybrid ML energy (kcal/mol) via JAX, bypassing CHARMM ENER."""
     try:
-        from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+        from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
             charmm_positions_angstrom,
             mlpot_spherical_energy_forces_ev_angstrom,
         )
-        from mmml.interfaces.pycharmmInterface.mmml_calculator import ev2kcalmol
+        from karml.interfaces.pycharmmInterface.karml_calculator import ev2kcalmol
 
         pyCModel = ctx.pyCModel
         if pyCModel is None:
@@ -334,7 +334,7 @@ def _mlpot_user_registration_diag(ctx: MlpotContext) -> str:
     if hybrid_e is not None and np.isfinite(hybrid_e):
         parts.append(f"JAX hybrid E={hybrid_e:.2f} kcal/mol")
         try:
-            from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+            from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
                 mlpot_hybrid_grms_from_calculator,
             )
 
@@ -381,11 +381,11 @@ def _read_mlpot_user_energy_kcal(
     """
     import math
 
-    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+    import karml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
     import pycharmm
     import pycharmm.energy as energy
 
-    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_silent_command
+    from karml.interfaces.pycharmmInterface.charmm_levels import charmm_silent_command
 
     script = "ENER FORCE" if force else "ENER"
     zero_tol = 1.0e-12
@@ -444,11 +444,11 @@ def _sum_mlpot_charmm_hybrid_energy_kcal(terms: dict[str, float]) -> float:
 
 def _read_mlpot_charmm_energy_terms_kcal() -> dict[str, float]:
     try:
-        from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_energy_row
+        from karml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_energy_row
 
         return dict(charmm_energy_row())
     except Exception:
-        import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+        import karml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
         import pycharmm.energy as energy
 
         out: dict[str, float] = {}
@@ -512,7 +512,7 @@ def rebind_mlpot_calculator_from_pycmodel(
     unset = getattr(mlpot, "unset_mlpot", None)
     if callable(unset):
         unset()
-    from mmml.interfaces.pycharmmInterface.mlpot.callback_failstop import (
+    from karml.interfaces.pycharmmInterface.mlpot.callback_failstop import (
         install_fail_closed_energy_func,
     )
 
@@ -544,7 +544,7 @@ def mlpot_skip_charmm_ener_force_before_first_sd(mlpot_ctx: Any) -> bool:
     """
     if not bool(getattr(mlpot_ctx, "use_pbc", False)):
         return False
-    from mmml.interfaces.pycharmmInterface.charmm_mpi import (
+    from karml.interfaces.pycharmmInterface.charmm_mpi import (
         charmm_lib_links_mpi,
         defer_jax_warmup_until_after_mlpot_sd,
     )
@@ -554,7 +554,7 @@ def mlpot_skip_charmm_ener_force_before_first_sd(mlpot_ctx: Any) -> bool:
     if defer_jax_warmup_until_after_mlpot_sd():
         return True
     pyCModel = getattr(mlpot_ctx, "pyCModel", None)
-    from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import DecomposedMlpotModel
+    from karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import DecomposedMlpotModel
 
     if isinstance(pyCModel, DecomposedMlpotModel):
         if getattr(pyCModel, "_defer_jax_until_after_sd", False) and not getattr(
@@ -601,15 +601,15 @@ def prime_charmm_hybrid_energy_before_mlpot_sd(
         if not _mlpot_user_missing(user, zero_tol_kcalmol=1.0e-12):
             return None
         setattr(mlpot_ctx, "_mlpot_pre_sd_ener_probed", False)
-    from mmml.interfaces.pycharmmInterface.charmm_mpi import (
+    from karml.interfaces.pycharmmInterface.charmm_mpi import (
         _under_mpirun,
         recover_mpi_for_charmm_after_jax,
     )
 
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
         charmm_grms_after_ener_force,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _ensure_domdec_off_for_mlpot_energy,
     )
 
@@ -633,7 +633,7 @@ def prime_charmm_hybrid_energy_before_mlpot_sd(
             f"(GRMS={grms:.4f} kcal/mol/Å); refusing MLpot SD"
         )
     if verbose:
-        from mmml.data.units import format_energy_kcal_ev
+        from karml.data.units import format_energy_kcal_ev
 
         print(
             f"{context}: CHARMM ENER prime OK "
@@ -660,7 +660,7 @@ def assert_mlpot_user_active(
     Once USER is verified it arms, so a lost pair list ends the run (exit 86).
     The deferred-probe path is unverified and stays disarmed.
     """
-    from mmml.interfaces.pycharmmInterface.mlpot.callback_failstop import (
+    from karml.interfaces.pycharmmInterface.mlpot.callback_failstop import (
         set_mlpot_dynamics_armed,
     )
 
@@ -698,7 +698,7 @@ def assert_mlpot_user_active(
         user = _read_mlpot_user_energy_kcal(force=True, ctx=ctx)
         missing = _mlpot_user_missing(user, zero_tol_kcalmol=zero_tol_kcalmol)
     if missing:
-        from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+        from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
             light_resync_mlpot_state,
         )
 
@@ -735,8 +735,8 @@ def assert_mlpot_user_active(
             )
         raise RuntimeError(msg)
     if not quiet:
-        from mmml.data.units import format_energy_kcal_ev
-        from mmml.utils.rich_report import emit_tagged
+        from karml.data.units import format_energy_kcal_ev
+        from karml.utils.rich_report import emit_tagged
 
         emit_tagged(
             "MLpot",
@@ -852,11 +852,11 @@ def verify_mlpot_charmm_atom_consistency(
     Raises ``RuntimeError`` on mismatch (wrong atom order or element mapping breaks
     PhysNet and CHARMM integration).
     """
-    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+    import karml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
     import pycharmm.coor as coor
     import pycharmm.psf as psf
 
-    from mmml.interfaces.pycharmmInterface.utils import get_Z_from_psf
+    from karml.interfaces.pycharmmInterface.utils import get_Z_from_psf
 
     if ctx.ml_Z is None:
         raise RuntimeError(
@@ -1002,7 +1002,7 @@ def verify_mlpot_charmm_atom_consistency(
 
 
 def _import_pycharmm():
-    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401 — CHARMM env
+    import karml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401 — CHARMM env
     import pycharmm
 
     return pycharmm
@@ -1064,7 +1064,7 @@ def select_by_resnames(res_names: Sequence[str]) -> Any:
     if not names:
         raise ValueError("select_by_resnames: empty residue-name list")
     # Include known CGenFF truncations (CH3CL → CH3C) so PSF tables still match.
-    from mmml.md.ml_region import _expand_resname_match_set
+    from karml.md.ml_region import _expand_resname_match_set
 
     expanded = sorted(_expand_resname_match_set(names))
     sel = select_by_resname(expanded[0])
@@ -1079,9 +1079,9 @@ def resolve_mlpot_selection_from_args(args: Any | None) -> Any:
     Mechanical embedding on PyCHARMM: PhysNet/USER only on the listed residues;
     solvent keeps CHARMM MM (requires BLOCK registration + non-``jax_mic`` VDW).
     """
-    from mmml.md.ml_region import parse_ml_resnames
+    from karml.md.ml_region import parse_ml_resnames
 
-    from mmml.interfaces.pycharmmInterface.ml_cut import ml_cut_from_args
+    from karml.interfaces.pycharmmInterface.ml_cut import ml_cut_from_args
 
     file_cut = ml_cut_from_args(args)
     if file_cut is not None:
@@ -1091,7 +1091,7 @@ def resolve_mlpot_selection_from_args(args: Any | None) -> Any:
         str(getattr(args, "mm_region", None) or "").strip().lower() if args is not None else ""
     )
     if mm_region == "his93":
-        from mmml.interfaces.pycharmmInterface.myoglobin import his93_cut_from_args
+        from karml.interfaces.pycharmmInterface.myoglobin import his93_cut_from_args
 
         ml_indices, _links = his93_cut_from_args(args)
         return _select_atoms_cls()(atom_nums=[int(i) for i in ml_indices])
@@ -1134,7 +1134,7 @@ def write_charmm_psf(path: PathLike) -> Path:
     """
     import ctypes
 
-    from mmml.interfaces.pycharmmInterface.charmm_paths import charmm_fortran_path
+    from karml.interfaces.pycharmmInterface.charmm_paths import charmm_fortran_path
     from pycharmm.charmm_file import c_api_path_buffer
 
     p = Path(path).expanduser().resolve()
@@ -1170,7 +1170,7 @@ def _write_vmd_pdb_from_positions(
     import ase
     import ase.io
 
-    from mmml.interfaces.pycharmmInterface.utils import get_Z_from_psf
+    from karml.interfaces.pycharmmInterface.utils import get_Z_from_psf
 
     p = Path(path).expanduser().resolve()
     p.parent.mkdir(parents=True, exist_ok=True)
@@ -1259,7 +1259,7 @@ def resolve_topology_psf_for_mlpot_reload(
     CHARMM then aborts with "Maximum number of nonbond exclusions exceeded".
     Prefer ``model.psf`` (saved pre-MLpot).
     """
-    from mmml.interfaces.pycharmmInterface.mlpot.artifact_paths import (
+    from karml.interfaces.pycharmmInterface.mlpot.artifact_paths import (
         resolve_topology_psf_candidates,
     )
 
@@ -1295,14 +1295,14 @@ def save_cluster_topology_for_vmd(
     """
     import pycharmm.psf as psf
 
-    from mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
-    from mmml.interfaces.pycharmmInterface.mlpot.topology_recovery import (
+    from karml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
+    from karml.interfaces.pycharmmInterface.mlpot.topology_recovery import (
         capture_topology_fingerprint_from_charmm,
         coerce_iblo_inb,
         save_topology_sidecar,
         topology_fingerprint_path,
     )
-    from mmml.interfaces.pycharmmInterface.mpi_rank_io import is_mpi_rank_zero
+    from karml.interfaces.pycharmmInterface.mpi_rank_io import is_mpi_rank_zero
 
     sync_charmm_positions(positions)
     out = Path(out_dir).expanduser().resolve()
@@ -1328,14 +1328,14 @@ def save_cluster_topology_for_vmd(
 
 def disable_charmm_domdec() -> None:
     """Turn off domdec once (``domdec dlb off`` would leave domdec on)."""
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import disable_charmm_domdec as _disable
+    from karml.interfaces.pycharmmInterface.import_pycharmm import disable_charmm_domdec as _disable
 
     _disable()
 
 
 def ensure_domdec_off_for_mlpot_energy(*, context: str = "MLpot energy") -> bool:
     """Single ``domdec off`` after JAX warmup, before MLpot SD / dynamics."""
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import (
+    from karml.interfaces.pycharmmInterface.import_pycharmm import (
         ensure_domdec_off_for_mlpot_energy as _ensure,
     )
 
@@ -1344,14 +1344,14 @@ def ensure_domdec_off_for_mlpot_energy(*, context: str = "MLpot energy") -> bool
 
 def prepare_charmm_vacuum() -> None:
     """Vacuum: crystal free (domdec off is deferred until MLpot SD/dynamics)."""
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import crystal_free_charmm
+    from karml.interfaces.pycharmmInterface.import_pycharmm import crystal_free_charmm
 
     crystal_free_charmm()
 
 
 def setup_default_nbonds(*, nbxmod: int = 5) -> None:
     """Vacuum nonbonds (same kwargs as ``md_pbc_suite/ase._run_charmm_minimize``)."""
-    from mmml.interfaces.pycharmmInterface.nbonds_config import apply_vacuum_nbonds
+    from karml.interfaces.pycharmmInterface.nbonds_config import apply_vacuum_nbonds
 
     apply_vacuum_nbonds(nbxmod=nbxmod)
 
@@ -1359,7 +1359,7 @@ def setup_default_nbonds(*, nbxmod: int = 5) -> None:
 def refresh_nbonds_after_mlpot(*, nbxmod: int = 5, use_pbc: bool = False, cubic_box_side_A: float | None = None) -> None:
     """Rebuild nonbond lists after :class:`pycharmm.MLpot` changes exclusions."""
     if use_pbc and cubic_box_side_A is not None:
-        from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import reassert_pbc_nbond_cutoffs
+        from karml.interfaces.pycharmmInterface.mlpot.pbc_env import reassert_pbc_nbond_cutoffs
 
         reassert_pbc_nbond_cutoffs(
             float(cubic_box_side_A),
@@ -1368,7 +1368,7 @@ def refresh_nbonds_after_mlpot(*, nbxmod: int = 5, use_pbc: bool = False, cubic_
         )
         return
 
-    from mmml.interfaces.pycharmmInterface.nbonds_config import apply_vacuum_nbonds
+    from karml.interfaces.pycharmmInterface.nbonds_config import apply_vacuum_nbonds
 
     apply_vacuum_nbonds(nbxmod=nbxmod)
 
@@ -1396,7 +1396,7 @@ def _is_all_ml_pbc_context(ctx: MlpotContext) -> bool:
 
 def apply_recovery_nbonds(ctx: MlpotContext, *, nbxmod: int = RECOVERY_NBXMOD) -> None:
     """Temporary nonbond settings for bonded rescue SD (``NBXMOD 2``, VDW on in BLOCK)."""
-    from mmml.interfaces.pycharmmInterface.nbonds_config import (
+    from karml.interfaces.pycharmmInterface.nbonds_config import (
         apply_nbonds_script_kwargs,
         trigger_nbonds_update_script,
         vacuum_nbond_kwargs,
@@ -1407,7 +1407,7 @@ def apply_recovery_nbonds(ctx: MlpotContext, *, nbxmod: int = RECOVERY_NBXMOD) -
         return
     pycharmm.nbonds.update_bnbnd()
     if ctx.use_pbc and ctx.cubic_box_side_A is not None:
-        from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import apply_pbc_nbonds
+        from karml.interfaces.pycharmmInterface.mlpot.pbc_env import apply_pbc_nbonds
 
         apply_pbc_nbonds(
             nbxmod=nbxmod,
@@ -1452,7 +1452,7 @@ def refresh_nbonds_after_mlpot_pbc(
     crystal/nbonds with MLpot active mid-workflow can segfault in ``upinb``.
     Pass ``force=True`` once immediately after initial MLpot registration.
     """
-    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+    from karml.interfaces.pycharmmInterface.mlpot.pbc_env import (
         _is_cubic_box_sides,
         _read_charmm_box_sides_A,
         apply_pbc_nbonds,
@@ -1474,7 +1474,7 @@ def refresh_nbonds_after_mlpot_pbc(
             return
 
     pycharmm = _import_pycharmm()
-    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
+    from karml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
 
     with charmm_relaxed_bomlev():
         prepare_charmm_pbc(side)
@@ -1485,7 +1485,7 @@ def refresh_nbonds_after_mlpot_pbc(
 
 def report_charmm_topology_summary(*, quiet: bool = False) -> bool:
     """Emit Rich PSF summary when CHARMM topology is loaded in memory."""
-    from mmml.utils.rich_report import emit_charmm_topology_summary
+    from karml.utils.rich_report import emit_charmm_topology_summary
 
     return emit_charmm_topology_summary(quiet=quiet)
 
@@ -1500,7 +1500,7 @@ def reconcile_n_monomers_with_psf(
     if n_atoms <= 0:
         return int(n_mol), getattr(args, "_cluster_atoms_per_list", None)
 
-    from mmml.interfaces.pycharmmInterface.myoglobin import is_myoglobin_args
+    from karml.interfaces.pycharmmInterface.myoglobin import is_myoglobin_args
 
     # MbCO is one protein. PSF residue boundaries are amino acids and waters,
     # not monomers; splitting them makes every peptide bond an inter-monomer clash.
@@ -1513,8 +1513,8 @@ def reconcile_n_monomers_with_psf(
         return 1, [n_atoms]
 
     try:
-        import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
-        from mmml.interfaces.pycharmmInterface.mlpot.trimer_scan import (
+        import karml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+        from karml.interfaces.pycharmmInterface.mlpot.trimer_scan import (
             atoms_per_monomer_from_psf,
         )
 
@@ -1579,7 +1579,7 @@ def _cluster_atoms_per_from_composition(
         if per and sum(per) == int(n_atoms):
             return per
     try:
-        from mmml.cli.run.md_handoff import cluster_layout_from_composition_string
+        from karml.cli.run.md_handoff import cluster_layout_from_composition_string
 
         atoms_per, residue_labels, summary = cluster_layout_from_composition_string(
             str(composition),
@@ -1710,7 +1710,7 @@ def _record_from_pdb_cluster_metadata(
     matches the PSF monomer count — ``psf.get_res()`` often truncates 5-char
     CGenFF names (``CH3CL`` → ``CH3C``), which breaks ``ml_resnames``.
     """
-    from mmml.interfaces.pycharmmInterface.mlpot.trimer_scan import (
+    from karml.interfaces.pycharmmInterface.mlpot.trimer_scan import (
         atoms_per_monomer_from_psf,
     )
 
@@ -1800,20 +1800,20 @@ def load_cluster_from_pdb(
     For PBC setups, box side prefers CRYST1, then sibling ``box.json``, then
     ``--box-size``. Vacuum ``free_*`` / ``--free-space`` may omit the box.
     """
-    from mmml.interfaces.pycharmmInterface.charmm_levels import (
+    from karml.interfaces.pycharmmInterface.charmm_levels import (
         charmm_relaxed_bomlev,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.composition_spec import (
+    from karml.interfaces.pycharmmInterface.mlpot.composition_spec import (
         read_pdb_cryst1_side_A,
     )
-    from mmml.interfaces.pycharmmInterface.nbonds_config import read_cgenff_toppar
-    from mmml.interfaces.pycharmmInterface.utils import get_Z_from_psf
+    from karml.interfaces.pycharmmInterface.nbonds_config import read_cgenff_toppar
+    from karml.interfaces.pycharmmInterface.utils import get_Z_from_psf
 
     _import_pycharmm()
 
     raw = pdb_path if pdb_path is not None else getattr(args, "from_pdb", None)
     if raw is None and getattr(args, "composition", None):
-        from mmml.interfaces.pycharmmInterface.mlpot.composition_spec import (
+        from karml.interfaces.pycharmmInterface.mlpot.composition_spec import (
             composition_mode,
             parse_composition_entries,
         )
@@ -1829,7 +1829,7 @@ def load_cluster_from_pdb(
 
     side: float | None = read_pdb_cryst1_side_A(path)
     if side is None:
-        from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import (
+        from karml.interfaces.pycharmmInterface.mlpot.box_sizing import (
             resolve_box_size_from_certified_artifacts,
         )
 
@@ -1876,7 +1876,7 @@ def load_cluster_from_pdb(
 
     if strategy == "sibling_psf":
         assert sibling_psf is not None
-        from mmml.interfaces.pycharmmInterface.cgenff_bonded_reference import (
+        from karml.interfaces.pycharmmInterface.cgenff_bonded_reference import (
             read_psf_card_file,
         )
 
@@ -1921,7 +1921,7 @@ def load_cluster_from_pdb(
                 raise RuntimeError(
                     f"GENERATE SYS failed for full-system PDB {path.name} "
                     f"(status={status}; sequence={res_seq}). Check CGenFF residue "
-                    "names and MMML_CGENFF_EXTRA_RTF for append topologies (e.g. CH3CL)."
+                    "names and KARML_CGENFF_EXTRA_RTF for append topologies (e.g. CH3CL)."
                 )
 
         z = np.asarray(get_Z_from_psf(), dtype=int)
@@ -1938,7 +1938,7 @@ def load_cluster_from_pdb(
         raise ValueError(
             f"Full-system PDB load produced 0/undefined atoms ({path}). "
             "Ensure the PDB has CGenFF RESN/atom names readable by CHARMM "
-            "and MMML_CGENFF_EXTRA_RTF is set for append residues (e.g. CH3CL)."
+            "and KARML_CGENFF_EXTRA_RTF is set for append residues (e.g. CH3CL)."
         )
 
     n_mol, tag = _record_from_pdb_cluster_metadata(
@@ -1952,9 +1952,9 @@ def load_cluster_from_artifacts(
     args: Any,
 ) -> tuple[np.ndarray, np.ndarray, int, str]:
     """Load PSF + CRD (and optional coordinates from ``--restart-from``)."""
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import load_minimized_coordinates
-    from mmml.interfaces.pycharmmInterface.nbonds_config import read_cgenff_toppar
-    from mmml.interfaces.pycharmmInterface.utils import get_Z_from_psf
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import load_minimized_coordinates
+    from karml.interfaces.pycharmmInterface.nbonds_config import read_cgenff_toppar
+    from karml.interfaces.pycharmmInterface.utils import get_Z_from_psf
 
     psf = getattr(args, "from_psf", None)
     crd = getattr(args, "from_crd", None)
@@ -1962,8 +1962,8 @@ def load_cluster_from_artifacts(
         out = Path(args.output_dir).expanduser().resolve()
         tag_guess = getattr(args, "tag", None)
         if not tag_guess and getattr(args, "composition", None):
-            from mmml.cli.run.md_pbc_suite.ase import _parse_composition
-            from mmml.interfaces.pycharmmInterface.mlpot.cli_common import composition_tag
+            from karml.cli.run.md_pbc_suite.ase import _parse_composition
+            from karml.interfaces.pycharmmInterface.mlpot.cli_common import composition_tag
 
             comp = _parse_composition(args.composition)
             n_from_comp = sum(c for _, c in comp)
@@ -1973,7 +1973,7 @@ def load_cluster_from_artifacts(
                 n_from_comp,
             )
         if tag_guess:
-            from mmml.interfaces.pycharmmInterface.mlpot.artifact_paths import mini_paths
+            from karml.interfaces.pycharmmInterface.mlpot.artifact_paths import mini_paths
 
             mini = mini_paths(out)
             psf = psf or mini["mini_psf"]
@@ -2002,7 +2002,7 @@ def load_cluster_from_artifacts(
 
     _import_pycharmm()
 
-    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
+    from karml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
 
     tag_guess = str(
         getattr(args, "tag", None)
@@ -2016,7 +2016,7 @@ def load_cluster_from_artifacts(
             flush=True,
         )
 
-    from mmml.interfaces.pycharmmInterface.cgenff_bonded_reference import read_psf_card_file
+    from karml.interfaces.pycharmmInterface.cgenff_bonded_reference import read_psf_card_file
 
     read_cgenff_toppar()
     with charmm_relaxed_bomlev():
@@ -2034,7 +2034,7 @@ def load_cluster_from_artifacts(
 
     n_mol = int(getattr(args, "n_molecules", 0) or 0)
     if getattr(args, "composition", None):
-        from mmml.cli.run.md_pbc_suite.ase import _parse_composition
+        from karml.cli.run.md_pbc_suite.ase import _parse_composition
 
         n_mol = sum(c for _, c in _parse_composition(args.composition))
     if n_mol <= 0:
@@ -2052,7 +2052,7 @@ def load_cluster_from_artifacts(
         fake_ctx = type("Ctx", (), {"workflow_args": args, "atoms_per_monomer": getattr(
             args, "_cluster_atoms_per_list", None
         )})()
-        from mmml.interfaces.pycharmmInterface.cluster_geometry import (
+        from karml.interfaces.pycharmmInterface.cluster_geometry import (
             resolve_cluster_residue_labels,
         )
 
@@ -2105,7 +2105,7 @@ def load_physnet_mlpot_bundle(
     ckpt = Path(checkpoint).expanduser().resolve()
     z = np.asarray(ase_atoms.get_atomic_numbers(), dtype=int)
 
-    from mmml.interfaces.pycharmmInterface.mlpot.metatomic_mlpot import (
+    from karml.interfaces.pycharmmInterface.mlpot.metatomic_mlpot import (
         build_metatomic_mlpot_model,
         should_use_metatomic_mlpot,
     )
@@ -2136,7 +2136,7 @@ def load_physnet_mlpot_bundle(
         return None, None, pyCModel
 
     if int(n_monomers) > 1:
-        from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
+        from karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
             build_decomposed_mlpot_model,
         )
 
@@ -2154,7 +2154,7 @@ def load_physnet_mlpot_bundle(
             # Mixed solvent systems have heterogeneous residue sizes.  Use
             # PSF residue boundaries before applying the legacy uniform split.
             try:
-                from mmml.interfaces.pycharmmInterface.mlpot.trimer_scan import (
+                from karml.interfaces.pycharmmInterface.mlpot.trimer_scan import (
                     atoms_per_monomer_from_psf,
                 )
 
@@ -2201,8 +2201,8 @@ def load_physnet_mlpot_bundle(
         )
         return None, None, pyCModel
 
-    from mmml.cli.base import load_physnet_params_and_ef_model
-    from mmml.models.physnetjax.physnetjax.calc.helper_mlp import get_pyc
+    from karml.cli.base import load_physnet_params_and_ef_model
+    from karml.models.physnetjax.physnetjax.calc.helper_mlp import get_pyc
 
     params, model = load_physnet_params_and_ef_model(ckpt, natoms=n_atoms)
     model.natoms = n_atoms
@@ -2359,14 +2359,14 @@ def ensure_ml_exclusions_before_mlpot_charmm_energy(
             pycharmm.image.update_bimag()
         return nnb
 
-    from mmml.interfaces.pycharmmInterface.charmm_levels import (
+    from karml.interfaces.pycharmmInterface.charmm_levels import (
         charmm_quiet_output,
         charmm_relaxed_bomlev,
     )
-    from mmml.interfaces.pycharmmInterface.charmm_mpi import (
+    from karml.interfaces.pycharmmInterface.charmm_mpi import (
         recover_mpi_for_charmm_after_jax,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+    from karml.interfaces.pycharmmInterface.mlpot.pbc_env import (
         prepare_charmm_pbc,
         reassert_pbc_nbond_cutoffs,
     )
@@ -2426,7 +2426,7 @@ def _registration_pbc_box_side_A(
         return float(cubic_box_side_A)
     if budget_box is not None:
         return float(budget_box)
-    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+    from karml.interfaces.pycharmmInterface.mlpot.pbc_env import (
         _is_cubic_box_sides,
         _read_charmm_box_sides_A,
     )
@@ -2456,7 +2456,7 @@ def _resolve_mlpot_ctx_pbc_box_side(ctx: MlpotContext) -> float | None:
 
 def _apply_mlpot_psf_mm_off_and_pbc(ctx: MlpotContext, *, verbose: bool = False) -> str:
     """Zero CHARMM MM on ML atoms; rebuild PBC lists after CGENFF param read."""
-    from mmml.interfaces.pycharmmInterface.mlpot.block_terms import (
+    from karml.interfaces.pycharmmInterface.mlpot.block_terms import (
         apply_mlpot_registration_mm_off,
     )
 
@@ -2498,7 +2498,7 @@ def _suspend_pbc_for_cgenff_param_read(*, verbose: bool = False) -> None:
     Also invoked from :func:`read_cgenff_prm` (append); this wrapper keeps the
     registration-time log line when ``verbose=True``.
     """
-    from mmml.interfaces.pycharmmInterface.nbonds_config import (
+    from karml.interfaces.pycharmmInterface.nbonds_config import (
         suspend_pbc_before_cgenff_param_append,
     )
 
@@ -2520,8 +2520,8 @@ def _resolve_atoms_per_for_mlpot_rewrap(
         if atoms_per is not None:
             return [int(x) for x in atoms_per]
     try:
-        import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
-        from mmml.interfaces.pycharmmInterface.mlpot.trimer_scan import (
+        import karml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+        from karml.interfaces.pycharmmInterface.mlpot.trimer_scan import (
             atoms_per_monomer_from_psf,
         )
 
@@ -2544,7 +2544,7 @@ def rewrap_charmm_coords_for_mlpot_pbc(
     atoms_per = _resolve_atoms_per_for_mlpot_rewrap(workflow_args)
     if not atoms_per:
         return 0
-    from mmml.cli.run.md_handoff import rewrap_charmm_pbc_molecules
+    from karml.cli.run.md_handoff import rewrap_charmm_pbc_molecules
 
     pos = get_charmm_positions_array()
     pos_wrapped = rewrap_charmm_pbc_molecules(
@@ -2589,13 +2589,13 @@ def _finalize_pbc_mlpot_exclusions_after_param_read(
     Installing exclusions before ``apply_pbc_nbonds`` left PSF-only exclusions (~1000
     for DCM:100) and ``MAKINB`` resize segfaults at the first MLpot SD ``ENER``.
     """
-    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+    from karml.interfaces.pycharmmInterface.mlpot.pbc_env import (
         prepare_charmm_pbc,
         reassert_pbc_nbond_cutoffs,
     )
 
-    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
-    from mmml.interfaces.pycharmmInterface.charmm_mpi import (
+    from karml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
+    from karml.interfaces.pycharmmInterface.charmm_mpi import (
         recover_mpi_for_charmm_after_jax,
     )
 
@@ -2662,7 +2662,7 @@ def _finalize_pbc_mlpot_exclusions_after_param_read(
         )
         if not skip_dense:
             _install_ml_exclusions(ml_selection, update=False)
-        from mmml.interfaces.pycharmmInterface.charmm_image_geometry import (
+        from karml.interfaces.pycharmmInterface.charmm_image_geometry import (
             capture_charmm_script_output,
             stash_mkimat2_registration_log,
         )
@@ -2685,7 +2685,7 @@ def _finalize_pbc_mlpot_exclusions_after_param_read(
         )
         if not skip_dense:
             _install_ml_exclusions(ml_selection, update=False)
-        from mmml.interfaces.pycharmmInterface.charmm_image_geometry import (
+        from karml.interfaces.pycharmmInterface.charmm_image_geometry import (
             capture_charmm_script_output,
             stash_mkimat2_registration_log,
         )
@@ -2726,11 +2726,11 @@ def _require_mlpot_skip_iblo_support(pycharmm: Any) -> None:
     ml_module = getattr(pycharmm.MLpot, "__module__", "unknown")
     raise RuntimeError(
         "PyCHARMM MLpot lacks skip_iblo_inb_update "
-        f"(loaded from {ml_module}). Reinstall mmml from this repo (`uv sync`) so "
+        f"(loaded from {ml_module}). Reinstall karml from this repo (`uv sync`) so "
         "import_pycharmm prefers the vendored pycharmm package over "
         "$CHARMM_HOME/tool/pycharmm. PBC all-ML registration runs upinb after BLOCK "
         "DELTIC without it and segfaults in __nbexcl_MOD_upinb. Also launch under "
-        "scripts/mmml-charmm-mpirun.sh for MPI-linked libcharmm.so."
+        "scripts/karml-charmm-mpirun.sh for MPI-linked libcharmm.so."
     )
 
 
@@ -2755,12 +2755,12 @@ def register_mlpot(
     **kwargs: Any,
 ) -> MlpotContext:
     """Register ``pycharmm.MLpot`` and return a context manager-like handle."""
-    from mmml.interfaces.pycharmmInterface.mlpot.block_terms import (
+    from karml.interfaces.pycharmmInterface.mlpot.block_terms import (
         apply_mlpot_registration_mm_off,
         mlpot_use_block_registration,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.mlpot_limits import validate_mlpot_system_size
-    from mmml.interfaces.pycharmmInterface.mlpot.periodic_mm import resolve_mm_nonbond_mode
+    from karml.interfaces.pycharmmInterface.mlpot.mlpot_limits import validate_mlpot_system_size
+    from karml.interfaces.pycharmmInterface.mlpot.periodic_mm import resolve_mm_nonbond_mode
 
     periodic_external = (
         resolve_mm_nonbond_mode(type("_Args", (), {"mm_nonbond_mode": mm_nonbond_mode})())
@@ -2773,7 +2773,7 @@ def register_mlpot(
     n_ml = len(ml_selection.get_atom_indexes())
     budget_box = None
     if use_pbc:
-        from mmml.interfaces.pycharmmInterface.mlpot.mlpot_limits import (
+        from karml.interfaces.pycharmmInterface.mlpot.mlpot_limits import (
             mlpot_limits_status,
             pbc_image_copies_per_atom,
             pbc_pair_budget_box_side_A,
@@ -2802,12 +2802,12 @@ def register_mlpot(
     validate_mlpot_system_size(
         n_ml, pbc=bool(use_pbc), box_side_A=budget_box
     )
-    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
-    from mmml.interfaces.pycharmmInterface.charmm_mpi import (
+    from karml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
+    from karml.interfaces.pycharmmInterface.charmm_mpi import (
         assert_mpi_launcher_for_mlpot,
         charmm_lib_links_mpi,
     )
-    from mmml.interfaces.pycharmmInterface.nbonds_config import CGENFF_PRM_BOMLEV
+    from karml.interfaces.pycharmmInterface.nbonds_config import CGENFF_PRM_BOMLEV
 
     if use_pbc and charmm_lib_links_mpi():
         assert_mpi_launcher_for_mlpot(context="MLpot PBC registration")
@@ -2838,7 +2838,7 @@ def register_mlpot(
         if use_pbc:
             box_side = _registration_pbc_box_side_A(cubic_box_side_A, budget_box)
             if workflow_args is not None:
-                from mmml.interfaces.pycharmmInterface.mlpot.charmm_energy_policy import (
+                from karml.interfaces.pycharmmInterface.mlpot.charmm_energy_policy import (
                     apply_charmm_energy_term_policies_before_pbc_finalize,
                 )
 
@@ -2889,7 +2889,7 @@ def register_mlpot(
                             flush=True,
                         )
         if workflow_args is not None:
-            from mmml.interfaces.pycharmmInterface.mlpot.charmm_energy_policy import (
+            from karml.interfaces.pycharmmInterface.mlpot.charmm_energy_policy import (
                 enforce_charmm_energy_term_policies,
             )
 
@@ -2925,7 +2925,7 @@ def register_mlpot(
         )
         # PyCHARMM registered calculator.calculate_charmm unguarded; swap in the
         # fail-closed wrapper before the first energy call.
-        from mmml.interfaces.pycharmmInterface.mlpot.callback_failstop import (
+        from karml.interfaces.pycharmmInterface.mlpot.callback_failstop import (
             install_fail_closed_energy_func,
         )
 
@@ -2936,7 +2936,7 @@ def register_mlpot(
             # MLpot.__init__ already set iblo/inb and ran update_bnbnd (upinb).
             # Re-running prepare_charmm_vacuum + update_bnbnd here segfaults in upinb
             # for large clusters (e.g. DCM:90) after JAX GPU warmup.
-            from mmml.interfaces.pycharmmInterface.nbonds_config import (
+            from karml.interfaces.pycharmmInterface.nbonds_config import (
                 apply_nbonds_script_kwargs,
                 vacuum_nbond_kwargs,
             )
@@ -2963,7 +2963,7 @@ def register_mlpot(
         )
     )
     if use_pbc:
-        from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+        from karml.interfaces.pycharmmInterface.mlpot.pbc_env import (
             assert_charmm_pbc_lattice_ready_for_mlpot,
         )
 
@@ -2971,7 +2971,7 @@ def register_mlpot(
             context="MLpot registration",
             cubic_box_side_A=reg_box,
         )
-        from mmml.interfaces.pycharmmInterface.charmm_image_geometry import (
+        from karml.interfaces.pycharmmInterface.charmm_image_geometry import (
             run_mlpot_pbc_image_registration_gate,
         )
 
@@ -2981,7 +2981,7 @@ def register_mlpot(
             context="MLpot PBC registration (post-MLpot)",
             verbose=verbose,
         )
-        from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+        from karml.interfaces.pycharmmInterface.mlpot.pbc_env import (
             reassert_pbc_nbond_cutoffs,
         )
 

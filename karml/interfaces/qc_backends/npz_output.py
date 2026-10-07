@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from mmml.data.units import convert_energy, convert_forces, normalize_energy_unit, normalize_force_unit
+from karml.data.units import convert_energy, convert_forces, normalize_energy_unit, normalize_force_unit
 
 
 BACKEND_NATIVE_UNITS: dict[str, tuple[str, str]] = {

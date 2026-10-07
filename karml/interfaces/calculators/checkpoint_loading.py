@@ -1,4 +1,4 @@
-"""Checkpoint detection and loading for MMML inference calculators."""
+"""Checkpoint detection and loading for KARML inference calculators."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ import numpy as np
 from ase import Atoms
 from ase.calculators.calculator import Calculator
 
-from mmml.utils.model_checkpoint import load_model_checkpoint, normalize_flax_params_for_apply
+from karml.utils.model_checkpoint import load_model_checkpoint, normalize_flax_params_for_apply
 
 CheckpointFormat = Literal["pickle_joint", "json", "orbax"]
 
@@ -290,7 +290,7 @@ def load_checkpoint_bundle(checkpoint: Path) -> LoadedCheckpoint:
 
 def _import_joint_model_classes() -> tuple[Any, Any]:
     try:
-        from mmml.cli.misc.train_joint import (
+        from karml.cli.misc.train_joint import (
             JointPhysNetDCMNet,
             JointPhysNetNonEquivariant,
         )
@@ -354,8 +354,8 @@ def load_physnet_for_hybrid_mlpot(
     Joint checkpoints use only the PhysNet submodule (E/F); DCMNet distributed
     charges are not evaluated in the decomposed monomer/dimer path.
     """
-    from mmml.models.physnetjax.physnetjax.models.model import PhysNet
-    from mmml.utils.model_checkpoint import (
+    from karml.models.physnetjax.physnetjax.models.model import PhysNet
+    from karml.utils.model_checkpoint import (
         infer_trainable_zbl_config,
         normalize_physnet_config,
         physnet_constructor_kwargs,
@@ -376,7 +376,7 @@ def load_physnet_for_hybrid_mlpot(
     model.max_padded_atoms = int(max_padded_atoms)
 
     if dtype is not None:
-        from mmml.interfaces.pycharmmInterface.ml_dtypes import (
+        from karml.interfaces.pycharmmInterface.ml_dtypes import (
             cast_pytree_to_ml_dtype,
             json_tree_to_jax_params,
         )
@@ -442,14 +442,14 @@ def _build_physnet_ef_calculator(
     cutoff: float | None,
     electrostatics_damping_sigma: float | None = None,
 ) -> Calculator:
-    from mmml.utils.model_checkpoint import (
+    from karml.utils.model_checkpoint import (
         infer_trainable_zbl_config,
         normalize_physnet_config,
         physnet_constructor_kwargs,
     )
-    from mmml.models.physnetjax.physnetjax.calc.helper_mlp import get_ase_calc
-    from mmml.models.physnetjax.physnetjax.models.model import PhysNet
-    from mmml.models.physnetjax.physnetjax.models.spooky_model import SpookyPhysNet
+    from karml.models.physnetjax.physnetjax.calc.helper_mlp import get_ase_calc
+    from karml.models.physnetjax.physnetjax.models.model import PhysNet
+    from karml.models.physnetjax.physnetjax.models.spooky_model import SpookyPhysNet
 
     if "physnet_config" in saved_config:
         model_config = dict(saved_config["physnet_config"])
@@ -492,7 +492,7 @@ def create_calculator_from_checkpoint(
     charge: float | None = None,
     spin: float | None = None,
 ) -> Calculator:
-    """Load a trained MMML model and return an ASE calculator."""
+    """Load a trained KARML model and return an ASE calculator."""
     bundle = load_checkpoint_bundle(Path(checkpoint_path))
 
     if "physnet_config" in bundle.config and (
@@ -505,7 +505,7 @@ def create_calculator_from_checkpoint(
             disable_physnet_point_coulomb=disable_physnet_point_coulomb,
         )
         effective_cutoff = cutoff if cutoff is not None else default_cutoff
-        from mmml.interfaces.calculators.simple_inference import SimpleInferenceCalculator
+        from karml.interfaces.calculators.simple_inference import SimpleInferenceCalculator
 
         return SimpleInferenceCalculator(
             model=model,

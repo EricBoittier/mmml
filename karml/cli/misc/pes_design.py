@@ -19,7 +19,7 @@ K_B_EV_K = 8.617333262e-5
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        prog="mmml pes-design",
+        prog="karml pes-design",
         description=(
             "Select a physical, Bayesian D-optimal, descriptor-diverse PES subset "
             "and validate it against equally sized random sampling."
@@ -129,7 +129,7 @@ def _soap(data: dict, indices: np.ndarray, cutoff: float) -> tuple[np.ndarray, l
         from ase import Atoms
         from dscribe.descriptors import SOAP
     except ImportError as exc:
-        raise RuntimeError("--descriptor soap/combined requires DScribe (install mmml[quantum])") from exc
+        raise RuntimeError("--descriptor soap/combined requires DScribe (install karml[quantum])") from exc
     R, Z, N = _frame_arrays(data)
     species = sorted(int(x) for x in np.unique(Z[Z > 0]))
     soap = SOAP(species=species, periodic=False, r_cut=cutoff, n_max=4, l_max=3,
@@ -250,7 +250,7 @@ def _plots(report_dir: Path, Z: np.ndarray, Xrdf: np.ndarray, selected: np.ndarr
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
-    from mmml.utils.plotting.styles import apply_plot_style, legend_outside
+    from karml.utils.plotting.styles import apply_plot_style, legend_outside
 
     style = apply_plot_style("icml")
     bayes_color = style.colors["train"]

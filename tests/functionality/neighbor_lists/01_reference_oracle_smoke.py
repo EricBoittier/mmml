@@ -9,7 +9,7 @@ import sys
 import numpy as np
 
 from _common import print_fail, print_header, print_pass, two_dimer_cluster
-from mmml.interfaces.pycharmmInterface.nl_reference import (
+from karml.interfaces.pycharmmInterface.nl_reference import (
     brute_force_mic_pairs,
     compare_pair_sets,
     have_vesin,

@@ -6,7 +6,7 @@ from pathlib import Path
 
 
 def test_rtf_path_for_append_strips_version_line(tmp_path: Path) -> None:
-    from mmml.interfaces.pycharmmInterface.nbonds_config import _rtf_path_for_append
+    from karml.interfaces.pycharmmInterface.nbonds_config import _rtf_path_for_append
 
     src = tmp_path / "extra.rtf"
     src.write_text(
@@ -22,7 +22,7 @@ def test_rtf_path_for_append_strips_version_line(tmp_path: Path) -> None:
 
 
 def test_rtf_path_for_append_noop_without_version(tmp_path: Path) -> None:
-    from mmml.interfaces.pycharmmInterface.nbonds_config import _rtf_path_for_append
+    from karml.interfaces.pycharmmInterface.nbonds_config import _rtf_path_for_append
 
     src = tmp_path / "extra.rtf"
     body = "* title\n*\nRESI FOO 0.00\nEND\n"

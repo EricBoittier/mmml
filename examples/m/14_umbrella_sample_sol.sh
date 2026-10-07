@@ -21,8 +21,8 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if [[ -n "${GPU:-}" ]]; then
   export CUDA_VISIBLE_DEVICES="${GPU}"
 fi
-if [[ -n "${CUDA_VISIBLE_DEVICES:-}" || "${MMML_EXAMPLE_DEVICE:-}" == "gpu" || "${MMML_EXAMPLE_DEVICE:-}" == "cuda" ]]; then
-  export MMML_EXAMPLE_DEVICE="${MMML_EXAMPLE_DEVICE:-gpu}"
+if [[ -n "${CUDA_VISIBLE_DEVICES:-}" || "${KARML_EXAMPLE_DEVICE:-}" == "gpu" || "${KARML_EXAMPLE_DEVICE:-}" == "cuda" ]]; then
+  export KARML_EXAMPLE_DEVICE="${KARML_EXAMPLE_DEVICE:-gpu}"
 fi
 
 # shellcheck source=/dev/null
@@ -30,8 +30,8 @@ source "${ROOT}/examples/m/_env.sh"
 cd "${ROOT}"
 
 export PYTHONUNBUFFERED=1
-if declare -F mmml_example_env_banner >/dev/null 2>&1; then
-  mmml_example_env_banner
+if declare -F karml_example_env_banner >/dev/null 2>&1; then
+  karml_example_env_banner
 fi
 if [[ -n "${CUDA_VISIBLE_DEVICES:-}" ]]; then
   echo "  CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES}  (physical GPU index → sole device cuda:0 for this job)"
@@ -74,7 +74,7 @@ MOVE_WITH="$(
   uv run python - <<'PY'
 from pathlib import Path
 import os
-from mmml.utils.domdec_psf_order import read_psf_atoms_and_bonds
+from karml.utils.domdec_psf_order import read_psf_atoms_and_bonds
 
 psf = Path(os.environ["PSF"])
 atoms, _ = read_psf_atoms_and_bonds(psf)
@@ -110,11 +110,11 @@ fi
 
 echo "=== hybrid umbrella-sample: $(basename "${CFG}") (solvent=${SOLVENT}, move-with=${MOVE_WITH}) ==="
 # CLI path overrides beat YAML relatives (config-dir resolution is easy to mis-count).
-uv run mmml umbrella-sample \
+uv run karml umbrella-sample \
   --config "${CFG}" \
   --from-pdb "${PDB}" \
   --from-psf "${PSF}" \
-  --checkpoint "${MMML_CKPT}" \
+  --checkpoint "${KARML_CKPT}" \
   --output-dir "${OUT}" \
   --move-with "${MOVE_WITH}" \
   "${EXTRA[@]}"

@@ -5,10 +5,10 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from mmml.acquisition.linear_student import init_linear_student, init_linear_teacher
-from mmml.acquisition.physnet_readout import architecture_equivalence_note, flatten_params
-from mmml.acquisition.representations import linear_readout_pooled_equals_energy_grad
-from mmml.acquisition.splits import StructureRecord
+from karml.acquisition.linear_student import init_linear_student, init_linear_teacher
+from karml.acquisition.physnet_readout import architecture_equivalence_note, flatten_params
+from karml.acquisition.representations import linear_readout_pooled_equals_energy_grad
+from karml.acquisition.splits import StructureRecord
 
 
 def _water():

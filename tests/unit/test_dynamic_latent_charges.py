@@ -6,7 +6,7 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from mmml.models.dynamic_latent_charges import weighted_scatter_average
+from karml.models.dynamic_latent_charges import weighted_scatter_average
 
 
 def test_single_slot_full_weight_is_a_plain_scatter():

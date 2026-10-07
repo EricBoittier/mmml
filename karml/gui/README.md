@@ -1,4 +1,4 @@
-# MMML Molecular Viewer
+# KARML Molecular Viewer
 
 A React-based molecular viewer using miew-react to visualize molecules in the browser. Supports NPZ, ASE trajectory, and PDB files.
 
@@ -13,26 +13,26 @@ A React-based molecular viewer using miew-react to visualize molecules in the br
 
 ## Installation
 
-### 1. Install MMML Package
+### 1. Install KARML Package
 
-The GUI is part of the MMML package. Install it using pip:
+The GUI is part of the KARML package. Install it using pip:
 
 ```bash
-# From the MMML root directory
+# From the KARML root directory
 pip install -e .
 
 # Or install from a distribution
-pip install mmml
+pip install karml
 ```
 
-This installs the `mmml` CLI command and all Python dependencies, including FastAPI and uvicorn (required for the GUI).
+This installs the `karml` CLI command and all Python dependencies, including FastAPI and uvicorn (required for the GUI).
 
 ### 2. Install Frontend Dependencies
 
 The React frontend requires Node.js and npm. Install the frontend dependencies:
 
 ```bash
-cd mmml/gui/viewer
+cd karml/gui/viewer
 npm install
 ```
 
@@ -41,11 +41,11 @@ npm install
 For production use, build the frontend:
 
 ```bash
-cd mmml/gui/viewer
+cd karml/gui/viewer
 npm run build
 ```
 
-This creates optimized production files in `mmml/gui/viewer/dist/`. The `mmml gui` command will automatically serve these files.
+This creates optimized production files in `karml/gui/viewer/dist/`. The `karml gui` command will automatically serve these files.
 
 **Note**: If you skip this step, you can still use the GUI in development mode (see below).
 
@@ -57,13 +57,13 @@ After building the frontend (step 3 above), you can run the GUI:
 
 ```bash
 # View all molecular files in a directory
-mmml gui --data-dir ./trajectories
+karml gui --data-dir ./trajectories
 
 # View a single file
-mmml gui --file simulation.npz
+karml gui --file simulation.npz
 
 # Custom port
-mmml gui --data-dir ./data --port 8080
+karml gui --data-dir ./data --port 8080
 ```
 
 The server will start and automatically open your browser. The GUI will be available at `http://localhost:8000` (or your specified port).
@@ -74,10 +74,10 @@ For development with hot-reload (no need to rebuild after code changes):
 
 ```bash
 # Terminal 1: Start the API server (dev mode)
-mmml gui --data-dir ./data --dev
+karml gui --data-dir ./data --dev
 
 # Terminal 2: Start the React dev server
-cd mmml/gui/viewer
+cd karml/gui/viewer
 npm run dev
 ```
 
@@ -88,18 +88,18 @@ Then open http://localhost:5173 in your browser. The React dev server will proxy
 To build the frontend for production:
 
 ```bash
-cd mmml/gui/viewer
+cd karml/gui/viewer
 npm install
 npm run build
 ```
 
-The built files will be in `mmml/gui/viewer/dist/`.
+The built files will be in `karml/gui/viewer/dist/`.
 
 ## Supported Data Formats
 
-### NPZ Files (MMML Format)
+### NPZ Files (KARML Format)
 
-NPZ files should follow the MMML schema:
+NPZ files should follow the KARML schema:
 
 - `R`: Coordinates (n_structures, n_atoms, 3) [Angstrom]
 - `Z`: Atomic numbers (n_structures, n_atoms) [int]
@@ -153,7 +153,7 @@ The backend provides the following REST API:
 ## Architecture
 
 ```
-mmml/gui/
+karml/gui/
 ├── api/                  # FastAPI backend
 │   ├── __init__.py
 │   ├── main.py          # FastAPI app configuration

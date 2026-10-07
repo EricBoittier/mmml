@@ -6,7 +6,7 @@ from argparse import Namespace
 
 import pytest
 
-from mmml.interfaces.pycharmmInterface.cutoffs import (
+from karml.interfaces.pycharmmInterface.cutoffs import (
     DEFAULT_ML_SWITCH_WIDTH,
     DEFAULT_MM_SWITCH_ON,
     DEFAULT_MM_SWITCH_WIDTH,
@@ -68,8 +68,8 @@ def _ase_args(**overrides) -> Namespace:
 
 
 def test_build_command_ase_pbc_npt_forwards_pressure() -> None:
-    from mmml.cli.run.md_pbc_suite.ase import build_parser
-    from mmml.cli.run.md_system import build_command
+    from karml.cli.run.md_pbc_suite.ase import build_parser
+    from karml.cli.run.md_system import build_command
 
     backend, argv = build_command(_ase_args(setup="pbc_npt", pressure=1.3176, temperature=90.0))
     assert backend == "ase"
@@ -84,7 +84,7 @@ def test_build_command_ase_pbc_npt_forwards_pressure() -> None:
 def test_ase_npt_refuses_calculator_without_stress() -> None:
     from ase import Atoms
 
-    from mmml.cli.run.md_pbc_suite.ase import ase_npt_externalstress, require_ase_npt_stress
+    from karml.cli.run.md_pbc_suite.ase import ase_npt_externalstress, require_ase_npt_stress
 
     atoms = Atoms("Ar", positions=[[0.0, 0.0, 0.0]])
     with pytest.raises(ValueError, match="implements stress"):
@@ -93,7 +93,7 @@ def test_ase_npt_refuses_calculator_without_stress() -> None:
 
 
 def test_build_command_ase_uses_mm_cutoff_not_switch_width() -> None:
-    from mmml.cli.run.md_system import build_command
+    from karml.cli.run.md_system import build_command
 
     backend, argv = build_command(_ase_args())
     assert backend == "ase"
@@ -111,7 +111,7 @@ def test_build_command_ase_uses_mm_cutoff_not_switch_width() -> None:
 
 
 def test_build_command_ase_forwards_do_ml_flags() -> None:
-    from mmml.cli.run.md_system import build_command
+    from karml.cli.run.md_system import build_command
 
     backend, argv = build_command(_ase_args(do_ml=False, do_ml_dimer=False, include_mm=False))
     assert backend == "ase"
@@ -122,8 +122,8 @@ def test_build_command_ase_forwards_do_ml_flags() -> None:
 
 def test_build_command_ase_forwards_fire_min_flags_parse() -> None:
     """md-system always forwards FIRE min flags; ASE backend must accept them."""
-    from mmml.cli.run.md_pbc_suite.ase import build_parser
-    from mmml.cli.run.md_system import build_command
+    from karml.cli.run.md_pbc_suite.ase import build_parser
+    from karml.cli.run.md_system import build_command
 
     backend, argv = build_command(
         _ase_args(fire_min_steps=200, fire_min_maxstep=0.2)
@@ -140,7 +140,7 @@ def test_build_command_ase_forwards_fire_min_flags_parse() -> None:
 
 
 def test_build_command_forwards_electrostatics_damping_sigma() -> None:
-    from mmml.cli.run.md_system import build_command
+    from karml.cli.run.md_system import build_command
 
     backend, argv = build_command(_ase_args(electrostatics_damping_sigma=0.0))
     assert backend == "ase"
@@ -168,15 +168,15 @@ def test_build_command_forwards_electrostatics_damping_sigma() -> None:
 
 def _backend_parser(backend: str):
     if backend == "ase":
-        from mmml.cli.run.md_pbc_suite.ase import build_parser
+        from karml.cli.run.md_pbc_suite.ase import build_parser
     else:
-        from mmml.cli.run.md_pbc_suite.jaxmd import build_parser
+        from karml.cli.run.md_pbc_suite.jaxmd import build_parser
     return build_parser()
 
 
 @pytest.mark.parametrize("backend", ["ase", "jaxmd"])
 def test_every_forwarded_flag_is_accepted_by_its_backend(backend: str) -> None:
-    from mmml.cli.run.md_system import build_command
+    from karml.cli.run.md_system import build_command
 
     # `extra_args` is user passthrough -- the fixture's are ASE-specific -- so
     # it is excluded here. Everything else in the argv is chosen by md_system.
@@ -190,7 +190,7 @@ def test_every_forwarded_flag_is_accepted_by_its_backend(backend: str) -> None:
 @pytest.mark.parametrize("backend", ["ase", "jaxmd"])
 def test_hybrid_hamiltonian_reaches_the_backend_with_its_value(backend: str) -> None:
     """Accepting the flag is not enough -- it has to arrive intact."""
-    from mmml.cli.run.md_system import build_command
+    from karml.cli.run.md_system import build_command
 
     _, argv = build_command(
         _ase_args(
@@ -210,7 +210,7 @@ def test_hybrid_hamiltonian_reaches_the_backend_with_its_value(backend: str) -> 
 def test_the_backend_default_matches_run_sim(backend: str) -> None:
     """Three parsers declare these options; a default that drifts between them
     silently changes which Hamiltonian a run uses."""
-    from mmml.cli.run.run_sim import build_parser as run_sim_parser
+    from karml.cli.run.run_sim import build_parser as run_sim_parser
 
     reference = {
         action.dest: action.default

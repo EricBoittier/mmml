@@ -1,11 +1,11 @@
-"""Paths to non-Python files bundled with the ``mmml`` package."""
+"""Paths to non-Python files bundled with the ``karml`` package."""
 
 from __future__ import annotations
 
 from pathlib import Path
 
 def _package_dir() -> Path:
-    """Directory containing ``paths.py`` (the installed ``mmml`` package root)."""
+    """Directory containing ``paths.py`` (the installed ``karml`` package root)."""
     return Path(__file__).resolve().parent
 
 

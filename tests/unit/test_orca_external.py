@@ -1,4 +1,4 @@
-"""Unit tests for the MMML ORCA external-tool wrapper."""
+"""Unit tests for the KARML ORCA external-tool wrapper."""
 
 from __future__ import annotations
 
@@ -8,15 +8,15 @@ import numpy as np
 import pytest
 from ase import Atoms
 
-from mmml.interfaces.orca_external.protocol import read_extinp, write_engrad
-from mmml.interfaces.orca_external.runner import (
-    MmmlOrcaExternalRunner,
+from karml.interfaces.orca_external.protocol import read_extinp, write_engrad
+from karml.interfaces.orca_external.runner import (
+    KarmlOrcaExternalRunner,
     atoms_from_xyz,
     clear_calculator_cache,
     evaluate_structure,
-    mmml_forces_to_orca_gradient,
+    karml_forces_to_orca_gradient,
 )
-from mmml.interfaces.orca_external.settings import MmmlOrcaSettings
+from karml.interfaces.orca_external.settings import KarmlOrcaSettings
 
 
 def test_read_extinp_parses_optional_pointcharges(tmp_path: Path) -> None:
@@ -64,9 +64,9 @@ def test_write_engrad_matches_orca_layout(tmp_path: Path) -> None:
     assert " 3.000000000000e-01" in text
 
 
-def test_mmml_forces_to_orca_gradient_sign_and_units() -> None:
+def test_karml_forces_to_orca_gradient_sign_and_units() -> None:
     forces = np.array([[1.0, 0.0, 0.0]])
-    gradient = mmml_forces_to_orca_gradient(forces)
+    gradient = karml_forces_to_orca_gradient(forces)
     assert gradient.shape == (3,)
     assert gradient[0] < 0.0
 
@@ -133,16 +133,16 @@ def test_runner_writes_engrad_with_mocked_checkpoint(tmp_path: Path, monkeypatch
         def get_forces(self, atoms=None):
             return self.results["forces"]
 
-    def _fake_get_calculator(settings: MmmlOrcaSettings):
+    def _fake_get_calculator(settings: KarmlOrcaSettings):
         return _MockCalc()
 
     monkeypatch.setattr(
-        "mmml.interfaces.orca_external.runner.get_calculator",
+        "karml.interfaces.orca_external.runner.get_calculator",
         _fake_get_calculator,
     )
 
-    settings = MmmlOrcaSettings(checkpoint=tmp_path / "dummy.pkl")
-    engrad_path = MmmlOrcaExternalRunner(settings).run(extinp_path)
+    settings = KarmlOrcaSettings(checkpoint=tmp_path / "dummy.pkl")
+    engrad_path = KarmlOrcaExternalRunner(settings).run(extinp_path)
 
     assert engrad_path == tmp_path / "water_EXT.engrad"
     assert engrad_path.is_file()

@@ -59,7 +59,7 @@ def window_log_relax_steps(output_dir: Path, wid: int) -> int | None:
 
 
 def scan_windows(output_dir: Path, wids: list[int]) -> list[WindowReport]:
-    from mmml.umbrella.hybrid_windows import load_window_checkpoint
+    from karml.umbrella.hybrid_windows import load_window_checkpoint
 
     reports: list[WindowReport] = []
     for wid in wids:
@@ -99,7 +99,7 @@ def files_to_reset(
     reset_unrelaxed: bool = False,
 ) -> list[Path]:
     """Window checkpoints to delete, plus the aggregates that would restore them."""
-    from mmml.umbrella.hybrid_windows import window_npz_path
+    from karml.umbrella.hybrid_windows import window_npz_path
 
     out = Path(output_dir)
     doomed: list[Path] = []

@@ -17,7 +17,7 @@ Writes ``examples/menshutkin/solvent_params/<name>.json``, which
 ``solvent_models.py`` picks up automatically.
 
 Adding a solvent to the campaign is therefore: make sure its residue exists in
-CGenFF (or supply an append RTF via MMML_CGENFF_EXTRA_RTF), run this once, done.
+CGenFF (or supply an append RTF via KARML_CGENFF_EXTRA_RTF), run this once, done.
 """
 
 from __future__ import annotations
@@ -43,16 +43,16 @@ def main() -> int:
     p.add_argument("--out-dir", type=Path, default=OUT_DIR)
     args = p.parse_args()
 
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import ensure_pycharmm_loaded
+    from karml.interfaces.pycharmmInterface.import_pycharmm import ensure_pycharmm_loaded
 
     if not ensure_pycharmm_loaded():
         raise SystemExit("PyCHARMM not available (CHARMM_LIB_DIR / libcharmm.so)")
 
     import pycharmm.write as write
 
-    from mmml.cli.run.md_pbc_suite.cluster import build_packmol_composition_cluster
-    from mmml.interfaces.pycharmmInterface.cgenff_topology import default_cgenff_paths
-    from mmml.interfaces.pycharmmInterface.mm_system_energy import (
+    from karml.cli.run.md_pbc_suite.cluster import build_packmol_composition_cluster
+    from karml.interfaces.pycharmmInterface.cgenff_topology import default_cgenff_paths
+    from karml.interfaces.pycharmmInterface.mm_system_energy import (
         load_bonded_system_from_psf,
         load_nonbonded_system_from_charmm,
     )
@@ -78,8 +78,8 @@ def main() -> int:
     extra_prm = []
     import os
 
-    if os.environ.get("MMML_CGENFF_EXTRA_PRM"):
-        extra_prm = [Path(x) for x in os.environ["MMML_CGENFF_EXTRA_PRM"].split(":") if x]
+    if os.environ.get("KARML_CGENFF_EXTRA_PRM"):
+        extra_prm = [Path(x) for x in os.environ["KARML_CGENFF_EXTRA_PRM"].split(":") if x]
 
     nb = load_nonbonded_system_from_charmm(psf, prm, *extra_prm)
     bonded_sys = load_bonded_system_from_psf(

@@ -17,12 +17,12 @@ _MIN_CGENFF_PRM_BYTES = 500_000
 _CHARMM_LIB_NAMES = ("libcharmm.so", "libcharmm.dylib", "charmm.so", "charmm.dylib")
 
 
-_DISABLE_ENV_VAR = "MMML_DISABLE_CHARMM"
+_DISABLE_ENV_VAR = "KARML_DISABLE_CHARMM"
 _TRUTHY = ("1", "true", "yes", "on")
 
 
 def charmm_disabled(env: "os._Environ | dict[str, str] | None" = None) -> bool:
-    """True when ``MMML_DISABLE_CHARMM`` asks discovery to pretend CHARMM is absent.
+    """True when ``KARML_DISABLE_CHARMM`` asks discovery to pretend CHARMM is absent.
 
     Pointing ``CHARMM_LIB_DIR`` at a nonexistent directory does *not* hide a
     build: :func:`_resolve_lib_dir` treats a lib-less explicit value as stale
@@ -37,17 +37,17 @@ def charmm_disabled(env: "os._Environ | dict[str, str] | None" = None) -> bool:
 
 def _repo_root_from(here: Path) -> Path | None:
     for parent in (here, *here.parents):
-        if (parent / "pyproject.toml").is_file() and (parent / "mmml").is_dir():
+        if (parent / "pyproject.toml").is_file() and (parent / "karml").is_dir():
             return parent
     return None
 
 
-def mmml_repo_root(start: Path | None = None) -> Path:
-    """Directory that contains ``pyproject.toml`` and the ``mmml`` package.
+def karml_repo_root(start: Path | None = None) -> Path:
+    """Directory that contains ``pyproject.toml`` and the ``karml`` package.
 
     An editable checkout is found from this file. A ``uv tool`` install lives
     under ``site-packages`` and has no checkout beside it, so the working
-    directory is checked next: ``mmml doctor`` run from the source tree still
+    directory is checked next: ``karml doctor`` run from the source tree still
     sees ``setup/charmm``.
     """
     here = (start or Path(__file__)).resolve()
@@ -78,11 +78,11 @@ def find_charmm_lib_in_dir(lib_dir: Path) -> Path | None:
 def default_repo_charmm_home(repo_root: Path | None = None) -> Path | None:
     """``setup/charmm`` when it holds a library or the MLpot source tree.
 
-    Out-of-tree builds keep ``libcharmm`` in ``~/.cache/mmml-charmm-build`` and
+    Out-of-tree builds keep ``libcharmm`` in ``~/.cache/karml-charmm-build`` and
     leave this directory without a shared library. It is still ``CHARMM_HOME``:
     ``source/api/api_func.F90`` is what the limit check reads.
     """
-    root = repo_root or mmml_repo_root()
+    root = repo_root or karml_repo_root()
     candidate = root / "setup" / "charmm"
     if find_charmm_lib_in_dir(candidate):
         return candidate
@@ -95,7 +95,7 @@ def charmm_build_cache_dirs(env: "os._Environ | dict[str, str] | None" = None) -
     """Out-of-tree build directories that hold a ``libcharmm``.
 
     ``scripts/rebuild_charmm_mlpot.sh`` builds into
-    ``$HOME/.cache/mmml-charmm-build/<platform-tag>`` (overridable with
+    ``$HOME/.cache/karml-charmm-build/<platform-tag>`` (overridable with
     ``CHARMM_BUILD_DIR``), and the per-tier helpers add
     ``.../tier_<max_npr>_nodomdec/lib``. Those builds are frequently *newer*
     than the copy under ``setup/charmm``, so they must be discoverable — a
@@ -115,9 +115,9 @@ def charmm_build_cache_dirs(env: "os._Environ | dict[str, str] | None" = None) -
         roots.extend([build_dir, build_dir.parent])
     home_raw = (environ.get("HOME") or "").strip()
     if home_raw:
-        roots.append(Path(home_raw) / ".cache" / "mmml-charmm-build")
+        roots.append(Path(home_raw) / ".cache" / "karml-charmm-build")
     elif env is None:
-        roots.append(Path("~/.cache/mmml-charmm-build").expanduser())
+        roots.append(Path("~/.cache/karml-charmm-build").expanduser())
 
     out: list[Path] = []
     seen: set[Path] = set()
@@ -217,7 +217,7 @@ def resolve_charmm_paths(
     environ = env if env is not None else os.environ
     if charmm_disabled(environ):
         return "", ""
-    root = repo_root or mmml_repo_root()
+    root = repo_root or karml_repo_root()
 
     default_home = default_repo_charmm_home(root)
     default_home_s = str(default_home) if default_home else ""
@@ -263,7 +263,7 @@ def bootstrap_charmm_env(
 
 
 def _charmm_io_aliases_disabled() -> bool:
-    raw = (os.environ.get("MMML_CHARMM_IO_ALIASES") or "1").strip().lower()
+    raw = (os.environ.get("KARML_CHARMM_IO_ALIASES") or "1").strip().lower()
     return raw in ("0", "false", "no", "off")
 
 
@@ -278,7 +278,7 @@ def _path_component_has_uppercase(part: str) -> bool:
 
 def charmm_fortran_max_path_length() -> int:
     """CHARMM Fortran ``OPEN``/``WRITE`` name buffer (typically 128 characters)."""
-    raw = (os.environ.get("MMML_CHARMM_MAX_PATH_LEN") or "").strip()
+    raw = (os.environ.get("KARML_CHARMM_MAX_PATH_LEN") or "").strip()
     if raw:
         return max(64, int(raw))
     return 128
@@ -293,7 +293,7 @@ def fortran_path_needs_alias(path: str | Path, *, for_write: bool = False) -> bo
         p = Path.cwd() / p
     resolved = p.resolve()
     # Library-mode CHARMM Fortran OPEN is case-sensitive; always stage writes to a
-    # lowercase path under $TMPDIR/mmml-charmm-io and copy back afterward.
+    # lowercase path under $TMPDIR/karml-charmm-io and copy back afterward.
     if for_write:
         return True
     if len(str(resolved)) > charmm_fortran_max_path_length():
@@ -301,7 +301,7 @@ def fortran_path_needs_alias(path: str | Path, *, for_write: bool = False) -> bo
     if any(_path_component_has_uppercase(part) for part in resolved.parts):
         return True
     try:
-        from mmml.interfaces.pycharmmInterface.charmm_mpi import (
+        from karml.interfaces.pycharmmInterface.charmm_mpi import (
             _under_mpirun,
             charmm_lib_links_mpi,
         )
@@ -314,22 +314,22 @@ def fortran_path_needs_alias(path: str | Path, *, for_write: bool = False) -> bo
 
 
 def charmm_io_staging_root() -> Path:
-    raw = (os.environ.get("MMML_CHARMM_IO_STAGING") or "").strip()
+    raw = (os.environ.get("KARML_CHARMM_IO_STAGING") or "").strip()
     if raw:
         return Path(os.path.expandvars(raw)).expanduser()
     base = Path(os.environ.get("TMPDIR", "/tmp"))
     # Per-user directory name: on shared compute nodes a legacy flat
-    # ``/tmp/mmml-charmm-io`` is often owned by another account (mode 755),
+    # ``/tmp/karml-charmm-io`` is often owned by another account (mode 755),
     # which blocks mkdir for everyone else.
     user = (os.environ.get("USER") or os.environ.get("LOGNAME") or "").strip()
     if not user:
         user = f"u{os.getuid()}"
-    return base / f"mmml-charmm-io-{user}"
+    return base / f"karml-charmm-io-{user}"
 
 
 def _charmm_io_alias_scope() -> str:
     """Isolate staging aliases per job/process (shared ``/tmp`` on compute nodes)."""
-    for key in ("SLURM_JOB_ID", "MMML_CHARMM_IO_SCOPE"):
+    for key in ("SLURM_JOB_ID", "KARML_CHARMM_IO_SCOPE"):
         raw = (os.environ.get(key) or "").strip()
         if raw:
             return raw
@@ -408,7 +408,7 @@ def remove_charmm_io_write_staging_alias(
     """Delete a staged write alias so the next DCD open starts from an empty file.
 
     ``_reset_stage_trajectory`` only removes the real output path; aborted runs can
-    leave a partial binary DCD under ``$TMPDIR/mmml-charmm-io``.  Reopening that
+    leave a partial binary DCD under ``$TMPDIR/karml-charmm-io``.  Reopening that
     alias via ``dynamics_set_iuncrd`` then triggers formatted/unformatted READ errors
     in ``dynio.F90``.
     """
@@ -477,7 +477,7 @@ def charmm_fortran_path(
 
 @dataclass(frozen=True)
 class CgenffTopparPaths:
-    """Resolved CGENFF RTF/PRM pair under the MMML repo."""
+    """Resolved CGENFF RTF/PRM pair under the KARML repo."""
 
     rtf: Path
     prm: Path
@@ -485,14 +485,14 @@ class CgenffTopparPaths:
 
 def _cgenff_toppar_search_dirs(repo_root: Path) -> list[Path]:
     return [
-        repo_root / "mmml" / "data" / "charmm",
+        repo_root / "karml" / "data" / "charmm",
         repo_root / "setup" / "charmm" / "toppar",
     ]
 
 
 def resolve_cgenff_toppar_paths(*, repo_root: Path | None = None) -> CgenffTopparPaths:
-    """Locate bundled CGENFF toppar (``mmml/data/charmm`` first, then ``setup/charmm/toppar``)."""
-    root = repo_root or mmml_repo_root()
+    """Locate bundled CGENFF toppar (``karml/data/charmm`` first, then ``setup/charmm/toppar``)."""
+    root = repo_root or karml_repo_root()
     for base in _cgenff_toppar_search_dirs(root):
         rtf = base / _CGENFF_RTF_NAME
         prm = base / _CGENFF_PRM_NAME
@@ -507,10 +507,10 @@ def resolve_cgenff_toppar_paths(*, repo_root: Path | None = None) -> CgenffToppa
         "CGENFF toppar not found. Expected both "
         f"{_CGENFF_RTF_NAME!r} and {_CGENFF_PRM_NAME!r}.\n"
         f"Searched:\n{tried}\n"
-        "A source checkout keeps them in mmml/data/charmm "
+        "A source checkout keeps them in karml/data/charmm "
         "(git pull if that directory is empty). "
         "A uv tool or wheel install only has them when that pair is in the "
-        "installed package; reinstall mmml from a checkout that includes them."
+        "installed package; reinstall karml from a checkout that includes them."
     )
 
 

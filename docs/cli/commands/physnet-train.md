@@ -1,4 +1,4 @@
-# `mmml physnet-train`
+# `karml physnet-train`
 
 Train PhysNet message-passing model (E/F).
 
@@ -6,13 +6,13 @@ Train PhysNet message-passing model (E/F).
 ## Usage
 
 ```bash
-mmml physnet-train --help
+karml physnet-train --help
 ```
 
 ## Options
 
 ```text
-usage: mmml physnet-train [-h] [--config CONFIG] [--data DATA]
+usage: karml physnet-train [-h] [--config CONFIG] [--data DATA]
                           [--valid-data VALID_DATA] [--ckpt-dir CKPT_DIR]
                           [--tag TAG] [--model MODEL] [--n-train N_TRAIN]
                           [--n-valid N_VALID] [--seed SEED]
@@ -272,13 +272,13 @@ Other options:
                         idxu/idxv (default) or JAX neighbor rebuild (--mm-pair-
                         source jax). All-ML bulk systems with empty callback
                         lists auto-fall back to JAX. Override with env
-                        MMML_MM_PAIR_SOURCE.
+                        KARML_MM_PAIR_SOURCE.
   --lr-solver, --lr_solver {mic,nvalchemiops_pme,ewald}
                         Hybrid-MM long-range Coulomb for training (default:
                         mic). mic: switched CGenFF LJ+Coulomb pairs.
                         nvalchemiops_pme: full-box many-to-many PME on fixed
                         CGenFF charges (no exclusions / no intra subtract;
-                        requires --pme-box-length and mmml[nvalchemiops-pme]).
+                        requires --pme-box-length and karml[nvalchemiops-pme]).
                         ewald: same full-box/no-exclusion Coulomb as
                         nvalchemiops_pme, pure JAX (no external PME library, no
                         CUDA requirement); requires --pme-box-length. With --mm-
@@ -342,7 +342,7 @@ Other options:
                         as the NPZ). Example for kcal/mol display when data are
                         eV: '{"energy": 23.060549, "forces": 23.060549}'. Dipole
                         units are not handled here — convert D/Dxyz before
-                        training (e.g. mmml fix-and-split --dipole-in debye
+                        training (e.g. karml fix-and-split --dipole-in debye
                         --dipole-out e-angstrom). See docs/UNITS_SUMMARY.md §
                         physnet-train --conversion.
   --init-params, --init_params INIT_PARAMS
@@ -376,12 +376,12 @@ Other options:
   --efa                 Enable Euclidean Fast Attention (EFA) in the model
   --no-efa              Disable Euclidean Fast Attention (EFA)
 
-Examples: mmml physnet-train \ --data output/energies_forces_dipoles_train.npz \
+Examples: karml physnet-train \ --data output/energies_forces_dipoles_train.npz \
 --ckpt-dir ./ckpts/ama_mp2 \ --tag ama_mp2 \ --n-train 24000 --n-valid 3000 \
---batch-size 32 --num-epochs 2000 \ --max-atomic-number 35 mmml physnet-train
+--batch-size 32 --num-epochs 2000 \ --max-atomic-number 35 karml physnet-train
 --config train.yaml YAML keys match CLI flags (with optional aliases: train,
-output, max_epochs). See mmml/cli/misc/physnet_train.example.yaml for a
-template. See mmml/cli/misc/physnet_train_transfer.example.yaml for transfer
+output, max_epochs). See karml/cli/misc/physnet_train.example.yaml for a
+template. See karml/cli/misc/physnet_train_transfer.example.yaml for transfer
 learning / distillation. See examples/hybrid_mm_charges/ for hybrid-mm +
 mm_charge_mode (fixed/latent/fixed_plus_latent).
 ```

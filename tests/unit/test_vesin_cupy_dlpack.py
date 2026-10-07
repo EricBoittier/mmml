@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from mmml.interfaces.pycharmmInterface.nl_reference import (
+from karml.interfaces.pycharmmInterface.nl_reference import (
     filter_vesin_half_list_vectorized,
     have_vesin,
     monomer_id_from_offsets,
@@ -49,8 +49,8 @@ def test_gpu_rebuild_parity_when_available():
     import jax
     import jax.numpy as jnp
 
-    from mmml.interfaces.pycharmmInterface.nl_gpu import gpu_nl_path_available, rebuild_vesin_pairs_gpu
-    from mmml.interfaces.pycharmmInterface.nl_reference import extract_valid_pairs
+    from karml.interfaces.pycharmmInterface.nl_gpu import gpu_nl_path_available, rebuild_vesin_pairs_gpu
+    from karml.interfaces.pycharmmInterface.nl_reference import extract_valid_pairs
 
     try:
         gpu_devices = jax.devices("gpu")
@@ -59,20 +59,20 @@ def test_gpu_rebuild_parity_when_available():
     if not gpu_devices:
         pytest.skip("no JAX GPU device")
 
-    prev = os.environ.get("MMML_MM_NL_DEVICE")
-    os.environ["MMML_MM_NL_DEVICE"] = "gpu"
+    prev = os.environ.get("KARML_MM_NL_DEVICE")
+    os.environ["KARML_MM_NL_DEVICE"] = "gpu"
     try:
         # Repair stale /usr/local/cuda before availability probe.
-        from mmml.interfaces.pycharmmInterface.nl_gpu import ensure_cupy_cuda_path
+        from karml.interfaces.pycharmmInterface.nl_gpu import ensure_cupy_cuda_path
 
         ensure_cupy_cuda_path(quiet=True)
         if not gpu_nl_path_available():
             pytest.skip("cupy or vesin GPU path unavailable")
     finally:
         if prev is None:
-            os.environ.pop("MMML_MM_NL_DEVICE", None)
+            os.environ.pop("KARML_MM_NL_DEVICE", None)
         else:
-            os.environ["MMML_MM_NL_DEVICE"] = prev
+            os.environ["KARML_MM_NL_DEVICE"] = prev
 
     rng = np.random.default_rng(1)
     n = 20
@@ -84,7 +84,7 @@ def test_gpu_rebuild_parity_when_available():
     cutoff = 7.0
     ref = vesin_mic_pairs(positions, cell, cutoff, monomer_id, monomer_offsets=offsets)
 
-    os.environ["MMML_MM_NL_DEVICE"] = "gpu"
+    os.environ["KARML_MM_NL_DEVICE"] = "gpu"
     device = jax.devices("gpu")[0]
     pos_jax = jax.device_put(jnp.asarray(positions), device)
     pair_idx, pair_mask, _ = rebuild_vesin_pairs_gpu(

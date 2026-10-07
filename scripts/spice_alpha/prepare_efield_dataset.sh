@@ -11,7 +11,7 @@
 set -euo pipefail
 
 ROOT="${1:?unzipped SPICE-α directory (contains SPICE-alpha/SPICE-alpha.tar.gz)}"
-OUT="${2:-$ROOT/mmml_efield}"
+OUT="${2:-$ROOT/karml_efield}"
 MAX_FRAMES="${3:-0}"
 
 ROOT="$(cd "$ROOT" && pwd)"
@@ -26,7 +26,7 @@ if [[ ! -f "$H5_DIR/DES370K_Monomers.hdf5" ]]; then
   fi
   echo "extracting DES370K monomers/dimers from tarball (members are ./DES370K_*.hdf5)"
   EXTRACT_TAR="$TAR" EXTRACT_DIR="$H5_DIR" python -c \
-    'import os; from mmml.data.spice_alpha import extract_des370k_hdf5; extract_des370k_hdf5(os.environ["EXTRACT_TAR"], os.environ["EXTRACT_DIR"])'
+    'import os; from karml.data.spice_alpha import extract_des370k_hdf5; extract_des370k_hdf5(os.environ["EXTRACT_TAR"], os.environ["EXTRACT_DIR"])'
 fi
 
 MAX_ARGS=()
@@ -35,7 +35,7 @@ if [[ "$MAX_FRAMES" != "0" ]]; then
 fi
 
 echo "converting monomers → efield NPZ (Ef=0, polar in Bohr³, neutrals only)"
-python -m mmml.data.spice_alpha \
+python -m karml.data.spice_alpha \
   "$H5_DIR/DES370K_Monomers.hdf5" \
   -o "$OUT/spice_des_mono.npz" \
   --efield --polar-units bohr3 --neutral-only \
@@ -55,7 +55,7 @@ if [[ -f "$H5_DIR/DES370K_Dimers.hdf5" ]]; then
 fi
 if [[ "$want_dimers" == "1" ]]; then
   echo "converting dimers (optional; pad from data)"
-  python -m mmml.data.spice_alpha \
+  python -m karml.data.spice_alpha \
     "$H5_DIR/DES370K_Dimers.hdf5" \
     -o "$OUT/spice_des_dimers.npz" \
     --efield --polar-units bohr3 --neutral-only \

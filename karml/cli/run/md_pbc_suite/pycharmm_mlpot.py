@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""CHARMM MLpot backend for ``mmml md-system --backend pycharmm`` (vacuum and PBC)."""
+"""CHARMM MLpot backend for ``karml md-system --backend pycharmm`` (vacuum and PBC)."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ import os
 import sys
 from pathlib import Path
 
-from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
     add_charmm_output_args,
     add_cluster_args,
     add_dcd_save_args,
@@ -22,12 +22,12 @@ from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
     add_staged_md_args,
     add_test_first_args,
 )
-from mmml.interfaces.pycharmmInterface.cutoffs import add_handoff_cutoff_args
-from mmml.interfaces.pycharmmInterface.ml_dtypes import add_ml_compute_dtype_args
-from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+from karml.interfaces.pycharmmInterface.cutoffs import add_handoff_cutoff_args
+from karml.interfaces.pycharmmInterface.ml_dtypes import add_ml_compute_dtype_args
+from karml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
     add_dynamics_overlap_args,
 )
-from mmml.interfaces.pycharmmInterface.mlpot.run_workflow import run_workflow
+from karml.interfaces.pycharmmInterface.mlpot.run_workflow import run_workflow
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -35,7 +35,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         description=(
             "CHARMM MLpot workflows: staged mini → heat → NVE → equi → prod "
             "(vacuum or PBC via --setup pbc_* / --box-size). "
-            "Invoked via ``mmml md-system --backend pycharmm``."
+            "Invoked via ``karml md-system --backend pycharmm``."
         )
     )
     parser.add_argument(
@@ -48,7 +48,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--setup",
         type=str,
         default="pycharmm_full",
-        help="Preset from mmml md-system (controls default --md-stages and PBC)",
+        help="Preset from karml md-system (controls default --md-stages and PBC)",
     )
     parser.add_argument(
         "--ensemble",
@@ -58,10 +58,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     add_cluster_args(parser)
     add_packmol_cache_args(parser)
-    from mmml.interfaces.pyxtal_placement import add_pyxtal_cluster_args
+    from karml.interfaces.pyxtal_placement import add_pyxtal_cluster_args
 
     add_pyxtal_cluster_args(parser)
-    from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import add_box_sizing_args
+    from karml.interfaces.pycharmmInterface.mlpot.box_sizing import add_box_sizing_args
 
     add_box_sizing_args(parser)
     add_run_state_checkpoint_args(parser)
@@ -86,13 +86,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--handoff-template-res",
         type=Path,
         default=None,
-        help="CHARMM restart template used when materializing an mmml handoff.",
+        help="CHARMM restart template used when materializing an karml handoff.",
     )
     parser.add_argument(
         "--continue-velocities",
         action=argparse.BooleanOptionalAction,
         default=True,
-        help="Preserve velocities from an incoming mmml handoff.",
+        help="Preserve velocities from an incoming karml handoff.",
     )
     parser.add_argument(
         "--nstep",
@@ -235,7 +235,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         metavar="N",
         help=(
             "Chunk PhysNet monomer/dimer batches (auto: 256 on GPU / 64 on CPU for n>=40; "
-            "or MMML_MLPOT_ML_BATCH_SIZE)."
+            "or KARML_MLPOT_ML_BATCH_SIZE)."
         ),
     )
     parser.add_argument(
@@ -244,7 +244,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=None,
         metavar="N",
         help=(
-            "Parallel PhysNet chunks on N local GPUs (default 1; or MMML_MLPOT_N_GPUS). "
+            "Parallel PhysNet chunks on N local GPUs (default 1; or KARML_MLPOT_N_GPUS). "
             "Use with CUDA_VISIBLE_DEVICES."
         ),
     )
@@ -252,8 +252,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--ml-spatial-mpi",
         action="store_true",
         help=(
-            "Per-rank spatial ML when MPI size>1 (PBC; or MMML_MLPOT_SPATIAL_MPI=1). "
-            "Use MMML_MPI_NP>1 and --ml-gpu-count 1."
+            "Per-rank spatial ML when MPI size>1 (PBC; or KARML_MLPOT_SPATIAL_MPI=1). "
+            "Use KARML_MPI_NP>1 and --ml-gpu-count 1."
         ),
     )
     add_ml_compute_dtype_args(parser)
@@ -293,22 +293,22 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 
 def main(argv: list[str] | None = None) -> int:
-    from mmml.interfaces.pycharmmInterface.jax_device_policy import apply_mlpot_jax_platform_env
+    from karml.interfaces.pycharmmInterface.jax_device_policy import apply_mlpot_jax_platform_env
 
     apply_mlpot_jax_platform_env()
     # CHARMM_LIB_DIR is set when import_pycharmm loads; ensure MPI before workflow.
     # After in-process auto warmup-mlpot-jax, pycharmm may still be None until load.
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import ensure_pycharmm_loaded
+    from karml.interfaces.pycharmmInterface.import_pycharmm import ensure_pycharmm_loaded
 
     ensure_pycharmm_loaded()
-    from mmml.interfaces.pycharmmInterface.charmm_mpi import ensure_mpi_for_charmm_domdec
-    from mmml.utils.jax_gpu_warmup import ensure_jax_cuda_toolchain
+    from karml.interfaces.pycharmmInterface.charmm_mpi import ensure_mpi_for_charmm_domdec
+    from karml.utils.jax_gpu_warmup import ensure_jax_cuda_toolchain
 
     ensure_mpi_for_charmm_domdec(phase="before MLpot workflow")
     # After MPI/CHARMM prepends LD_LIBRARY_PATH, prefer pip cuDNN over module stacks.
     ensure_jax_cuda_toolchain()
     args = parse_args(argv)
-    from mmml.cli.run.md_config import normalize_hybrid_assembly_flags
+    from karml.cli.run.md_config import normalize_hybrid_assembly_flags
 
     normalize_hybrid_assembly_flags(args)
     # Alias for run_workflow helpers that read ``temp``.
@@ -321,7 +321,7 @@ def main(argv: list[str] | None = None) -> int:
         )
     except (ValueError, FileNotFoundError, RuntimeError) as exc:
         print(f"pycharmm_mlpot: error: {exc}", file=sys.stderr)
-        if (os.environ.get("MMML_TRACEBACK") or "").strip().lower() in ("1", "true", "yes", "on"):
+        if (os.environ.get("KARML_TRACEBACK") or "").strip().lower() in ("1", "true", "yes", "on"):
             import traceback
 
             traceback.print_exc(file=sys.stderr)

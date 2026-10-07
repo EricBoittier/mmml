@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from mmml.cli.run.md_handoff import (
+from karml.cli.run.md_handoff import (
     _validate_handoff_psf_layout,
     ensure_psf_for_handoff_cluster,
 )
@@ -43,12 +43,12 @@ def test_ensure_psf_reuses_live_psf_without_rebuild(monkeypatch):
         raise AssertionError("should not rebuild PSF")
 
     monkeypatch.setattr(
-        "mmml.cli.run.md_handoff._live_psf_matches_handoff",
+        "karml.cli.run.md_handoff._live_psf_matches_handoff",
         lambda n_atoms: n_atoms == len(z),
     )
     monkeypatch.setitem(
         __import__("sys").modules,
-        "mmml.cli.run.md_pbc_suite.ase",
+        "karml.cli.run.md_pbc_suite.ase",
         type(
             "FakeASE",
             (),

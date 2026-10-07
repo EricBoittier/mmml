@@ -1,21 +1,21 @@
-# `mmml run-pycharmm`
+# `karml run-pycharmm`
 
 Pure CHARMM heating/equilibration.
 
 !!! warning "legacy"
-    Legacy command. Prefer **`mmml md-system --backend pycharmm (no ML checkpoint)`**. Pure MM CHARMM without MLpot; md-system covers ML workflows.
+    Legacy command. Prefer **`karml md-system --backend pycharmm (no ML checkpoint)`**. Pure MM CHARMM without MLpot; md-system covers ML workflows.
 
 
 ## Usage
 
 ```bash
-mmml run-pycharmm --help
+karml run-pycharmm --help
 ```
 
 ## Options
 
 ```text
-usage: mmml run-pycharmm [-h] --pdbfile PDBFILE [--cell CELL]
+usage: karml run-pycharmm [-h] --pdbfile PDBFILE [--cell CELL]
                          [--skip-setup-energy-show]
                          [--pycharmm-minimize/--no-pycharmm-minimize | --no-pycharmm-minimize/--no-pycharmm-minimize]
                          [--pycharmm-minimize-steps N]
@@ -71,8 +71,8 @@ Other options:
 Pure PyCHARMM runner: heating and equilibration only (no MM/ML). Runs CHARMM
 setup, minimization, heating, and equilibration. Does not run ASE MD, JAX-MD, or
 any ML calculator. Use this for classical CHARMM-only simulations or to prepare
-structures before running mmml run (MM/ML). Usage: python -m
-mmml.cli.run.run_pycharmm --pdbfile pdb/init-packmol.pdb --cell 40 mmml run-
+structures before running karml run (MM/ML). Usage: python -m
+karml.cli.run.run_pycharmm --pdbfile pdb/init-packmol.pdb --cell 40 karml run-
 pycharmm --pdbfile pdb/init-packmol.pdb --cell 40
 ```
 

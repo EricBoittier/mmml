@@ -22,24 +22,24 @@ from ase import units
 from ase.md.verlet import VelocityVerlet
 from ase.optimize import FIRE
 
-import mmml
-from mmml.interfaces.pycharmmInterface.import_pycharmm import (
+import karml
+from karml.interfaces.pycharmmInterface.import_pycharmm import (
     ensure_pycharmm_loaded,
     CGENFF_PRM,
     pycharmm_loud,
     coor,
 )
-from mmml.interfaces.pycharmmInterface.trialanine_water_box import build_trialanine_water_box_in_charmm
-from mmml.interfaces.pycharmmInterface.cgenff_bonded_reference import (
+from karml.interfaces.pycharmmInterface.trialanine_water_box import build_trialanine_water_box_in_charmm
+from karml.interfaces.pycharmmInterface.cgenff_bonded_reference import (
     set_charmm_positions,
     setup_nonbonded_only_charmm,
 )
-from mmml.interfaces.pycharmmInterface.mm_system_energy import load_nonbonded_system_from_charmm
-from mmml.interfaces.pycharmmInterface.charmm_jax_energy_benchmark import _nbond_settings_from_cutoffs
-from mmml.interfaces.pycharmmInterface.utils import get_Z_from_psf
-from mmml.interfaces.pycharmmInterface.charmm_levels import run_charmm_script_loud
-from mmml.interfaces.calculators.simple_inference import create_calculator_from_checkpoint
-from mmml.interfaces.calculators.hybrid import (
+from karml.interfaces.pycharmmInterface.mm_system_energy import load_nonbonded_system_from_charmm
+from karml.interfaces.pycharmmInterface.charmm_jax_energy_benchmark import _nbond_settings_from_cutoffs
+from karml.interfaces.pycharmmInterface.utils import get_Z_from_psf
+from karml.interfaces.pycharmmInterface.charmm_levels import run_charmm_script_loud
+from karml.interfaces.calculators.simple_inference import create_calculator_from_checkpoint
+from karml.interfaces.calculators.hybrid import (
     MonomerSumCalculator,
     JAXIntermolecularCalculator,
 )
@@ -239,7 +239,7 @@ md_trajectory.close()
 # 9. Perform dynamics in PyCHARMM (Optional / Alternative workflow)
 print("--- Running CHARMM MD Script Workflow ---")
 # Setup environment for CHARMM library
-os.environ['CHARMM_LIB_DIR'] = '/Users/ericboittier/mmml/setup/charmm'
+os.environ['CHARMM_LIB_DIR'] = '/Users/ericboittier/karml/setup/charmm'
 
 import pycharmm
 import pycharmm.dynamics as charm_dyn

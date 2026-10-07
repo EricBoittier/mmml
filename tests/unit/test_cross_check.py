@@ -8,23 +8,23 @@ import numpy as np
 import pytest
 from ase import Atoms
 
-from mmml.interfaces.qc_backends.factory import build_backend
-from mmml.interfaces.qc_backends.ml_backend import MLBackend
-from mmml.interfaces.qc_backends.npz_output import (
+from karml.interfaces.qc_backends.factory import build_backend
+from karml.interfaces.qc_backends.ml_backend import MLBackend
+from karml.interfaces.qc_backends.npz_output import (
     infer_target_units,
     normalize_backend_npz,
     stack_frame_results,
 )
-from mmml.interfaces.qc_backends.orca_qm import (
+from karml.interfaces.qc_backends.orca_qm import (
     OrcaQMBackend,
     parse_orca_out_energy,
     read_orca_engrad,
     render_orca_input,
 )
-from mmml.interfaces.qc_backends.protocol import BackendSpec
-from mmml.interfaces.qc_backends.pyscf_backend import PySCFBackend
-from mmml.interfaces.qc_backends.runner import CrossCheckConfig, CrossCheckRunner
-from mmml.interfaces.qc_backends.structures import load_structures_npz
+from karml.interfaces.qc_backends.protocol import BackendSpec
+from karml.interfaces.qc_backends.pyscf_backend import PySCFBackend
+from karml.interfaces.qc_backends.runner import CrossCheckConfig, CrossCheckRunner
+from karml.interfaces.qc_backends.structures import load_structures_npz
 
 
 @pytest.fixture
@@ -158,7 +158,7 @@ def test_cross_check_runner_with_reference_npz(water_npz: Path, tmp_path: Path):
             return ShiftingPySCF(compute_fn=fake_compute)
         return original_build(spec)
 
-    import mmml.interfaces.qc_backends.runner as runner_mod
+    import karml.interfaces.qc_backends.runner as runner_mod
 
     runner_mod.build_backend = patched_build
     try:
@@ -234,7 +234,7 @@ def test_orca_backend_mock_run():
 
 
 def test_molpro_backend_mock():
-    from mmml.interfaces.qc_backends.molpro import MolproBackend
+    from karml.interfaces.qc_backends.molpro import MolproBackend
 
     def fake_run(atoms, workdir, backend):
         return {

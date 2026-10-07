@@ -10,7 +10,7 @@ from typing import Any, Sequence
 
 import numpy as np
 
-from mmml.interfaces.pycharmmInterface.mlpot.periodic_mm import (
+from karml.interfaces.pycharmmInterface.mlpot.periodic_mm import (
     resolve_periodic_charmm_vdw,
 )
 
@@ -63,7 +63,7 @@ POLICY_REGISTRY: dict[str, CharmmEnergyTermPolicy] = {
 ZERO_CHARGE_SKIPE_TERMS: tuple[str, ...] = ("ELEC", "IMEL")
 
 #: Opt-out for A/B checks: keep CHARMM's (zero) ELEC/IMEL evaluation.
-KEEP_CHARMM_ELEC_ENV = "MMML_MLPOT_KEEP_CHARMM_ELEC"
+KEEP_CHARMM_ELEC_ENV = "KARML_MLPOT_KEEP_CHARMM_ELEC"
 
 # SKIPE is global and accumulates for the CHARMM process; mirror it here so the
 # MLpot eterm router does not push MM buckets into terms CHARMM no longer sums.
@@ -76,7 +76,7 @@ def charmm_skipped_terms() -> frozenset[str]:
 
 
 def _charmm_skipe(terms: Sequence[str]) -> None:
-    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+    import karml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
     import pycharmm
 
     # eval_charmm_script skips CHARMM's uppercase conversion: commands must be uppercase.
@@ -114,7 +114,7 @@ def skip_redundant_charmm_elec(
     if not any(p.zero_nonbond_prm for p in policies):
         return []
     try:
-        import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+        import karml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
         import pycharmm
 
         charges = list(pycharmm.psf.get_charges())
@@ -178,7 +178,7 @@ def resolve_charmm_energy_term_policies(
 
 
 def measure_charmm_energy_terms() -> dict[str, float]:
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_energy_row
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_energy_row
 
     return dict(charmm_energy_row())
 
@@ -228,7 +228,7 @@ def _skip_policy_terms(policies: Sequence[CharmmEnergyTermPolicy], *, verbose: b
 def _zero_scalar_vdw() -> None:
     import pycharmm
 
-    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_silent_command
+    from karml.interfaces.pycharmmInterface.charmm_levels import charmm_silent_command
 
     with charmm_silent_command():
         pycharmm.lingo.charmm_script("SCALAR VDW SET 0.0 SELE ALL END")
@@ -239,9 +239,9 @@ def _policy_args_use_heme_library(args: argparse.Namespace | None) -> bool:
     """True when this run's residue is from the protein heme stream, not CGenFF."""
     if args is None:
         return False
-    from mmml.interfaces.pycharmmInterface.heme_library import is_heme_library_residue
+    from karml.interfaces.pycharmmInterface.heme_library import is_heme_library_residue
 
-    from mmml.interfaces.pycharmmInterface.myoglobin import is_myoglobin_args
+    from karml.interfaces.pycharmmInterface.myoglobin import is_myoglobin_args
 
     if is_myoglobin_args(args):
         return True
@@ -270,7 +270,7 @@ def _remediate_heme_without_cgenff_overlay(
     the same way the CGenFF path does after its overlay fails to clear the
     live table.
     """
-    from mmml.interfaces.pycharmmInterface.mlpot.block_terms import ALL_ML_SKIPE_BONDED
+    from karml.interfaces.pycharmmInterface.mlpot.block_terms import ALL_ML_SKIPE_BONDED
 
     loud = verbose or not getattr(args, "quiet", False)
     _skip_policy_terms(violated, verbose=loud)
@@ -303,7 +303,7 @@ def _policy_scratch_dir(args: argparse.Namespace | None) -> Path:
 
 
 def _zero_ml_atom_charges(ml_selection: Any) -> None:
-    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+    import karml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
     import pycharmm.psf as psf
 
     charges = list(psf.get_charges())
@@ -323,11 +323,11 @@ def _reload_prm_overlay(
     zero_nonbond: bool = False,
     workflow_args: argparse.Namespace | None = None,
 ) -> None:
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+    from karml.interfaces.pycharmmInterface.mlpot.setup import (
         _finalize_pbc_mlpot_exclusions_after_param_read,
         _suspend_pbc_for_cgenff_param_read,
     )
-    from mmml.interfaces.pycharmmInterface.nbonds_config import read_cgenff_prm
+    from karml.interfaces.pycharmmInterface.nbonds_config import read_cgenff_prm
 
     if use_pbc:
         _suspend_pbc_for_cgenff_param_read(verbose=verbose)
@@ -349,7 +349,7 @@ def _reload_prm_overlay(
             verbose=verbose,
             workflow_args=workflow_args,
         )
-        from mmml.interfaces.pycharmmInterface.charmm_image_geometry import (
+        from karml.interfaces.pycharmmInterface.charmm_image_geometry import (
             run_mlpot_pbc_image_registration_gate,
         )
 
@@ -360,8 +360,8 @@ def _reload_prm_overlay(
             verbose=verbose,
         )
     else:
-        import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
-        from mmml.interfaces.pycharmmInterface.nbonds_config import (
+        import karml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+        from karml.interfaces.pycharmmInterface.nbonds_config import (
             apply_nbonds_script_kwargs,
             vacuum_nbond_kwargs,
         )
@@ -370,9 +370,9 @@ def _reload_prm_overlay(
 
 
 def _run_silent_ener() -> None:
-    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+    import karml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
     import pycharmm
-    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_silent_command
+    from karml.interfaces.pycharmmInterface.charmm_levels import charmm_silent_command
 
     with charmm_silent_command():
         pycharmm.lingo.charmm_script("ENER")
@@ -393,7 +393,7 @@ def enforce_charmm_energy_term_policies(
     if not policies:
         return []
 
-    from mmml.interfaces.pycharmmInterface.charmm_image_geometry import (
+    from karml.interfaces.pycharmmInterface.charmm_image_geometry import (
         _mlpot_active_in_charmm,
     )
 
@@ -408,7 +408,7 @@ def enforce_charmm_energy_term_policies(
             )
         return []
 
-    from mmml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap import (
+    from karml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap import (
         cgenff_prm_path,
     )
 
@@ -481,7 +481,7 @@ def enforce_charmm_energy_term_policies(
     scratch.mkdir(parents=True, exist_ok=True)
     policy_tag = "_".join(p.name for p in violated)
     overlay = scratch / f"zeroed_{policy_tag}.prm"
-    from mmml.interfaces.pycharmmInterface.charmm_prm_zero import write_prm_policy_overlay
+    from karml.interfaces.pycharmmInterface.charmm_prm_zero import write_prm_policy_overlay
 
     write_prm_policy_overlay(
         cgenff_prm_path(),
@@ -572,14 +572,14 @@ def apply_charmm_energy_term_policies_before_pbc_finalize(
     applied: list[str] = []
 
     if zero_nonbond:
-        import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
-        from mmml.interfaces.pycharmmInterface.charmm_prm_zero import (
+        import karml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+        from karml.interfaces.pycharmmInterface.charmm_prm_zero import (
             zeroed_nonbond_prm_text,
         )
-        from mmml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap import (
+        from karml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap import (
             cgenff_prm_path,
         )
-        from mmml.interfaces.pycharmmInterface.nbonds_config import read_cgenff_prm
+        from karml.interfaces.pycharmmInterface.nbonds_config import read_cgenff_prm
 
         scratch = _policy_scratch_dir(args)
         scratch.mkdir(parents=True, exist_ok=True)
@@ -594,7 +594,7 @@ def apply_charmm_energy_term_policies_before_pbc_finalize(
                 "cannot enforce IMNB≈0 for jax_mic"
             )
         overlay.write_text(
-            "* MMML pre-PBC VDW zero overlay (ε=0 READ PARAM APPEND)\n"
+            "* KARML pre-PBC VDW zero overlay (ε=0 READ PARAM APPEND)\n"
             f"* Source: {src.name}\n"
             "* --------------------------------------------------------------------------  *\n"
             + body,

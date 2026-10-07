@@ -11,8 +11,8 @@ from typing import TYPE_CHECKING, Any
 
 
 if TYPE_CHECKING:
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import BondedMmMiniConfig
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import BondedMmMiniConfig
+    from karml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
 
 PathLike = str | Path
 
@@ -125,7 +125,7 @@ def topology_fingerprint_path(psf_path: PathLike) -> Path:
 
 def allow_psf_delete_reload() -> bool:
     """True when deprecated ``DELETE ATOM`` + ``read.psf_card`` reload is allowed."""
-    return (os.environ.get("MMML_ALLOW_PSF_DELETE_RELOAD") or "").strip().lower() in (
+    return (os.environ.get("KARML_ALLOW_PSF_DELETE_RELOAD") or "").strip().lower() in (
         "1",
         "yes",
         "true",
@@ -168,7 +168,7 @@ def coerce_iblo_inb(raw: object) -> tuple[list[int], list[int]]:
 
 def capture_topology_fingerprint_from_charmm() -> TopologyFingerprint:
     """Snapshot current CHARMM PSF composition (atom names, residue IDs, counts)."""
-    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+    import karml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
     import pycharmm.psf as psf
 
     natom = int(psf.get_natom())
@@ -314,27 +314,27 @@ def prepare_rescue_lists_safe(
     IMAGE lists are stale.  A bare ``UPDATE`` on all-ML PBC clusters then
     segfaults in ``enbav2e2b2_`` (force-switched IMAGE VDW).  When
     ``ctx.use_pbc`` is set, rebuild crystal + ML exclusions via
-    :func:`~mmml.interfaces.pycharmmInterface.mlpot.setup._finalize_pbc_mlpot_exclusions_after_param_read`
+    :func:`~karml.interfaces.pycharmmInterface.mlpot.setup._finalize_pbc_mlpot_exclusions_after_param_read`
     instead of a vacuum ``UPDATE``.
 
     Vacuum clusters use scripting ``UPDATE`` only (no ``update_bnbnd`` / ``upinb``).
     """
-    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+    from karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
         assert_bonded_mm_energy_active,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.charmm_nbond_diagnostics import (
+    from karml.interfaces.pycharmmInterface.mlpot.charmm_nbond_diagnostics import (
         maybe_snapshot_nbond_state,
     )
 
-    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+    import karml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
     import pycharmm
 
-    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
+    from karml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
 
     maybe_snapshot_nbond_state(ctx, context=f"{context} (pre-list-refresh)")
 
     if bool(getattr(ctx, "use_pbc", False)) and ctx.ml_selection is not None:
-        from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+        from karml.interfaces.pycharmmInterface.mlpot.setup import (
             _finalize_pbc_mlpot_exclusions_after_param_read,
             _resolve_mlpot_ctx_pbc_box_side,
         )
@@ -387,7 +387,7 @@ def _apply_recovery_block(
     *,
     restore_params: bool = True,
 ) -> None:
-    from mmml.interfaces.pycharmmInterface.mlpot.block_terms import (
+    from karml.interfaces.pycharmmInterface.mlpot.block_terms import (
         apply_bonded_mm_only_block,
         apply_bonded_vdw_recovery_block,
         apply_charmm_mm_block,
@@ -407,7 +407,7 @@ def _apply_recovery_block(
         if restore_params:
             apply_charmm_mm_block()
         else:
-            from mmml.interfaces.pycharmmInterface.import_pycharmm import reset_block
+            from karml.interfaces.pycharmmInterface.import_pycharmm import reset_block
 
             reset_block()
     else:
@@ -424,14 +424,14 @@ def run_bonded_recovery_inplace(
     rescue: Any | None = None,
 ) -> float | None:
     """Bonded recovery via BLOCK toggle + MLpot detach/reattach (no PSF DELETE)."""
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_grms
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_grms
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _bonded_recovery_sd_kwargs,
         _import_pycharmm_modules,
         _with_mlpot_detached,
     )
 
-    from mmml.interfaces.pycharmmInterface.charmm_levels import (
+    from karml.interfaces.pycharmmInterface.charmm_levels import (
         charmm_quiet_output,
         run_charmm_script_quiet,
     )
@@ -463,7 +463,7 @@ def run_bonded_recovery_inplace(
     if mode == BondedRecoveryMode.BONDED_ONLY and str(
         getattr(config, "backend", "auto")
     ).lower() in ("auto", "jax"):
-        from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
             minimize_bonded_mm_recovery,
         )
 
@@ -526,15 +526,15 @@ def measure_mm_strain_inplace(
     topology_psf: PathLike | None = None,
 ) -> "MmStrainBaseline":
     """Measure MM bonded strain with bonded-only BLOCK and MLpot detached (no PSF reload)."""
-    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import MmStrainBaseline
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_grms
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import MmStrainBaseline
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_grms
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _with_mlpot_detached,
         charmm_bonded_term_kcalmol,
         charmm_internal_energy_kcalmol,
     )
 
-    from mmml.interfaces.pycharmmInterface.charmm_levels import run_charmm_script_quiet
+    from karml.interfaces.pycharmmInterface.charmm_levels import run_charmm_script_quiet
 
     fingerprint = getattr(ctx, "topology_fingerprint", None)
     if fingerprint is None and topology_psf is not None:

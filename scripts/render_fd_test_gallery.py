@@ -4,14 +4,14 @@ results as figures, under the house style.
 
 Two sources, deliberately contrasted:
 
-1. **SMD bias term** (`mmml.md.energy.terms.SMDBiasTerm`) -- the analytic
+1. **SMD bias term** (`karml.md.energy.terms.SMDBiasTerm`) -- the analytic
    `ase_contribution` force checked against a central finite difference,
    recomputed here the same way `tests/unit/test_md_energy_terms.py::
    test_ase_forces_match_finite_difference` does. This one PASSES
    (atol=1e-4): a clean small-molecule autodiff-vs-FD check.
 2. **CHARMM/mlpot ML-only calculator**, from the saved result at
    `artifacts/pycharmm_mlpot/mlpot_force_fd.json` -- a real run from
-   `mmml/interfaces/pycharmmInterface/mlpot/derivative_test.py`. This one
+   `karml/interfaces/pycharmmInterface/mlpot/derivative_test.py`. This one
    currently FAILS all 60 checked force components (tol=0.005 kcal/mol/A) --
    included as-is (not cherry-picked) since it's the actual state of that
    integration, and directly relevant to the open "real neighbor-list
@@ -26,7 +26,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 
-from mmml.utils.plotting.styles import apply_plot_style, comparison_colors, legend_outside
+from karml.utils.plotting.styles import apply_plot_style, comparison_colors, legend_outside
 
 STYLE_NAME = "icml"
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -39,9 +39,9 @@ def _smd_fd_check():
     procedure as test_ase_forces_match_finite_difference) and return
     (analytic, fd) force arrays, shape (n_atoms, 3)."""
 
-    from mmml.md.energy.registry import EnergyContext
-    from mmml.md.energy.terms import SMDBiasTerm
-    from mmml.md.system import MolecularSystem
+    from karml.md.energy.registry import EnergyContext
+    from karml.md.energy.terms import SMDBiasTerm
+    from karml.md.system import MolecularSystem
 
     rng = np.random.default_rng(5)
     R = rng.uniform(-5, 5, size=(6, 3))

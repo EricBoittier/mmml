@@ -17,37 +17,37 @@ Two independent sub-tests:
    ``--checkpoint`` and prebuilt PSF/CRD):
    Uses ``bootstrap_topology_mpi`` for cooperative ``np>1`` READ. Validate the
    READ gate first (``./scripts/run_mpi_pycharmm_read_gate.sh``). Full Tier 3
-   target: ``MMML_MPI_NP=4 --charmm-ener`` with CPU/MIC (see below).
+   target: ``KARML_MPI_NP=4 --charmm-ener`` with CPU/MIC (see below).
 
 Prerequisites
 -------------
-Prebuilt PSF/CRD for the live path (run once at ``MMML_MPI_NP=1``)::
+Prebuilt PSF/CRD for the live path (run once at ``KARML_MPI_NP=1``)::
 
-    MMML_MPI_NP=1 ./scripts/mmml-charmm-mpirun.sh python \\
+    KARML_MPI_NP=1 ./scripts/karml-charmm-mpirun.sh python \\
       tests/functionality/mlpot/10_domdec_spatial_mpi_smoke.py \\
       --prepare-prebuilt-only --residue DCM --n-molecules 20 --box-side 40
 
 The prepare step writes ``artifacts/domdec_spatial_smoke/dcm_20mer.{psf,crd,res}``.
 ``np>1`` live ENER uses ``bootstrap_topology_mpi`` (PSF/CRD default; restart via
-``MMML_MPI_LOAD_RESTART=1``).
+``KARML_MPI_LOAD_RESTART=1``).
 
 Callback-only (np=2, no checkpoint; CPU node)::
 
-    MMML_MPI_NP=2 MMML_MLPOT_SPATIAL_MPI=1 \\
-      CUDA_VISIBLE_DEVICES="" MMML_MLPOT_DEVICE=cpu JAX_PLATFORMS=cpu \\
-      ./scripts/mmml-charmm-mpirun.sh python \\
+    KARML_MPI_NP=2 KARML_MLPOT_SPATIAL_MPI=1 \\
+      CUDA_VISIBLE_DEVICES="" KARML_MLPOT_DEVICE=cpu JAX_PLATFORMS=cpu \\
+      ./scripts/karml-charmm-mpirun.sh python \\
       tests/functionality/mlpot/10_domdec_spatial_mpi_smoke.py
 
 Live ENER (np=1 gate, then np=4 Tier 3)::
 
     # READ gate (cluster)
-    MMML_MPI_NP=4 ./scripts/run_mpi_pycharmm_read_gate.sh --mode psf-crd
+    KARML_MPI_NP=4 ./scripts/run_mpi_pycharmm_read_gate.sh --mode psf-crd
 
-    MMML_MPI_NP=4 MMML_MLPOT_SPATIAL_MPI=1 \\
-      CUDA_VISIBLE_DEVICES="" MMML_MLPOT_DEVICE=cpu JAX_PLATFORMS=cpu MMML_LR_SOLVER=mic \\
-      ./scripts/mmml-charmm-mpirun.sh python \\
+    KARML_MPI_NP=4 KARML_MLPOT_SPATIAL_MPI=1 \\
+      CUDA_VISIBLE_DEVICES="" KARML_MLPOT_DEVICE=cpu JAX_PLATFORMS=cpu KARML_LR_SOLVER=mic \\
+      ./scripts/karml-charmm-mpirun.sh python \\
       tests/functionality/mlpot/10_domdec_spatial_mpi_smoke.py \\
-      --charmm-ener --checkpoint $MMML_CKPT \\
+      --charmm-ener --checkpoint $KARML_CKPT \\
       --residue DCM --n-molecules 20 --box-side 40
 
 First ENER compiles JAX on CPU (often 2–10 min); the script runs an explicit
@@ -76,7 +76,7 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-_DOMDEC_MODULE = "mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domdec_atoms"
+_DOMDEC_MODULE = "karml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domdec_atoms"
 
 
 def _parse_args() -> argparse.Namespace:
@@ -90,7 +90,7 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("--atoms-per-monomer", type=int, default=None,
                    help="Atoms per monomer (default: auto from n_atoms / n_molecules).")
     p.add_argument("--checkpoint", type=Path, default=None,
-                   help="PhysNet checkpoint for the live ENER path (env: MMML_CKPT).")
+                   help="PhysNet checkpoint for the live ENER path (env: KARML_CKPT).")
     p.add_argument("--prebuilt-dir", type=Path,
                    default=Path("artifacts/domdec_spatial_smoke"),
                    help="Directory for prebuilt PSF/CRD artifacts.")
@@ -122,10 +122,10 @@ def _parse_args() -> argparse.Namespace:
 
 def _mpi_info() -> tuple[int, int]:
     try:
-        from mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
+        from karml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
         return mpi_rank_size()
     except Exception:
-        return 0, max(1, int(os.environ.get("MMML_MPI_NP", "1")))
+        return 0, max(1, int(os.environ.get("KARML_MPI_NP", "1")))
 
 
 def _mpi_barrier(*, tag: str = "sync") -> None:
@@ -134,7 +134,7 @@ def _mpi_barrier(*, tag: str = "sync") -> None:
     if size <= 1:
         return
     try:
-        from mmml.interfaces.pycharmmInterface.charmm_mpi import _mpi_script_barrier
+        from karml.interfaces.pycharmmInterface.charmm_mpi import _mpi_script_barrier
 
         _mpi_script_barrier()
     except Exception as exc:
@@ -151,30 +151,30 @@ def _configure_cpu_jax_if_requested() -> None:
     if os.environ.get("JAX_PLATFORM_NAME", "").strip().lower() == "cpu":
         os.environ.setdefault("JAX_PLATFORMS", "cpu")
     if os.environ.get("CUDA_VISIBLE_DEVICES", None) == "":
-        os.environ.setdefault("MMML_MLPOT_DEVICE", "cpu")
+        os.environ.setdefault("KARML_MLPOT_DEVICE", "cpu")
         os.environ.setdefault("JAX_PLATFORMS", "cpu")
-        os.environ.setdefault("MMML_JAX_WARMUP_DEVICE", "cpu")
-    if os.environ.get("MMML_MLPOT_DEVICE", "").strip().lower() == "cpu":
+        os.environ.setdefault("KARML_JAX_WARMUP_DEVICE", "cpu")
+    if os.environ.get("KARML_MLPOT_DEVICE", "").strip().lower() == "cpu":
         os.environ.setdefault("JAX_PLATFORMS", "cpu")
-        os.environ.setdefault("MMML_JAX_WARMUP_DEVICE", "cpu")
+        os.environ.setdefault("KARML_JAX_WARMUP_DEVICE", "cpu")
         # jax-pme mesh first eval can hang on CPU after XLA compile (node09, June 2026).
-        os.environ.setdefault("MMML_LR_SOLVER", "mic")
+        os.environ.setdefault("KARML_LR_SOLVER", "mic")
 
 
 def _configure_live_charmm_mpi_import(*, size: int) -> None:
     """Env guards before the first ``import_pycharmm`` on np>1 live CHARMM paths."""
     if size <= 1:
         return
-    from mmml.interfaces.pycharmmInterface.charmm_mpi import configure_mpi_bootstrap_env
+    from karml.interfaces.pycharmmInterface.charmm_mpi import configure_mpi_bootstrap_env
 
     configure_mpi_bootstrap_env()
-    _log("setup", "np>1 live CHARMM: skip import-time reset_block; defer mpi4py; MMML_QUIET")
+    _log("setup", "np>1 live CHARMM: skip import-time reset_block; defer mpi4py; KARML_QUIET")
     _skip_vacuum_crystal_free_for_mpi()
 
 
 def _skip_vacuum_crystal_free_for_mpi() -> None:
     """Avoid ``prepare_charmm_vacuum`` → ``crystal free`` during np>1 prebuilt load."""
-    import mmml.interfaces.pycharmmInterface.mlpot.setup as mlpot_setup
+    import karml.interfaces.pycharmmInterface.mlpot.setup as mlpot_setup
 
     def _skip() -> None:
         _log("setup", "skipping prepare_charmm_vacuum for np>1 prebuilt path")
@@ -184,18 +184,18 @@ def _skip_vacuum_crystal_free_for_mpi() -> None:
 
 def _sync_import_pycharmm(*, tag: str = "sync") -> None:
     """Ensure ``import_pycharmm`` is loaded on all ranks."""
-    from mmml.interfaces.pycharmmInterface.charmm_mpi import sync_import_pycharmm_for_bootstrap
+    from karml.interfaces.pycharmmInterface.charmm_mpi import sync_import_pycharmm_for_bootstrap
 
     rank, size = _mpi_info()
-    if "mmml.interfaces.pycharmmInterface.import_pycharmm" in sys.modules:
+    if "karml.interfaces.pycharmmInterface.import_pycharmm" in sys.modules:
         if size > 1:
-            from mmml.interfaces.pycharmmInterface.charmm_mpi import ensure_mpi4py_after_charmm_init
+            from karml.interfaces.pycharmmInterface.charmm_mpi import ensure_mpi4py_after_charmm_init
 
             if not ensure_mpi4py_after_charmm_init(phase="import_pycharmm already loaded"):
                 raise RuntimeError(f"rank {rank}/{size}: mpi4py.MPI unavailable after import_pycharmm")
         return
     if size <= 1:
-        import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+        import karml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
         return
     _log(tag, "importing import_pycharmm")
     sync_import_pycharmm_for_bootstrap(tag=tag)
@@ -215,8 +215,8 @@ def _write_prebuilt_restart(res_path: Path, *, write_unit: int = 20) -> None:
     """Write CHARMM restart from in-memory state (np=1 prepare phase)."""
     import pycharmm.lingo as lingo
 
-    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
-    from mmml.interfaces.pycharmmInterface.charmm_paths import charmm_fortran_path
+    from karml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
+    from karml.interfaces.pycharmmInterface.charmm_paths import charmm_fortran_path
 
     res_path.parent.mkdir(parents=True, exist_ok=True)
     fortran_path, alias = charmm_fortran_path(res_path, for_write=True)
@@ -233,31 +233,31 @@ def _write_prebuilt_restart(res_path: Path, *, write_unit: int = 20) -> None:
 def _print_dry_run(args: argparse.Namespace) -> None:
     print("# Step 1 — build prebuilt PSF/CRD (np=1):")
     print(
-        f"MMML_MPI_NP=1 ./scripts/mmml-charmm-mpirun.sh python \\\n"
+        f"KARML_MPI_NP=1 ./scripts/karml-charmm-mpirun.sh python \\\n"
         f"  tests/functionality/mlpot/10_domdec_spatial_mpi_smoke.py \\\n"
         f"  --prepare-prebuilt-only --residue {args.residue} "
         f"--n-molecules {args.n_molecules} --box-side {args.box_side}"
     )
     print()
     print("# Step 2 — callback-only smoke (no checkpoint needed):")
-    np_cb = max(2, int(os.environ.get("MMML_MPI_NP", "2")))
+    np_cb = max(2, int(os.environ.get("KARML_MPI_NP", "2")))
     print(
-        f"MMML_MPI_NP={np_cb} MMML_MLPOT_SPATIAL_MPI=1 \\\n"
-        f"  CUDA_VISIBLE_DEVICES=\"\" MMML_MLPOT_DEVICE=cpu JAX_PLATFORMS=cpu \\\n"
-        f"  ./scripts/mmml-charmm-mpirun.sh python \\\n"
+        f"KARML_MPI_NP={np_cb} KARML_MLPOT_SPATIAL_MPI=1 \\\n"
+        f"  CUDA_VISIBLE_DEVICES=\"\" KARML_MLPOT_DEVICE=cpu JAX_PLATFORMS=cpu \\\n"
+        f"  ./scripts/karml-charmm-mpirun.sh python \\\n"
         f"  tests/functionality/mlpot/10_domdec_spatial_mpi_smoke.py"
     )
     print()
     print("# Step 3 — live CHARMM ENER (run READ gate first at np=4):")
-    ckpt = args.checkpoint or Path("$MMML_CKPT")
+    ckpt = args.checkpoint or Path("$KARML_CKPT")
     print(
-        f"MMML_MPI_NP=4 ./scripts/run_mpi_pycharmm_read_gate.sh --mode psf-crd"
+        f"KARML_MPI_NP=4 ./scripts/run_mpi_pycharmm_read_gate.sh --mode psf-crd"
     )
     print()
     print(
-        f"MMML_MPI_NP=4 MMML_MLPOT_SPATIAL_MPI=1 \\\n"
-        f"  CUDA_VISIBLE_DEVICES=\"\" MMML_MLPOT_DEVICE=cpu JAX_PLATFORMS=cpu MMML_LR_SOLVER=mic \\\n"
-        f"  ./scripts/mmml-charmm-mpirun.sh python \\\n"
+        f"KARML_MPI_NP=4 KARML_MLPOT_SPATIAL_MPI=1 \\\n"
+        f"  CUDA_VISIBLE_DEVICES=\"\" KARML_MLPOT_DEVICE=cpu JAX_PLATFORMS=cpu KARML_LR_SOLVER=mic \\\n"
+        f"  ./scripts/karml-charmm-mpirun.sh python \\\n"
         f"  tests/functionality/mlpot/10_domdec_spatial_mpi_smoke.py \\\n"
         f"  --charmm-ener --checkpoint {ckpt} \\\n"
         f"  --residue {args.residue} --n-molecules {args.n_molecules} "
@@ -273,12 +273,12 @@ def _callback_smoke(args: argparse.Namespace) -> int:
     """Exercise the DOMDEC-active branch without live CHARMM."""
     rank, size = _mpi_info()
     if size < 2:
-        _log("callback", "skipped (need np>=2; re-run under mpirun with MMML_MPI_NP=2)")
+        _log("callback", "skipped (need np>=2; re-run under mpirun with KARML_MPI_NP=2)")
         return 0
 
     # All ranks must run ML (not rank-0 bridge). Calculator sets spatial_mpi=True but
-    # mpi_bridge.mlpot_runs_on_this_rank() keys off MMML_MLPOT_SPATIAL_MPI env.
-    from mmml.interfaces.pycharmmInterface.mlpot.spatial_mpi_policy import (
+    # mpi_bridge.mlpot_runs_on_this_rank() keys off KARML_MLPOT_SPATIAL_MPI env.
+    from karml.interfaces.pycharmmInterface.mlpot.spatial_mpi_policy import (
         spatial_mpi_enabled,
         sync_spatial_mpi_env,
     )
@@ -286,7 +286,7 @@ def _callback_smoke(args: argparse.Namespace) -> int:
     sync_spatial_mpi_env(explicit=True)
     if not spatial_mpi_enabled():
         print(
-            "FAIL callback smoke: MMML_MLPOT_SPATIAL_MPI must be enabled at np>1 "
+            "FAIL callback smoke: KARML_MLPOT_SPATIAL_MPI must be enabled at np>1 "
             "(all ranks run spatial ML; rank-0 bridge leaves workers with empty PSF path)",
             file=sys.stderr,
         )
@@ -297,11 +297,11 @@ def _callback_smoke(args: argparse.Namespace) -> int:
 
     import jax.numpy as jnp
 
-    from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
-    from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
+    from karml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
+    from karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
         DecomposedMlpotCalculator,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.medium_pbc_validation import (
+    from karml.interfaces.pycharmmInterface.mlpot.medium_pbc_validation import (
         lattice_positions_cubic_pbc,
     )
 
@@ -357,7 +357,7 @@ def _callback_smoke(args: argparse.Namespace) -> int:
     dx = dy = dz = np.zeros(n, dtype=np.float64)
 
     # Barrier 1: synchronise all ranks after heavy imports (JAX, etc.).
-    # Callback-only runs with MMML_WARMUP_MLPOT_JAX_ONLY (no pycharmm) and
+    # Callback-only runs with KARML_WARMUP_MLPOT_JAX_ONLY (no pycharmm) and
     # mpi4py already initialised MPI in main().
     _mpi_barrier()
     _log("callback", "running calculate_charmm with mocked DOMDEC ctypes")
@@ -368,34 +368,34 @@ def _callback_smoke(args: argparse.Namespace) -> int:
         mock.patch(f"{_DOMDEC_MODULE}.get_ghost_atom_indices",
                    return_value=np.empty(0, dtype=np.int32)),
         mock.patch(
-            "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.resolve_mlpot_mic_box_side_A",
+            "karml.interfaces.pycharmmInterface.mlpot.pbc_env.resolve_mlpot_mic_box_side_A",
             return_value=(box, "smoke"),
         ),
         mock.patch(
-            "mmml.interfaces.pycharmmInterface.jax_device_policy.mlpot_jax_device_context",
+            "karml.interfaces.pycharmmInterface.jax_device_policy.mlpot_jax_device_context",
             return_value=mock.MagicMock(
                 __enter__=mock.MagicMock(return_value=None),
                 __exit__=mock.MagicMock(return_value=False),
             ),
         ),
-        mock.patch("mmml.interfaces.pycharmmInterface.charmm_mpi.recover_mpi_for_charmm_after_jax"),
-        mock.patch("mmml.utils.jax_gpu_warmup.sync_jax_gpu_before_charmm"),
+        mock.patch("karml.interfaces.pycharmmInterface.charmm_mpi.recover_mpi_for_charmm_after_jax"),
+        mock.patch("karml.utils.jax_gpu_warmup.sync_jax_gpu_before_charmm"),
         # Prevent broadcast_mlpot_result / mpi_allreduce_forces / mpi_allreduce_energy
         # from calling ensure_charmm_mpi_initialized(), which would try to run
         # init_vacuum_charmm_state_mpi() (sets up CHARMM topology, nbonds, etc.)
         # — not needed in this mocked callback-only path and potentially
         # unsafe if pycharmm was imported without a vacuum topology.
-        mock.patch("mmml.interfaces.pycharmmInterface.charmm_mpi.ensure_charmm_mpi_initialized"),
+        mock.patch("karml.interfaces.pycharmmInterface.charmm_mpi.ensure_charmm_mpi_initialized"),
         mock.patch(
-            "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.as_ml_array",
+            "karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.as_ml_array",
             side_effect=lambda arr, dtype=None: jnp.asarray(arr),
         ),
         mock.patch(
-            "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.resolve_ml_compute_dtype",
+            "karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.resolve_ml_compute_dtype",
             return_value=jnp.float32,
         ),
         mock.patch(
-            "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.jax.device_get",
+            "karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.jax.device_get",
             side_effect=lambda x: np.asarray(x),
         ),
     ):
@@ -418,7 +418,7 @@ def _callback_smoke(args: argparse.Namespace) -> int:
         if rank > 0 and not captured:
             hint = (
                 " — rank-0 bridge ran (only rank 0 executed ML); "
-                "ensure MMML_MLPOT_SPATIAL_MPI=1 on all ranks"
+                "ensure KARML_MLPOT_SPATIAL_MPI=1 on all ranks"
             )
         failures.append(
             f"rank {rank}: use_spatial=False (expected True at np>{size - 1}){hint}"
@@ -474,7 +474,7 @@ def _prepare_prebuilt(args: argparse.Namespace) -> int:
     """Build PSF/CRD for the multi-monomer test system (np=1 phase)."""
     rank, size = _mpi_info()
     if size > 1:
-        print("--prepare-prebuilt-only must be run with MMML_MPI_NP=1.", file=sys.stderr)
+        print("--prepare-prebuilt-only must be run with KARML_MPI_NP=1.", file=sys.stderr)
         return 6
 
     from _common import build_ase_cluster  # noqa: F401 — available in tests/functionality/mlpot/
@@ -526,7 +526,7 @@ def _shared_minimal_rtf_path(psf_path: Path) -> Path:
 
 def _ensure_shared_minimal_rtf(psf_path: Path, prm_path: Path) -> Path:
     """Build minimal MASS-only RTF beside the PSF (shared path for MPI read.rtf)."""
-    from mmml.interfaces.pycharmmInterface.charmm_mpi import ensure_shared_minimal_rtf
+    from karml.interfaces.pycharmmInterface.charmm_mpi import ensure_shared_minimal_rtf
 
     return ensure_shared_minimal_rtf(psf_path, prm_path)
 
@@ -536,17 +536,17 @@ def _load_prebuilt(args: argparse.Namespace) -> tuple["np.ndarray", "np.ndarray"
     import numpy as np
     import pycharmm.coor as coor
 
-    from mmml.interfaces.pycharmmInterface.charmm_mpi import (
+    from karml.interfaces.pycharmmInterface.charmm_mpi import (
         bootstrap_topology_mpi,
         mpi_charmm_script,
     )
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_PRM
-    from mmml.interfaces.pycharmmInterface.utils import get_Z_from_psf
+    from karml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_PRM
+    from karml.interfaces.pycharmmInterface.utils import get_Z_from_psf
 
     rank, size = _mpi_info()
     psf_path, crd_path, res_path = _prebuilt_paths(args)
     if size > 1:
-        flag = os.environ.get("MMML_MPI_LOAD_RESTART", "").strip().lower()
+        flag = os.environ.get("KARML_MPI_LOAD_RESTART", "").strip().lower()
         if flag in ("0", "false", "no"):
             use_restart = False
         else:
@@ -566,7 +566,7 @@ def _load_prebuilt(args: argparse.Namespace) -> tuple["np.ndarray", "np.ndarray"
         if not psf_path.is_file():
             raise FileNotFoundError(
                 f"Prebuilt PSF not found: {psf_path}\n"
-                "Run with --prepare-prebuilt-only first (MMML_MPI_NP=1)."
+                "Run with --prepare-prebuilt-only first (KARML_MPI_NP=1)."
             )
         if not crd_path.is_file():
             raise FileNotFoundError(f"Prebuilt CRD not found: {crd_path}")
@@ -620,7 +620,7 @@ def _charmm_domdec_ener_smoke(args: argparse.Namespace) -> int:
     from _common import check_mlpot_symbols, resolve_checkpoint
 
     _log("ener", "loading prebuilt topology")
-    os.environ["MMML_NO_CHARMM_DOMDEC_OFF"] = "1"
+    os.environ["KARML_NO_CHARMM_DOMDEC_OFF"] = "1"
     _sync_import_pycharmm(tag="ener")
 
     # Skip ``crystal free`` before np>1 restart load — same MPI eval_charmm hang
@@ -656,7 +656,7 @@ def _charmm_domdec_ener_smoke(args: argparse.Namespace) -> int:
     n_atoms = len(z)
     _mpi_barrier(tag="ener")
 
-    from mmml.interfaces.pycharmmInterface.charmm_mpi import disable_ase_mpi_parallel
+    from karml.interfaces.pycharmmInterface.charmm_mpi import disable_ase_mpi_parallel
 
     disable_ase_mpi_parallel()
     _mpi_barrier(tag="ener")
@@ -664,10 +664,10 @@ def _charmm_domdec_ener_smoke(args: argparse.Namespace) -> int:
     import ase
     import pycharmm.energy as energy
 
-    from mmml.interfaces.pycharmmInterface.charmm_mpi import mpi_charmm_script
-    from mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domdec_atoms import domdec_summary
-    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import setup_charmm_environment
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+    from karml.interfaces.pycharmmInterface.charmm_mpi import mpi_charmm_script
+    from karml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domdec_atoms import domdec_summary
+    from karml.interfaces.pycharmmInterface.mlpot.pbc_env import setup_charmm_environment
+    from karml.interfaces.pycharmmInterface.mlpot.setup import (
         load_physnet_mlpot_bundle,
         register_mlpot,
         select_all_atoms,
@@ -695,7 +695,7 @@ def _charmm_domdec_ener_smoke(args: argparse.Namespace) -> int:
             print(domdec_summary())
 
     _log("ener", "loading PhysNet checkpoint / building model")
-    lr_solver = os.environ.get("MMML_LR_SOLVER", "mic")
+    lr_solver = os.environ.get("KARML_LR_SOLVER", "mic")
     if rank == 0:
         print(f"Live ENER lr_solver={lr_solver} (CPU smoke defaults to mic)", flush=True)
     ase_atoms = ase.Atoms(numbers=z, positions=r)
@@ -707,7 +707,7 @@ def _charmm_domdec_ener_smoke(args: argparse.Namespace) -> int:
         atoms_per_monomer=atoms_per_monomer,
         cell=float(args.box_side),
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import warmup_decomposed_mlpot
+    from karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import warmup_decomposed_mlpot
 
     _log("ener", "JAX warmup begin (CPU compile may take several minutes)")
     t_warm = time.perf_counter()
@@ -722,7 +722,7 @@ def _charmm_domdec_ener_smoke(args: argparse.Namespace) -> int:
 
     _log("ener", "registering MLpot")
     if size > 1:
-        os.environ["MMML_MLPOT_SPATIAL_MPI"] = "1"
+        os.environ["KARML_MLPOT_SPATIAL_MPI"] = "1"
 
     ml_selection = select_all_atoms()
     ctx = register_mlpot(
@@ -783,13 +783,13 @@ def main() -> int:
     # libcharmm on every rank; non-root ranks enter CHARMM's Fortran receive loop
     # (100% CPU spin) while rank 0 continues in Python → Barrier deadlock.
     #
-    # mpi4py owns MPI instead (MMML_MPI_PY_INIT=1).  Safe here because pycharmm
+    # mpi4py owns MPI instead (KARML_MPI_PY_INIT=1).  Safe here because pycharmm
     # is never loaded, so there is no second Fortran MPI_Init.
     if callback_only:
-        os.environ["MMML_WARMUP_MLPOT_JAX_ONLY"] = "1"
-        os.environ["MMML_MPI_PY_INIT"] = "1"
+        os.environ["KARML_WARMUP_MLPOT_JAX_ONLY"] = "1"
+        os.environ["KARML_MPI_PY_INIT"] = "1"
 
-    from mmml.interfaces.pycharmmInterface.charmm_mpi import (
+    from karml.interfaces.pycharmmInterface.charmm_mpi import (
         mpi4py_openmpi_mismatch,
         prepare_serial_charmm_mpi_env,
     )
@@ -801,7 +801,7 @@ def main() -> int:
         return 1
 
     if callback_only:
-        # First mpi4py import with MMML_MPI_PY_INIT=1: auto MPI_Init under mpirun.
+        # First mpi4py import with KARML_MPI_PY_INIT=1: auto MPI_Init under mpirun.
         try:
             from mpi4py import MPI as _MPI  # noqa: N812, F401
         except Exception:
@@ -809,20 +809,20 @@ def main() -> int:
     elif args.charmm_ener or args.prepare_prebuilt_only:
         rank, size = _mpi_info()
         if args.charmm_ener:
-            os.environ.setdefault("MMML_NO_CHARMM_DOMDEC_OFF", "1")
+            os.environ.setdefault("KARML_NO_CHARMM_DOMDEC_OFF", "1")
             _configure_live_charmm_mpi_import(size=size)
         # np>1 live ENER: defer PyCHARMM import to _charmm_domdec_ener_smoke so
-        # MMML_SKIP_CHARMM_RESET_BLOCK is in place before import_pycharmm loads.
+        # KARML_SKIP_CHARMM_RESET_BLOCK is in place before import_pycharmm loads.
         # ensure_charmm_mpi_initialized also runs init_vacuum/crystal free, which
         # is unsafe before synchronized prebuilt topology on np>1.
         if args.prepare_prebuilt_only or size <= 1:
-            from mmml.interfaces.pycharmmInterface.charmm_mpi import ensure_charmm_mpi_initialized
+            from karml.interfaces.pycharmmInterface.charmm_mpi import ensure_charmm_mpi_initialized
             _log("setup", "ensure_charmm_mpi_initialized")
             ensure_charmm_mpi_initialized()
             _log("setup", "ensure_charmm_mpi_initialized done")
         elif args.charmm_ener:
             _log("setup", f"np={size} live ENER: eager import_pycharmm (probe pattern)")
-            import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+            import karml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
 
     rank, size = _mpi_info()
 
@@ -836,7 +836,7 @@ def main() -> int:
 
     if args.prepare_prebuilt_only:
         # Requires PyCHARMM (topology build uses lingo/gen/ic)
-        import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+        import karml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
         return _prepare_prebuilt(args)
 
     # Phase 1: callback-only (default; skipped when --charmm-ener — live path

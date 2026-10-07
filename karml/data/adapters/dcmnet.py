@@ -47,7 +47,7 @@ def prepare_dcmnet_batches(
     Notes
     -----
     This adapter is based on the prepare_batches function from
-    mmml/dcmnet/dcmnet/data.py but adapted to work with the
+    karml/dcmnet/dcmnet/data.py but adapted to work with the
     standardized NPZ format.
     
     TODO: This is a stub that needs full implementation

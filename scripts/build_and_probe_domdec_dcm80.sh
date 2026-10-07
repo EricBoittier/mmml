@@ -2,9 +2,9 @@
 # Build a DCM box large enough for DOMDEC ndir=8, then run the atom-map probe.
 #
 # Requirements:
-#   - mmml venv active
+#   - karml venv active
 #   - mpirun available
-#   - CHARMM_HOME / CHARMM_LIB_DIR set (mmml configure)
+#   - CHARMM_HOME / CHARMM_LIB_DIR set (karml configure)
 #
 # DOMDEC sizing rule: domain_width = box/ndir >= cutnb
 #   → min_box = ndir × cutnb
@@ -61,8 +61,8 @@ echo "========================================"
 
 # ---- Step 1: build -------------------------------------------------------
 echo ""
-echo ">>> Step 1: mmml liquid-box"
-mmml liquid-box \
+echo ">>> Step 1: karml liquid-box"
+karml liquid-box \
     --composition "DCM:${NMOL}" \
     --box-size ${BOX} \
     --output-dir "${OUTDIR}" \

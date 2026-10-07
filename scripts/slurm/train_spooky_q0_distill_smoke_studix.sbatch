@@ -55,30 +55,30 @@
 #SBATCH --signal=B:TERM@90
 set -euo pipefail
 
-ROOT="${MMML_REPO:-$HOME/mmml}"
+ROOT="${KARML_REPO:-$HOME/karml}"
 cd "$ROOT"
-# A side checkout (e.g. ~/mmml_distill) has no .venv of its own. Borrow the main
+# A side checkout (e.g. ~/karml_distill) has no .venv of its own. Borrow the main
 # checkout's interpreter, but put THIS tree first on PYTHONPATH: that venv holds
-# an editable install pointing at ~/mmml, so without this `import mmml` silently
+# an editable install pointing at ~/karml, so without this `import karml` silently
 # loads the other tree's code and the run tests something you did not change.
-if [[ -z "${MMML_PYTHON:-}" && ! -x "$ROOT/.venv/bin/python" && -x "$HOME/mmml/.venv/bin/python" ]]; then
-  export MMML_PYTHON="$HOME/mmml/.venv/bin/python"
+if [[ -z "${KARML_PYTHON:-}" && ! -x "$ROOT/.venv/bin/python" && -x "$HOME/karml/.venv/bin/python" ]]; then
+  export KARML_PYTHON="$HOME/karml/.venv/bin/python"
 fi
-source "$ROOT/scripts/resolve_mmml_env.sh"
-mmml_resolve_env "$ROOT"
+source "$ROOT/scripts/resolve_karml_env.sh"
+karml_resolve_env "$ROOT"
 export PYTHONPATH="$ROOT${PYTHONPATH:+:$PYTHONPATH}"
 export JAX_ENABLE_X64=1
 export XLA_PYTHON_CLIENT_PREALLOCATE=false
 
-# Verify rather than assume: refuse to run if `import mmml` resolves elsewhere.
-"$MMML_PYTHON" - "$ROOT" <<'PY'
-import sys, pathlib, mmml
+# Verify rather than assume: refuse to run if `import karml` resolves elsewhere.
+"$KARML_PYTHON" - "$ROOT" <<'PY'
+import sys, pathlib, karml
 root = pathlib.Path(sys.argv[1]).resolve()
-got = pathlib.Path(mmml.__file__).resolve()
+got = pathlib.Path(karml.__file__).resolve()
 if root not in got.parents:
-    sys.exit(f"import mmml resolved to {got}, not under {root} -- refusing to run")
-from mmml.models.physnetjax.physnetjax.training import spooky_distill
-print(f"import check OK: mmml={got}, spooky_distill={spooky_distill.__file__}")
+    sys.exit(f"import karml resolved to {got}, not under {root} -- refusing to run")
+from karml.models.physnetjax.physnetjax.training import spooky_distill
+print(f"import check OK: karml={got}, spooky_distill={spooky_distill.__file__}")
 PY
 
 CACHE="/mmhome/boittier/home/so3lr_orbax_cache/so3lr_train_flat_5ba739ddac63717d"
@@ -97,7 +97,7 @@ done
 verdict() {
   local rc=$?
   set +e
-  "$MMML_PYTHON" scripts/check_training_run.py \
+  "$KARML_PYTHON" scripts/check_training_run.py \
     --workdir "$OUT" \
     --require-steps 40 --require-distillation --max-force-mae 50.0
   local verdict_rc=$?
@@ -106,7 +106,7 @@ verdict() {
 }
 trap verdict EXIT TERM
 
-"$MMML_PYTHON" scripts/train_so3lr_spooky_extxyz.py \
+"$KARML_PYTHON" scripts/train_so3lr_spooky_extxyz.py \
   --mode train --cache-path "$CACHE" \
   --workdir "$OUT" --init-checkpoint "$INIT" \
   --teacher-checkpoint "$TEACHER" \

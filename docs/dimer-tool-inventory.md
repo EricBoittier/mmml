@@ -21,12 +21,12 @@ the tools present on 2026-07-20.
 
 | Path | Class | Ownership and next action |
 |---|---|---|
-| `mmml.dimer_scan` | Canonical | Public configuration, evaluation, result bundle, provenance, plotting, and `run_dimer_scan`. Extend this for supported 1D calculator-neutral scans. |
-| `mmml.cli.misc.dimer_scan` | Canonical | Thin `mmml dimer-scan` adapter. It must not acquire independent scientific logic. |
-| `mmml.analysis.dimer_scans` | Supporting library | Deterministic geometry and low-level scan helpers. Migrate silent failure-dropping evaluators toward the canonical structured result path. |
-| `mmml.analysis.dimer_molecules` | Supporting library | Named monomers and orientations. Treat orientation definitions as versioned scientific inputs. |
-| `mmml.analysis.dimer_cgenff` | Supporting library | CGenFF-specific dimer analysis; keep calculator/domain-specific behavior outside the generic scan core. |
-| `mmml.interfaces.pycharmmInterface.mlpot.mlpot_sparse_dimer_policy` | Supporting library | Sparse-dimer policy for MLpot/PyCHARMM, not a general scan interface. |
+| `karml.dimer_scan` | Canonical | Public configuration, evaluation, result bundle, provenance, plotting, and `run_dimer_scan`. Extend this for supported 1D calculator-neutral scans. |
+| `karml.cli.misc.dimer_scan` | Canonical | Thin `karml dimer-scan` adapter. It must not acquire independent scientific logic. |
+| `karml.analysis.dimer_scans` | Supporting library | Deterministic geometry and low-level scan helpers. Migrate silent failure-dropping evaluators toward the canonical structured result path. |
+| `karml.analysis.dimer_molecules` | Supporting library | Named monomers and orientations. Treat orientation definitions as versioned scientific inputs. |
+| `karml.analysis.dimer_cgenff` | Supporting library | CGenFF-specific dimer analysis; keep calculator/domain-specific behavior outside the generic scan core. |
+| `karml.interfaces.pycharmmInterface.mlpot.mlpot_sparse_dimer_policy` | Supporting library | Sparse-dimer policy for MLpot/PyCHARMM, not a general scan interface. |
 
 ## Campaigns and wrappers
 
@@ -51,7 +51,7 @@ the tools present on 2026-07-20.
 | `scripts/scan_meoh_dimer_2d_cutoffs.py` | Campaign | Methanol cutoff study with specialized dimensions. |
 | `scripts/scan_hybrid_dimer.py` | Exploratory | Hybrid prototype. Audit conventions against the canonical API before reuse. |
 | `scripts/scan_dimer_orientations.py` | Campaign | Orientation atlas/campaign. Feed successful orientation definitions into the versioned orientation registry. |
-| `scripts/scan_meoh_dimer_distance.py` | Exploratory | Earlier single-purpose distance scan. Do not extend; migrate any unique calculator behavior into `mmml.dimer_scan`. |
+| `scripts/scan_meoh_dimer_distance.py` | Exploratory | Earlier single-purpose distance scan. Do not extend; migrate any unique calculator behavior into `karml.dimer_scan`. |
 | `scripts/run_charmm_and_plot_dimers.py` | Exploratory | Mixed execution/plotting prototype. Split responsibilities if any behavior is promoted. |
 | `workflows/pbc_solvent_burst/scripts/scan_heterogeneous_dimer_boundary.py` | Validation | Workflow-specific PBC boundary diagnostic. |
 
@@ -72,29 +72,29 @@ the tools present on 2026-07-20.
 
 | Path | Class | Ownership and next action |
 |---|---|---|
-| `mmml.mode_check` | Canonical | Monomer **and** small-cluster local diagnostics (FD forces, X–H stretch, ASE vib, kick). `--cutoff-sweep` samples COM stations on the hybrid handoff ruler. Not a binding-energy COM scan — that remains `mmml.dimer_scan`. Vacuum defaults to `--lr-solver mic`; hybrid-native `ewald` is opt-in via `--pbc-fd --lr-solver ewald [--ewald-omit-self]`. |
-| `mmml.cli.misc.mode_check` | Canonical | Thin `mmml mode-check` adapter (`--pbc-fd` covers the former unregistered `check_fd.py` path; `--cutoff-sweep` for region ladder). |
-| `mmml.cli.run.md_pbc_suite.check_fd` | Wrapper | Legacy script entry; delegates to `mmml.mode_check.pbc_fd`. Do not extend scientific logic here. |
+| `karml.mode_check` | Canonical | Monomer **and** small-cluster local diagnostics (FD forces, X–H stretch, ASE vib, kick). `--cutoff-sweep` samples COM stations on the hybrid handoff ruler. Not a binding-energy COM scan — that remains `karml.dimer_scan`. Vacuum defaults to `--lr-solver mic`; hybrid-native `ewald` is opt-in via `--pbc-fd --lr-solver ewald [--ewald-omit-self]`. |
+| `karml.cli.misc.mode_check` | Canonical | Thin `karml mode-check` adapter (`--pbc-fd` covers the former unregistered `check_fd.py` path; `--cutoff-sweep` for region ladder). |
+| `karml.cli.run.md_pbc_suite.check_fd` | Wrapper | Legacy script entry; delegates to `karml.mode_check.pbc_fd`. Do not extend scientific logic here. |
 | `scripts/validate_dimer_rays.py` | Validation | Geometry/ray validation, not scan execution. |
 | `scripts/validate_mlpot_sparse_dimers.py` | Validation | Production preflight for sparse dimer selection. |
 | `tests/functionality/dimer_scans/` | Validation | Environment-dependent functional scan checks. |
 | `tests/functionality/long_range/01_mic_analytic_dimer.py` | Validation | Analytic minimum-image check. |
-| `mmml/mcp/recipes/dimer_smoke.yaml` | Validation | Agent-facing smoke recipe; keep it pointed at supported commands. |
+| `karml/mcp/recipes/dimer_smoke.yaml` | Validation | Agent-facing smoke recipe; keep it pointed at supported commands. |
 
 ## Deprecated and historical paths
 
 | Path | Class | Ownership and next action |
 |---|---|---|
-| `mmml.interfaces.aseInterface.dimers` | Deprecated | Machine-specific paths, environment/device mutation, and execution at import time. Retain only for provenance until unique behavior is extracted; never import from new code. |
-| `mmml.generate.sample.pycharmm_dimers` | Exploratory | Audit before reuse; promote only deterministic, tested package behavior. |
-| `mmml.generate.sample/dimers.sh` | Deprecated | Historical generation shell path. Replace with a documented package/CLI caller if still needed. |
+| `karml.interfaces.aseInterface.dimers` | Deprecated | Machine-specific paths, environment/device mutation, and execution at import time. Retain only for provenance until unique behavior is extracted; never import from new code. |
+| `karml.generate.sample.pycharmm_dimers` | Exploratory | Audit before reuse; promote only deterministic, tested package behavior. |
+| `karml.generate.sample/dimers.sh` | Deprecated | Historical generation shell path. Replace with a documented package/CLI caller if still needed. |
 
-Data assets such as `mmml/generate/sample/meoh_dimer.pdb` and bundled model
-fixtures such as `mmml/models/physnetjax/defaults/meoh_dimer_portable.json` are
+Data assets such as `karml/generate/sample/meoh_dimer.pdb` and bundled model
+fixtures such as `karml/models/physnetjax/defaults/meoh_dimer_portable.json` are
 inputs, not tools. Their content identity should be recorded when used.
 
 ## Maintenance rule
 
 Update this inventory in the same pull request that adds, removes, supersedes,
 or changes the ownership of a dimer-related tool. A new supported scan path
-requires an explicit explanation of why `mmml.dimer_scan` cannot be extended.
+requires an explicit explanation of why `karml.dimer_scan` cannot be extended.

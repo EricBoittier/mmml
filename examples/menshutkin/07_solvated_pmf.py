@@ -91,7 +91,7 @@ def window_ladder(xi_min: float, xi_max: float, fine_to: float,
 
 def n_solvent_for_density(resi: str, density: float, box_size: float) -> int:
     """Molecules needed to fill the *cube* at the experimental density."""
-    from mmml.analysis.residue_geometry import load_residue_monomer_atoms
+    from karml.analysis.residue_geometry import load_residue_monomer_atoms
 
     molar_mass = float(sum(load_residue_monomer_atoms(resi, generate=True).get_masses()))
     return int(round(density * 1e-3 * box_size**3 * 6.02214076e23 / (1e24 * molar_mass)))
@@ -318,7 +318,7 @@ def main() -> int:
                         "coupling ramp; 0 disables")
     p.add_argument("--heat-start-fraction", type=float, default=0.2,
                    help="Heat stage starts here x --temperature "
-                        "(0.2 is the default used elsewhere in mmml)")
+                        "(0.2 is the default used elsewhere in karml)")
     p.add_argument("--ramp-stages", type=int, default=5,
                    help="Stages over which to switch the ML/MM "
                         "electrostatics on during equilibration; 0 disables")
@@ -481,9 +481,9 @@ def main() -> int:
     print(f"atoms        {system.n_atoms} total, {SOLUTE_N_ATOMS} ML solute, "
           f"{system.metadata['n_solvent']} {model_solv.residue}")
 
-    from mmml.md.config import EnsembleSpec, RunConfig
-    from mmml.md.energy.registry import EnergyContext
-    from mmml.md.restraints import (
+    from karml.md.config import EnsembleSpec, RunConfig
+    from karml.md.energy.registry import EnergyContext
+    from karml.md.restraints import (
         AngleWall,
         ReactionChannelRestraint,
         BondRetentionWall,
@@ -621,7 +621,7 @@ def main() -> int:
     # The timestep here is set by the O-H stretch: k = 450 kcal/mol/A^2 gives a
     # 9.97 fs period (the real 3700 cm-1 stretch is 9.0 fs, so that checks out),
     # and 20 steps/period caps dt at 0.50 fs. Water in this setup is FLEXIBLE --
-    # there is no SHAKE/RATTLE/SETTLE in mmml and jax_md.simulate has no
+    # there is no SHAKE/RATTLE/SETTLE in karml and jax_md.simulate has no
     # constraint support at all -- so the usual fix is unavailable.
     #
     # Moving mass from O onto its hydrogens slows that vibration without
@@ -670,7 +670,7 @@ def main() -> int:
 
     import dataclasses
 
-    from mmml.md.assemble import assemble_and_run
+    from karml.md.assemble import assemble_and_run
 
     # Built once: the window centre arrives per step as the traced `lambda_t`
     # scalar, so the compiled graph is reused across every window and leg.
@@ -700,8 +700,8 @@ def main() -> int:
     if "ml_mm_pol" in terms:
         term_kwargs_static["ml_mm_pol"] = {"ml_atoms": solute}
 
-    from mmml.md.assemble import build_hybrid_energy
-    from mmml.md.drivers import JaxmdDriver
+    from karml.md.assemble import build_hybrid_energy
+    from karml.md.drivers import JaxmdDriver
 
     # Build the energy ONCE. Rebuilding it per leg creates fresh Python closures,
     # which XLA sees as new computations and recompiles from scratch (~25 s each
@@ -1053,7 +1053,7 @@ def main() -> int:
     # 300 K dynamics from there is a thermal shock, and this codebase refuses to
     # do it elsewhere -- mlpot/cli_common.py raises on a 0 K heat start unless
     # --allow-zero-temperature-start is given, and defaults to firstt = 0.2 *
-    # finalt. The staged order used throughout mmml is mini -> heat -> nve ->
+    # finalt. The staged order used throughout karml is mini -> heat -> nve ->
     # equi -> prod (see cli/run/md_run_advice.py::_STAGE_ORDER); this run had
     # been going mini -> equi, skipping the two stages that exist to catch
     # exactly the failures seen here.
@@ -1364,7 +1364,7 @@ if __name__ == "__main__":
     #
     # os._exit skips atexit and interpreter shutdown, so the status chosen here
     # is the one the caller observes. Streams must be flushed first because
-    # os._exit will not do it. Same idiom as mmml.cli.__main__._hard_exit.
+    # os._exit will not do it. Same idiom as karml.cli.__main__._hard_exit.
     try:
         _rc = main()
     except SystemExit as _exc:          # argparse errors and our own guards

@@ -26,18 +26,18 @@
 #SBATCH --error=artifacts/spice_ef_polar/slurm-%j.err
 set -euo pipefail
 
-ROOT="${MMML_REPO:-$HOME/mmml}"
+ROOT="${KARML_REPO:-$HOME/karml}"
 cd "$ROOT"
 mkdir -p artifacts/spice_ef_polar
 
-if [[ -z "${MMML_PYTHON:-}" && ! -x "$ROOT/.venv/bin/python" && -x "$HOME/mmml/.venv/bin/python" ]]; then
-  export MMML_PYTHON="$HOME/mmml/.venv/bin/python"
+if [[ -z "${KARML_PYTHON:-}" && ! -x "$ROOT/.venv/bin/python" && -x "$HOME/karml/.venv/bin/python" ]]; then
+  export KARML_PYTHON="$HOME/karml/.venv/bin/python"
 fi
-if [[ -f "$ROOT/scripts/resolve_mmml_env.sh" ]]; then
+if [[ -f "$ROOT/scripts/resolve_karml_env.sh" ]]; then
   # shellcheck disable=SC1091
-  source "$ROOT/scripts/resolve_mmml_env.sh"
-  mmml_resolve_env "$ROOT"
-  export PATH="$(dirname "${MMML_PYTHON}"):$PATH"
+  source "$ROOT/scripts/resolve_karml_env.sh"
+  karml_resolve_env "$ROOT"
+  export PATH="$(dirname "${KARML_PYTHON}"):$PATH"
 fi
 export PYTHONPATH="$ROOT${PYTHONPATH:+:$PYTHONPATH}"
 export JAX_ENABLE_X64=0
@@ -46,7 +46,7 @@ export XLA_PYTHON_CLIENT_PREALLOCATE=false
 export XLA_PYTHON_CLIENT_MEM_FRACTION="${XLA_PYTHON_CLIENT_MEM_FRACTION:-0.85}"
 export XLA_FLAGS="${XLA_FLAGS:---xla_gpu_autotune_level=0}"
 
-SPLITS="${SPLITS:-$HOME/data/spicealpha/mmml_efield/splits_des_mono}"
+SPLITS="${SPLITS:-$HOME/data/spicealpha/karml_efield/splits_des_mono}"
 CKPT="${CKPT:-$ROOT/ckpts/spice_ef_polar}"
 MODE="${MODE:-smoke}"
 

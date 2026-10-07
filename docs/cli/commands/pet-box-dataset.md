@@ -1,4 +1,4 @@
-# `mmml pet-box-dataset`
+# `karml pet-box-dataset`
 
 Many-seed PET box dataset: random packing, FIRE intermediates, NVT (extxyz).
 
@@ -6,13 +6,13 @@ Many-seed PET box dataset: random packing, FIRE intermediates, NVT (extxyz).
 ## Usage
 
 ```bash
-mmml pet-box-dataset --help
+karml pet-box-dataset --help
 ```
 
 ## Options
 
 ```text
-usage: mmml pet-box-dataset [-h] --checkpoint CHECKPOINT --out-dir OUT_DIR
+usage: karml pet-box-dataset [-h] --checkpoint CHECKPOINT --out-dir OUT_DIR
                             [--seeds SEEDS] [--residue RESIDUE]
                             [--monomer-xyz MONOMER_XYZ] [--box-size BOX_SIZE]
                             [--n-molecules N_MOLECULES]
@@ -88,7 +88,7 @@ Other options:
 
 ## Related docs
 
-- [Metatomic in MMML](../../metatomic.md)
+- [Metatomic in KARML](../../metatomic.md)
 
 ---
 

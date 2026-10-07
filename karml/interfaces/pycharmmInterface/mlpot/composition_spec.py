@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
 
-from mmml.interfaces.pycharmmInterface.cgenff_residues import require_cgenff_residue_name
+from karml.interfaces.pycharmmInterface.cgenff_residues import require_cgenff_residue_name
 
 CompositionMode = Literal["cgenff", "packmol_pdb", "full_system_pdb"]
 
@@ -117,7 +117,7 @@ def load_monomer_geometry_from_pdb(
     import numpy as np
     from ase.data import atomic_numbers, chemical_symbols
 
-    from mmml.interfaces.pycharmmInterface.packmol_placement import (
+    from karml.interfaces.pycharmmInterface.packmol_placement import (
         _parse_pdb_atom_records,
     )
 

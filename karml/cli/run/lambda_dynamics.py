@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generalized MMML lambda dynamics (TI sampling) and MBAR post-processing."""
+"""Generalized KARML lambda dynamics (TI sampling) and MBAR post-processing."""
 
 from __future__ import annotations
 
@@ -22,13 +22,13 @@ from ase.md.verlet import VelocityVerlet
 from ase.optimize import BFGS
 from ase.optimize.fire import FIRE
 
-import mmml.interfaces.pycharmmInterface.import_pycharmm as pyci
-from mmml.cli.base import resolve_checkpoint_paths
-from mmml.cli.run.md_config import resume_requested
-from mmml.cli.run.md_pbc_suite import ase as md_suite
-from mmml.cli.run.md_pbc_suite.cluster import _build_psf_ordered_cluster
-from mmml.interfaces.pycharmmInterface.import_pycharmm import coor
-from mmml.interfaces.pycharmmInterface.mmml_calculator import CutoffParameters, setup_calculator
+import karml.interfaces.pycharmmInterface.import_pycharmm as pyci
+from karml.cli.base import resolve_checkpoint_paths
+from karml.cli.run.md_config import resume_requested
+from karml.cli.run.md_pbc_suite import ase as md_suite
+from karml.cli.run.md_pbc_suite.cluster import _build_psf_ordered_cluster
+from karml.interfaces.pycharmmInterface.import_pycharmm import coor
+from karml.interfaces.pycharmmInterface.karml_calculator import CutoffParameters, setup_calculator
 
 import pycharmm.param as param
 import pycharmm.psf as psf
@@ -208,7 +208,7 @@ class LambdaDynamicsConfig:
     packmol_tolerance: float = 2.0
     skip_jit_warmup: bool = False
     # MM neighbor refresh cadence in MD steps for --backend jaxmd. None/0 uses
-    # the ensemble default in mmml.md.nl_cadence (NVT 10, NVE 5). This also sets
+    # the ensemble default in karml.md.nl_cadence (NVT 10, NVE 5). This also sets
     # the compiled block size, so raising it needs a matching Verlet skin.
     jax_md_update_interval: int | None = None
     resume: bool = False
@@ -276,7 +276,7 @@ def build_cluster_system(cfg: LambdaDynamicsConfig) -> ClusterContext:
     md = md_suite
 
     if cfg.composition:
-        from mmml.interfaces.pycharmmInterface.packmol_placement import (
+        from karml.interfaces.pycharmmInterface.packmol_placement import (
             resolve_packmol_cube_side,
             resolve_packmol_placement_mode,
             resolve_packmol_sphere_radius,
@@ -342,7 +342,7 @@ def build_cluster_system(cfg: LambdaDynamicsConfig) -> ClusterContext:
     monomer_offsets = np.zeros(n_monomers + 1, dtype=int)
     monomer_offsets[1:] = np.cumsum(np.asarray(atoms_per_list, dtype=int))
 
-    from mmml.interfaces.pycharmmInterface.packmol_placement import resolve_packmol_use
+    from karml.interfaces.pycharmmInterface.packmol_placement import resolve_packmol_use
 
     if (
         not resolve_packmol_use(
@@ -480,7 +480,7 @@ def minimize_lambda_structure(
     label: str,
     min_traj_path: Path | None,
 ) -> dict[str, float | int | str]:
-    """CHARMM (MM) then MMML-calculator BFGS, matching ``md_10mer_mmml_pbc_suite``."""
+    """CHARMM (MM) then KARML-calculator BFGS, matching ``md_10mer_karml_pbc_suite``."""
     cfg.repo_root or repo_root_from_here()
     md = md_suite
     timings: dict[str, float | int | str] = {}
@@ -557,15 +557,15 @@ def minimize_lambda_structure(
     atoms.calc = calc
 
     if not cfg.skip_jit_warmup:
-        from mmml.utils.jax_gpu_warmup import warmup_ase_mmml_energy_forces
+        from karml.utils.jax_gpu_warmup import warmup_ase_karml_energy_forces
 
-        warmup_ase_mmml_energy_forces(atoms, include_forces=True)
+        warmup_ase_karml_energy_forces(atoms, include_forces=True)
 
     if not cfg.calculator_pre_minimize:
         coor.set_positions(pd.DataFrame(atoms.get_positions(), columns=["x", "y", "z"]))
         return timings
 
-    print(f"{label}: MMML BFGS (max {cfg.pre_min_steps} steps, fmax={cfg.pre_min_fmax})")
+    print(f"{label}: KARML BFGS (max {cfg.pre_min_steps} steps, fmax={cfg.pre_min_fmax})")
     bfgs_log = None
     opt = BFGS(
         atoms,
@@ -1083,7 +1083,7 @@ def run_lambda_dynamics(cfg: LambdaDynamicsConfig) -> dict[str, Any]:
     if backend == "auto":
         backend = "ase"
     if backend == "jaxmd":
-        from mmml.cli.run.lambda_jaxmd import run_lambda_dynamics_jaxmd
+        from karml.cli.run.lambda_jaxmd import run_lambda_dynamics_jaxmd
 
         return run_lambda_dynamics_jaxmd(cfg)
     if backend != "ase":
@@ -1568,7 +1568,7 @@ def merge_mbar_into_summary(run_dir: Path, mbar_block: dict[str, Any], write_plo
 
 
 def print_lambda_summary(summary: dict[str, Any]) -> None:
-    from mmml.utils.rich_report import print_colored_json
+    from karml.utils.rich_report import print_colored_json
 
     delta_f_ev = summary.get("delta_F_couple_eV", float("nan"))
     delta_f_kcal = summary.get("delta_F_couple_kcal_mol", float("nan"))
@@ -1649,8 +1649,8 @@ def add_lambda_dynamics_args(parser: argparse.ArgumentParser) -> None:
         default="auto",
         help="NVT thermostat when lambda-md-mode ends with _nvt.",
     )
-    parser.add_argument("--pre-min-steps", type=int, default=50, help="MMML BFGS steps per λ window.")
-    parser.add_argument("--pre-min-fmax", type=float, default=0.1, help="MMML BFGS fmax (eV/Å) per λ window.")
+    parser.add_argument("--pre-min-steps", type=int, default=50, help="KARML BFGS steps per λ window.")
+    parser.add_argument("--pre-min-fmax", type=float, default=0.1, help="KARML BFGS fmax (eV/Å) per λ window.")
     parser.add_argument("--min-steps", type=int, default=None, help="Alias for --pre-min-steps.")
     parser.add_argument("--min-fmax", type=float, default=None, help="Alias for --pre-min-fmax.")
     parser.add_argument("--bfgs-maxstep", type=float, default=0.05)
@@ -1658,13 +1658,13 @@ def add_lambda_dynamics_args(parser: argparse.ArgumentParser) -> None:
         "--charmm-pre-minimize",
         action=argparse.BooleanOptionalAction,
         default=True,
-        help="CHARMM SD/ABNR before MMML BFGS each λ window.",
+        help="CHARMM SD/ABNR before KARML BFGS each λ window.",
     )
     parser.add_argument(
         "--calculator-pre-minimize",
         action=argparse.BooleanOptionalAction,
         default=True,
-        help="ASE BFGS on the MMML calculator after CHARMM.",
+        help="ASE BFGS on the KARML calculator after CHARMM.",
     )
     parser.add_argument("--charmm-sd-steps", type=int, default=25)
     parser.add_argument("--charmm-abnr-steps", type=int, default=100)
@@ -1815,7 +1815,7 @@ def config_from_namespace(args: argparse.Namespace, repo_root: Path | None = Non
 
 def main_lambda_dynamics(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        description="MMML lambda dynamics / TI for arbitrary composition and coupled residues."
+        description="KARML lambda dynamics / TI for arbitrary composition and coupled residues."
     )
     add_lambda_dynamics_args(parser)
     args = parser.parse_args(argv)
@@ -1827,5 +1827,5 @@ def main_lambda_dynamics(argv: list[str] | None = None) -> int:
     print_lambda_summary(summary)
     print(f"Wrote {summary['_summary_path']}")
     print(f"Snapshots: {summary['snapshots_npz']}")
-    print("Run MBAR: mmml lambda-mbar --run-dir", args.output_dir)
+    print("Run MBAR: karml lambda-mbar --run-dir", args.output_dir)
     return 0

@@ -58,7 +58,7 @@ def _vdw_probe():
     import pycharmm.read as read
     import pycharmm.settings as settings
 
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import (
+    from karml.interfaces.pycharmmInterface.import_pycharmm import (
         pycharmm_quiet,
         reset_block,
     )
@@ -88,11 +88,11 @@ def test_full_parameter_read_after_an_append_keeps_vdw_alive():
     """
     import pycharmm.read as read
 
-    from mmml.interfaces.pycharmmInterface.charmm_paths import (
+    from karml.interfaces.pycharmmInterface.charmm_paths import (
         assert_cgenff_toppar_readable,
     )
-    from mmml.interfaces.pycharmmInterface.cgenff_residues import extra_cgenff_prm_paths
-    from mmml.interfaces.pycharmmInterface.nbonds_config import (
+    from karml.interfaces.pycharmmInterface.cgenff_residues import extra_cgenff_prm_paths
+    from karml.interfaces.pycharmmInterface.nbonds_config import (
         _rtf_path_without_drude_autogen,
         read_cgenff_prm,
     )
@@ -137,7 +137,7 @@ def test_read_cgenff_toppar_is_idempotent():
     This is the call pattern the Packmol cluster builder actually uses, and it
     is what silently produced monomer-distorting cluster minimizations.
     """
-    from mmml.interfaces.pycharmmInterface.nbonds_config import read_cgenff_toppar
+    from karml.interfaces.pycharmmInterface.nbonds_config import read_cgenff_toppar
 
     vdw = _vdw_probe()
 

@@ -30,10 +30,10 @@ def main() -> int:
     import jax.numpy as jnp
     import e3x
 
-    from mmml.interfaces.pycharmmInterface.calculator_utils import unpack_factory_result
-    from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import resolve_checkpoint
-    from mmml.interfaces.pycharmmInterface.mmml_calculator import setup_calculator
+    from karml.interfaces.pycharmmInterface.calculator_utils import unpack_factory_result
+    from karml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import resolve_checkpoint
+    from karml.interfaces.pycharmmInterface.karml_calculator import setup_calculator
 
     ckpt = resolve_checkpoint(args.checkpoint)
     z, r = aco_dimer_cluster(n_monomers=int(args.n_monomers), spacing=float(args.spacing))

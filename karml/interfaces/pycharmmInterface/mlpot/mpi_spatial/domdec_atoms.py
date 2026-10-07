@@ -330,7 +330,7 @@ def discover_domdec_symbols() -> dict[str, bool]:
 
     Useful for diagnosing a DOMDEC build on a new cluster::
 
-        from mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domdec_atoms import (
+        from karml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domdec_atoms import (
             discover_domdec_symbols,
         )
         print(discover_domdec_symbols())

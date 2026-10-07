@@ -1,4 +1,4 @@
-# `mmml warmup-mlpot-jax`
+# `karml warmup-mlpot-jax`
 
 Serial JAX JIT warmup for MLpot.
 
@@ -6,13 +6,13 @@ Serial JAX JIT warmup for MLpot.
 ## Usage
 
 ```bash
-mmml warmup-mlpot-jax --help
+karml warmup-mlpot-jax --help
 ```
 
 ## Options
 
 ```text
-usage: mmml warmup-mlpot-jax [-h] [--checkpoint CHECKPOINT]
+usage: karml warmup-mlpot-jax [-h] [--checkpoint CHECKPOINT]
                              [--n-monomers N_MONOMERS]
                              [--atoms-per-monomer ATOMS_PER_MONOMER]
                              [--box-side BOX_SIDE] [--spacing SPACING]
@@ -36,8 +36,8 @@ import PyCHARMM or call MPI.
 
 Input & configuration:
   --checkpoint CHECKPOINT
-                        PhysNet checkpoint (default: MMML_CKPT or
-                        MMML_CHECKPOINT)
+                        PhysNet checkpoint (default: KARML_CKPT or
+                        KARML_CHECKPOINT)
 
 Scientific model:
   --shared-cutoff SHARED_CUTOFF
@@ -62,7 +62,7 @@ Execution:
                         mm_switch_on. Switched MM reaches zero at mm_switch_on +
                         width (default: 5).
   --compile-threads COMPILE_THREADS
-                        Override MMML_JAX_COMPILE_THREADS (default: min(16,
+                        Override KARML_JAX_COMPILE_THREADS (default: min(16,
                         ncpu) when unset)
   --allow-under-mpirun  Allow running under mpirun (not recommended; compile
                         threads usually off)
@@ -97,17 +97,17 @@ Other options:
                         idxu/idxv (default) or JAX neighbor rebuild (--mm-pair-
                         source jax). All-ML bulk systems with empty callback
                         lists auto-fall back to JAX. Override with env
-                        MMML_MM_PAIR_SOURCE.
+                        KARML_MM_PAIR_SOURCE.
   --do-mm               Include MM pair path in warmup (closer to production
                         hybrid)
 
-Examples: export MMML_CKPT=/path/to/DESdimers_params.json mmml warmup-mlpot-jax
+Examples: export KARML_CKPT=/path/to/DESdimers_params.json karml warmup-mlpot-jax
 --n-monomers 20 --ml-batch-size 128 # Match DCM:60 liquid workflow (resilient
-preset cutoffs + sparse dimer cap): mmml warmup-mlpot-jax --checkpoint
-"$MMML_CKPT" --n-monomers 60 \ --atoms-per-monomer 5 --box-side 32 --ml-batch-
+preset cutoffs + sparse dimer cap): karml warmup-mlpot-jax --checkpoint
+"$KARML_CKPT" --n-monomers 60 \ --atoms-per-monomer 5 --box-side 32 --ml-batch-
 size 64 --ml-gpu-count 1 \ --ml-max-active-dimers 1770 --mm-switch-on 6.0 --mm-
-switch-width 4.0 \ --ml-switch-width 1.0 --do-mm # Then under MPI: MMML_MPI_NP=2
-MMML_MLPOT_SPATIAL_MPI=1 ./scripts/mmml-charmm-mpirun.sh md-system ... Do
+switch-width 4.0 \ --ml-switch-width 1.0 --do-mm # Then under MPI: KARML_MPI_NP=2
+KARML_MLPOT_SPATIAL_MPI=1 ./scripts/karml-charmm-mpirun.sh md-system ... Do
 **not** run under mpirun (compile threads are disabled there by design). Clear
 stale launcher env if needed: unset OMPI_COMM_WORLD_SIZE PMI_SIZE PMIX_SIZE
 ```

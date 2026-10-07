@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
     _apply_hoover_nvt_kwargs,
     _apply_npt_cpt_kwargs,
     build_cpt_equilibration_dynamics,
@@ -16,7 +16,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
     compute_cpt_piston_masses,
     run_dynamics,
 )
-from mmml.interfaces.pycharmmInterface.mlpot.pressure_tensor import NptPressureTensor
+from karml.interfaces.pycharmmInterface.mlpot.pressure_tensor import NptPressureTensor
 from tests.unit.pycharmm_stubs import fake_pycharmm_modules
 
 
@@ -113,7 +113,7 @@ def test_cpt_equilibration_anisotropic_pressure_tensor():
 
 
 def test_charmm_grms_after_ener_force_runs_script():
-    import mmml.interfaces.pycharmmInterface.mlpot.cli_common as cli_common
+    import karml.interfaces.pycharmmInterface.mlpot.cli_common as cli_common
 
     fake_lingo = mock.MagicMock()
     fake_energy = mock.MagicMock()
@@ -126,7 +126,7 @@ def test_charmm_grms_after_ener_force_runs_script():
     ), mock.patch.object(
         cli_common, "charmm_system_is_evaluable", return_value=True
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.charmm_levels.charmm_silent_command",
+        "karml.interfaces.pycharmmInterface.charmm_levels.charmm_silent_command",
         return_value=__import__("contextlib").nullcontext(),
     ):
         fake_pycharmm.lingo = fake_lingo
@@ -145,10 +145,10 @@ def test_charmm_total_forces_negates_gradient():
     )
     gradient = np.column_stack([grad["dx"], grad["dy"], grad["dz"]])
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.charmm_forces.charmm_gradient_array",
+        "karml.interfaces.pycharmmInterface.charmm_forces.charmm_gradient_array",
         return_value=gradient,
     ):
-        from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+        from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
             charmm_total_forces_kcalmol_A,
         )
 
@@ -160,10 +160,10 @@ def test_charmm_total_forces_negates_gradient():
 def test_charmm_total_forces_ev_angstrom_unit_conversion():
     physical = np.array([[23.060548867, 0.0, 0.0]], dtype=np.float64)
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.charmm_total_forces_kcalmol_A",
+        "karml.interfaces.pycharmmInterface.mlpot.cli_common.charmm_total_forces_kcalmol_A",
         return_value=physical,
     ):
-        from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+        from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
             charmm_total_forces_ev_angstrom,
         )
 
@@ -185,19 +185,19 @@ def test_run_dynamics_passes_cpt_keywords_to_dynamics_script():
     )
     kw["nstep"] = 10
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.maybe_assign_velocities_via_ase_if_cold",
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.maybe_assign_velocities_via_ase_if_cold",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.mirror_comparison_velocities_for_dynamics",
+        "karml.interfaces.pycharmmInterface.mlpot.comp_velocities.mirror_comparison_velocities_for_dynamics",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._release_charmm_dynamics_api_buffers",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._release_charmm_dynamics_api_buffers",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_c_api_available",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_c_api_available",
         return_value=False,
     ), mock.patch(
         # Unit test has no libcharmm; CPT fail-closes on mlpot_set_virial without this.
-        "mmml.interfaces.pycharmmInterface.mlpot.strain_virial.require_charmm_virial_hook",
+        "karml.interfaces.pycharmmInterface.mlpot.strain_virial.require_charmm_virial_hook",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._execute_dynamics_script",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._execute_dynamics_script",
     ) as exec_dyn, mock.patch.dict(
         __import__("sys").modules,
         {"pycharmm": fake_pycharmm},
@@ -212,7 +212,7 @@ def test_run_dynamics_passes_cpt_keywords_to_dynamics_script():
     exec_dyn.assert_called_once()
 
 
-def test_run_dynamics_strips_mmml_dcd_metadata_keywords():
+def test_run_dynamics_strips_karml_dcd_metadata_keywords():
     fake_dyn = mock.MagicMock()
     fake_pycharmm = mock.MagicMock()
     fake_pycharmm.DynamicsScript.return_value = fake_dyn
@@ -226,12 +226,12 @@ def test_run_dynamics_strips_mmml_dcd_metadata_keywords():
         "iasvel": 1,
     }
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._release_charmm_dynamics_api_buffers",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._release_charmm_dynamics_api_buffers",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_c_api_available",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_c_api_available",
         return_value=False,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._execute_dynamics_script",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._execute_dynamics_script",
     ), mock.patch.dict(
         __import__("sys").modules,
         {"pycharmm": fake_pycharmm},
@@ -252,29 +252,29 @@ def test_run_dynamics_skips_ase_cold_velocity_when_flag_set():
     v = np.ones((3, 3), dtype=np.float64)
     init = {"vx": v[:, 0], "vy": v[:, 1], "vz": v[:, 2]}
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._resolve_dynamics_init_velocities",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._resolve_dynamics_init_velocities",
         return_value=init,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.maybe_assign_velocities_via_ase_if_cold",
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.maybe_assign_velocities_via_ase_if_cold",
     ) as maybe_assign, mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.mirror_comparison_velocities_for_dynamics",
+        "karml.interfaces.pycharmmInterface.mlpot.comp_velocities.mirror_comparison_velocities_for_dynamics",
     ) as mirror_comp, mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.refresh_bussi_comp_velocity_handoff",
+        "karml.interfaces.pycharmmInterface.mlpot.comp_velocities.refresh_bussi_comp_velocity_handoff",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._init_velocities_handoff_looks_valid",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._init_velocities_handoff_looks_valid",
         return_value=True,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._validate_init_velocities_handoff",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._validate_init_velocities_handoff",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._release_charmm_dynamics_api_buffers",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._release_charmm_dynamics_api_buffers",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_c_api_available",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_c_api_available",
         return_value=True,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_via_c_api",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_via_c_api",
         return_value=fake_dyn,
     ) as run_capi, mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._finalize_init_velocities_handoff",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._finalize_init_velocities_handoff",
         return_value=init,
     ), mock.patch.dict(
         __import__("sys").modules,
@@ -307,18 +307,18 @@ def test_run_dynamics_mirror_noops_after_ase_cold_assign():
         return True
 
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.maybe_assign_velocities_via_ase_if_cold",
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.maybe_assign_velocities_via_ase_if_cold",
         side_effect=_assign_side_effect,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.sync_comparison_velocities_from_main",
+        "karml.interfaces.pycharmmInterface.mlpot.comp_velocities.sync_comparison_velocities_from_main",
         return_value=True,
     ) as sync_from_main, mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._release_charmm_dynamics_api_buffers",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._release_charmm_dynamics_api_buffers",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_c_api_available",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_c_api_available",
         return_value=False,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._execute_dynamics_script",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._execute_dynamics_script",
     ), mock.patch.dict(
         __import__("sys").modules,
         {"pycharmm": fake_pycharmm},
@@ -344,19 +344,19 @@ def test_run_dynamics_falls_back_to_iasvel_one_when_cold_without_start():
         return None
 
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._resolve_dynamics_init_velocities",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._resolve_dynamics_init_velocities",
         side_effect=_resolve_cold,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.maybe_assign_velocities_via_ase_if_cold",
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.maybe_assign_velocities_via_ase_if_cold",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.mirror_comparison_velocities_for_dynamics",
+        "karml.interfaces.pycharmmInterface.mlpot.comp_velocities.mirror_comparison_velocities_for_dynamics",
     ) as mirror_comp, mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._release_charmm_dynamics_api_buffers",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._release_charmm_dynamics_api_buffers",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_c_api_available",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_c_api_available",
         return_value=False,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._execute_dynamics_script",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._execute_dynamics_script",
     ), mock.patch.dict(
         __import__("sys").modules,
         {"pycharmm": fake_pycharmm},

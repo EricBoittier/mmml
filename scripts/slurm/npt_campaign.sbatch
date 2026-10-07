@@ -28,7 +28,7 @@
 # length; see run_npt_argon_water_campaign.sh).
 set -uo pipefail
 
-REPO="${MMML_REPO:-$HOME/mmml}"
+REPO="${KARML_REPO:-$HOME/karml}"
 cd "$REPO" || exit 1
 
 # scicore compute nodes ship an older userland than libcharmm.so was built
@@ -40,16 +40,16 @@ cd "$REPO" || exit 1
 # defined but MODULEPATH empty `module load` finds nothing and fails SILENTLY.
 # It also relaxes `set -u` around the system profile scripts, which otherwise
 # abort the job with no output at all.
-export MMML_SCICORE_CMAKE="${MMML_SCICORE_CMAKE:-CMake/3.31.8-GCCcore-14.3.0}"
-export MMML_SCICORE_TOOLCHAIN="${MMML_SCICORE_TOOLCHAIN:-foss/2025a}"
+export KARML_SCICORE_CMAKE="${KARML_SCICORE_CMAKE:-CMake/3.31.8-GCCcore-14.3.0}"
+export KARML_SCICORE_TOOLCHAIN="${KARML_SCICORE_TOOLCHAIN:-foss/2025a}"
 # shellcheck disable=SC1091
 source scripts/scicore_env.sh
 
 # libcharmm.so is a build artifact, so a fresh clone of the repo does not carry
 # one. When running from a side checkout, fall back to the main tree's build.
-if [[ ! -f "$REPO/setup/charmm/libcharmm.so" && -f "$HOME/mmml/setup/charmm/libcharmm.so" ]]; then
-  export CHARMM_LIB_DIR="$HOME/mmml/setup/charmm"
-  export CHARMM_HOME="$HOME/mmml/setup/charmm"
+if [[ ! -f "$REPO/setup/charmm/libcharmm.so" && -f "$HOME/karml/setup/charmm/libcharmm.so" ]]; then
+  export CHARMM_LIB_DIR="$HOME/karml/setup/charmm"
+  export CHARMM_HOME="$HOME/karml/setup/charmm"
   echo "=== CHARMM_LIB_DIR -> $CHARMM_LIB_DIR (this checkout has no built lib)"
 fi
 
@@ -60,9 +60,9 @@ export PYTHONPATH="$REPO${PYTHONPATH:+:$PYTHONPATH}" 2>/dev/null
 # Compute nodes have no outbound network; uv would otherwise try pypi and hang.
 export UV_NO_SYNC=1 UV_OFFLINE=1
 
-_NG="$REPO/mmml/data/charmm"
-export MMML_CGENFF_EXTRA_RTF="$_NG/top_noble_gases_literature.rtf"
-export MMML_CGENFF_EXTRA_PRM="$_NG/par_noble_gases_literature.prm"
+_NG="$REPO/karml/data/charmm"
+export KARML_CGENFF_EXTRA_RTF="$_NG/top_noble_gases_literature.rtf"
+export KARML_CGENFF_EXTRA_PRM="$_NG/par_noble_gases_literature.prm"
 
 OUT_ROOT="$REPO/artifacts/npt_argon_water"
 BOX_ROOT="$OUT_ROOT/boxes"
@@ -132,7 +132,7 @@ echo "=== [$IDX] $tag / $mode : T=$temp K, P=$press atm, $((EQ_PS+PROD_PS)) ps"
 echo "    box: $nmol x $resid in a $side A cell (loaded, not rebuilt)"
 nvidia-smi --query-gpu=name,memory.total --format=csv,noheader 2>/dev/null | head -1
 
-uv run mmml md-system \
+uv run karml md-system \
   --setup pbc_npt --backend jaxmd \
   --composition "${resid}:${nmol}" \
   --from-psf "$box/model.psf" \

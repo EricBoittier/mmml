@@ -44,7 +44,7 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "Solute PDB (CGenFF residue/atom names). Copied to pdb/initial.pdb "
             "before Packmol. When omitted, pdb/initial.pdb must already exist "
-            "(e.g. from mmml make-res)."
+            "(e.g. from karml make-res)."
         ),
     )
     parser.add_argument(
@@ -133,8 +133,8 @@ def _stage_solute_pdb(pdb: str | Path) -> Path:
 
 
 def main_loop(args):
-    from mmml.interfaces.pycharmmInterface import setupBox
-    from mmml.interfaces.pycharmmInterface.utils import set_up_directories
+    from karml.interfaces.pycharmmInterface import setupBox
+    from karml.interfaces.pycharmmInterface.utils import set_up_directories
 
     set_up_directories()  # ensure pdb/, psf/, xyz/, res/, dcd/ exist
 
@@ -160,7 +160,7 @@ def main_loop(args):
         setupBox.run_packmol(n_molecules, args.side_length)
         pdb_path = "pdb/init-packmol.pdb"
     else:
-        from mmml.interfaces.pycharmmInterface.cgenff_residues import (
+        from karml.interfaces.pycharmmInterface.cgenff_residues import (
             require_cgenff_residue_name,
         )
 
@@ -189,7 +189,7 @@ def main_loop(args):
     tag = str(args.res or "box").lower()
     setupBox.setup_box_generic(pdb_path, side_length=args.side_length, tag=tag)
 
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import (
+    from karml.interfaces.pycharmmInterface.import_pycharmm import (
         reset_block,
         reset_block_no_internal,
     )

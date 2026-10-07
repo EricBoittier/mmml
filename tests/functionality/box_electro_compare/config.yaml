@@ -1,6 +1,6 @@
 # DCM:5 reference box — energy + short NVE across backends and electrostatics.
 # Certified box: ~/tests/boxes/dcm5_l25_ref (built by run_compare.sh if missing).
-# Checkpoint: export MMML_CKPT (DCM PhysNet directory).
+# Checkpoint: export KARML_CKPT (DCM PhysNet directory).
 
 composition: "DCM:5"
 ps: 2.0
@@ -12,9 +12,9 @@ spacing: 5.0
 packmol_radius: 6.9
 packmol_tolerance: 1.0
 box_size: 25.0
-checkpoint: "${MMML_CKPT}"
+checkpoint: "${KARML_CKPT}"
 output_root: "results"
-mpirun_wrapper: "../../../scripts/mmml-charmm-mpirun.sh"
+mpirun_wrapper: "../../../scripts/karml-charmm-mpirun.sh"
 
 from_psf: "~/tests/boxes/dcm5_l25_ref/model.psf"
 from_crd: "~/tests/boxes/dcm5_l25_ref/model.crd"

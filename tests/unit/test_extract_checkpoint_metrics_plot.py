@@ -5,7 +5,7 @@ from pathlib import Path
 
 import numpy as np
 
-from mmml.cli.misc.extract_checkpoint_metrics import (
+from karml.cli.misc.extract_checkpoint_metrics import (
     plot_individual_training_metrics,
     plot_learning_curve_scaling,
     plot_training_comparison,

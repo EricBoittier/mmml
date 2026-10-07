@@ -13,8 +13,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from mmml.md.drivers import NonFiniteStateError
-from mmml.umbrella.hybrid import save_failure_trace
+from karml.md.drivers import NonFiniteStateError
+from karml.umbrella.hybrid import save_failure_trace
 
 
 def _error(n_frames: int = 6, n_atoms: int = 4) -> NonFiniteStateError:
@@ -63,7 +63,7 @@ def test_trace_keeps_only_the_tail_of_the_trajectory(tmp_path: Path):
 
 
 def test_trace_written_next_to_the_window_checkpoint(tmp_path: Path):
-    from mmml.umbrella.hybrid_windows import window_npz_path
+    from karml.umbrella.hybrid_windows import window_npz_path
 
     path = save_failure_trace(tmp_path, 21, _error())
     assert path.parent == window_npz_path(tmp_path, 21).parent

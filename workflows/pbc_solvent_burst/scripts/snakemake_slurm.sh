@@ -9,10 +9,10 @@ WORKFLOW_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$WORKFLOW_ROOT"
 
 REPO_ROOT="$(cd "$WORKFLOW_ROOT/../.." && pwd)"
-# shellcheck source=../../../scripts/resolve_mmml_env.sh
-source "$REPO_ROOT/scripts/resolve_mmml_env.sh"
-mmml_resolve_env "$REPO_ROOT"
-PY="${MMML_PYTHON}"
+# shellcheck source=../../../scripts/resolve_karml_env.sh
+source "$REPO_ROOT/scripts/resolve_karml_env.sh"
+karml_resolve_env "$REPO_ROOT"
+PY="${KARML_PYTHON}"
 
 IFS=$'\t' read -r DEFAULT_JOBS DEFAULT_RES <<EOF
 $("$PY" -c "
@@ -32,7 +32,7 @@ fi
 JOBS="${1:-$DEFAULT_JOBS}"
 shift || true
 
-if [[ "${MMML_SNAKEMAKE_FORCE:-}" != "1" ]]; then
+if [[ "${KARML_SNAKEMAKE_FORCE:-}" != "1" ]]; then
   _existing=()
   while IFS= read -r _pid; do
     _cwd="$(readlink -f "/proc/${_pid}/cwd" 2>/dev/null || true)"
@@ -44,7 +44,7 @@ if [[ "${MMML_SNAKEMAKE_FORCE:-}" != "1" ]]; then
     echo "snakemake_slurm.sh: driver already running in ${WORKFLOW_ROOT} (PIDs: ${_existing[*]})." >&2
     echo "  bash scripts/stop_snakemake.sh" >&2
     echo "  snakemake --profile profiles/slurm --unlock" >&2
-    echo "  Or force a second driver: MMML_SNAKEMAKE_FORCE=1 bash scripts/snakemake_slurm.sh ..." >&2
+    echo "  Or force a second driver: KARML_SNAKEMAKE_FORCE=1 bash scripts/snakemake_slurm.sh ..." >&2
     exit 1
   fi
 fi

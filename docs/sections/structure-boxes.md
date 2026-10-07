@@ -5,15 +5,15 @@ a packed periodic box, or a symmetry-generated crystal. These are the inputs
 every MD and QM workflow downstream expects.
 
 ```bash
-mmml make-res --list-residues            # what topologies are available
-mmml make-res --res CYBZ                 # residue -> PDB/PSF/topology
-mmml make-box --res CYBZ --n 50 --box-size 25.0
+karml make-res --list-residues            # what topologies are available
+karml make-res --res CYBZ                 # residue -> PDB/PSF/topology
+karml make-box --res CYBZ --n 50 --box-size 25.0
 ```
 
 For a density-certified liquid box instead of a naive pack:
 
 ```bash
-mmml liquid-box --composition DCM:206 --target-density-g-cm3 1.326 -o boxes/dcm206
+karml liquid-box --composition DCM:206 --target-density-g-cm3 1.326 -o boxes/dcm206
 ```
 
 ## What's here

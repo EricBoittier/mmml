@@ -1,10 +1,10 @@
-"""Opt-in unified-stack path for ``mmml md-system --backend jaxmd``.
+"""Opt-in unified-stack path for ``karml md-system --backend jaxmd``.
 
-Wires the legacy ``md-system`` CLI onto the shared ``mmml.md`` pipeline
+Wires the legacy ``md-system`` CLI onto the shared ``karml.md`` pipeline
 (``runconfig_from_md_system_args`` → ``assemble_and_run``) instead of the
-legacy ``mmml.cli.run.md_pbc_suite.jaxmd`` inline loop. Opt-in via
+legacy ``karml.cli.run.md_pbc_suite.jaxmd`` inline loop. Opt-in via
 ``--jaxmd-unified`` (see ``build_parser()`` / ``main()`` in
-``mmml.cli.run.md_system``) so the existing default path is untouched until
+``karml.cli.run.md_system``) so the existing default path is untouched until
 this one is validated across more of md-system's feature surface.
 
 Deliberately NOT yet supported (raise clearly rather than silently diverge
@@ -110,7 +110,7 @@ def format_npt_volume_pressure_line(
         p_part += f" Pkin0={pk0:.4g} bar Pvir0={pv0:.4g} bar"
     t_part = f" P_target={float(p_target):.4g} bar" if p_target is not None else ""
     return (
-        f"mmml md-system (jaxmd-unified): NPT "
+        f"karml md-system (jaxmd-unified): NPT "
         f"V0={v0:.4g} A3 (L~{L0:.4g} A) "
         f"Vfinal={vf:.4g} A3 (L~{Lf:.4g} A) "
         f"Vfinal/V0={ratio:.4g}{p_part}{t_part}"
@@ -136,7 +136,7 @@ def _system_with_positions_and_box(system, positions: np.ndarray, box: np.ndarra
 
 def _resolve_handoff_in(args: Any):
     """Return campaign/context handoff or load ``--continue-from`` if set."""
-    from mmml.cli.run.md_handoff import get_handoff_in, load_handoff
+    from karml.cli.run.md_handoff import get_handoff_in, load_handoff
 
     handoff = get_handoff_in()
     if handoff is not None:
@@ -181,14 +181,14 @@ def _apply_incoming_handoff(args: Any, system):
             )
     elif system.box is not None and bool(getattr(handoff, "pbc", False)):
         print(
-            "mmml md-system (jaxmd-unified): WARNING handoff has pbc but no cell; "
+            "karml md-system (jaxmd-unified): WARNING handoff has pbc but no cell; "
             "keeping built-system box",
             flush=True,
         )
     system = _system_with_positions_and_box(system, pos, box)
     src = (handoff.metadata or {}).get("source") or getattr(args, "continue_from", None) or "context"
     print(
-        f"mmml md-system (jaxmd-unified): continue-from geometry "
+        f"karml md-system (jaxmd-unified): continue-from geometry "
         f"N={system.n_atoms} box={'yes' if system.box is not None else 'no'} "
         f"({src})",
         flush=True,
@@ -220,7 +220,7 @@ def _restart_payload_from_handoff(args: Any) -> dict | None:
 
 def _publish_unified_handoff(args: Any, system, traj) -> None:
     """Publish final geometry for campaign ``depends_on`` / ``save_handoff``."""
-    from mmml.cli.run.md_handoff import MdHandoffState, set_handoff_out
+    from karml.cli.run.md_handoff import MdHandoffState, set_handoff_out
 
     positions = traj.metadata.get("positions")
     if positions is None or len(positions) == 0:
@@ -236,7 +236,7 @@ def _publish_unified_handoff(args: Any, system, traj) -> None:
     else:
         cell = None
         pbc = False
-    from mmml.md.restart import ang_ps_from_momenta
+    from karml.md.restart import ang_ps_from_momenta
 
     restart = traj.metadata.get("restart") or None
     velocities = None
@@ -279,7 +279,7 @@ def _fire_minimize_system(
     """Optional FIRE relax before NVT/NPT/NVE (Packmol cold starts)."""
     from dataclasses import replace
 
-    from mmml.md.assemble import assemble_and_run
+    from karml.md.assemble import assemble_and_run
 
     n_steps = int(getattr(args, "jaxmd_minimize_steps", 0) or 0)
     if n_steps <= 0 or run_config.ensemble.ensemble == "min":
@@ -298,7 +298,7 @@ def _fire_minimize_system(
     )
     min_cfg = replace(run_config, ensemble=min_ens, output_dir=None)
     print(
-        f"mmml md-system (jaxmd-unified): FIRE minimize {n_steps} steps before "
+        f"karml md-system (jaxmd-unified): FIRE minimize {n_steps} steps before "
         f"{run_config.ensemble.ensemble}",
         flush=True,
     )
@@ -309,7 +309,7 @@ def _fire_minimize_system(
     energies = traj.metadata.get("energies")
     if positions is None or len(positions) == 0:
         print(
-            "mmml md-system (jaxmd-unified): WARNING FIRE produced no frames; "
+            "karml md-system (jaxmd-unified): WARNING FIRE produced no frames; "
             "continuing with input coordinates",
             flush=True,
         )
@@ -318,20 +318,20 @@ def _fire_minimize_system(
     if e is not None and np.any(np.isfinite(e)):
         best = int(np.nanargmin(e))
         print(
-            f"mmml md-system (jaxmd-unified): FIRE E0={e[0]:.4f} eV "
+            f"karml md-system (jaxmd-unified): FIRE E0={e[0]:.4f} eV "
             f"Ebest={e[best]:.4f} eV (frame {best})",
             flush=True,
         )
         if not np.isfinite(e[best]) or float(e[best]) > 1.0e6:
             print(
-                "mmml md-system (jaxmd-unified): WARNING FIRE best energy still "
+                "karml md-system (jaxmd-unified): WARNING FIRE best energy still "
                 f"pathological ({e[best]}); check packing / box size",
                 flush=True,
             )
     else:
         best = len(positions) - 1
         print(
-            "mmml md-system (jaxmd-unified): WARNING FIRE energies non-finite; "
+            "karml md-system (jaxmd-unified): WARNING FIRE energies non-finite; "
             "using last frame",
             flush=True,
         )
@@ -342,7 +342,7 @@ def _print_unified_ensemble_banner(args: Any, run_config: Any) -> None:
     ens = run_config.ensemble
     params = dict(ens.params or {})
     print(
-        f"mmml md-system (jaxmd-unified): ensemble={ens.ensemble} "
+        f"karml md-system (jaxmd-unified): ensemble={ens.ensemble} "
         f"thermostat={ens.thermostat or 'default'} "
         f"dt_fs={ens.dt_fs} n_steps={ens.n_steps} "
         f"float64={bool(params.get('float64', False))} "
@@ -354,7 +354,7 @@ def _print_unified_ensemble_banner(args: Any, run_config: Any) -> None:
 
 def check_md_system_args_supported(args: Any) -> None:
     """Raise clearly (before any CHARMM build) for combinations not yet wired."""
-    from mmml.md.lowering import terms_from_md_system_args
+    from karml.md.lowering import terms_from_md_system_args
 
     builder = getattr(args, "builder", None)
     if builder not in (None, "packmol", "from_pdb"):
@@ -397,14 +397,14 @@ def _durable_psf_path(args: Any, *, stem: str = "md_system_unified") -> Path:
 def build_packmol_system_with_ffparams(spec: Any, args: Any = None):
     """Build a composition system via packmol and lower it to ``FFParams``.
 
-    ``PackmolSystemBuilder`` (``mmml.md.builders.placement``) does not write a
+    ``PackmolSystemBuilder`` (``karml.md.builders.placement``) does not write a
     PSF file by default, since ``build_packmol_composition_cluster`` never
     persists one — it only leaves the built system live in CHARMM. Reuse the
     same building blocks, then write the live PSF to a durable path so
     ``FFParams`` / ``mm_bonded`` can resolve it after the builder returns.
     """
-    from mmml.cli.run.md_pbc_suite.cluster import build_packmol_composition_cluster
-    from mmml.md.builders.placement import _box, _composition, _lower_optional_psf, _placement_system
+    from karml.cli.run.md_pbc_suite.cluster import build_packmol_composition_cluster
+    from karml.md.builders.placement import _box, _composition, _lower_optional_psf, _placement_system
 
     params = dict(spec.params)
     box = _box(spec, params)
@@ -437,11 +437,11 @@ def build_from_pdb_system_with_ffparams(args: Any, spec: Any):
     dump the live CHARMM PSF to a durable path (not a TemporaryDirectory that
     is deleted before ``mm_bonded`` runs).
     """
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+    from karml.interfaces.pycharmmInterface.mlpot.setup import (
         _sibling_psf_for_pdb,
         load_cluster_from_pdb,
     )
-    from mmml.md.builders.placement import _lower_optional_psf, _placement_system
+    from karml.md.builders.placement import _lower_optional_psf, _placement_system
 
     pdb_path = spec.template_pdb or getattr(args, "from_pdb", None)
     if pdb_path is None:
@@ -487,11 +487,11 @@ def build_from_pdb_system_with_ffparams(args: Any, spec: Any):
 
 
 def _load_model(checkpoint_path: Path) -> tuple[Any, Any]:
-    from mmml.interfaces.calculators.simple_inference import create_calculator_from_checkpoint
+    from karml.interfaces.calculators.simple_inference import create_calculator_from_checkpoint
 
     calc = create_calculator_from_checkpoint(str(checkpoint_path))
-    model = getattr(calc, "model", getattr(calc, "_mmml_physnet_model", None))
-    params = getattr(calc, "params", getattr(calc, "_mmml_physnet_params", None))
+    model = getattr(calc, "model", getattr(calc, "_karml_physnet_model", None))
+    params = getattr(calc, "params", getattr(calc, "_karml_physnet_params", None))
     if model is None or params is None:
         raise ValueError(f"could not extract model/params from checkpoint {checkpoint_path}")
     return model, params
@@ -501,7 +501,7 @@ def _freeze_multipoles(system, multipole_checkpoint: Path | None) -> dict[str, A
     """Predict fragment multipoles once and return fixed_multipoles options."""
     from ase import Atoms
 
-    from mmml.models.multipoles.electrostatics import (
+    from karml.models.multipoles.electrostatics import (
         LearnedMolecularMultipoleElectrostatics,
         resolve_multipoles_checkpoint,
     )
@@ -528,7 +528,7 @@ def _freeze_dispersion(system, mbd_checkpoint: Path | None, mbd_weight: float) -
     """Predict per-atom C6/alpha once; map to QDO coefficients + damping."""
     from ase import Atoms
 
-    from mmml.models.mbd.calculator import QCMLMBDCalculator, resolve_mbd_checkpoint
+    from karml.models.mbd.calculator import QCMLMBDCalculator, resolve_mbd_checkpoint
 
     ckpt = resolve_mbd_checkpoint(mbd_checkpoint)
     calc = QCMLMBDCalculator(checkpoint=ckpt)
@@ -553,8 +553,8 @@ def _freeze_dispersion(system, mbd_checkpoint: Path | None, mbd_weight: float) -
 
 def build_energy_context(args: Any, system, terms: tuple[str, ...]):
     """Build :class:`EnergyContext` for the selected terms (ML and/or fixed QCML)."""
-    from mmml.md.energy.registry import EnergyContext
-    from mmml.md.energy.terms.zbl import DEFAULT_ZBL_CUTOFF_A, DEFAULT_ZBL_CUTON_A
+    from karml.md.energy.registry import EnergyContext
+    from karml.md.energy.terms.zbl import DEFAULT_ZBL_CUTOFF_A, DEFAULT_ZBL_CUTON_A
 
     options: dict[str, Any] = {
         "zbl_cuton": DEFAULT_ZBL_CUTON_A,
@@ -584,12 +584,12 @@ def build_energy_context(args: Any, system, terms: tuple[str, ...]):
 
 
 def run_unified_jaxmd(args: Any) -> int:
-    """Run ``args`` through the unified ``mmml.md`` pipeline; return an exit code."""
+    """Run ``args`` through the unified ``karml.md`` pipeline; return an exit code."""
     check_md_system_args_supported(args)
 
     # Platforms + CUDA runtime libs before import jax. Campaign ``quiet: true``
-    # still gets the device banner below (honours MMML_QUIET only).
-    from mmml.interfaces.pycharmmInterface.jax_device_policy import (
+    # still gets the device banner below (honours KARML_QUIET only).
+    from karml.interfaces.pycharmmInterface.jax_device_policy import (
         apply_mlpot_jax_platform_env,
         mlpot_device_context_fell_back_to_cpu,
         mlpot_jax_device_context,
@@ -603,9 +603,9 @@ def run_unified_jaxmd(args: Any) -> int:
 
     jax.config.update("jax_enable_x64", True)
 
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import ensure_pycharmm_loaded
-    from mmml.md.assemble import assemble_and_run
-    from mmml.md.lowering import runconfig_from_md_system_args
+    from karml.interfaces.pycharmmInterface.import_pycharmm import ensure_pycharmm_loaded
+    from karml.md.assemble import assemble_and_run
+    from karml.md.lowering import runconfig_from_md_system_args
 
     # Explicit and idempotent: unlike PeptideWaterSystemBuilder's underlying
     # build_trialanine_water_box_in_charmm, build_packmol_composition_cluster
@@ -617,7 +617,7 @@ def run_unified_jaxmd(args: Any) -> int:
         # Same normalisation the ase / staged cold-start paths apply: resolves the
         # path and rejects --from-pdb mixed with --from-psf/--from-crd or with a
         # Packmol composition. Must run before the spec is lowered.
-        from mmml.interfaces.pycharmmInterface.mlpot.composition_spec import (
+        from karml.interfaces.pycharmmInterface.mlpot.composition_spec import (
             apply_from_pdb_alias,
         )
 
@@ -632,14 +632,14 @@ def run_unified_jaxmd(args: Any) -> int:
     from dataclasses import replace
     from pathlib import Path
 
-    from mmml.md.ml_region import (
+    from karml.md.ml_region import (
         apply_ml_resnames_mechanical_embedding,
         parse_ml_resnames,
     )
 
     policy_path = getattr(args, "interaction_policy", None)
     if policy_path is not None:
-        from mmml.md.interactions import (
+        from karml.md.interactions import (
             assert_interaction_plan_lowerable,
             compile_interaction_policy,
             load_interaction_policy,
@@ -687,7 +687,7 @@ def run_unified_jaxmd(args: Any) -> int:
         if extra_prm:
             term_kwargs.setdefault("mm_bonded", {})["extra_prm_files"] = extra_prm
         print(
-            f"mmml md-system (jaxmd-unified): ML region "
+            f"karml md-system (jaxmd-unified): ML region "
             f"{len(ml_indices)} atoms resnames={list(ml_resnames)}; "
             f"mm_bonded on MM atoms; MM nonbonded for solute–solvent / solvent–solvent",
             flush=True,
@@ -696,7 +696,7 @@ def run_unified_jaxmd(args: Any) -> int:
     # Overlay campaign / --continue-from geometry after topology + ML-region remap.
     system, from_handoff = _apply_incoming_handoff(args, system)
 
-    # Pin ML + jax-md energy/MD to MMML_MLPOT_DEVICE (default gpu). Without this,
+    # Pin ML + jax-md energy/MD to KARML_MLPOT_DEVICE (default gpu). Without this,
     # a cpu-first JAX_PLATFORMS list (or silent CUDA plugin fallback) leaves
     # Spooky/PhysNet on the host while nvidia-smi stays idle.
     reset_mlpot_device_fallback_flag()
@@ -704,7 +704,7 @@ def run_unified_jaxmd(args: Any) -> int:
         print_jax_device_banner(active_device=jax_device)
         if mlpot_device_context_fell_back_to_cpu():
             print(
-                "mmml md-system (jaxmd-unified): computing on CPU "
+                "karml md-system (jaxmd-unified): computing on CPU "
                 "(GPU requested but unavailable — see WARNING above)",
                 flush=True,
             )
@@ -714,7 +714,7 @@ def run_unified_jaxmd(args: Any) -> int:
         # the user explicitly asked for --handoff-pre-minimize.
         if from_handoff and not bool(getattr(args, "handoff_pre_minimize", False)):
             print(
-                "mmml md-system (jaxmd-unified): skipping FIRE "
+                "karml md-system (jaxmd-unified): skipping FIRE "
                 "(continue-from / campaign handoff)",
                 flush=True,
             )
@@ -750,7 +750,7 @@ def run_unified_jaxmd(args: Any) -> int:
     energies = traj.metadata.get("energies")
     if energies is not None and len(energies):
         print(
-            f"mmml md-system (jaxmd-unified): {traj.n_frames} frames, "
+            f"karml md-system (jaxmd-unified): {traj.n_frames} frames, "
             f"E0={energies[0]:.4f} eV, Efinal={energies[-1]:.4f} eV",
             flush=True,
         )
@@ -765,21 +765,21 @@ def run_unified_jaxmd(args: Any) -> int:
             p0 = float(np.asarray(pressures, dtype=np.float64).reshape(-1)[0])
             if np.isfinite(p0) and abs(p0) > 500.0:
                 print(
-                    f"mmml md-system (jaxmd-unified): WARNING NPT |P0|={abs(p0):.4g} bar "
+                    f"karml md-system (jaxmd-unified): WARNING NPT |P0|={abs(p0):.4g} bar "
                     f">> P_target (dilute/cold-start box). Use a denser box or raise "
                     f"barostat_tau (metal time) so the piston cannot slam the cell "
                     f"on a short smoke.",
                     flush=True,
                 )
     if energies is None or not np.all(np.isfinite(energies)):
-        print("mmml md-system: jaxmd-unified produced non-finite energies", file=sys.stderr)
+        print("karml md-system: jaxmd-unified produced non-finite energies", file=sys.stderr)
         return 1
     # Huge-but-finite energies still mean the run exploded (e.g. missing solvent
     # bonded terms). Fail closed so wrapper scripts do not print PASS.
     abs_max = float(np.max(np.abs(np.asarray(energies, dtype=np.float64))))
     if abs_max > 1.0e6:
         print(
-            f"mmml md-system: jaxmd-unified energy blew up "
+            f"karml md-system: jaxmd-unified energy blew up "
             f"(|E|_max={abs_max:.4e} eV > 1e6)",
             file=sys.stderr,
         )
@@ -795,7 +795,7 @@ def run_unified_jaxmd(args: Any) -> int:
         if not ok:
             ratio_s = "nan" if ratio is None else f"{ratio:.4g}"
             print(
-                f"mmml md-system: jaxmd-unified NPT volume ratio out of range "
+                f"karml md-system: jaxmd-unified NPT volume ratio out of range "
                 f"(Vfinal/V0={ratio_s}; allowed "
                 f"[{_NPT_VOLUME_RATIO_MIN}, {_NPT_VOLUME_RATIO_MAX}])",
                 file=sys.stderr,
@@ -806,7 +806,7 @@ def run_unified_jaxmd(args: Any) -> int:
             np.isfinite(np.asarray(pressures, dtype=np.float64))
         ):
             print(
-                "mmml md-system: jaxmd-unified produced non-finite NPT pressures",
+                "karml md-system: jaxmd-unified produced non-finite NPT pressures",
                 file=sys.stderr,
             )
             return 1
@@ -819,7 +819,7 @@ def _resolve_extra_prm_files(args: Any) -> list[Path]:
 
     out: list[Path] = []
     raw = getattr(args, "cgenff_extra_prm", None) or os.environ.get(
-        "MMML_CGENFF_EXTRA_PRM", ""
+        "KARML_CGENFF_EXTRA_PRM", ""
     )
     if raw:
         p = Path(str(raw)).expanduser()

@@ -10,7 +10,7 @@ from typing import Any
 
 import numpy as np
 
-from mmml.data.orbax_shards import write_orbax_shards
+from karml.data.orbax_shards import write_orbax_shards
 
 DATASETS = {
     "geometry": "qcml/dft_force_field",

@@ -2,7 +2,7 @@
 """Print CHARMM image nonbond exclusion buffer stats (MKIMNB/UPIMNB).
 
 Requires a live PyCHARMM session and a CHARMM build exporting
-``image_get_iminb_stats`` (MMML ``api_image.F90``).
+``image_get_iminb_stats`` (KARML ``api_image.F90``).
 
 Example (after PSF+crystal are loaded in an interactive session):
 
@@ -38,10 +38,10 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+    import karml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
     import pycharmm.image as charmm_image
 
-    from mmml.interfaces.pycharmmInterface.charmm_image_geometry import (
+    from karml.interfaces.pycharmmInterface.charmm_image_geometry import (
         fetch_charmm_image_nb_stats,
         format_charmm_image_nb_stats,
     )
@@ -51,12 +51,12 @@ def main() -> int:
     stats = fetch_charmm_image_nb_stats()
     if stats is None:
         print(
-            "image_get_iminb_stats unavailable (rebuild CHARMM lib from MMML api_image.F90)",
+            "image_get_iminb_stats unavailable (rebuild CHARMM lib from KARML api_image.F90)",
             file=sys.stderr,
         )
         return 1
     if args.json:
-        from mmml.utils.rich_report import print_colored_json
+        from karml.utils.rich_report import print_colored_json
 
         print_colored_json(stats.__dict__, sort_keys=True)
     else:

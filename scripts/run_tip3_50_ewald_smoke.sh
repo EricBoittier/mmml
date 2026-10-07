@@ -165,7 +165,7 @@ if [[ "$USE_CERTIFIED" == "1" ]]; then
   echo "  after-heat: CONTINUE_TO_NPT=$CONTINUE_TO_NPT (CHARMM CPT when heat*.res exists)"
 
   set +e
-  mmml md-system \
+  karml md-system \
     --backend pycharmm \
     --setup pycharmm_full \
     --md-stages "$MD_STAGES" \
@@ -217,7 +217,7 @@ else
 
   # Packmol liquid in --box-size, then CHARMM MM mini/heat before MLpot.
   set +e
-  mmml md-system \
+  karml md-system \
     --backend pycharmm \
     --setup pycharmm_full \
     --md-stages "$MD_STAGES" \

@@ -8,7 +8,7 @@ from pathlib import Path
 import h5py
 import numpy as np
 
-from mmml.data.spice_alpha import SPICE_ALPHA_CANONICAL_UNITS
+from karml.data.spice_alpha import SPICE_ALPHA_CANONICAL_UNITS
 
 
 def write_spice_h5(

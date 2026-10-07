@@ -7,12 +7,12 @@ from typing import Any, Mapping
 
 import numpy as np
 
-from mmml.data.units import (
+from karml.data.units import (
     format_energy_kcal_ev,
     format_fmax_ev_kcal_a,
     format_grms_kcal_ev_a,
 )
-from mmml.utils.rich_report import emit_dashboard, emit_tagged, rich_enabled
+from karml.utils.rich_report import emit_dashboard, emit_tagged, rich_enabled
 
 
 _DIAG_NOTES = {
@@ -31,13 +31,13 @@ def try_user_energy_kcal(mlpot_ctx: Any | None = None) -> float | None:
     if mlpot_ctx is None:
         return None
     try:
-        from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+        from karml.interfaces.pycharmmInterface.mlpot.setup import (
             _effective_mlpot_user_kcal,
             _read_mlpot_charmm_energy_terms_kcal,
         )
 
         terms = _read_mlpot_charmm_energy_terms_kcal()
-        from mmml.interfaces.pycharmmInterface.mlpot.mlpot_eterms import (
+        from karml.interfaces.pycharmmInterface.mlpot.mlpot_eterms import (
             mlpot_eterm_kcal_from_terms,
         )
 

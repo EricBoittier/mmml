@@ -14,8 +14,8 @@ import jax.numpy as jnp
 
 
 def test_dimer_lattice_shift_value_and_gradients() -> None:
-    from mmml.interfaces.pycharmmInterface.mmml_calculator import _dimer_lattice_shift
-    from mmml.interfaces.pycharmmInterface.pbc_utils_jax import mic_displacement
+    from karml.interfaces.pycharmmInterface.karml_calculator import _dimer_lattice_shift
+    from karml.interfaces.pycharmmInterface.pbc_utils_jax import mic_displacement
 
     cell = jnp.eye(3) * 20.0
     com_a = jnp.array([1.0, 2.0, 3.0])
@@ -32,7 +32,7 @@ def test_dimer_lattice_shift_value_and_gradients() -> None:
 
 
 def test_virial_correction_tensor_lattice_and_rewrap_terms() -> None:
-    from mmml.interfaces.pycharmmInterface.mlpot.strain_virial import virial_correction_kcal
+    from karml.interfaces.pycharmmInterface.mlpot.strain_virial import virial_correction_kcal
 
     cell = np.eye(3) * 32.0
     G = np.diag([0.5, -1.0, 2.0])  # dE/dcell, eV/A
@@ -49,7 +49,7 @@ def test_virial_correction_tensor_lattice_and_rewrap_terms() -> None:
 
 
 def test_strain_virial_scope_only_for_live_barostat(monkeypatch) -> None:
-    from mmml.interfaces.pycharmmInterface.mlpot import strain_virial as sv
+    from karml.interfaces.pycharmmInterface.mlpot import strain_virial as sv
 
     monkeypatch.delenv(sv.STRAIN_VIRIAL_ENV, raising=False)
     monkeypatch.setattr(sv, "require_charmm_virial_hook", lambda: None)

@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from mmml.dimer_scan.calculators import calculator_factory
-from mmml.dimer_scan.config import DimerScanConfig
+from karml.dimer_scan.calculators import calculator_factory
+from karml.dimer_scan.config import DimerScanConfig
 
 
 def test_physnet_factory_forwards_charge_and_spin(monkeypatch, tmp_path: Path):
@@ -17,7 +17,7 @@ def test_physnet_factory_forwards_charge_and_spin(monkeypatch, tmp_path: Path):
         return sentinel
 
     monkeypatch.setattr(
-        "mmml.interfaces.calculators.simple_inference.create_calculator_from_checkpoint",
+        "karml.interfaces.calculators.simple_inference.create_calculator_from_checkpoint",
         fake_loader,
     )
     config = DimerScanConfig(
@@ -50,7 +50,7 @@ def test_metatomic_factory_forwards_checkpoint(monkeypatch, tmp_path: Path):
         return sentinel
 
     monkeypatch.setattr(
-        "mmml.interfaces.calculators.metatomic.load_metatomic_calculator",
+        "karml.interfaces.calculators.metatomic.load_metatomic_calculator",
         fake_loader,
     )
     config = DimerScanConfig(

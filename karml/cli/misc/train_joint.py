@@ -91,7 +91,7 @@ import time
 import json
 from dataclasses import dataclass
 
-# CLI tool - mmml should be installed
+# CLI tool - karml should be installed
 
 import jax
 import jax.numpy as jnp
@@ -118,27 +118,27 @@ except ImportError:
     HAS_MATPLOTLIB = False
 
 # Import PhysNet components
-from mmml.utils.model_checkpoint import build_physnet_from_config
-from mmml.models.physnetjax.physnetjax.directories import BASE_CKPT_DIR
-from mmml.cli.base import BUNDLED_LEGACY_MEOH_REL_PATH, BUNDLED_PORTABLE_MEOH_PATH
-from mmml.models.physnetjax.defaults import (
+from karml.utils.model_checkpoint import build_physnet_from_config
+from karml.models.physnetjax.physnetjax.directories import BASE_CKPT_DIR
+from karml.cli.base import BUNDLED_LEGACY_MEOH_REL_PATH, BUNDLED_PORTABLE_MEOH_PATH
+from karml.models.physnetjax.defaults import (
     JOINT_TRAINING_CATEGORY,
     resolve_hf_physnet_model,
 )
 
 # Import DCMNet components
-from mmml.dcmnet.dcmnet.modules import MessagePassingModel
-from mmml.dcmnet.dcmnet.electrostatics import calc_esp
+from karml.dcmnet.dcmnet.modules import MessagePassingModel
+from karml.dcmnet.dcmnet.electrostatics import calc_esp
 
 # Import data utilities
-from mmml.data.units import (
+from karml.data.units import (
     ANGSTROM_TO_BOHR,
     HARTREE_TO_EV,
     EANGSTROM_TO_DEBYE,
     EV_TO_KCAL_MOL,
     HARTREE_TO_KCAL_MOL,
 )
-from mmml.models.physnetjax.checkpoint_utils import (
+from karml.models.physnetjax.checkpoint_utils import (
     load_physnet_checkpoint as _load_physnet_checkpoint,
     print_bundled_physnet_models as _print_bundled_physnet_models,
 )
@@ -1160,11 +1160,11 @@ def load_combined_data(efd_file: Path, esp_file: Path, subtract_atom_energies: b
     
     energies = efd_data['E'].copy()
     
-    # Subtract atomic energies using mmml reference table
+    # Subtract atomic energies using karml reference table
     if subtract_atom_energies:
         try:
-            from mmml.data.atomic_references import get_atomic_reference_dict
-            from mmml.data.preprocessing import subtract_atomic_energies as subtract_ae
+            from karml.data.atomic_references import get_atomic_reference_dict
+            from karml.data.preprocessing import subtract_atomic_energies as subtract_ae
             atomic_refs = get_atomic_reference_dict(unit="eV")
             energies = subtract_ae(energies, Z, N, atomic_refs)
         except (FileNotFoundError, ValueError) as e:
@@ -4257,7 +4257,7 @@ def main():
         print(f"{'='*70}")
         run_root = (ckpt_dir / args.name).resolve()
         print(f"\nFinal parameters saved to: {run_root}")
-        print(f"MMML_CHECKPOINT_DIR={run_root}")
+        print(f"KARML_CHECKPOINT_DIR={run_root}")
         if args.write_checkpoint_path is not None:
             args.write_checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
             args.write_checkpoint_path.write_text(f"{run_root}\n", encoding="utf-8")
@@ -4304,7 +4304,7 @@ def main():
         print("\n\n⚠️  Training interrupted by user")
         run_root = (ckpt_dir / args.name).resolve()
         print(f"Checkpoints saved to: {run_root}")
-        print(f"MMML_CHECKPOINT_DIR={run_root}")
+        print(f"KARML_CHECKPOINT_DIR={run_root}")
         if args.write_checkpoint_path is not None:
             args.write_checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
             args.write_checkpoint_path.write_text(f"{run_root}\n", encoding="utf-8")

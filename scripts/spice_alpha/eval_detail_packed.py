@@ -37,9 +37,9 @@ def main():
     import jax.numpy as jnp
 
     jax.config.update("jax_enable_x64", False)
-    from mmml.data.spice_alpha_ragged import SUBSET_IDS, load_ragged
-    from mmml.models.efield.packed import PackSpec, _forward, iter_packed_batches, packed_losses, prefetch
-    from mmml.models.efield.training import EFieldPhysNet, load_params
+    from karml.data.spice_alpha_ragged import SUBSET_IDS, load_ragged
+    from karml.models.efield.packed import PackSpec, _forward, iter_packed_batches, packed_losses, prefetch
+    from karml.models.efield.training import EFieldPhysNet, load_params
 
     cfg = json.loads((args.ckpt_dir / "config.json").read_text())
     out = args.out_dir

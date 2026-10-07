@@ -15,10 +15,10 @@ from ase.io.trajectory import Trajectory
 from jax import jit
 from jax_md import simulate, space, units as jax_md_units
 
-from mmml.cli.run.jaxmd_runner import as_jaxmd_dtype, normalize_jaxmd_state
-from mmml.md.nl_cadence import resolve_block_steps, resolve_update_interval
-from mmml.md.step_batching import make_block_stepper
-from mmml.cli.run.lambda_dynamics import (
+from karml.cli.run.jaxmd_runner import as_jaxmd_dtype, normalize_jaxmd_state
+from karml.md.nl_cadence import resolve_block_steps, resolve_update_interval
+from karml.md.step_batching import make_block_stepper
+from karml.cli.run.lambda_dynamics import (
     LambdaDynamicsConfig,
     LambdaMdSettings,
     is_lambda_prod_complete,
@@ -34,10 +34,10 @@ from mmml.cli.run.lambda_dynamics import (
     print_lambda_resume_plan,
     resolve_model_restart_path,
 )
-from mmml.interfaces.pycharmmInterface.mmml_calculator import CutoffParameters, setup_calculator
+from karml.interfaces.pycharmmInterface.karml_calculator import CutoffParameters, setup_calculator
 # Lives in jax_gpu_warmup, not lambda_dynamics; the wrong import made this whole
 # module (i.e. `lambda_ti --backend jaxmd`) fail at import time.
-from mmml.utils.jax_gpu_warmup import ensure_jax_cuda_toolchain
+from karml.utils.jax_gpu_warmup import ensure_jax_cuda_toolchain
 
 import pycharmm.param as param
 import pycharmm.psf as psf
@@ -45,7 +45,7 @@ import pycharmm.psf as psf
 
 @dataclass
 class LambdaJaxMdBundle:
-    """JIT MMML spherical calculators for production (λ) and TI probes (λ=1, λ=0)."""
+    """JIT KARML spherical calculators for production (λ) and TI probes (λ=1, λ=0)."""
 
     wrapped_force_fn: Callable
     spherical_prod: Callable
@@ -62,7 +62,7 @@ class LambdaJaxMdBundle:
     pbc_state: dict[str, Any]
 
 
-def _warm_mmml_spherical_cache(
+def _warm_karml_spherical_cache(
     *,
     get_update_fn: Callable | None,
     positions: np.ndarray,
@@ -71,7 +71,7 @@ def _warm_mmml_spherical_cache(
     """Build MM energy/force caches outside JIT (mirrors ASE ``calculate`` / jaxmd_runner)."""
     if get_update_fn is None:
         raise RuntimeError(
-            "MMML calculator returned no get_update_fn; cannot warm MM cache for JAX-MD."
+            "KARML calculator returned no get_update_fn; cannot warm MM cache for JAX-MD."
         )
     get_update_fn(np.asarray(positions, dtype=float), cutoff)
 
@@ -166,7 +166,7 @@ def build_lambda_jaxmd_bundle(
 
     pos_np = np.asarray(positions, dtype=float)
     for upd in (get_update_fn, get_update_on, get_update_off):
-        _warm_mmml_spherical_cache(get_update_fn=upd, positions=pos_np, cutoff=cutoff)
+        _warm_karml_spherical_cache(get_update_fn=upd, positions=pos_np, cutoff=cutoff)
 
     z_jnp = jnp.asarray(atomic_numbers, dtype=jnp.int32)
     use_pbc = md_settings.use_pbc
@@ -495,7 +495,7 @@ def run_jaxmd_segment(
 
 def run_lambda_dynamics_jaxmd(cfg: LambdaDynamicsConfig) -> dict[str, Any]:
     """λ-window TI with JAX-MD (CHARMM + ASE BFGS minimization unchanged)."""
-    from mmml.cli.run.lambda_dynamics import (
+    from karml.cli.run.lambda_dynamics import (
         SNAPSHOTS_NPZ,
         SUMMARY_JSON,
         _print_run_banner,
@@ -732,7 +732,7 @@ def run_lambda_dynamics_jaxmd(cfg: LambdaDynamicsConfig) -> dict[str, Any]:
             }
         )
 
-    from mmml.cli.run.lambda_dynamics import _EV_TO_KCAL, asdict
+    from karml.cli.run.lambda_dynamics import _EV_TO_KCAL, asdict
 
     lam_col = np.array([r["lambda_coupled"] for r in rows], dtype=float)
     mean_b = np.array([r["mean_dUdlambda_eV"] for r in rows], dtype=float)

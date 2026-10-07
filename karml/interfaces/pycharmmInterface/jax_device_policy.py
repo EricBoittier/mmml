@@ -2,11 +2,11 @@
 
 GPU selection
 -------------
-- ``MMML_MLPOT_DEVICE``: ``gpu`` (default) or ``cpu``.
+- ``KARML_MLPOT_DEVICE``: ``gpu`` (default) or ``cpu``.
 - ``CUDA_VISIBLE_DEVICES``: restrict which physical GPUs JAX sees (e.g. ``0`` or ``0,1``).
-- ``MMML_MLPOT_N_GPUS`` / ``--ml-gpu-count``: parallel PhysNet *chunks* across local GPUs
+- ``KARML_MLPOT_N_GPUS`` / ``--ml-gpu-count``: parallel PhysNet *chunks* across local GPUs
   (default 1). Does not split CHARMM integration across devices.
-- ``JAX_PLATFORMS``: default ``gpu,cpu`` when ``MMML_MLPOT_DEVICE=gpu`` (CPU kept for
+- ``JAX_PLATFORMS``: default ``gpu,cpu`` when ``KARML_MLPOT_DEVICE=gpu`` (CPU kept for
   MPI defer / fallback). GPU-only values like ``cuda`` are expanded to ``cuda,cpu``
   before the first ``import jax``.
 """
@@ -35,7 +35,7 @@ def mlpot_local_gpu_count() -> int:
 
 def mlpot_jax_device_name() -> str:
     """``cpu`` or ``gpu`` for MLpot energy/force evaluation."""
-    mode = (os.environ.get("MMML_MLPOT_DEVICE") or "gpu").strip().lower()
+    mode = (os.environ.get("KARML_MLPOT_DEVICE") or "gpu").strip().lower()
     if mode in ("cpu", "gpu"):
         return mode
     if mode == "auto":
@@ -45,7 +45,7 @@ def mlpot_jax_device_name() -> str:
 
 def mlpot_jax_compilation_cache_dir() -> Path | None:
     """Persistent JIT cache directory (``None`` when disabled)."""
-    if _truthy("MMML_NO_JAX_COMPILATION_CACHE"):
+    if _truthy("KARML_NO_JAX_COMPILATION_CACHE"):
         return None
     override = (os.environ.get("JAX_COMPILATION_CACHE_DIR") or "").strip()
     if override:
@@ -55,7 +55,7 @@ def mlpot_jax_compilation_cache_dir() -> Path | None:
         base = Path(cache_home).expanduser()
     else:
         base = Path.home() / ".cache"
-    return base / "mmml" / "jax-compilation-cache"
+    return base / "karml" / "jax-compilation-cache"
 
 
 def apply_mlpot_jax_compilation_cache_env(*, quiet: bool = False) -> Path | None:
@@ -70,8 +70,8 @@ def apply_mlpot_jax_compilation_cache_env(*, quiet: bool = False) -> Path | None
         "JAX_PERSISTENT_CACHE_ENABLE_XLA_CACHES",
         "xla_gpu_per_fusion_autotune_cache_dir",
     )
-    if not quiet and not _truthy("MMML_QUIET"):
-        print(f"mmml: JAX compilation cache -> {cache_dir}", flush=True)
+    if not quiet and not _truthy("KARML_QUIET"):
+        print(f"karml: JAX compilation cache -> {cache_dir}", flush=True)
     return cache_dir
 
 
@@ -143,7 +143,7 @@ def mlpot_jax_platforms_for_device(device: str) -> str:
     if name == "cpu":
         return "cpu"
     try:
-        from mmml.utils.jax_gpu_warmup import _installed_jax_cuda_plugins
+        from karml.utils.jax_gpu_warmup import _installed_jax_cuda_plugins
 
         if not _installed_jax_cuda_plugins():
             return "cpu"
@@ -181,14 +181,14 @@ def _jax_platforms_are_cpu_first(existing: str) -> bool:
 def apply_mlpot_jax_platform_env(*, quiet: bool = False) -> str:
     """Set ``JAX_PLATFORMS`` and compilation cache before the first ``import jax``.
 
-    When ``MMML_MLPOT_DEVICE=gpu``, a stale login export of ``JAX_PLATFORMS=cpu``
+    When ``KARML_MLPOT_DEVICE=gpu``, a stale login export of ``JAX_PLATFORMS=cpu``
     (or leftover MPI-defer ``cpu,gpu`` / ``cpu,cuda``) is rewritten to put CUDA
-    first. MPI MLpot defer keeps ``MMML_MLPOT_DEVICE=cpu`` during that window, so
+    first. MPI MLpot defer keeps ``KARML_MLPOT_DEVICE=cpu`` during that window, so
     it is not clobbered here.
     """
     import sys
 
-    from mmml.interfaces.pycharmmInterface.jax_compile_threads import (
+    from karml.interfaces.pycharmmInterface.jax_compile_threads import (
         apply_jax_compile_xla_flags,
     )
 
@@ -197,7 +197,7 @@ def apply_mlpot_jax_platform_env(*, quiet: bool = False) -> str:
     if device == "gpu":
         # Bundled cuDNN/ptxas must precede import jax for the CUDA plugin to bind.
         try:
-            from mmml.utils.jax_gpu_warmup import ensure_jax_cuda_toolchain
+            from karml.utils.jax_gpu_warmup import ensure_jax_cuda_toolchain
 
             ensure_jax_cuda_toolchain(required=False)
         except Exception:
@@ -211,9 +211,9 @@ def apply_mlpot_jax_platform_env(*, quiet: bool = False) -> str:
         expanded = _expand_gpu_platforms_to_include_cpu(existing)
         if expanded is not None:
             if "jax" in sys.modules:
-                if not quiet and not _truthy("MMML_QUIET"):
+                if not quiet and not _truthy("KARML_QUIET"):
                     print(
-                        "mmml WARNING: JAX_PLATFORMS="
+                        "karml WARNING: JAX_PLATFORMS="
                         f"{existing!r} is GPU-only and jax is already imported; "
                         "cannot register the CPU backend. Restart with "
                         f"JAX_PLATFORMS={expanded!r} (or unset it).",
@@ -221,9 +221,9 @@ def apply_mlpot_jax_platform_env(*, quiet: bool = False) -> str:
                     )
             else:
                 os.environ["JAX_PLATFORMS"] = expanded
-                if not quiet and not _truthy("MMML_QUIET"):
+                if not quiet and not _truthy("KARML_QUIET"):
                     print(
-                        f"mmml: JAX_PLATFORMS expanded {existing!r} → {expanded!r} "
+                        f"karml: JAX_PLATFORMS expanded {existing!r} → {expanded!r} "
                         "(CPU kept for MLpot defer/fallback)",
                         flush=True,
                     )
@@ -231,9 +231,9 @@ def apply_mlpot_jax_platform_env(*, quiet: bool = False) -> str:
             existing
         ):
             if "jax" in sys.modules:
-                if not quiet and not _truthy("MMML_QUIET"):
+                if not quiet and not _truthy("KARML_QUIET"):
                     print(
-                        "mmml WARNING: MMML_MLPOT_DEVICE=gpu but JAX_PLATFORMS="
+                        "karml WARNING: KARML_MLPOT_DEVICE=gpu but JAX_PLATFORMS="
                         f"{existing!r} and jax is already imported — default "
                         "backend stays CPU. Restart with JAX_PLATFORMS unset "
                         f"(or {wanted!r}); jaxmd-unified / MLpot still pin via "
@@ -242,17 +242,17 @@ def apply_mlpot_jax_platform_env(*, quiet: bool = False) -> str:
                     )
             else:
                 os.environ["JAX_PLATFORMS"] = wanted
-                if not quiet and not _truthy("MMML_QUIET"):
+                if not quiet and not _truthy("KARML_QUIET"):
                     print(
-                        f"mmml: JAX_PLATFORMS overridden {existing!r} → {wanted!r} "
-                        "(MMML_MLPOT_DEVICE=gpu; CUDA first)",
+                        f"karml: JAX_PLATFORMS overridden {existing!r} → {wanted!r} "
+                        "(KARML_MLPOT_DEVICE=gpu; CUDA first)",
                         flush=True,
                     )
     apply_mlpot_jax_compilation_cache_env(quiet=quiet)
-    if not quiet and not _truthy("MMML_QUIET") and device == "cpu":
+    if not quiet and not _truthy("KARML_QUIET") and device == "cpu":
         print(
-            "mmml: MLpot JAX runs on CPU (MMML_MLPOT_DEVICE=cpu). "
-            "Unset or set MMML_MLPOT_DEVICE=gpu for GPU.",
+            "karml: MLpot JAX runs on CPU (KARML_MLPOT_DEVICE=cpu). "
+            "Unset or set KARML_MLPOT_DEVICE=gpu for GPU.",
             flush=True,
         )
     return device
@@ -279,21 +279,21 @@ def format_jax_device_banner(*, active_device: Any | None = None) -> str:
         backend = f"no-jax:{exc}"
     active = "" if active_device is None else f" active={active_device}"
     return (
-        f"mmml: JAX requested={requested} JAX_PLATFORMS={platforms} "
+        f"karml: JAX requested={requested} JAX_PLATFORMS={platforms} "
         f"default_backend={backend} devices=[{devices_s}]{active}"
     )
 
 
 def print_jax_device_banner(*, active_device: Any | None = None) -> None:
-    """Print :func:`format_jax_device_banner` (honours ``MMML_QUIET`` only)."""
-    if _truthy("MMML_QUIET"):
+    """Print :func:`format_jax_device_banner` (honours ``KARML_QUIET`` only)."""
+    if _truthy("KARML_QUIET"):
         return
     print(format_jax_device_banner(active_device=active_device), flush=True)
 
 
 def jax_warmup_device_name() -> str:
     """Warmup backend; follows :func:`mlpot_jax_device_name` unless overridden."""
-    mode = (os.environ.get("MMML_JAX_WARMUP_DEVICE") or "auto").strip().lower()
+    mode = (os.environ.get("KARML_JAX_WARMUP_DEVICE") or "auto").strip().lower()
     if mode in ("cpu", "gpu"):
         return mode
     if mode == "auto":
@@ -330,7 +330,7 @@ def mlpot_jax_device_context() -> Iterator[Any]:
     (e.g. a CPU-only jaxlib install, or a long-running process whose jaxlib
     was loaded before a later ``uv sync --extra gpu``). The fallback itself
     is intentional -- CPU-only dev/CI machines default to
-    ``MMML_MLPOT_DEVICE=gpu`` and must not hard-fail -- but callers
+    ``KARML_MLPOT_DEVICE=gpu`` and must not hard-fail -- but callers
     (``DecomposedMlpotModel._finalize_jax_factory``) track "on GPU" state
     from this fallback outcome (see :func:`mlpot_device_context_fell_back_to_cpu`),
     not from the request, precisely because a silent fallback here previously
@@ -364,19 +364,19 @@ def mlpot_jax_device_context() -> Iterator[Any]:
 
 def _warn_gpu_requested_but_unavailable() -> None:
     message = (
-        "MMML_MLPOT_DEVICE=gpu requested but JAX sees no GPU device "
+        "KARML_MLPOT_DEVICE=gpu requested but JAX sees no GPU device "
         "(jax.devices('gpu') is empty) -- falling back to CPU. If a GPU "
         "should be present: uv sync --extra gpu, then restart this process "
         "(a running interpreter keeps whatever jaxlib it already imported; "
-        "resyncing on disk does not change it). Set MMML_MLPOT_DEVICE=cpu "
+        "resyncing on disk does not change it). Set KARML_MLPOT_DEVICE=cpu "
         "to silence this if CPU is intentional."
     )
     try:
-        from mmml.utils.rich_report import get_reporter
+        from karml.utils.rich_report import get_reporter
 
         get_reporter().status("warning", message)
     except Exception:
-        print(f"mmml WARNING: {message}", flush=True)
+        print(f"karml WARNING: {message}", flush=True)
 
 
 def jax_registered_backend_names() -> list[str]:
@@ -474,7 +474,7 @@ def jax_cpu_until_mlpot_registered() -> Iterator[Any]:
             want_cpu = mlpot_jax_device_name() == "cpu"
             level = "WARNING" if want_cpu else "NOTE"
             print(
-                f"mmml {level}: JAX CPU backend not registered "
+                f"karml {level}: JAX CPU backend not registered "
                 f"(JAX_PLATFORMS={platforms!r}, registered={registered or ['?']}); "
                 "using GPU. To register CPU as well, restart with "
                 "JAX_PLATFORMS=gpu,cpu before any import jax.",

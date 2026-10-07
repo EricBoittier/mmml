@@ -7,7 +7,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from mmml.md.builders import (
+from karml.md.builders import (
     PackmolSystemBuilder,
     PeptideWaterSystemBuilder,
     PsfSystemBuilder,
@@ -15,7 +15,7 @@ from mmml.md.builders import (
     molecule_ids_from_bonds,
     monomer_indices_from_mol_id,
 )
-from mmml.md.system import FFParams, MolecularSystem, SystemSpec
+from karml.md.system import FFParams, MolecularSystem, SystemSpec
 
 REPO = Path(__file__).resolve().parents[2]
 
@@ -25,7 +25,7 @@ REPO = Path(__file__).resolve().parents[2]
 
 def test_ffparams_from_nonbonded_system_data():
     pytest.importorskip("jax")  # NonbondedSystemData lives in a jax module
-    from mmml.interfaces.pycharmmInterface.mm_system_energy import NonbondedSystemData
+    from karml.interfaces.pycharmmInterface.mm_system_energy import NonbondedSystemData
 
     n = 5
     nb = NonbondedSystemData(
@@ -53,7 +53,7 @@ def test_ffparams_from_nonbonded_system_data():
 
 def test_ffparams_empty_pairs():
     pytest.importorskip("jax")
-    from mmml.interfaces.pycharmmInterface.mm_system_energy import NonbondedSystemData
+    from karml.interfaces.pycharmmInterface.mm_system_energy import NonbondedSystemData
 
     nb = NonbondedSystemData(
         charges=np.zeros(2),
@@ -204,7 +204,7 @@ def test_psf_builder_integration():
 
     from ase.io import read
 
-    from mmml.interfaces.pycharmmInterface.charmm_paths import resolve_cgenff_toppar_paths
+    from karml.interfaces.pycharmmInterface.charmm_paths import resolve_cgenff_toppar_paths
 
     atoms = read(str(pdb_path))
     n = len(atoms)

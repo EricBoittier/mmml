@@ -38,7 +38,7 @@ run_yaml() {
     return 0
   fi
   echo "=== md-system --config ${cfg} ==="
-  uv run mmml md-system --config "${cfg}"
+  uv run karml md-system --config "${cfg}"
 }
 
 run_yaml examples/m/yaml/free_nve_ase.yaml 1

@@ -29,8 +29,8 @@ from PIL import Image
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from mmml.utils.domdec_psf_order import read_psf_atoms_and_bonds  # noqa: E402
-from mmml.utils.plotting.styles import (  # noqa: E402
+from karml.utils.domdec_psf_order import read_psf_atoms_and_bonds  # noqa: E402
+from karml.utils.plotting.styles import (  # noqa: E402
     LINE_STYLE_CYCLE,
     apply_plot_style,
     assert_no_text_overlap,
@@ -40,7 +40,7 @@ from mmml.utils.plotting.styles import (  # noqa: E402
     status_color,
     timeseries_with_distribution,
 )
-from mmml.utils.plotting.trajectory_structure import (  # noqa: E402
+from karml.utils.plotting.trajectory_structure import (  # noqa: E402
     InternalCoordinates,
     element_pair_rdfs,
 )

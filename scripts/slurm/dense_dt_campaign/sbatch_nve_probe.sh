@@ -13,8 +13,8 @@ set -euo pipefail
 # ROOT from BASH_SOURCE under the batch allocation.
 if [[ -n "${SLURM_SUBMIT_DIR:-}" && -d "${SLURM_SUBMIT_DIR}" ]]; then
   ROOT="$(cd "${SLURM_SUBMIT_DIR}" && pwd)"
-elif [[ -n "${MMML_ROOT:-}" && -d "${MMML_ROOT}" ]]; then
-  ROOT="$(cd "${MMML_ROOT}" && pwd)"
+elif [[ -n "${KARML_ROOT:-}" && -d "${KARML_ROOT}" ]]; then
+  ROOT="$(cd "${KARML_ROOT}" && pwd)"
 else
   ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 fi
@@ -39,16 +39,16 @@ PSF="${BOX_DIR}/model.psf"; CRD="${BOX_DIR}/model.crd"
 [[ -f "$CRD" ]] || CRD="${BOX_DIR}/mini.crd"
 mkdir -p "$OUT_ROOT" "$OUT"
 nvidia-smi --query-gpu=index,name,memory.free --format=csv || true
-if [[ "$X64" == "1" ]]; then export JAX_ENABLE_X64=1 MMML_ML_DTYPE=float64; ML=float64
-else export JAX_ENABLE_X64=0 MMML_ML_DTYPE=float32; ML=float32; fi
-export LJ_DEVICE=gpu JAX_PLATFORMS=cuda MMML_MLPOT_DEVICE=gpu MMML_MM_NL_DEVICE=gpu PYTHONUNBUFFERED=1
+if [[ "$X64" == "1" ]]; then export JAX_ENABLE_X64=1 KARML_ML_DTYPE=float64; ML=float64
+else export JAX_ENABLE_X64=0 KARML_ML_DTYPE=float32; ML=float32; fi
+export LJ_DEVICE=gpu JAX_PLATFORMS=cuda KARML_MLPOT_DEVICE=gpu KARML_MM_NL_DEVICE=gpu PYTHONUNBUFFERED=1
 {
   echo "tag=$TAG host=$(hostname) job=${SLURM_JOB_ID:-} $(date -Is)"
   echo "NVE probe CRD + jaxmd-minimize (fire-min-steps=0) + no-rescue dt=$DT_FS x64=$X64 ps=$PS box=$BOX_A"
 } | tee "$OUT/run_meta.txt"
 set +e
 /usr/bin/time -f 'elapsed_s %e' -o "$OUT/wall.time" \
-  uv run mmml md-system \
+  uv run karml md-system \
     --backend jaxmd --setup pbc_nve \
     --composition DCM:120 --box-size "$BOX_A" \
     --from-psf "$PSF" --from-crd "$CRD" --no-packmol \

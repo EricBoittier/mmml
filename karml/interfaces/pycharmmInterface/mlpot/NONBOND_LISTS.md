@@ -1,6 +1,6 @@
 # ML-Pot nonbond lists
 
-Technical reference for how **CHARMM** and **MMML** neighbor lists interact in the ML-Pot hybrid potential, how update frequencies govern list freshness, and which mismatches are likely contributors to NVE instabilities.
+Technical reference for how **CHARMM** and **KARML** neighbor lists interact in the ML-Pot hybrid potential, how update frequencies govern list freshness, and which mismatches are likely contributors to NVE instabilities.
 
 Related: [CHARMM_SETTINGS.md](CHARMM_SETTINGS.md) (CLI defaults), [README.md](README.md) (workflow order), [LONG_RANGE_ELECTROSTATICS.md](LONG_RANGE_ELECTROSTATICS.md) (ScaFaCoS / jax-pme), Fortran patches under [`setup/`](../../../setup/).
 
@@ -24,7 +24,7 @@ flowchart TB
     MLPOTUPD --> MLPOTCALL
   end
 
-  subgraph python [MMML Python/JAX]
+  subgraph python [KARML Python/JAX]
     BLOCK[BLOCK zero ELEC/VDW on ML atoms]
     CALLBACK[DecomposedMlpotCalculator.calculate_charmm]
     UPDMM[get_update_fn / update_mm_pairs]
@@ -60,7 +60,7 @@ CHARMM ENER → mlpot_call → Python calculate_charmm
 
 ## Two independent nonbond list systems
 
-**CHARMM and MMML maintain separate lists** with different cutoffs, update policies, and (for the decomposed PhysNet path) different pair sources. This is the central point for instability analysis.
+**CHARMM and KARML maintain separate lists** with different cutoffs, update policies, and (for the decomposed PhysNet path) different pair sources. This is the central point for instability analysis.
 
 | Layer | Owner | What it lists | Outer cutoff | When it updates |
 |-------|-------|---------------|--------------|-----------------|
@@ -155,13 +155,13 @@ Re-calling `update_bnbnd()` / `upinb` after MLpot registration can **segfault** 
 
 ---
 
-## MMML layer
+## KARML layer
 
 ### Vacuum: static cross-monomer pairs
 
 When `pbc_cell` is `None`, [`build_mm_energy_forces_fn`](../mm_energy_forces.py) builds **all** cross-monomer atom pairs statically (no spatial cull):
 
-```362:384:mmml/interfaces/pycharmmInterface/mm_energy_forces.py
+```362:384:karml/interfaces/pycharmmInterface/mm_energy_forces.py
     else:
         pair_idx_list = []
         pair_lambda_list = []
@@ -200,7 +200,7 @@ jax-md incremental with `mm_nl_backend=jax_md`.
 Static PBC lists and jax-md **overflow fallback** share rebuild logic via
 [`nl_backend.py`](../nl_backend.py) and [`nl_reference.py`](../nl_reference.py).
 
-| `mm_nl_backend` / `MMML_MM_NL_BACKEND` | Primary rebuild | Fallback |
+| `mm_nl_backend` / `KARML_MM_NL_BACKEND` | Primary rebuild | Fallback |
 |----------------------------------------|-----------------|----------|
 | `auto` (default) | Vesin rebuild + skin cache when installed | cell-list |
 | `vesin` | [Vesin](https://luthaf.fr/vesin/latest/index.html) half-list + MM filters | cell-list |
@@ -211,13 +211,13 @@ Vesin is bundled in the `md` extra (`vesin>=0.5.0`) and is the preferred **cross
 reference oracle** for validation (`uv sync --extra nl-validation` also works).
 Brute-force MIC is used when Vesin is not installed.
 
-Pass `mm_nl_backend=` to `build_mm_energy_forces_fn` or set env `MMML_MM_NL_BACKEND`.
+Pass `mm_nl_backend=` to `build_mm_energy_forces_fn` or set env `KARML_MM_NL_BACKEND`.
 
 ### GPU: Vesin + CuPy + DLPack (`nl_gpu.py`)
 
 Vesin **0.5+** accepts CuPy arrays and runs the CUDA backend when inputs are on GPU.
-MMML exposes an optional GPU rebuild path for **JAX-held positions** (primarily
-`jaxmd_runner.py`), gated by `MMML_MM_NL_DEVICE=gpu` (default `cpu`).
+KARML exposes an optional GPU rebuild path for **JAX-held positions** (primarily
+`jaxmd_runner.py`), gated by `KARML_MM_NL_DEVICE=gpu` (default `cpu`).
 
 Requirements: `uv sync --extra gpu` (CuPy + JAX CUDA), `vesin>=0.5.0`, CUDA GPU.
 
@@ -232,10 +232,10 @@ Dynamic MM pair providers share one contract:
 |------|---------------|------------------|
 | CPU Vesin + skin (default) | PyCHARMM hybrid MD; coords already on host | — |
 | GPU Vesin + DLPack | `jaxmd_runner` PBC: avoids H2D for `pair_idx`/`pair_mask` on rebuild | PyCHARMM callback (coords on host) |
-| jax-md incremental | Device-resident NL state when explicitly selected | Host `np.asarray(positions)` sync each step unless `MMML_MM_NL_DEVICE=gpu` |
+| jax-md incremental | Device-resident NL state when explicitly selected | Host `np.asarray(positions)` sync each step unless `KARML_MM_NL_DEVICE=gpu` |
 
 `jaxmd_runner` passes GPU positions through to `update_mm_pairs` when
-`MMML_MM_NL_DEVICE=gpu` ([`_nl_update_positions`](../cli/run/jaxmd_runner.py)).
+`KARML_MM_NL_DEVICE=gpu` ([`_nl_update_positions`](../cli/run/jaxmd_runner.py)).
 GPU mode avoids the unconditional host sync before Vesin rebuilds. Until a
 device-side displacement cache exists, skin-based reuse is disabled in GPU mode;
 safe interval reuse is allowed only when the box is unchanged.
@@ -248,7 +248,7 @@ Validation sequence before recommending GPU NL on a new CUDA environment:
 uv run pytest tests/unit/test_neighbor_pair_cache.py tests/unit/test_liquid_density_nl.py tests/unit/test_nl_reference_vectorized.py
 uv run python tests/functionality/neighbor_lists/04_update_mm_pairs_integration.py --mm-nl-backend vesin
 uv run python tests/functionality/neighbor_lists/10_vesin_cupy_parity.py --case synthetic_aco_liquid_n32_rho150
-MMML_MM_NL_DEVICE=gpu uv run python tests/functionality/neighbor_lists/11_gpu_nl_sync_profile.py --case synthetic_aco_liquid_n32_rho150
+KARML_MM_NL_DEVICE=gpu uv run python tests/functionality/neighbor_lists/11_gpu_nl_sync_profile.py --case synthetic_aco_liquid_n32_rho150
 ```
 
 Acceptance criteria:
@@ -278,7 +278,7 @@ The cadence and method of updating these lists depend on the **simulation runner
 
 [`DecomposedMlpotCalculator.calculate_charmm`](hybrid_mlpot.py) accepts `idxu`, `idxv`, `idxi`, `idxj` from Fortran but **does not use them**. ML and MM pairs are determined entirely in Python:
 
-```141:143:mmml/interfaces/pycharmmInterface/mlpot/hybrid_mlpot.py
+```141:143:karml/interfaces/pycharmmInterface/mlpot/hybrid_mlpot.py
             if self.do_mm and self._get_update_fn is not None:
                 self._get_update_fn(pos, self.cutoff_params, box=box)
 ```
@@ -371,7 +371,7 @@ Example post-mini audit:
 
 ```bash
 python scripts/validate_mlpot_pair_lists.py \
-  --crd path/to/02_mlpot_mmml.crd \
+  --crd path/to/02_mlpot_karml.crd \
   --n-monomers 8 --atoms-per-monomer 5 --free-space
 ```
 
@@ -410,10 +410,10 @@ Python bindings: [`pycharmm/energy_mlpot.py`](../../../../pycharmm/energy_mlpot.
 | [`mlpot/dynamics.py`](dynamics.py) | `inbfrq=0` SD kwargs, `sync_charmm_lists_after_mini`, `--dyn-inbfrq` |
 | [`mm_energy_forces.py`](../mm_energy_forces.py) | `build_mm_energy_forces_fn`, `update_mm_pairs`, `neighbor_pair_cache_should_reuse` |
 | [`nl_backend.py`](../nl_backend.py) | Vesin / cell-list rebuild backends |
-| [`nl_gpu.py`](../nl_gpu.py) | Optional CuPy + DLPack GPU rebuild (`MMML_MM_NL_DEVICE`) |
+| [`nl_gpu.py`](../nl_gpu.py) | Optional CuPy + DLPack GPU rebuild (`KARML_MM_NL_DEVICE`) |
 | [`nl_reference.py`](../nl_reference.py) | Brute / Vesin reference oracles, vectorized MM filters |
 | [`jax_md_neighbor_list.py`](../jax_md_neighbor_list.py) | PBC jax-md neighbor list builder |
-| [`mmml_calculator.py`](../mmml_calculator.py) | `setup_calculator` factory; jax-md tuning kwargs |
+| [`karml_calculator.py`](../karml_calculator.py) | `setup_calculator` factory; jax-md tuning kwargs |
 | [`cutoffs.py`](../cutoffs.py) | ML/MM complementary handoff parameters |
 | [`nbonds_config.py`](../nbonds_config.py) | Vacuum and PBC CHARMM cutoff presets |
 
@@ -422,6 +422,6 @@ Python bindings: [`pycharmm/energy_mlpot.py`](../../../../pycharmm/energy_mlpot.
 ## Open questions / future work
 
 1. **Wire `idxu`/`idxv`** into the decomposed callback for ML–MM embedding electrostatics (stub exists in single-monomer `PyCharmm_Calculator`; not implemented for multi-monomer path).
-2. **Safe recovery after MLpot** — bonded-MM-mini, overlap rescue, and extent recovery use **inplace** BLOCK toggle + `CHARMM UPDATE` only ([`topology_recovery.py`](topology_recovery.py), [`bonded_mm_recovery.py`](bonded_mm_recovery.py)). Deprecated `DELETE ATOM` + `read.psf_card` requires `MMML_ALLOW_PSF_DELETE_RELOAD=1`. `set_iblo_inb_no_update` restores pre-MLpot exclusions without `upinb` when UPDATE-only prep is insufficient.
+2. **Safe recovery after MLpot** — bonded-MM-mini, overlap rescue, and extent recovery use **inplace** BLOCK toggle + `CHARMM UPDATE` only ([`topology_recovery.py`](topology_recovery.py), [`bonded_mm_recovery.py`](bonded_mm_recovery.py)). Deprecated `DELETE ATOM` + `read.psf_card` requires `KARML_ALLOW_PSF_DELETE_RELOAD=1`. `set_iblo_inb_no_update` restores pre-MLpot exclusions without `upinb` when UPDATE-only prep is insufficient.
 3. **Align CHARMM and Python update cadence** — Python MM lists refresh every ENER; CHARMM lists may lag by up to `inbfrq` steps. Consider whether CHARMM list staleness affects any active code path beyond the unused Fortran indices.
 4. **Vacuum spatial culling** — static all-pairs scales as O(n_monomers² × n_atoms²); acceptable for DCM clusters but may need jax-md or cell lists for very large free-space systems.

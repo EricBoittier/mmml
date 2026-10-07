@@ -1,11 +1,11 @@
 """Holonomic constraints (SHAKE/RATTLE), separate from restraints.
 
 A restraint adds an energy penalty and lets the coordinate move; a constraint
-removes the degree of freedom outright. See ``mmml.md.restraints`` for the
+removes the degree of freedom outright. See ``karml.md.restraints`` for the
 former.
 """
 
-from mmml.md.constraints.rattle import (
+from karml.md.constraints.rattle import (
     MolecularConstraints,
     constrained_nve,
     constrained_velocity_verlet,

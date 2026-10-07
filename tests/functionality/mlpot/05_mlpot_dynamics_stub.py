@@ -110,7 +110,7 @@ def main() -> int:
 
     import ase
     import pycharmm.energy as energy
-    from mmml.interfaces.pycharmmInterface.mlpot import (
+    from karml.interfaces.pycharmmInterface.mlpot import (
         CharmmTrajectoryFiles,
         MinimizeWithMlpotConfig,
         build_nve_dynamics,

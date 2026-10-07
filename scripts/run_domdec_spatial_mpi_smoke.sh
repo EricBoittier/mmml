@@ -12,10 +12,10 @@
 #   bash scripts/run_domdec_spatial_mpi_smoke.sh
 #
 #   # Live ENER (checkpoint required):
-#   MMML_CKPT=/path/to/checkpoint.json bash scripts/run_domdec_spatial_mpi_smoke.sh --live
+#   KARML_CKPT=/path/to/checkpoint.json bash scripts/run_domdec_spatial_mpi_smoke.sh --live
 #
 # Environment:
-#   MMML_CKPT          PhysNet checkpoint path (required for --live)
+#   KARML_CKPT          PhysNet checkpoint path (required for --live)
 #   SMOKE_NP           MPI ranks for callback-only step 2 (default: 4)
 #   SMOKE_LIVE_NP      MPI ranks for live ENER step 3 (default: 4)
 #   SMOKE_N_MOL        Number of DCM monomers (default: 20)
@@ -55,7 +55,7 @@ if [[ -f "$PSF_FILE" ]]; then
     echo "Step 1: prebuilt artifacts found at $PSF_FILE — skipping build."
 else
     echo "Step 1: building DCM:${SMOKE_N_MOL} PSF/CRD (np=1)..."
-    MMML_MPI_NP=1 ./scripts/mmml-charmm-mpirun.sh python \
+    KARML_MPI_NP=1 ./scripts/karml-charmm-mpirun.sh python \
         "$SCRIPT" \
         --prepare-prebuilt-only \
         --residue DCM \
@@ -69,8 +69,8 @@ fi
 # Step 2 — Callback-only DOMDEC path check (no checkpoint)
 # ----------------------------------------------------------------
 echo "Step 2: callback-only smoke (mocked DOMDEC, np=$SMOKE_NP)..."
-MMML_MPI_NP="$SMOKE_NP" MMML_MLPOT_SPATIAL_MPI=1 \
-    ./scripts/mmml-charmm-mpirun.sh python \
+KARML_MPI_NP="$SMOKE_NP" KARML_MLPOT_SPATIAL_MPI=1 \
+    ./scripts/karml-charmm-mpirun.sh python \
     "$SCRIPT" \
     --residue DCM \
     --n-molecules "$SMOKE_N_MOL" \
@@ -81,25 +81,25 @@ echo ""
 # Step 3 — Live CHARMM ENER (opt-in, requires checkpoint + READ gate at np>1)
 # ----------------------------------------------------------------
 if [[ "$LIVE" -eq 1 ]]; then
-    if [[ -z "${MMML_CKPT:-}" ]]; then
-        echo "ERROR: --live requires MMML_CKPT to be set." >&2
+    if [[ -z "${KARML_CKPT:-}" ]]; then
+        echo "ERROR: --live requires KARML_CKPT to be set." >&2
         exit 1
     fi
     SMOKE_LIVE_NP="${SMOKE_LIVE_NP:-4}"
     if [[ "$SMOKE_LIVE_NP" -gt 1 ]]; then
         echo "Step 2b: READ gate (np=$SMOKE_LIVE_NP)..."
-        MMML_MPI_NP="$SMOKE_LIVE_NP" ./scripts/run_mpi_pycharmm_read_gate.sh --mode psf-crd \
+        KARML_MPI_NP="$SMOKE_LIVE_NP" ./scripts/run_mpi_pycharmm_read_gate.sh --mode psf-crd \
             --psf "$SMOKE_PREBUILT_DIR/dcm_${SMOKE_N_MOL}mer.psf" \
             --crd "$SMOKE_PREBUILT_DIR/dcm_${SMOKE_N_MOL}mer.crd" || exit 1
         echo ""
     fi
     echo "Step 3: live CHARMM ENER (np=$SMOKE_LIVE_NP)..."
-    MMML_MPI_NP="$SMOKE_LIVE_NP" MMML_MLPOT_SPATIAL_MPI=1 \
-        CUDA_VISIBLE_DEVICES="" MMML_MLPOT_DEVICE=cpu JAX_PLATFORMS=cpu MMML_LR_SOLVER=mic \
-        ./scripts/mmml-charmm-mpirun.sh python \
+    KARML_MPI_NP="$SMOKE_LIVE_NP" KARML_MLPOT_SPATIAL_MPI=1 \
+        CUDA_VISIBLE_DEVICES="" KARML_MLPOT_DEVICE=cpu JAX_PLATFORMS=cpu KARML_LR_SOLVER=mic \
+        ./scripts/karml-charmm-mpirun.sh python \
         "$SCRIPT" \
         --charmm-ener \
-        --checkpoint "$MMML_CKPT" \
+        --checkpoint "$KARML_CKPT" \
         --residue DCM \
         --n-molecules "$SMOKE_N_MOL" \
         --box-side "$SMOKE_BOX" \
@@ -107,7 +107,7 @@ if [[ "$LIVE" -eq 1 ]]; then
         --prebuilt-dir "$SMOKE_PREBUILT_DIR"
     echo ""
 else
-    echo "Step 3: skipped (pass --live and set MMML_CKPT for live CHARMM ENER)."
+    echo "Step 3: skipped (pass --live and set KARML_CKPT for live CHARMM ENER)."
 fi
 
 echo "================================================================"

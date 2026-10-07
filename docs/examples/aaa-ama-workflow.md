@@ -2,19 +2,19 @@
 
 End-to-end example using the public [MMunibas/aaa.ama](https://github.com/MMunibas/aaa.ama) repository: download the **34-atom capped tri-alanine** ML training set, inspect energies and forces, rebuild the solvated system in CHARMM, train a small PhysNet model, and register **peptide ML + water MM** (the mixed embedding pattern from upstream `dyna.sol.py`).
 
-**Canonical CLI:** [`mmml md-embedding`](md-embedding-design.md) (`train` → `build` → `run`) automates the same pipeline; the sections below remain useful for manual steps and inspection.
+**Canonical CLI:** [`karml md-embedding`](md-embedding-design.md) (`train` → `build` → `run`) automates the same pipeline; the sections below remain useful for manual steps and inspection.
 
 Functionality tests: `tests/functionality/aaa_ama/README.md` and `tests/functionality/embedding/README.md`.
 
 ## 1. Fetch and identify the dataset
 
-The NPZ lives at [`aaa_model/dataset_aaa.npz`](https://github.com/MMunibas/aaa.ama/tree/main/aaa_model) (~18 MB). MMML can download and summarize it:
+The NPZ lives at [`aaa_model/dataset_aaa.npz`](https://github.com/MMunibas/aaa.ama/tree/main/aaa_model) (~18 MB). KARML can download and summarize it:
 
 ```bash
 uv run python scripts/analyze_aaa_ama_dataset.py --download
 ```
 
-Bundled summary (after running the script): `mmml/data/external/aaa_ama_dataset_summary.json`.
+Bundled summary (after running the script): `karml/data/external/aaa_ama_dataset_summary.json`.
 
 | Field | Value |
 |-------|--------|
@@ -71,13 +71,13 @@ cd aaa.ama/aaa_model
 python dyna.sol.py
 ```
 
-### MMML bonded reference (protein PSF)
+### KARML bonded reference (protein PSF)
 
 For a **pure MM bonded** reference on ACE–ALA×3–CT3 using `top_all36_prot` (42 atoms — atom count may differ from the 34-atom training topology):
 
 ```bash
 export CHARMM_HOME=... CHARMM_LIB_DIR=... LD_LIBRARY_PATH=...
-./scripts/mmml-charmm-mpirun.sh python tests/functionality/aaa_ama/report_charmm_bonded.py
+./scripts/karml-charmm-mpirun.sh python tests/functionality/aaa_ama/report_charmm_bonded.py
 ```
 
 Example output shape:
@@ -104,13 +104,13 @@ validation parity plots, and CHARMM box figures.
 ```bash
 # One-shot docs pipeline (train → eval → build → figures)
 export CHARMM_HOME=... CHARMM_LIB_DIR=... LD_LIBRARY_PATH=...
-JAX_PLATFORMS=cpu MMML_NO_CHARMM_MPI=1 uv run python scripts/collect_md_embedding_docs_results.py
+JAX_PLATFORMS=cpu KARML_NO_CHARMM_MPI=1 uv run python scripts/collect_md_embedding_docs_results.py
 ```
 
 Equivalent manual split with fix-and-split:
 
 ```bash
-mmml fix-and-split --efd mmml/data/external/dataset_aaa.npz -o artifacts/md_embedding/aaa/splits \
+karml fix-and-split --efd karml/data/external/dataset_aaa.npz -o artifacts/md_embedding/aaa/splits \
   --preserve-units --coords-in angstrom --energy-in ev --force-in ev-angstrom \
   --train-frac 0.9 --valid-frac 0.1 --test-frac 0
 ```
@@ -122,7 +122,7 @@ Manual equivalent (shuffle split only):
 uv run python - <<'PY'
 import numpy as np
 from pathlib import Path
-d = np.load("mmml/data/external/dataset_aaa.npz", allow_pickle=True)
+d = np.load("karml/data/external/dataset_aaa.npz", allow_pickle=True)
 n = len(d["E"])
 idx = np.arange(n)
 rng = np.random.default_rng(0)
@@ -137,7 +137,7 @@ np.savez(out / "valid.npz", **valid)
 print("wrote", out / "train.npz", out / "valid.npz")
 PY
 
-mmml physnet-train \
+karml physnet-train \
   --data artifacts/aaa_ama/train.npz \
   --valid-data artifacts/aaa_ama/valid.npz \
   --ckpt-dir artifacts/aaa_ama/checkpoints \
@@ -157,10 +157,10 @@ mmml physnet-train \
 After training, export for MLpot (Orbax → JSON if needed):
 
 ```bash
-mmml orbax-to-json --checkpoint artifacts/aaa_ama/checkpoints/aaa_smoke --output artifacts/aaa_ama/aaa_params.json
+karml orbax-to-json --checkpoint artifacts/aaa_ama/checkpoints/aaa_smoke --output artifacts/aaa_ama/aaa_params.json
 ```
 
-See [`physnet-train`](../cli/commands/physnet-train.md) for full flags. Upstream `dyna.sol.py` uses TensorFlow 1.x checkpoints under `./model/aaa` with `run_aaa.inp` — MMML uses **PhysNetJAX**; retrain or convert checkpoints before mixing formats.
+See [`physnet-train`](../cli/commands/physnet-train.md) for full flags. Upstream `dyna.sol.py` uses TensorFlow 1.x checkpoints under `./model/aaa` with `run_aaa.inp` — KARML uses **PhysNetJAX**; retrain or convert checkpoints before mixing formats.
 
 ## 4. Mixed MM / ML-MM calculator (peptide + water)
 
@@ -171,14 +171,14 @@ selection = pycharmm.SelectAtoms(seg_id='PEPT')
 pycharmm.MLpot(ml_selection=selection, ...)
 ```
 
-### MMML equivalent (partial ML / MM)
+### KARML equivalent (partial ML / MM)
 
 ```python
-from mmml.interfaces.pycharmmInterface.mlpot.partial_mm import (
+from karml.interfaces.pycharmmInterface.mlpot.partial_mm import (
     PartialMlMmConfig,
     register_mlpot_partial_mm,
 )
-from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+from karml.interfaces.pycharmmInterface.mlpot.setup import (
     load_physnet_mlpot_bundle,
     select_by_seg_id,
 )
@@ -199,7 +199,7 @@ ctx = register_mlpot_partial_mm(
 )
 ```
 
-Then `energy.show()` / `minimize.run_sd` / dynamics as in `mmml/interfaces/pycharmmInterface/mlpot/README.md`.
+Then `energy.show()` / `minimize.run_sd` / dynamics as in `karml/interfaces/pycharmmInterface/mlpot/README.md`.
 
 ### Current limitations
 
@@ -226,4 +226,4 @@ For solvated peptide MD, the **partial segment** pattern above matches [aaa.ama 
 - [aaa.ama repository](https://github.com/MMunibas/aaa.ama)
 - [Hybrid potential regions](../hybrid-potential-regions.md)
 - [Tri-alanine water box](../trialanine-water-box.md) (CGENFF MM cross-check)
-- Partial ML module: `mmml/interfaces/pycharmmInterface/mlpot/partial_mm.py`
+- Partial ML module: `karml/interfaces/pycharmmInterface/mlpot/partial_mm.py`

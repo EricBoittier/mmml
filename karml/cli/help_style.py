@@ -103,9 +103,9 @@ def _classify(action: argparse.Action) -> str:
 def group_parser_options(parser: argparse.ArgumentParser) -> None:
     """Group a flat parser once; preserve parsers with explicit custom groups."""
 
-    if getattr(parser, "_mmml_functionally_grouped", False):
+    if getattr(parser, "_karml_functionally_grouped", False):
         return
-    parser._mmml_functionally_grouped = True
+    parser._karml_functionally_grouped = True
     custom = [group for group in parser._action_groups if group not in {parser._positionals, parser._optionals}]
     if custom:
         return
@@ -149,8 +149,8 @@ def styled_help_text(message: str):
 
 
 def _use_color(stream: TextIO) -> bool:
-    forced = (os.environ.get("MMML_RICH") or "").strip().lower() in {"1", "yes", "true"}
-    disabled = (os.environ.get("MMML_NO_RICH") or "").strip().lower() in {"1", "yes", "true"}
+    forced = (os.environ.get("KARML_RICH") or "").strip().lower() in {"1", "yes", "true"}
+    disabled = (os.environ.get("KARML_NO_RICH") or "").strip().lower() in {"1", "yes", "true"}
     return not disabled and (forced or bool(getattr(stream, "isatty", lambda: False)()))
 
 
@@ -173,7 +173,7 @@ def print_cli_text(message: str, *, stream: TextIO | None = None) -> None:
 
 
 def install_colored_argparse() -> None:
-    """Install the shared formatter once for parsers dispatched by ``mmml``."""
+    """Install the shared formatter once for parsers dispatched by ``karml``."""
 
     global _INSTALLED
     if _INSTALLED:

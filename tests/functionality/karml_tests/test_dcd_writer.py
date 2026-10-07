@@ -11,11 +11,11 @@ import numpy as np
 import pytest
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
-DCD_WRITER_PATH = PROJECT_ROOT / "mmml" / "utils" / "dcd_writer.py"
+DCD_WRITER_PATH = PROJECT_ROOT / "karml" / "utils" / "dcd_writer.py"
 
 
 def _load_dcd_writer():
-    """Load dcd_writer module without triggering mmml package imports (avoids jax etc)."""
+    """Load dcd_writer module without triggering karml package imports (avoids jax etc)."""
     spec = importlib.util.spec_from_file_location("dcd_writer", DCD_WRITER_PATH)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)

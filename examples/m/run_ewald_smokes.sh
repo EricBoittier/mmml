@@ -50,7 +50,7 @@ run_job() {
     return 0
   fi
   echo "=== ${cfg} --job-id ${job} ==="
-  if ! uv run mmml md-system --config "${cfg}" --job-id "${job}"; then
+  if ! uv run karml md-system --config "${cfg}" --job-id "${job}"; then
     echo "FAIL: ${job} (continuing)"
     return 1
   fi

@@ -1,4 +1,4 @@
-from mmml.interfaces.chemcoordInterface.interface import patch_chemcoord_for_pandas3
+from karml.interfaces.chemcoordInterface.interface import patch_chemcoord_for_pandas3
 
 patch_chemcoord_for_pandas3()
 

@@ -21,7 +21,7 @@ from campaign_lib import (  # noqa: E402
     umbrella_variants,
 )
 
-_CFG_PATH = os.environ.get("MMML_WORKFLOW_CONFIG") or str(Path(workflow.basedir) / "config.yaml")
+_CFG_PATH = os.environ.get("KARML_WORKFLOW_CONFIG") or str(Path(workflow.basedir) / "config.yaml")
 CFG = load_config(_CFG_PATH) if Path(_CFG_PATH).is_file() else dict(config)
 
 WORKFLOW_DIR = Path(workflow.basedir)

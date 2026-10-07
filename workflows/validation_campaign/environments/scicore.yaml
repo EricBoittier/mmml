@@ -1,7 +1,7 @@
 name: scicore
 kind: slurm
 role: primary GPU production and checkpoint/method matrices
-repo_root: ~/mmml
+repo_root: ~/karml
 
 # On scicore the GPU type is chosen by the *partition* (rtx4090 / a100 / titanx),
 # not by a --constraint, and the qos must agree with the partition and the
@@ -19,8 +19,8 @@ runtime_min: 360
 gpus: 1
 gpu_constraint: null  # unused on scicore: the partition selects the GPU
 max_concurrent: 16
-launcher: scripts/mmml-charmm-mpirun.sh
+launcher: scripts/karml-charmm-mpirun.sh
 environment:
   JAX_ENABLE_X64: "1"
-  MMML_ML_DTYPE: float64
+  KARML_ML_DTYPE: float64
   OMP_NUM_THREADS: "2"

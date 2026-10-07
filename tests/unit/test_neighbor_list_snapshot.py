@@ -8,8 +8,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from mmml.utils.neighbor_list_snapshot import (
-    capture_mmml_inter_monomer_pairs,
+from karml.utils.neighbor_list_snapshot import (
+    capture_karml_inter_monomer_pairs,
     compare_snapshots,
     cubic_cell_matrix,
     save_neighbor_list_artifacts,
@@ -32,9 +32,9 @@ def _two_dimer_cluster(box_side: float = 40.0, separation: float = 8.0):
     return positions, cell, offsets
 
 
-def test_capture_mmml_inter_monomer_pairs_cell_list() -> None:
+def test_capture_karml_inter_monomer_pairs_cell_list() -> None:
     positions, cell, offsets = _two_dimer_cluster()
-    snap = capture_mmml_inter_monomer_pairs(
+    snap = capture_karml_inter_monomer_pairs(
         positions=positions,
         cell=cell,
         cutoff_A=13.0,
@@ -48,14 +48,14 @@ def test_capture_mmml_inter_monomer_pairs_cell_list() -> None:
 
 def test_compare_snapshots_reports_diff() -> None:
     positions, cell, offsets = _two_dimer_cluster()
-    left = capture_mmml_inter_monomer_pairs(
+    left = capture_karml_inter_monomer_pairs(
         positions=positions,
         cell=cell,
         cutoff_A=13.0,
         monomer_offsets=offsets,
         backend="cell_list",
     )
-    right = capture_mmml_inter_monomer_pairs(
+    right = capture_karml_inter_monomer_pairs(
         positions=positions,
         cell=cell,
         cutoff_A=6.0,
@@ -70,7 +70,7 @@ def test_compare_snapshots_reports_diff() -> None:
 def test_save_neighbor_list_artifacts_writes_json_and_plot(tmp_path: Path) -> None:
     pytest.importorskip("matplotlib")
     positions, cell, offsets = _two_dimer_cluster()
-    mmml = capture_mmml_inter_monomer_pairs(
+    karml = capture_karml_inter_monomer_pairs(
         positions=positions,
         cell=cell,
         cutoff_A=13.0,
@@ -82,12 +82,12 @@ def test_save_neighbor_list_artifacts_writes_json_and_plot(tmp_path: Path) -> No
         positions=positions,
         cell=cell,
         monomer_offsets=offsets,
-        mmml=mmml,
+        karml=karml,
         extra_meta={"tag": "unit"},
     )
     assert paths["json"].is_file()
     payload = json.loads(paths["json"].read_text(encoding="utf-8"))
     assert payload["meta"]["tag"] == "unit"
-    assert payload["mmml"]["pairs"]
+    assert payload["karml"]["pairs"]
     assert paths["plot"].is_file()
-    assert paths["mmml_csv"].is_file()
+    assert paths["karml_csv"].is_file()

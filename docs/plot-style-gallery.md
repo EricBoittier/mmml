@@ -1,7 +1,7 @@
 # Plot style gallery
 
 Renders of the same example figure under each registered style
-(`mmml.utils.plotting.styles`), so a look can be picked by eye instead of
+(`karml.utils.plotting.styles`), so a look can be picked by eye instead of
 from a description. Regenerate with `python scripts/render_plot_style_gallery.py`.
 
 Every example also demonstrates the **legend-outside-the-plot** rule (see
@@ -62,7 +62,7 @@ categorical identity):
 ![status palette](plot-style-gallery-assets/chart_status_palette.png)
 
 ```python
-from mmml.utils.plotting.styles import status_color, status_hatch
+from karml.utils.plotting.styles import status_color, status_hatch
 
 ax.bar(labels, values, color=[status_color(s) for s in states],
        hatch=[status_hatch(s) for s in states], edgecolor="#222222")
@@ -229,7 +229,7 @@ elements they describe rather than pulled out into a legend.
 ### ASE Atoms as an overlay on a data plot
 
 Not a separate figure next to the data — an `ax.inset_axes()` holding
-[`scripts/plot_utils.py::render_dimer_atoms`](https://github.com/EricBoittier/mmml/blob/main/scripts/plot_utils.py)'s
+[`scripts/plot_utils.py::render_dimer_atoms`](https://github.com/EricBoittier/karml/blob/main/scripts/plot_utils.py)'s
 ball-and-stick render, placed directly over the point on the curve it
 corresponds to. Tufte principle: put the explanation where the eye already
 is, not somewhere the reader has to cross-reference by hand. This is the
@@ -341,14 +341,14 @@ dihedral-angle radial histogram earlier in this gallery.
 | `cmocean:phase` | cyclic | The house default for any periodic quantity (angles, phases) |
 
 **Decided.** House defaults, wired into
-[`mmml.utils.plotting.styles.default_cmap(kind)`](https://github.com/EricBoittier/mmml/blob/main/mmml/utils/plotting/styles.py):
+[`karml.utils.plotting.styles.default_cmap(kind)`](https://github.com/EricBoittier/karml/blob/main/karml/utils/plotting/styles.py):
 
 - **Sequential**: `crameri:lipari`
 - **Diverging**: `contrib:pampa`
 - **Cyclic**: `cmocean:phase`
 
 ```python
-from mmml.utils.plotting.styles import default_cmap
+from karml.utils.plotting.styles import default_cmap
 
 ax.pcolormesh(xx, yy, zz, cmap=default_cmap("sequential"))
 ```
@@ -420,7 +420,7 @@ harmonics indexed by degree `l` and order `m`) as one colored, numbered box
 per (l, m), in a Pascal's-triangle layout (row `l` has `2l+1` boxes,
 centered) — regenerate with `python scripts/render_multipole_gallery.py`.
 No real saved multipole-coefficient array exists in this checkout (real
-values come from `mmml.models.multipoles` at runtime); these use
+values come from `karml.models.multipoles` at runtime); these use
 physically-plausible synthetic values matching that module's documented
 units and packed-irrep convention (see the script's docstring).
 
@@ -462,7 +462,7 @@ instead of matplotlib's `Axes.table` approximation:
 ![multipole standardized complex figure](plot-style-gallery-assets/chart_multipole_complex.png)
 
 ```python
-from mmml.utils.plotting.styles import latex_table_image, latex_available, shared_axis_labels
+from karml.utils.plotting.styles import latex_table_image, latex_available, shared_axis_labels
 
 if latex_available():
     latex_table_image(ax_table, cell_text, col_labels=col_labels)
@@ -481,7 +481,7 @@ Where the multipole *triangle* above shows the coefficients as an abstract
 space — the same parametric-surface idea as the torus, but the natural surface
 here is a sphere around each source. Regenerate with
 `python scripts/render_multipole_field_gallery.py`
-(`mmml.utils.plotting.multipoles`).
+(`karml.utils.plotting.multipoles`).
 
 ### Multipole surfaces: one deformed sphere per source
 
@@ -517,7 +517,7 @@ When you want the field of the *whole* set rather than per-source lobes,
 `plot_field_slice` lays a grid on a plane through the sources and draws filled
 potential contours (diverging, real zero) under electric-field streamlines. It
 wraps the existing physics in
-`mmml.models.multipoles.electrostatics._point_multipole_potential_field_au`;
+`karml.models.multipoles.electrostatics._point_multipole_potential_field_au`;
 nothing new is computed, only drawn.
 
 ![multipole field slice](plot-style-gallery-assets/chart_multipole_field.png)
@@ -586,7 +586,7 @@ per panel, in a fixed order, from `MULTI_CMAP_SHORTLIST`:
 ![three sequential colormaps, one figure](plot-style-gallery-assets/chart_multi_cmap_panels.png)
 
 ```python
-from mmml.utils.plotting.styles import MULTI_CMAP_SHORTLIST
+from karml.utils.plotting.styles import MULTI_CMAP_SHORTLIST
 
 names = MULTI_CMAP_SHORTLIST["sequential"][:3]  # or ["diverging"] / ["cyclic"]
 ```
@@ -604,7 +604,7 @@ already spends color on one distinction (e.g. force field) and needs a
 second one (e.g. replicate) on top of it; the figure must survive grayscale
 printing; or color-alone identity would fail a colorblind reader even with a
 safe palette (redundant coding). See `LINE_STYLE_CYCLE` / `MARKER_CYCLE` in
-`mmml.utils.plotting.styles` and
+`karml.utils.plotting.styles` and
 [`docs/plotting-style-guide.md`](plotting-style-guide.md) "Line styles,
 markers, and symbols" for the full writeup.
 
@@ -633,11 +633,11 @@ broken chain rule in a force implementation. Regenerate with
 `python scripts/render_fd_test_gallery.py`. Two real checks, deliberately
 shown side by side rather than cherry-picking the passing one:
 
-- **SMD bias restraint** (`mmml.md.energy.terms.SMDBiasTerm`, the same check
+- **SMD bias restraint** (`karml.md.energy.terms.SMDBiasTerm`, the same check
   as `tests/unit/test_md_energy_terms.py::test_ase_forces_match_finite_difference`)
   — PASSES, `atol=1e-4`.
 - **CHARMM/mlpot ML-only calculator**
-  (`mmml/interfaces/pycharmmInterface/mlpot/derivative_test.py`, saved
+  (`karml/interfaces/pycharmmInterface/mlpot/derivative_test.py`, saved
   result at `artifacts/pycharmm_mlpot/mlpot_force_fd.json`) — currently
   FAILS all 60 checked force components against `tol=0.005 kcal/mol/Å`, with
   a max discrepancy of 1.52 kcal/mol/Å and rms 0.75. This is real, current
@@ -671,7 +671,7 @@ The compositing rules and caveats are documented in
 ## How to pick
 
 ```python
-from mmml.utils.plotting.styles import apply_plot_style
+from karml.utils.plotting.styles import apply_plot_style
 
 apply_plot_style("icml")  # or editorial_dejavu_serif / _dejavu_sans / _stix / _cm
 ```

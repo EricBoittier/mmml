@@ -12,7 +12,7 @@ T = TypeVar("T")
 
 def mpi_rank_size() -> tuple[int, int]:
     """Return ``(rank, size)`` from mpi4py or OpenMPI env vars."""
-    from mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size as _rank_size
+    from karml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size as _rank_size
 
     return _rank_size()
 
@@ -30,11 +30,11 @@ def rank0_only(value: T, *, default: T | None = None) -> T | None:
 
 
 def rank0_print(*args: Any, quiet: bool = False, **kwargs: Any) -> None:
-    """``print`` on rank 0 when ``size>1`` (disable gating with ``MMML_MPI_RANK0_PRINT=0``)."""
+    """``print`` on rank 0 when ``size>1`` (disable gating with ``KARML_MPI_RANK0_PRINT=0``)."""
     if quiet:
         return
     rank, size = mpi_rank_size()
-    gate = os.environ.get("MMML_MPI_RANK0_PRINT", "1").strip().lower() not in (
+    gate = os.environ.get("KARML_MPI_RANK0_PRINT", "1").strip().lower() not in (
         "0",
         "false",
         "no",

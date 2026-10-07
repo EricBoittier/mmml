@@ -7,8 +7,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from mmml.interfaces.calculators.checkpoint_loading import LoadedCheckpoint
-from mmml.umbrella.checkpoint import load_params_and_model
+from karml.interfaces.calculators.checkpoint_loading import LoadedCheckpoint
+from karml.umbrella.checkpoint import load_params_and_model
 
 
 def test_load_params_and_model_rejects_missing(tmp_path: Path):
@@ -39,19 +39,19 @@ def test_load_params_and_model_json_builds_physnet(tmp_path: Path):
         format="json",
     )
     with patch(
-        "mmml.interfaces.calculators.checkpoint_loading.load_checkpoint_bundle",
+        "karml.interfaces.calculators.checkpoint_loading.load_checkpoint_bundle",
         return_value=fake_bundle,
     ):
         with patch(
-            "mmml.utils.model_checkpoint.build_physnet_from_config",
+            "karml.utils.model_checkpoint.build_physnet_from_config",
             return_value=MagicMock(max_padded_atoms=2),
         ) as build:
             with patch(
-                "mmml.utils.model_checkpoint.infer_trainable_zbl_config",
+                "karml.utils.model_checkpoint.infer_trainable_zbl_config",
                 side_effect=lambda cfg, _p: cfg,
             ):
                 with patch(
-                    "mmml.utils.model_checkpoint.normalize_physnet_config",
+                    "karml.utils.model_checkpoint.normalize_physnet_config",
                     side_effect=lambda cfg: cfg,
                 ):
                     params, model = load_params_and_model(path, natoms=2)
@@ -71,7 +71,7 @@ def test_load_params_and_model_rejects_joint(tmp_path: Path):
         format="json",
     )
     with patch(
-        "mmml.interfaces.calculators.checkpoint_loading.load_checkpoint_bundle",
+        "karml.interfaces.calculators.checkpoint_loading.load_checkpoint_bundle",
         return_value=fake_bundle,
     ):
         with pytest.raises(ValueError, match="joint"):

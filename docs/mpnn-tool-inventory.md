@@ -16,43 +16,43 @@ no god-model Flax merge that would break checkpoints).
 
 | Path | Class | Ownership and next action |
 |---|---|---|
-| `mmml.models.physnetjax.physnetjax.models.model.PhysNet` | Canonical | EF without charge/spin conditioning. Prefer for plain E/F training. Inherits `PhysNetFamilyMixin`. |
-| `mmml.models.physnetjax.physnetjax.models.spooky_model.SpookyPhysNet` | Canonical | Production hybrid path: E/F + Q/S conditioning. Prefer for liquid/hybrid checkpoints. Inherits `PhysNetFamilyMixin`. |
-| `mmml.models.efield.model.EFieldPhysNet` | Canonical | External electric-field conditioned head. Uses shared `encode_geometry_and_basis` (reciprocal Bernstein); field coupling stays local. |
-| `mmml.models.dcmnet.dcmnet.modules.DCMNetCharges` | Canonical | Distributed-charge (ESP) head. Uses shared geometry/basis encode; DCM readout stays local. |
+| `karml.models.physnetjax.physnetjax.models.model.PhysNet` | Canonical | EF without charge/spin conditioning. Prefer for plain E/F training. Inherits `PhysNetFamilyMixin`. |
+| `karml.models.physnetjax.physnetjax.models.spooky_model.SpookyPhysNet` | Canonical | Production hybrid path: E/F + Q/S conditioning. Prefer for liquid/hybrid checkpoints. Inherits `PhysNetFamilyMixin`. |
+| `karml.models.efield.model.EFieldPhysNet` | Canonical | External electric-field conditioned head. Uses shared `encode_geometry_and_basis` (reciprocal Bernstein); field coupling stays local. |
+| `karml.models.dcmnet.dcmnet.modules.DCMNetCharges` | Canonical | Distributed-charge (ESP) head. Uses shared geometry/basis encode; DCM readout stays local. |
 
 ## Supporting kernels and family facade
 
 | Path | Class | Ownership and next action |
 |---|---|---|
-| `mmml.models.physnetjax.physnetjax.models.mpnn_kernels` | Supporting library | Pair geometry, radial/spherical basis (`radial_fn` selectable), `encode_geometry_and_basis`, electrostatic switches, pair Coulomb, molecular dipoles. Extend here instead of copy-pasting. |
-| `mmml.models.physnetjax.physnetjax.models.physnet_family` | Supporting library | `PhysNetFamilyConfig`, `resolve_physnet_class`, `PhysNetFamilyMixin`. Selects PhysNet vs SpookyPhysNet without merging Flax parameter trees. |
-| `mmml.models.physnetjax.physnetjax.models.zbl` | Supporting library | ZBL short-range repulsion already shared by PhysNet family. |
-| `mmml.models.physnetjax.physnetjax.models.euclidean_fast_attention` | Supporting library | Optional EFA attention blocks for PhysNet family. |
+| `karml.models.physnetjax.physnetjax.models.mpnn_kernels` | Supporting library | Pair geometry, radial/spherical basis (`radial_fn` selectable), `encode_geometry_and_basis`, electrostatic switches, pair Coulomb, molecular dipoles. Extend here instead of copy-pasting. |
+| `karml.models.physnetjax.physnetjax.models.physnet_family` | Supporting library | `PhysNetFamilyConfig`, `resolve_physnet_class`, `PhysNetFamilyMixin`. Selects PhysNet vs SpookyPhysNet without merging Flax parameter trees. |
+| `karml.models.physnetjax.physnetjax.models.zbl` | Supporting library | ZBL short-range repulsion already shared by PhysNet family. |
+| `karml.models.physnetjax.physnetjax.models.euclidean_fast_attention` | Supporting library | Optional EFA attention blocks for PhysNet family. |
 
 ## Adapters and loaders
 
 | Path | Class | Ownership and next action |
 |---|---|---|
-| `mmml.models.physnetjax.physnetjax.calc.helper_mlp` | Adapter | Resolves architecture and builds ASE calculators from checkpoints. Spooky detection uses `type(model).__module__` containing `spooky_model` — keep SpookyPhysNet defined in that module. |
-| `mmml.models.physnetjax.physnetjax.calc.ase_calculator` | Adapter | ASE wrapper around PhysNet-family apply functions. |
-| `mmml.interfaces.calculators.checkpoint_loading` | Adapter | Portable JSON / Orbax load paths; must stay load-compatible across kernel extractions. |
-| `mmml.models.spookynet_calc.SpookyNetCalculator` | Adapter | External / legacy SpookyNet ASE path; not the Flax SpookyPhysNet production model. |
-| `mmml.models.dcmnet.dcmnet_ase` | Adapter | ASE calculator for DCMNetCharges. |
+| `karml.models.physnetjax.physnetjax.calc.helper_mlp` | Adapter | Resolves architecture and builds ASE calculators from checkpoints. Spooky detection uses `type(model).__module__` containing `spooky_model` — keep SpookyPhysNet defined in that module. |
+| `karml.models.physnetjax.physnetjax.calc.ase_calculator` | Adapter | ASE wrapper around PhysNet-family apply functions. |
+| `karml.interfaces.calculators.checkpoint_loading` | Adapter | Portable JSON / Orbax load paths; must stay load-compatible across kernel extractions. |
+| `karml.models.spookynet_calc.SpookyNetCalculator` | Adapter | External / legacy SpookyNet ASE path; not the Flax SpookyPhysNet production model. |
+| `karml.models.dcmnet.dcmnet_ase` | Adapter | ASE calculator for DCMNetCharges. |
 
 ## Forks and deprecated paths
 
 | Path | Class | Ownership and next action |
 |---|---|---|
-| `mmml.models.physnetjax.physnetjax.models.model_charge_spin.PhysNetChargeSpin` | Deprecated | Third PhysNet fork with discrete Q/S embeddings. Emits `DeprecationWarning` on `setup`. Use SpookyPhysNet for new Q/S work. Alias `EF_ChargeSpinConditioned` remains. |
-| `mmml.models.EF` | Deprecated | Import shim → `mmml.models.efield`. |
+| `karml.models.physnetjax.physnetjax.models.model_charge_spin.PhysNetChargeSpin` | Deprecated | Third PhysNet fork with discrete Q/S embeddings. Emits `DeprecationWarning` on `setup`. Use SpookyPhysNet for new Q/S work. Alias `EF_ChargeSpinConditioned` remains. |
+| `karml.models.EF` | Deprecated | Import shim → `karml.models.efield`. |
 | `spooky_model.EF` / `model.EF` aliases | Deprecated | Prefer `SpookyPhysNet` / `PhysNet` names. |
 
 ## What must stay separate
 
 - **Checkpoint parameter trees** (Orbax / portable JSON): do not rename Flax modules or move `Embed` / `MessagePass` into shared helpers.
 - **Training loops**: `physnetjax/training`, `efield/training`, `dcmnet/training` until heads share a richer encode API.
-- **Hybrid ML/MM assembly**: `mmml.models.hybrid_energy` and MLpot calculator remain calculator-neutral.
+- **Hybrid ML/MM assembly**: `karml.models.hybrid_energy` and MLpot calculator remain calculator-neutral.
 - **Head-specific readout**: DCM distributed sites, EF field coupling, Spooky CGenFF vdW — stay in their modules.
 
 ## Harmonization status

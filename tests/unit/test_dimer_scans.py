@@ -5,7 +5,7 @@ import pytest
 from ase import Atoms
 from ase.calculators.calculator import Calculator, all_changes
 
-from mmml.analysis.dimer_scans import (
+from karml.analysis.dimer_scans import (
     assign_mol_id,
     build_rigid_dimer,
     distance_scan_geometries,

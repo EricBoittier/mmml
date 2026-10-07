@@ -5,7 +5,7 @@
 #   export PET_OMOL_S_CKPT=$PWD/pet-omol-s-v1.0.0.pt
 #   export CHARMM_HOME=$PWD/setup/charmm
 #   export CHARMM_LIB_DIR=$CHARMM_HOME/lib
-#   uv run --no-sync mmml md-system --config examples/pet_omol_heme/yaml/mbco_nve.yaml --checkpoint "$PET_OMOL_S_CKPT"
+#   uv run --no-sync karml md-system --config examples/pet_omol_heme/yaml/mbco_nve.yaml --checkpoint "$PET_OMOL_S_CKPT"
 #
 # mbco4985w.crd is the cubic benchmark in setup/charmm/test/cbenchtest/mbco/.
 # The side length is the value in that directory's mbcodyn.inp.

@@ -7,19 +7,19 @@ import numpy as np
 import pytest
 from ase import Atoms
 
-from mmml.analysis.dimer_cgenff import (
+from karml.analysis.dimer_cgenff import (
     CGENFF_ATOM_TYPES,
     attach_cgenff_dimer_metadata,
     load_cgenff_sigma_epsilon,
 )
-from mmml.analysis.dimer_molecules import MOLECULES
-from mmml.interfaces.pycharmmInterface.long_range_backend import per_atom_jax_pme_c6_sqrt
-from mmml.models.spookynet_calc import (
+from karml.analysis.dimer_molecules import MOLECULES
+from karml.interfaces.pycharmmInterface.long_range_backend import per_atom_jax_pme_c6_sqrt
+from karml.models.spookynet_calc import (
     SpookyNetCalculator,
     _infer_vdw_architecture_config,
     _is_spooky_checkpoint,
 )
-from mmml.models.physnetjax.physnetjax.models.spooky_model import SpookyPhysNet
+from karml.models.physnetjax.physnetjax.models.spooky_model import SpookyPhysNet
 from scripts.run_dimer_scan_campaign import _charmm_component_rows
 
 
@@ -71,7 +71,7 @@ def test_legacy_checkpoint_infers_trainable_zbl_from_parameter_tree():
 
 
 def test_legacy_zbl_clamps_wide_cutoff_copied_from_model_cutoff():
-    from mmml.utils.model_checkpoint import infer_trainable_zbl_config
+    from karml.utils.model_checkpoint import infer_trainable_zbl_config
 
     tree = {"params": {"repulsion": {"a_coefficient": np.asarray(0.5)}}}
     config = infer_trainable_zbl_config(

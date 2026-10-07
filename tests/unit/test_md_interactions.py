@@ -4,7 +4,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from mmml.md.interactions import (
+from karml.md.interactions import (
     InteractionPolicy,
     assert_interaction_plan_lowerable,
     compile_interaction_policy,
@@ -13,7 +13,7 @@ from mmml.md.interactions import (
     load_interaction_policy,
     policy_is_lowerable,
 )
-from mmml.md.system import MolecularSystem
+from karml.md.system import MolecularSystem
 
 
 def _system(names=("PEP", "TIP3", "SOD")):
@@ -127,7 +127,7 @@ def test_single_provider_is_lowerable_multi_is_not():
 
 
 def test_mechanical_embedding_policy_is_lowerable():
-    from mmml.md.interactions import (
+    from karml.md.interactions import (
         mechanical_embedding_ml_species,
         policy_is_mechanical_embedding,
     )
@@ -170,7 +170,7 @@ def test_policy_content_hash_stable():
 
 
 def test_config_relative_interaction_policy_resolution(tmp_path):
-    from mmml.cli.run.md_config import resolve_config_relative_path
+    from karml.cli.run.md_config import resolve_config_relative_path
 
     cfg_dir = tmp_path / "cfgs"
     cfg_dir.mkdir()
@@ -191,7 +191,7 @@ def test_config_relative_interaction_policy_resolution(tmp_path):
 
 
 def test_md_system_parse_resolves_interaction_policy(tmp_path, monkeypatch):
-    from mmml.cli.run import md_system as md_system_mod
+    from karml.cli.run import md_system as md_system_mod
 
     cfg_dir = tmp_path / "run"
     cfg_dir.mkdir()
@@ -211,7 +211,7 @@ def test_md_system_parse_resolves_interaction_policy(tmp_path, monkeypatch):
         encoding="utf-8",
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.spatial_mpi_policy.sync_spatial_mpi_env_from_args",
+        "karml.interfaces.pycharmmInterface.mlpot.spatial_mpi_policy.sync_spatial_mpi_env_from_args",
         lambda args: None,
     )
     args = md_system_mod.parse_md_system_args(["--config", str(cfg)])
@@ -221,7 +221,7 @@ def test_md_system_parse_resolves_interaction_policy(tmp_path, monkeypatch):
 def test_validate_single_provider_records_hash(tmp_path):
     import argparse
 
-    from mmml.cli.run.md_system import _validate_and_record_interaction_policy
+    from karml.cli.run.md_system import _validate_and_record_interaction_policy
 
     policy = tmp_path / "single.yaml"
     policy.write_text(
@@ -241,7 +241,7 @@ def test_manifest_includes_interaction_policy_block():
     import argparse
     from datetime import datetime, timezone
 
-    from mmml.cli.run.md_system import build_run_manifest
+    from karml.cli.run.md_system import build_run_manifest
 
     args = argparse.Namespace(
         setup="free_nve",

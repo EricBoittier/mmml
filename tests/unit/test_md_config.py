@@ -9,7 +9,7 @@ import pytest
 
 
 def test_load_yaml_config_merges_include_defaults(tmp_path: Path) -> None:
-    from mmml.cli.run.md_config import load_yaml_config
+    from karml.cli.run.md_config import load_yaml_config
 
     preset = tmp_path / "preset.yaml"
     preset.write_text(
@@ -51,7 +51,7 @@ def test_load_yaml_config_merges_include_defaults(tmp_path: Path) -> None:
 
 
 def test_load_yaml_config_chained_includes(tmp_path: Path) -> None:
-    from mmml.cli.run.md_config import load_yaml_config
+    from karml.cli.run.md_config import load_yaml_config
 
     base = tmp_path / "base.yaml"
     base.write_text("defaults:\n  dt_fs: 0.5\n", encoding="utf-8")
@@ -73,20 +73,20 @@ def test_load_yaml_config_chained_includes(tmp_path: Path) -> None:
 
 
 def test_repo_preset_heat_conservative_loads() -> None:
-    from mmml.cli.run.md_config import load_yaml_config
+    from karml.cli.run.md_config import load_yaml_config
 
     repo = Path(__file__).resolve().parents[2]
-    preset = repo / "mmml/cli/run/presets/heat-dt0.25-conservative.yaml"
+    preset = repo / "karml/cli/run/presets/heat-dt0.25-conservative.yaml"
     cfg = load_yaml_config(preset)
     assert cfg["defaults"]["heat_thermostat"] == "hoover"
     assert cfg["defaults"]["no_echeck_heat"] is True
 
 
 def test_dcm_liquid_workflow_resilient_merges_presets() -> None:
-    from mmml.cli.run.md_config import load_yaml_config
+    from karml.cli.run.md_config import load_yaml_config
 
     repo = Path(__file__).resolve().parents[2]
-    cfg = load_yaml_config(repo / "mmml/cli/run/dcm_liquid_workflow.resilient.example.yaml")
+    cfg = load_yaml_config(repo / "karml/cli/run/dcm_liquid_workflow.resilient.example.yaml")
     d = cfg["defaults"]
     assert d["md_stages"] == "mini,heat,equi"
     assert d["calculator_pre_minimize"] is True
@@ -100,10 +100,10 @@ def test_dcm_liquid_workflow_resilient_merges_presets() -> None:
 
 
 def test_parse_md_system_args_resilient_workflow_config() -> None:
-    from mmml.cli.run.md_system import parse_md_system_args
+    from karml.cli.run.md_system import parse_md_system_args
 
     repo = Path(__file__).resolve().parents[2]
-    cfg = repo / "mmml/cli/run/dcm_liquid_workflow.resilient.example.yaml"
+    cfg = repo / "karml/cli/run/dcm_liquid_workflow.resilient.example.yaml"
     args = parse_md_system_args(
         [
             "--config",
@@ -125,10 +125,10 @@ def test_parse_md_system_args_resilient_workflow_config() -> None:
 
 
 def test_dcm103_example_campaign_merges_presets() -> None:
-    from mmml.cli.run.md_config import load_yaml_config
+    from karml.cli.run.md_config import load_yaml_config
 
     repo = Path(__file__).resolve().parents[2]
-    cfg = load_yaml_config(repo / "mmml/cli/run/md_system.dcm103_equil.example.yaml")
+    cfg = load_yaml_config(repo / "karml/cli/run/md_system.dcm103_equil.example.yaml")
     d = cfg["defaults"]
     assert d["composition"] == "DCM:103"
     assert d["calculator_pre_minimize"] is True
@@ -140,7 +140,7 @@ def test_dcm103_example_campaign_merges_presets() -> None:
 
 
 def test_config_is_campaign() -> None:
-    from mmml.cli.run.md_config import config_is_campaign
+    from karml.cli.run.md_config import config_is_campaign
 
     assert config_is_campaign({"defaults": {"dt_fs": 0.25}}) is False
     assert config_is_campaign({"runs": {"a": {"backend": "pycharmm"}}}) is True
@@ -149,7 +149,7 @@ def test_config_is_campaign() -> None:
 
 
 def test_parse_md_system_args_applies_defaults_block(tmp_path: Path) -> None:
-    from mmml.cli.run.md_system import parse_md_system_args
+    from karml.cli.run.md_system import parse_md_system_args
 
     cfg = tmp_path / "heat.conf"
     cfg.write_text(
@@ -179,16 +179,16 @@ def test_parse_md_system_args_applies_defaults_block(tmp_path: Path) -> None:
     assert args.composition == "DCM:52"
 
 
-def test_merge_campaign_job_config_resolves_mmml_ckpt(
+def test_merge_campaign_job_config_resolves_karml_ckpt(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    from mmml.cli.run.md_config import merge_campaign_job_config
+    from karml.cli.run.md_config import merge_campaign_job_config
 
     ckpt = tmp_path / "ckpt.json"
     ckpt.write_text("{}", encoding="utf-8")
-    monkeypatch.setenv("MMML_CKPT", str(ckpt))
+    monkeypatch.setenv("KARML_CKPT", str(ckpt))
     campaign = {
-        "defaults": {"checkpoint": "${MMML_CKPT}", "composition": "DCM:10"},
+        "defaults": {"checkpoint": "${KARML_CKPT}", "composition": "DCM:10"},
         "runs": {"mini": {"backend": "pycharmm", "md_stages": "mini"}},
     }
     merged = merge_campaign_job_config(campaign, "mini")
@@ -198,17 +198,17 @@ def test_merge_campaign_job_config_resolves_mmml_ckpt(
 def test_parse_md_system_args_resolves_campaign_checkpoint(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    from mmml.cli.run.md_system import parse_md_system_args
+    from karml.cli.run.md_system import parse_md_system_args
 
     ckpt = tmp_path / "params.json"
     ckpt.write_text("{}", encoding="utf-8")
-    monkeypatch.setenv("MMML_CKPT", str(ckpt))
+    monkeypatch.setenv("KARML_CKPT", str(ckpt))
     cfg = tmp_path / "campaign.yaml"
     cfg.write_text(
         textwrap.dedent(
             """
             defaults:
-              checkpoint: ${MMML_CKPT}
+              checkpoint: ${KARML_CKPT}
               composition: DCM:52
             runs:
               pycharmm_mini:

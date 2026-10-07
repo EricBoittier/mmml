@@ -16,7 +16,7 @@ pytest.importorskip("jax_md")
 
 
 def _mono_atom_pbc_system(n=4, spacing=5.0, box=20.0):
-    from mmml.md.system import FFParams, MolecularSystem
+    from karml.md.system import FFParams, MolecularSystem
 
     R = np.zeros((n, 3))
     R[:, 0] = np.arange(n) * spacing
@@ -37,11 +37,11 @@ def _mono_atom_pbc_system(n=4, spacing=5.0, box=20.0):
 
 
 def _run(block_size, record_every, n_steps, skin_A=0.0, ensemble="nve"):
-    from mmml.md.assemble import build_hybrid_energy
-    from mmml.md.config import EnsembleSpec
-    from mmml.md.drivers import JaxmdDriver
-    from mmml.md.energy import EnergyContext
-    from mmml.md.neighbors import make_intermolecular_neighbor_fn
+    from karml.md.assemble import build_hybrid_energy
+    from karml.md.config import EnsembleSpec
+    from karml.md.drivers import JaxmdDriver
+    from karml.md.energy import EnergyContext
+    from karml.md.neighbors import make_intermolecular_neighbor_fn
 
     system = _mono_atom_pbc_system()
     energy = build_hybrid_energy(system, ("mm_nonbonded",), EnergyContext())
@@ -108,12 +108,12 @@ def test_energies_stay_finite_across_blocks():
 
 def _ensemble_cadence(ensemble: str, monkeypatch, *, make_block_stepper):
     """Run a tiny box and count block dispatches + neighbor refreshes."""
-    import mmml.md.step_batching as step_batching
-    from mmml.md.assemble import build_hybrid_energy
-    from mmml.md.config import EnsembleSpec
-    from mmml.md.drivers import JaxmdDriver
-    from mmml.md.energy import EnergyContext
-    from mmml.md.neighbors import make_intermolecular_neighbor_fn
+    import karml.md.step_batching as step_batching
+    from karml.md.assemble import build_hybrid_energy
+    from karml.md.config import EnsembleSpec
+    from karml.md.drivers import JaxmdDriver
+    from karml.md.energy import EnergyContext
+    from karml.md.neighbors import make_intermolecular_neighbor_fn
 
     tallies = {"neighbor": 0, "block_dispatches": 0, "block_steps": []}
 
@@ -159,7 +159,7 @@ def test_nve_and_nvt_share_block_and_neighbor_cadence(monkeypatch):
     the driver cadence matches, that gap is integrator kernel cost, not a
     missed ``fori_loop``.
     """
-    import mmml.md.step_batching as step_batching
+    import karml.md.step_batching as step_batching
 
     original = step_batching.make_block_stepper
     nve = _ensemble_cadence("nve", monkeypatch, make_block_stepper=original)

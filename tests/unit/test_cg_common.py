@@ -125,7 +125,7 @@ def test_dual_trajectory_writer_writes_matching_traj_and_dcd(tmp_path: Path) -> 
     from ase import Atoms
     from ase.io import read
 
-    from mmml.utils.dcd_reader import read_dcd_trajectory
+    from karml.utils.dcd_reader import read_dcd_trajectory
 
     atoms = Atoms("H2", positions=[[0, 0, 0], [0, 0, 0.7]], cell=[8, 8, 8], pbc=True)
     writer = cg_common.DualTrajectoryWriter(

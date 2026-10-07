@@ -6,7 +6,7 @@ Default recipe: 32 Å ethanol at 0.789 g/cm³ (ETOH:338), 300 K, 0.5 fs.
 Example::
 
     export PET_MAD_CKPT=/path/to/pet-mad-xs-v1.5.0.pt
-    mmml metatomic-pbc-md --ensemble nve --minimize-steps 60 --n-steps 400
+    karml metatomic-pbc-md --ensemble nve --minimize-steps 60 --n-steps 400
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ import sys
 import time
 from pathlib import Path
 
-# Argparse-only at import: ``mmml <cmd> --help`` and docs generation load this
+# Argparse-only at import: ``karml <cmd> --help`` and docs generation load this
 # module. ASE / metatomic stay inside ``main``.
 
 DEFAULT_BOX_A = 32.0
@@ -41,22 +41,22 @@ def _sha256(path: Path) -> str:
 
 def _default_checkpoint() -> Path | None:
     env = os.environ.get("PET_MAD_CKPT", "").strip() or os.environ.get(
-        "MMML_CKPT", ""
+        "KARML_CKPT", ""
     ).strip()
     if env:
         return Path(env).expanduser()
-    model_dir = os.environ.get("MMML_METATOMIC_MODEL_DIR", "").strip()
+    model_dir = os.environ.get("KARML_METATOMIC_MODEL_DIR", "").strip()
     if model_dir:
         candidate = Path(model_dir).expanduser() / "pet-mad-xs-v1.5.0.pt"
         if candidate.is_file():
             return candidate
-    fallback = Path("/tmp/mmml-metatomic-models/pet-mad-xs-v1.5.0.pt")
+    fallback = Path("/tmp/karml-metatomic-models/pet-mad-xs-v1.5.0.pt")
     return fallback if fallback.is_file() else None
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="mmml metatomic-pbc-md",
+        prog="karml metatomic-pbc-md",
         description=(
             "CHARMM-free metatomic ASE MD in a cubic liquid box. Default: "
             "32 Å ethanol at experimental density, 300 K, 0.5 fs."
@@ -180,13 +180,13 @@ def main(argv: list[str] | None = None) -> int:
         def thermalize_momenta(atoms, temperature_K, *, rng=None, **_kwargs):
             MaxwellBoltzmannDistribution(atoms, temperature_K=temperature_K, rng=rng)
 
-    from mmml.interfaces.calculators.metatomic import (
+    from karml.interfaces.calculators.metatomic import (
         have_metatomic,
         load_metatomic_calculator,
         metatomic_device_name,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import SOLVENT_BULK_PROPS
-    from mmml.md.metatomic_pbc import (
+    from karml.interfaces.pycharmmInterface.mlpot.box_sizing import SOLVENT_BULK_PROPS
+    from karml.md.metatomic_pbc import (
         append_training_frame,
         build_tiled_cubic_liquid,
         default_etoh_monomer_xyz,

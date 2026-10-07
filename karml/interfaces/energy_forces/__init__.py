@@ -11,22 +11,22 @@ metatomic fragment hybrid).
 Use :func:`assert_hybrid_ml_compatible` before building decomposed MLpot.
 """
 
-from mmml.interfaces.energy_forces.adapters import AseCalculatorProvider
-from mmml.interfaces.energy_forces.ml import (
+from karml.interfaces.energy_forces.adapters import AseCalculatorProvider
+from karml.interfaces.energy_forces.ml import (
     assert_hybrid_ml_compatible,
     build_ml_ase_provider,
     build_ml_provider,
     capabilities_for_kind,
     detect_model_kind,
 )
-from mmml.interfaces.energy_forces.protocol import (
+from karml.interfaces.energy_forces.protocol import (
     EnergyForcesProvider,
     ProviderCapabilities,
     ProviderKind,
     QCEvaluator,
 )
-from mmml.interfaces.energy_forces.registry import build_provider, provider_from_dict
-from mmml.interfaces.energy_forces.spec import ProviderSpec
+from karml.interfaces.energy_forces.registry import build_provider, provider_from_dict
+from karml.interfaces.energy_forces.spec import ProviderSpec
 
 __all__ = [
     "AseCalculatorProvider",

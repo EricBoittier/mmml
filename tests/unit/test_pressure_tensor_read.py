@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from mmml.interfaces.pycharmmInterface.mlpot.pressure_tensor import (
+from karml.interfaces.pycharmmInterface.mlpot.pressure_tensor import (
     scalar_pressure_atm_from_energy_getters,
 )
 

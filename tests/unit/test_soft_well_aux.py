@@ -5,8 +5,8 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from mmml.data.units import EV_TO_KCAL_MOL, KCAL_MOL_TO_EV
-from mmml.models.physnetjax.physnetjax.training.soft_well_aux import (
+from karml.data.units import EV_TO_KCAL_MOL, KCAL_MOL_TO_EV
+from karml.models.physnetjax.physnetjax.training.soft_well_aux import (
     SoftWellConfig,
     SoftWellGeometryPool,
     extract_monomer_from_hybrid_frame,
@@ -89,7 +89,7 @@ def test_geometry_pool_filters_contact_ok():
     assert pool.n > 0
     assert pool.pad == 10
     # All stored geometries must be contact-ok by construction.
-    from mmml.analysis.dimer_scans import intermolecular_min_distance
+    from karml.analysis.dimer_scans import intermolecular_min_distance
 
     for i in range(min(pool.n, 32)):
         Ra = pool.R[i, :5]

@@ -1,6 +1,6 @@
 # CPU profiling smoke: DCM:32 L=25, MLpot + JAX compile timers enabled.
 # Usage:
-#   MMML_WORKFLOW_CONFIG=config.profile.cpu.yaml bash scripts/job_shell.sh dcm_32_t300_l25
+#   KARML_WORKFLOW_CONFIG=config.profile.cpu.yaml bash scripts/job_shell.sh dcm_32_t300_l25
 
 cluster: pc-bach
 scheduler: cpu
@@ -10,7 +10,7 @@ solvents: [DCM]
 cluster_sizes: [32]
 temperatures: [300.0]
 box_sizes: [25.0]
-checkpoint: ${MMML_CKPT}
+checkpoint: ${KARML_CKPT}
 output_root: artifacts/pbc_liquid_density_dyn_profile
 seed_base: 5150
 
@@ -74,5 +74,5 @@ warmup_mlpot_jax: true
 warmup_do_mm: false
 use_mpirun_wrapper: true
 
-mpirun_wrapper: ../../scripts/mmml-charmm-mpirun.sh
-MMML_MPI_NP: 1
+mpirun_wrapper: ../../scripts/karml-charmm-mpirun.sh
+KARML_MPI_NP: 1

@@ -1,4 +1,4 @@
-# `mmml md-system`
+# `karml md-system`
 
 Mixed-composition MD (ASE/JAX-MD/PyCHARMM).
 
@@ -14,16 +14,16 @@ the native CHARMM runtime.
 ## Usage
 
 ```bash
-mmml md-system -h              # category index
-mmml md-system -h4             # category by number
-mmml md-system -hpycharmm      # same via alias
-mmml md-system --help-all      # full option dump
+karml md-system -h              # category index
+karml md-system -h4             # category by number
+karml md-system -hpycharmm      # same via alias
+karml md-system --help-all      # full option dump
 ```
 
 ## Options
 
 ```text
-usage: mmml md-system [options]
+usage: karml md-system [options]
 
 Full help (all categories). Short index: -h One category: -hN or -halias (see
 -h)
@@ -31,8 +31,8 @@ Full help (all categories). Short index: -h One category: -hN or -halias (see
 1. Core setup, composition & ensemble  (-hcore):
   --setup {free_nve,free_nvt,free_thermalize,pbc_nve,pbc_nvt,pbc_thermalize,pbc_npt,lambda_ti,pycharmm_minimize,pycharmm_full,all}
                         Simulation setup preset. lambda_ti: alchemical TI with
-                        CHARMM+MMML minimization per λ window (--lambda-md-mode,
-                        --backend ase|jaxmd); mmml lambda-mbar afterward.
+                        CHARMM+KARML minimization per λ window (--lambda-md-mode,
+                        --backend ase|jaxmd); karml lambda-mbar afterward.
                         pycharmm_minimize: CHARMM MLpot SD only (--backend
                         pycharmm). pycharmm_full: mini → heat → NVE → equi →
                         prod (--backend pycharmm). pbc_* with --backend
@@ -80,7 +80,7 @@ Full help (all categories). Short index: -h One category: -hN or -halias (see
                         C6 dispersion. Omit for hybrid ml_intra+mm_nonbonded
                         when a checkpoint is set.
   --jaxmd-unified       EXPERIMENTAL: run --backend jaxmd through the unified
-                        mmml.md pipeline (mmml.cli.run.md_system_unified)
+                        karml.md pipeline (karml.cli.run.md_system_unified)
                         instead of the legacy md_pbc_suite.jaxmd inline loop.
                         Only supports the packmol composition builder; see
                         docs/md-cg-unification-design.md for scope and status.
@@ -169,7 +169,7 @@ Full help (all categories). Short index: -h One category: -hN or -halias (see
   --rebuild-packmol     pycharmm: ignore Packmol cache and rebuild placement.
   --packmol-cache-dir PACKMOL_CACHE_DIR
                         pycharmm: Packmol cache root (default: output-
-                        dir/.packmol_cache or MMML_PACKMOL_CACHE).
+                        dir/.packmol_cache or KARML_PACKMOL_CACHE).
   --pyxtal, --no-pyxtal
                         Build --composition with PyXtal (space-group crystal)
                         instead of Packmol/grid. Requires uv sync --extra chem.
@@ -725,7 +725,7 @@ Full help (all categories). Short index: -h One category: -hN or -halias (see
   --dynamics-overlap-memory-handoff
                         Continue overlap chunks in-process without READYN on
                         scratch restarts. Default on MPI-linked CHARMM under
-                        mpirun (set MMML_NO_OVERLAP_MEMORY_HANDOFF=1 to force
+                        mpirun (set KARML_NO_OVERLAP_MEMORY_HANDOFF=1 to force
                         scratch .overlap_a/.b.res handoffs).
   --no-dynamics-overlap-separate
                         Do not repack overlapped monomers (re-place COMs with
@@ -795,9 +795,9 @@ Full help (all categories). Short index: -h One category: -hN or -halias (see
 
 6. Minimization (FIRE / BFGS / CHARMM)  (-hminimize, -hmin):
   --pre-min-steps PRE_MIN_STEPS
-                        lambda_ti: MMML BFGS steps per window.
+                        lambda_ti: KARML BFGS steps per window.
   --pre-min-fmax PRE_MIN_FMAX
-                        lambda_ti: MMML BFGS fmax (eV/Å).
+                        lambda_ti: KARML BFGS fmax (eV/Å).
   --min-steps MIN_STEPS
                         lambda_ti: alias for --pre-min-steps.
   --min-fmax MIN_FMAX   lambda_ti: alias for --pre-min-fmax.
@@ -848,9 +848,9 @@ Full help (all categories). Short index: -h One category: -hN or -halias (see
   --bfgs-log-every N    Compact BFGS/FIRE log every N steps (default: ~10 lines
                         per run).
   --charmm-pre-minimize, --no-charmm-pre-minimize
-                        lambda_ti: CHARMM SD/ABNR before MMML BFGS (default on).
+                        lambda_ti: CHARMM SD/ABNR before KARML BFGS (default on).
   --calculator-pre-minimize, --no-calculator-pre-minimize
-                        lambda_ti: MMML-calculator BFGS after CHARMM (default
+                        lambda_ti: KARML-calculator BFGS after CHARMM (default
                         on).
   --calculator-safe-grms KCAL
                         Hybrid GRMS (kcal/mol/Å) to stop pre-SD ASE FIRE/BFGS
@@ -909,25 +909,25 @@ Full help (all categories). Short index: -h One category: -hN or -halias (see
                         jaxmd: minimum MD dt (fs) when backing off (default:
                         0.05).
   --ml-batch-size N     pycharmm: chunk PhysNet batches (auto: 256 on GPU / 64
-                        on CPU for n>=40; or MMML_MLPOT_ML_BATCH_SIZE). DCM:90
+                        on CPU for n>=40; or KARML_MLPOT_ML_BATCH_SIZE). DCM:90
                         try 256-512 on one GPU.
   --ml-gpu-count N      Parallel PhysNet chunks on N local GPUs for
-                        pycharmm/ASE/jaxmd (default 1; or MMML_MLPOT_N_GPUS).
+                        pycharmm/ASE/jaxmd (default 1; or KARML_MLPOT_N_GPUS).
                         Set CUDA_VISIBLE_DEVICES to the GPU ids to use. Requires
                         --ml-batch-size so work splits into chunks.
   --max-pairs N         PBC: cell-list MM pair buffer size (auto from N and box
                         when unset). Increase if you see 'MM Pair List
                         Truncated' during MLpot mini/MD.
   --ml-spatial-mpi      pycharmm: per-rank spatial ML decomposition when MPI
-                        size>1 (PBC only; or MMML_MLPOT_SPATIAL_MPI=1). Use with
-                        MMML_MPI_NP>1 and --ml-gpu-count 1.
+                        size>1 (PBC only; or KARML_MLPOT_SPATIAL_MPI=1). Use with
+                        KARML_MPI_NP>1 and --ml-gpu-count 1.
   --charmm-omp-threads N
-                        pycharmm: set MMML_CHARMM_OMP_THREADS before MPI-linked
+                        pycharmm: set KARML_CHARMM_OMP_THREADS before MPI-linked
                         CHARMM bootstrap (default 1; CPU performance experiment
                         knob).
   --ml-compute-dtype {float32,float64}
                         JAX dtype for ML/MM hybrid interior (default: float32,
-                        or MMML_ML_DTYPE / JAX_ENABLE_X64=1 → float64). CHARMM
+                        or KARML_ML_DTYPE / JAX_ENABLE_X64=1 → float64). CHARMM
                         I/O stays float64.
   --ml-max-active-dimers N
                         pycharmm: sparse ML dimer slot cap per step (PBC default
@@ -938,7 +938,7 @@ Full help (all categories). Short index: -h One category: -hN or -halias (see
                         lambda_ti: ML cutoff (Å).
   --ml-switch-width, --ml-cutoff-distance ML_SWITCH_WIDTH
                         COM-distance width (Å) of the ML→MM handoff for
-                        pycharmm/MMML; ML is fully on below mm_switch_on - width
+                        pycharmm/KARML; ML is fully on below mm_switch_on - width
                         and reaches zero at mm_switch_on (default: 1.5). Does
                         not affect lambda_ti (see --ml-cutoff).
   --mm-switch-on MM_SWITCH_ON
@@ -974,7 +974,7 @@ Full help (all categories). Short index: -h One category: -hN or -halias (see
                         jax-pme real-space cutoff in Å (default 6.0).
   --jax-pme-dispersion, --no-jax-pme-dispersion
                         pycharmm jax_mic + jax_pme: include reciprocal r^-6 LJ
-                        dispersion (default: env MMML_JAX_PME_DISPERSION or on).
+                        dispersion (default: env KARML_JAX_PME_DISPERSION or on).
                         Use --no-jax-pme-dispersion for Coulomb-only long range.
   --scafacos-method SCAFACOS_METHOD
                         ScaFaCoS fcs_init method when --lr-solver=scafacos
@@ -1073,14 +1073,14 @@ Full help (all categories). Short index: -h One category: -hN or -halias (see
   --no-stationary       lambda_ti: skip Stationary/ZeroRotation on velocity init
                         (with --no-fix-com, COM can translate).
   --skip-jit-warmup     Skip JIT/XLA warmup. jaxmd/ase: generic XLA GPU compile
-                        and pre-MD hybrid MMML eval; lambda_ti: skip first MMML
+                        and pre-MD hybrid KARML eval; lambda_ti: skip first KARML
                         energy eval per window; pycharmm: skip serial auto
                         warmup-mlpot-jax before CHARMM MLpot.
   --auto-warmup-mlpot-jax, --no-auto-warmup-mlpot-jax
                         pycharmm: run serial warmup-mlpot-jax before MPI/CHARMM
                         to populate JAX_COMPILATION_CACHE_DIR (default on). Also
                         disabled by --skip-jit-warmup or
-                        MMML_NO_AUTO_WARMUP_MLPOT_JAX=1.
+                        KARML_NO_AUTO_WARMUP_MLPOT_JAX=1.
   --resume              Resume existing work instead of starting in new output
                         directories. Campaign (--run-all): reuse output dirs and
                         skip jobs with valid handoffs. PyCHARMM retry: when re-
@@ -1123,7 +1123,7 @@ Full help (all categories). Short index: -h One category: -hN or -halias (see
                         Run pre-minimization even when continuing from a
                         handoff.
   --handoff-quality-gate, --no-handoff-quality-gate
-                        When continuing from handoff, evaluate initial MMML |F|
+                        When continuing from handoff, evaluate initial KARML |F|
                         and optionally run pre-minimization if above --handoff-
                         quality-fmax-eVA (default: off).
   --handoff-quality-fmax-eVA HANDOFF_QUALITY_FMAX_EVA
@@ -1166,7 +1166,7 @@ Full help (all categories). Short index: -h One category: -hN or -halias (see
                         --evaluate-frame).
   --evaluate-reference-energy-unit {hartree,ev,kcal_mol}
                         Unit of E in --evaluate-reference-npz. Default: infer
-                        from NPZ _mmml_units / units_manifest.json / force
+                        from NPZ _karml_units / units_manifest.json / force
                         magnitudes (else hartree).
   --evaluate-reference-force-unit {hartree_bohr,ev_ang}
                         Unit of F in --evaluate-reference-npz. Default: infer
@@ -1208,11 +1208,11 @@ Full help (all categories). Short index: -h One category: -hN or -halias (see
                         next_run.sh) when a job finishes or fails.
   --no-stage-summary    Do not write stage_summary.json (campaigns).
   --mlpot-profile       Enable ASE/MLpot wall-time profiling (writes
-                        mlpot_profile.json; sets MMML_MLPOT_PROFILE=1 and
-                        MMML_JAX_COMPILE_TIMERS=1)
+                        mlpot_profile.json; sets KARML_MLPOT_PROFILE=1 and
+                        KARML_JAX_COMPILE_TIMERS=1)
   --jax-profiler-dir DIR
                         Optional TensorBoard JAX profiler trace directory for
-                        jaxmd/ASE (also MMML_JAX_PROFILER_DIR). Prefer short
+                        jaxmd/ASE (also KARML_JAX_PROFILER_DIR). Prefer short
                         --ps when tracing.
 
 9. Other options  (-hother):
@@ -1264,7 +1264,7 @@ Full help (all categories). Short index: -h One category: -hN or -halias (see
                         pycharmm decomposed MLpot MM pair provider: Fortran
                         callback idxu/idxv or JAX neighbor rebuild. All-ML
                         jax_mic hybrids (empty CHARMM lists) default to jax;
-                        override with MMML_MM_PAIR_SOURCE.
+                        override with KARML_MM_PAIR_SOURCE.
   --do-ml, --no-do-ml   Include ML monomer terms in the hybrid calculator
                         (doML). YAML aliases: doML, do_ml. Default: on.
   --do-ml-dimer, --no-do-ml-dimer
@@ -1295,7 +1295,7 @@ Full help (all categories). Short index: -h One category: -hN or -halias (see
                         docs/hybrid-bonded-intra.md.
   --metatomic-eval-mode {fragments,whole_system}
                         How a metatomic model is evaluated in CHARMM MLpot.
-                        Default is 'fragments' (the MMML ML/MM scheme: isolated
+                        Default is 'fragments' (the KARML ML/MM scheme: isolated
                         monomers plus switched dimer interaction).
                         'whole_system' is one evaluation on the ML selection
                         (all-ML USER term).
@@ -1314,10 +1314,10 @@ Full help (all categories). Short index: -h One category: -hN or -halias (see
                         measured noise well sits (O-H = 0.771 A).
   --mm-nl-backend {auto,vesin,cell_list,jax_md}
                         MM neighbor-list builder for jaxmd (default:
-                        MMML_MM_NL_BACKEND or auto→vesin).
+                        KARML_MM_NL_BACKEND or auto→vesin).
   --mm-nl-device {auto,cpu,gpu}
                         MM Vesin pair-list rebuild device (default:
-                        MMML_MM_NL_DEVICE or auto: GPU when CuPy + a JAX GPU are
+                        KARML_MM_NL_DEVICE or auto: GPU when CuPy + a JAX GPU are
                         present, else cpu).
   --nhc-tau MULT        jaxmd: Nose–Hoover thermostat coupling multiplier (tau =
                         nhc_tau * dt; default 100 in the jaxmd suite).

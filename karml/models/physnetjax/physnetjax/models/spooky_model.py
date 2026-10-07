@@ -22,9 +22,9 @@ from jax import Array
 # from jax.sharding import NamedSharding
 # from jax.sharding import PartitionSpec as P
 
-from mmml.models.physnetjax.physnetjax.models.euclidean_fast_attention import fast_attention as efa
-from mmml.models.physnetjax.physnetjax.models.physnet_family import PhysNetFamilyMixin
-from mmml.models.physnetjax.physnetjax.models.zbl import (
+from karml.models.physnetjax.physnetjax.models.euclidean_fast_attention import fast_attention as efa
+from karml.models.physnetjax.physnetjax.models.physnet_family import PhysNetFamilyMixin
+from karml.models.physnetjax.physnetjax.models.zbl import (
     ZBLRepulsion,
     geometric_pair_distances,
 )
@@ -68,7 +68,7 @@ class SpookyPhysNet(PhysNetFamilyMixin, nn.Module):
     # changes electrostatics behavior and is NOT backward compatible with
     # checkpoints trained under the old defaults. Previously these were
     # decoupled from `cutoff` with no code anywhere checking the two stayed
-    # consistent (see mmml/models/physnetjax/physnetjax/training/
+    # consistent (see karml/models/physnetjax/physnetjax/training/
     # far_field_augment.py's SAFE_SEPARATION_ANGSTROM, which depends on
     # electrostatics_off_end being an exact hard-zero point and silently
     # went stale if this ever changed without it knowing).

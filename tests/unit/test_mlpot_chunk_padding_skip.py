@@ -11,7 +11,7 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from mmml.interfaces.pycharmmInterface.mlpot_gpu import run_chunked_model_apply
+from karml.interfaces.pycharmmInterface.mlpot_gpu import run_chunked_model_apply
 
 N_CHUNKS, CHUNK, MAX_ATOMS = 5, 4, 3
 BATCH = 18  # last chunk is partly beyond the batch

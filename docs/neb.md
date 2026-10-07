@@ -1,12 +1,12 @@
-# Nudged elastic band (`mmml neb`)
+# Nudged elastic band (`karml neb`)
 
 Find a minimum-energy path between two fixed endpoints on a PhysNet (or other
-MMML checkpoint) potential using ASE’s nudged elastic band (NEB). The band is a
+KARML checkpoint) potential using ASE’s nudged elastic band (NEB). The band is a
 chain of images; springs keep them spaced along the path while projected forces
 relax perpendicular to the path.
 
-CLI flag reference: `[mmml neb](cli/commands/neb.md)`.  
-NH₃–CH₃Cl example: `[examples/m](https://github.com/EricBoittier/mmml/blob/main/examples/m/README.md)`
+CLI flag reference: `[karml neb](cli/commands/neb.md)`.  
+NH₃–CH₃Cl example: `[examples/m](https://github.com/EricBoittier/karml/blob/main/examples/m/README.md)`
 (`kl.json`, endpoints under `examples/m/neb/`).
 
 ## When to use it
@@ -14,11 +14,11 @@ NH₃–CH₃Cl example: `[examples/m](https://github.com/EricBoittier/mmml/blob
 
 | Goal                                                           | Tool                                                   |
 | -------------------------------------------------------------- | ------------------------------------------------------ |
-| Vacuum MEP / barrier estimate between two optimized geometries | `mmml neb`                                             |
-| Classical MD on the same potential                             | `[mmml physnet-md](cli/commands/physnet-md.md)`        |
-| Rigid 1D interaction scan (no bond rearrangements)             | `[mmml dimer-scan](cli/commands/dimer-scan.md)`        |
+| Vacuum MEP / barrier estimate between two optimized geometries | `karml neb`                                             |
+| Classical MD on the same potential                             | `[karml physnet-md](cli/commands/physnet-md.md)`        |
+| Rigid 1D interaction scan (no bond rearrangements)             | `[karml dimer-scan](cli/commands/dimer-scan.md)`        |
 | Adaptive umbrella / free-energy along Cl⋯C / C⋯N (CHARMM)      | ADUMB in `[examples/m](examples/nh3-ch3cl-results.md)` |
-| Pure-ML distance umbrella PMF (NVT + MBAR)                     | `[mmml umbrella-sample](umbrella.md)`                  |
+| Pure-ML distance umbrella PMF (NVT + MBAR)                     | `[karml umbrella-sample](umbrella.md)`                  |
 
 
 NEB is a **local path** method: endpoints must already be local minima (or
@@ -71,7 +71,7 @@ source examples/m/_env.sh
 bash examples/m/13_neb.sh
 
 # Same via YAML
-uv run mmml neb --config examples/m/yaml/neb.yaml --overwrite
+uv run karml neb --config examples/m/yaml/neb.yaml --overwrite
 
 # Dense band (~Asparagus 99-image setup)
 N_IMAGES=99 bash examples/m/13_neb.sh
@@ -80,7 +80,7 @@ N_IMAGES=99 bash examples/m/13_neb.sh
 Equivalent explicit flags:
 
 ```bash
-uv run mmml neb \
+uv run karml neb \
   --checkpoint examples/m/kl.json \
   --initial examples/m/neb/reag_0_opt.xyz \
   --final examples/m/neb/prod_0_opt.xyz \
@@ -182,7 +182,7 @@ the config directory.
 
 ```python
 from pathlib import Path
-from mmml.neb import NebConfig, run_neb
+from karml.neb import NebConfig, run_neb
 
 result = run_neb(
     NebConfig(
@@ -216,8 +216,8 @@ free-energy profiles — they answer different questions.
 
 ## See also
 
-- `mmml neb` [CLI options](cli/commands/neb.md)
-- `[examples/m/README.md](https://github.com/EricBoittier/mmml/blob/main/examples/m/README.md)` — smoke script `13_neb.sh`
+- `karml neb` [CLI options](cli/commands/neb.md)
+- `[examples/m/README.md](https://github.com/EricBoittier/karml/blob/main/examples/m/README.md)` — smoke script `13_neb.sh`
 - [NH₃–CH₃Cl results](examples/nh3-ch3cl-results.md) — ADUMB notes for the same chemistry
 - ASE NEB docs: [ase.mep](https://wiki.fysik.dtu.dk/ase/ase/mep/neb.html)
 

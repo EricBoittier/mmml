@@ -61,7 +61,7 @@ except Exception as exc:  # pragma: no cover - environment dependent
 
 # --- the deposited structures ----------------------------------------------
 try:
-    from mmml.analysis.dcm_crystal import DCM_CRYSTAL_PHASES
+    from karml.analysis.dcm_crystal import DCM_CRYSTAL_PHASES
 
     missing = [
         phase.key for phase in DCM_CRYSTAL_PHASES.values() if not phase.cif_path().is_file()
@@ -75,7 +75,7 @@ except Exception as exc:
 
 # --- CGenFF, read straight off the bundled parameter files ------------------
 try:
-    from mmml.data.cgenff_dataset import load_reference
+    from karml.data.cgenff_dataset import load_reference
 
     ref = load_reference()
     if "DCM" not in ref.residues:

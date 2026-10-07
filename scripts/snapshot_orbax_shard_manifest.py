@@ -58,7 +58,7 @@ def main() -> None:
         del restored
 
     manifest = {
-        "format": "mmml-orbax-shards-v1",
+        "format": "karml-orbax-shards-v1",
         "dataset_kind": args.dataset_kind,
         "num_structures": total,
         "shard_size": max(item["num_structures"] for item in shards),

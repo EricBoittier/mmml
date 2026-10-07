@@ -54,9 +54,9 @@ def build_psf_angle_restraint_fns(
     import jax.numpy as jnp
     from jax_md import space
 
-    from mmml.data.units import KCAL_MOL_TO_EV
-    from mmml.interfaces.pycharmmInterface.cgenff_bonded import bonded_energy_components
-    from mmml.interfaces.pycharmmInterface.cgenff_topology import (
+    from karml.data.units import KCAL_MOL_TO_EV
+    from karml.interfaces.pycharmmInterface.cgenff_bonded import bonded_energy_components
+    from karml.interfaces.pycharmmInterface.cgenff_topology import (
         load_cgenff_bonded_from_psf,
     )
 

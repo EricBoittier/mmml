@@ -2,7 +2,7 @@
 """Validate cross-monomer jax-pme vs legacy and profile both modes together.
 
     JAX_PLATFORMS=cpu uv run python tests/functionality/long_range/09_jax_pme_cross_validate.py
-    MMML_JAX_PME_PROFILE=1 JAX_PLATFORMS=cpu uv run python tests/functionality/long_range/09_jax_pme_cross_validate.py --reps 10
+    KARML_JAX_PME_PROFILE=1 JAX_PLATFORMS=cpu uv run python tests/functionality/long_range/09_jax_pme_cross_validate.py --reps 10
 """
 
 from __future__ import annotations
@@ -49,15 +49,15 @@ def main() -> int:
 
     from jaxpme import prefactors as jpref
 
-    from mmml.interfaces.pycharmmInterface.jax_pme_cross_monomer import (
+    from karml.interfaces.pycharmmInterface.jax_pme_cross_monomer import (
         compute_jax_pme_cross_monomer_power_law,
         consume_cross_monomer_profile,
     )
-    from mmml.interfaces.pycharmmInterface.jax_pme_hybrid_coulomb import (
+    from karml.interfaces.pycharmmInterface.jax_pme_hybrid_coulomb import (
         _intra_monomer_jax_pme_power_law,
         hybrid_jax_pme_mm_lr_correction,
     )
-    from mmml.interfaces.pycharmmInterface.long_range_backend import (
+    from karml.interfaces.pycharmmInterface.long_range_backend import (
         compute_jax_pme_power_law,
         per_atom_jax_pme_c6_sqrt_for_atoms,
     )
@@ -98,7 +98,7 @@ def main() -> int:
         return 1
 
     def _run_hybrid(mode: str) -> float:
-        os.environ["MMML_JAX_PME_INTRA_MODE"] = mode
+        os.environ["KARML_JAX_PME_INTRA_MODE"] = mode
         return _time_hybrid(
             lambda: hybrid_jax_pme_mm_lr_correction(
                 pos,

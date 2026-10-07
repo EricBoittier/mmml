@@ -6,9 +6,9 @@ from pathlib import Path
 
 import numpy as np
 
-from mmml.acquisition.ids import structure_id
-from mmml.acquisition.labels import LabelCache, MockMorseReference, labels_to_npz
-from mmml.acquisition.splits import StructureRecord
+from karml.acquisition.ids import structure_id
+from karml.acquisition.labels import LabelCache, MockMorseReference, labels_to_npz
+from karml.acquisition.splits import StructureRecord
 
 
 def _rec(i: int = 0) -> StructureRecord:

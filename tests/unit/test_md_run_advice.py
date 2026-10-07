@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from mmml.cli.run.md_run_advice import (
+from karml.cli.run.md_run_advice import (
     RestartCandidate,
     build_run_advice,
     collect_restart_candidates,
@@ -50,7 +50,7 @@ def test_select_restart_prefers_lowest_grms_on_failure(tmp_path: Path) -> None:
 
 
 def test_select_restart_tiebreaks_by_mtime_at_similar_grms(tmp_path: Path) -> None:
-    from mmml.cli.run.md_run_advice import RestartCandidate
+    from karml.cli.run.md_run_advice import RestartCandidate
 
     older = tmp_path / "baseline.res"
     newer = tmp_path / "heat.res"
@@ -128,7 +128,7 @@ def test_build_run_advice_failure_suggests_resume(tmp_path: Path) -> None:
         "backend": "pycharmm",
         "exit_code": 1,
         "args": {
-            "config": "mmml/cli/run/md_system.dcm103_equil.example.yaml",
+            "config": "karml/cli/run/md_system.dcm103_equil.example.yaml",
             "md_stages": "mini,heat,equi",
             "output_dir": str(out),
             "no_echeck_heat": False,
@@ -312,7 +312,7 @@ def test_select_restart_does_not_fall_back_to_pretreat_heat(tmp_path: Path) -> N
 
 
 def test_is_valid_restart_rejects_flyoff_coords(tmp_path: Path) -> None:
-    from mmml.cli.run.md_run_advice import _is_valid_restart
+    from karml.cli.run.md_run_advice import _is_valid_restart
 
     bad = tmp_path / "heat.res"
     bad.write_text(

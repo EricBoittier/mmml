@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from mmml.cli.misc.subtract_element_refs import fit_element_refs, main
+from karml.cli.misc.subtract_element_refs import fit_element_refs, main
 
 
 def _synthetic(n=200, seed=0):
@@ -132,7 +132,7 @@ def test_dry_run_writes_nothing(tmp_path):
 def test_species_pairing_is_order_independent():
     """A+B and B+A are the same dimer species; treating them separately would
     split every pair's statistics in half."""
-    from mmml.cli.misc.subtract_element_refs import fit_species_refs
+    from karml.cli.misc.subtract_element_refs import fit_species_refs
 
     res = np.array([["A", "B"], ["B", "A"]], dtype=object)
     labels, _, means = fit_species_refs(np.array([10.0, 12.0]), res)
@@ -141,7 +141,7 @@ def test_species_pairing_is_order_independent():
 
 
 def test_species_refs_centre_each_species():
-    from mmml.cli.misc.subtract_element_refs import fit_species_refs
+    from karml.cli.misc.subtract_element_refs import fit_species_refs
 
     res = np.array([["A", "A"], ["A", "A"], ["B", "B"]], dtype=object)
     E = np.array([10.0, 20.0, 7.0])
@@ -152,7 +152,7 @@ def test_species_refs_centre_each_species():
 def test_species_refs_remove_offsets_forces_cannot_see():
     """The motivating case: a per-species constant is invisible to a force loss
     (forces are dE/dR), so it must be removed from the target instead."""
-    from mmml.cli.misc.subtract_element_refs import fit_species_refs
+    from karml.cli.misc.subtract_element_refs import fit_species_refs
 
     rng = np.random.default_rng(3)
     n = 600

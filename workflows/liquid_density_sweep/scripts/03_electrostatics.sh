@@ -34,7 +34,7 @@ banner "Electrostatics sweep (L=${BOX_SIZE} Å)"
 # Common arguments for every variant below.
 md_common() {  # solvent n outdir
   printf '%s' "--setup pbc_nvt --composition $1:$2 --box-size $BOX_SIZE \
---checkpoint $MMML_CKPT --temperature $TEMPERATURE --dt-fs $DT_FS \
+--checkpoint $KARML_CKPT --temperature $TEMPERATURE --dt-fs $DT_FS \
 --ps $PS_PROD --output-dir $3"
 }
 
@@ -49,13 +49,13 @@ for solvent in $SOLVENTS; do
 
     # 1. Truncated MIC — the baseline everything else is compared against.
     echo "--- lr-solver=mic (baseline) ---"
-    run_cmd mmml md-system --backend jaxmd \
+    run_cmd karml md-system --backend jaxmd \
       $(md_common "$solvent" "$n" "${base}/mic") \
       --lr-solver mic
 
     # 2. Full-box Ewald, pure JAX. Correct choice for Ewald-trained models.
     echo "--- lr-solver=ewald (full-box, JAX) ---"
-    run_cmd mmml md-system --backend jaxmd \
+    run_cmd karml md-system --backend jaxmd \
       $(md_common "$solvent" "$n" "${base}/ewald") \
       --lr-solver ewald
 
@@ -63,14 +63,14 @@ for solvent in $SOLVENTS; do
     #    cross-monomer Ewald only, omitting intramolecular + Gaussian self.
     #    Use this when the checkpoint was trained under MIC.
     echo "--- lr-solver=ewald --ewald-omit-self (MIC-trained models) ---"
-    run_cmd mmml md-system --backend jaxmd \
+    run_cmd karml md-system --backend jaxmd \
       $(md_common "$solvent" "$n" "${base}/ewald_omit_self") \
       --lr-solver ewald --ewald-omit-self
 
     # 4. jax-pme k-space. Three methods; p3m is usually the best accuracy/cost.
     for method in ewald pme p3m; do
       echo "--- lr-solver=jax_pme --jax-pme-method ${method} ---"
-      run_cmd mmml md-system --backend jaxmd \
+      run_cmd karml md-system --backend jaxmd \
         $(md_common "$solvent" "$n" "${base}/jax_pme_${method}") \
         --lr-solver jax_pme --jax-pme-method "$method" \
         --jax-pme-sr-cutoff 6.0
@@ -79,7 +79,7 @@ for solvent in $SOLVENTS; do
     # 5. Coulomb-only long range (drop the reciprocal r^-6 LJ dispersion) —
     #    isolates the electrostatic contribution from LJ tail effects.
     echo "--- jax_pme, Coulomb-only (no reciprocal dispersion) ---"
-    run_cmd mmml md-system --backend jaxmd \
+    run_cmd karml md-system --backend jaxmd \
       $(md_common "$solvent" "$n" "${base}/jax_pme_nodisp") \
       --lr-solver jax_pme --jax-pme-method p3m --no-jax-pme-dispersion
 

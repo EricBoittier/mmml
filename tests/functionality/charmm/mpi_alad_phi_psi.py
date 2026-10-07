@@ -6,13 +6,13 @@ CHARMM minimizations sharded across mpi4py ranks, gathered on rank 0.
 
 User-run on a CHARMM + OpenMPI node (not CI):
 
-  MMML_MPI_NP=4 ./scripts/mmml-charmm-mpirun.sh python \\
+  KARML_MPI_NP=4 ./scripts/karml-charmm-mpirun.sh python \\
     tests/functionality/charmm/mpi_alad_phi_psi.py --n-phi 12 --n-psi 12 \\
     -o /tmp/alad_phi_psi_mpi.json
 
 Serial reference:
 
-  ./scripts/mmml-charmm-mpirun.sh python \\
+  ./scripts/karml-charmm-mpirun.sh python \\
     tests/functionality/charmm/mpi_alad_phi_psi.py --n-phi 12 --n-psi 12 \\
     -o /tmp/alad_phi_psi_serial.json
 """
@@ -44,7 +44,7 @@ def _parse_args() -> argparse.Namespace:
 
 
 def _build_alad_and_minimize_base() -> None:
-    from mmml.interfaces.pycharmmInterface.protein_charmm_build import build_alad_dipeptide
+    from karml.interfaces.pycharmmInterface.protein_charmm_build import build_alad_dipeptide
 
     build_alad_dipeptide(minimize=True, mini_steps=500)
 

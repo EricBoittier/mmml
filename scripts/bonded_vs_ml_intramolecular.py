@@ -2,7 +2,7 @@
 """Does a real bonded model own the intramolecular coordinate the ML gets wrong?
 
 The hybrid computes the dimer term as E_AB - (E_A + E_B), all three from the same
-ML model (mmml_calculator.calculate_dimer_contributions). Along an O-H scan the
+ML model (karml_calculator.calculate_dimer_contributions). Along an O-H scan the
 monomer sum rises, as it must, but the dimer total *falls* -- so the interaction
 comes out with a -73 kcal/mol well at O-H = 0.77 A that is pure cancellation
 error between two badly extrapolated totals.
@@ -36,8 +36,8 @@ def main() -> int:
     p.add_argument("--mm-switch-on", type=float, default=6.0)
     args = p.parse_args()
 
-    from mmml.interfaces.pycharmmInterface import import_pycharmm as ipy
-    from mmml.interfaces.pycharmmInterface.mlpot.jax_mm_spoof import (
+    from karml.interfaces.pycharmmInterface import import_pycharmm as ipy
+    from karml.interfaces.pycharmmInterface.mlpot.jax_mm_spoof import (
         resolve_monomer_bonded_evaluator,
     )
 
@@ -62,7 +62,7 @@ def main() -> int:
 
     # Switching at the scan geometry. The dimer term is scaled by this; the arm
     # differencing assumes it is 1.0 at the fixed O-O of the scan.
-    from mmml.interfaces.pycharmmInterface.calculator_utils import ml_switch_simple
+    from karml.interfaces.pycharmmInterface.calculator_utils import ml_switch_simple
 
     com_a = R[:, :3].mean(axis=1)
     com_b = R[:, 3:].mean(axis=1)

@@ -39,7 +39,7 @@ try:
     from rich.table import Table
     from rich.text import Text
 except ImportError as exc:  # pragma: no cover - rich is a project dep
-    raise SystemExit("monitor_tv.py requires rich (install mmml deps)") from exc
+    raise SystemExit("monitor_tv.py requires rich (install karml deps)") from exc
 
 _ANSI = re.compile(r"\x1b\[[0-9;]*(?:[0-9;]*[A-Za-z])|\x1b\][^\x07]*(?:\x07|\x1b\\)")
 _GRMS_PRE_OK = re.compile(r"Pre-dynamics GRMS OK:\s*([0-9.]+)")
@@ -88,7 +88,7 @@ def _workflow_root() -> Path:
 
 def _resolve_config(path: str | None) -> Path:
     wf = _workflow_root()
-    raw = path or os.environ.get("MMML_WORKFLOW_CONFIG", "config.yaml")
+    raw = path or os.environ.get("KARML_WORKFLOW_CONFIG", "config.yaml")
     p = Path(raw)
     if not p.is_absolute():
         p = wf / p
@@ -650,7 +650,7 @@ def cmd_list(args: argparse.Namespace) -> int:
 
 def main() -> int:
     common = argparse.ArgumentParser(add_help=False)
-    common.add_argument("--config", help="workflow config (default: MMML_WORKFLOW_CONFIG)")
+    common.add_argument("--config", help="workflow config (default: KARML_WORKFLOW_CONFIG)")
     common.add_argument("--tags", nargs="*", help="explicit channel list")
     common.add_argument(
         "--include-done",

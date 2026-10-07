@@ -168,7 +168,7 @@ def scale_nonbonded_block(
 
 
 def _scale_maps(sidecar: str | Path) -> tuple[dict[str, float], dict[str, float]]:
-    from mmml.models.mm_lj_scales import load_mm_lj_scales_sidecar
+    from karml.models.mm_lj_scales import load_mm_lj_scales_sidecar
 
     payload = load_mm_lj_scales_sidecar(Path(sidecar))
     if payload is None:
@@ -189,7 +189,7 @@ def default_parameter_files() -> list[Path]:
     receive trained scales. Rewriting only ``par_all36_cgenff.prm`` would deploy
     those types **unscaled** while appearing to succeed.
     """
-    from mmml.data.cgenff_dataset import DEF_PRM_PATH, DEF_EXTRA_TOPPAR
+    from karml.data.cgenff_dataset import DEF_PRM_PATH, DEF_EXTRA_TOPPAR
 
     return [Path(DEF_PRM_PATH), *(Path(p) for p in DEF_EXTRA_TOPPAR)]
 
@@ -284,7 +284,7 @@ def deploy_scaled_lj_into_charmm(
     import hashlib
     import tempfile
 
-    from mmml.interfaces.pycharmmInterface.nbonds_config import read_cgenff_prm
+    from karml.interfaces.pycharmmInterface.nbonds_config import read_cgenff_prm
 
     fingerprint = hashlib.sha256(
         Path(sidecar).read_bytes() + f"|scale_14={bool(scale_14)}".encode()
@@ -308,7 +308,7 @@ def deploy_scaled_lj_into_charmm(
         )
 
     if out_dir is None:
-        out_dir = Path(tempfile.mkdtemp(prefix="mmml-scaled-lj-"))
+        out_dir = Path(tempfile.mkdtemp(prefix="karml-scaled-lj-"))
     results = write_scaled_cgenff_prm(
         sidecar, out_dir, scale_14=scale_14, overwrite=True
     )

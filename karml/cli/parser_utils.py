@@ -1,4 +1,4 @@
-"""Lazy ``build_parser()`` loading for MMML subcommands."""
+"""Lazy ``build_parser()`` loading for KARML subcommands."""
 
 from __future__ import annotations
 
@@ -8,13 +8,13 @@ import importlib
 import importlib.util
 from pathlib import Path
 
-from mmml.cli.registry import COMMAND_REGISTRY, command_by_name
+from karml.cli.registry import COMMAND_REGISTRY, command_by_name
 
 
 def _module_defines_build_parser(module_path: str) -> bool:
-    """Fast static check (no import) — used by ``mmml commands --audit``."""
+    """Fast static check (no import) — used by ``karml commands --audit``."""
     try:
-        if module_path == "mmml" or module_path.startswith("mmml."):
+        if module_path == "karml" or module_path.startswith("karml."):
             package_root = Path(__file__).resolve().parents[1]
             relative = module_path.split(".")[1:]
             module_file = package_root.joinpath(*relative).with_suffix(".py")
@@ -46,7 +46,7 @@ def _import_parser_builder(module_path: str):
 
 
 def get_subcommand_parser(command: str) -> argparse.ArgumentParser | None:
-    """Return an ``ArgumentParser`` for ``mmml <command>`` (completion / introspection)."""
+    """Return an ``ArgumentParser`` for ``karml <command>`` (completion / introspection)."""
     spec = command_by_name(command)
     if spec is None:
         return None
@@ -61,7 +61,7 @@ def get_subcommand_parser(command: str) -> argparse.ArgumentParser | None:
 
 
 def parser_available(command: str, *, import_module: bool = False) -> bool:
-    """Return True when ``mmml <command> --help`` is wired via ``build_parser()``."""
+    """Return True when ``karml <command> --help`` is wired via ``build_parser()``."""
     spec = command_by_name(command)
     if spec is None:
         return False

@@ -10,19 +10,19 @@ from pathlib import Path
 
 import numpy as np
 
-from mmml.umbrella.config import UmbrellaConfig
-from mmml.umbrella.energy import (
+from karml.umbrella.config import UmbrellaConfig
+from karml.umbrella.energy import (
     build_packed_graph,
     make_packed_energy_fn,
 )
-from mmml.umbrella.io import (
+from karml.umbrella.io import (
     BIN_MINIMA_TRAJ,
     SNAPSHOTS_NPZ,
     SUMMARY_JSON,
     save_snapshots,
     write_summary,
 )
-from mmml.umbrella.structure import (
+from karml.umbrella.structure import (
     load_structure,
     load_structure_frames,
     pack_window_seeds,
@@ -124,7 +124,7 @@ def _schedule_targets_ks(sched):
 def run_umbrella_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
     """Run umbrella sampling (packed pure-ML or hybrid mechanical embedding)."""
     if cfg.engine == "hybrid_jaxmd":
-        from mmml.umbrella.hybrid import run_umbrella_hybrid_nvt
+        from karml.umbrella.hybrid import run_umbrella_hybrid_nvt
 
         return run_umbrella_hybrid_nvt(cfg)
 
@@ -134,7 +134,7 @@ def run_umbrella_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
     from ase.io import write
     from jax_md import quantity, simulate, space, units
 
-    from mmml.umbrella.checkpoint import load_params_and_model
+    from karml.umbrella.checkpoint import load_params_and_model
 
     jax.config.update("jax_enable_x64", True)
 
@@ -257,11 +257,11 @@ def run_umbrella_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
     savefreq = cfg.effective_savefreq()
     # Periodic partial dump of the trajectory so progress is visible while the
     # run is still going. Costs one compressed write per `live_every` saved
-    # frames; set MMML_UMBRELLA_LIVE_EVERY=0 to disable.
-    live_every = int(os.environ.get("MMML_UMBRELLA_LIVE_EVERY", "10"))
+    # frames; set KARML_UMBRELLA_LIVE_EVERY=0 to disable.
+    live_every = int(os.environ.get("KARML_UMBRELLA_LIVE_EVERY", "10"))
     live_path = Path(cfg.output_dir) / "umbrella_live.npz"
     # Recover from a single-window blow-up rather than losing the whole run.
-    recover_windows = os.environ.get("MMML_UMBRELLA_RECOVER", "1") not in ("0", "")
+    recover_windows = os.environ.get("KARML_UMBRELLA_RECOVER", "1") not in ("0", "")
     if recover_windows and bool(cfg.replica_exchange):
         # Measured the hard way: with REX on, a reset window resumes near
         # whatever region blew it up, replica exchange then swaps that
@@ -278,7 +278,7 @@ def run_umbrella_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
             "reset window's configuration propagates to its neighbours and "
             "corrupts the ladder silently. Either drop --replica-exchange "
             "(windows are then independent and recovery is local and correct) "
-            "or set MMML_UMBRELLA_RECOVER=0 to abort on the first spike."
+            "or set KARML_UMBRELLA_RECOVER=0 to abort on the first spike."
         )
     reset_counts = [0] * int(np.prod(sched.grid_shape))
     # A window that has to be reset more than a handful of times is not
@@ -287,7 +287,7 @@ def run_umbrella_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
     # times in one run while the other 27 sampled cleanly for 55 ps. Retrying
     # such a window forever fills it with garbage; the honest outcome is to mark
     # it failed so downstream analysis drops it.
-    max_resets = int(os.environ.get("MMML_UMBRELLA_MAX_RESETS", "5"))
+    max_resets = int(os.environ.get("KARML_UMBRELLA_MAX_RESETS", "5"))
     failed_windows: set[int] = set()
     last_good = None
     recover_rng = np.random.default_rng(int(cfg.seed) + 991)
@@ -371,7 +371,7 @@ def run_umbrella_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
     rex_phase = 0
     rex_rng = None
     if cfg.replica_exchange:
-        from mmml.umbrella.rex import RexStats
+        from karml.umbrella.rex import RexStats
 
         if k_windows < 2:
             raise ValueError("replica exchange requires at least 2 windows")
@@ -390,7 +390,7 @@ def run_umbrella_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
             and step % int(cfg.rex_freq) == 0
         ):
 
-            from mmml.umbrella.rex import attempt_replica_exchanges
+            from karml.umbrella.rex import attempt_replica_exchanges
 
             cv_now = _cv_frame(state.position)
             force_arr = getattr(state, "force", None)
@@ -559,7 +559,7 @@ def run_umbrella_nvt(cfg: UmbrellaConfig) -> UmbrellaResult:
                         f"(limit {t_abort:.0f} K; hottest {cv}). "
                         "Packed Nose-Hoover couples replicas — prefer Langevin; "
                         "soften --k/--ky or remove that grid corner. "
-                        "Set MMML_UMBRELLA_RECOVER=1 to reset the offending "
+                        "Set KARML_UMBRELLA_RECOVER=1 to reset the offending "
                         "window and continue instead of aborting."
                     )
             print(

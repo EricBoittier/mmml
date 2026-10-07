@@ -1,7 +1,7 @@
 # NH₃–CH₃Cl PhysNet example (`examples/m`)
 
 Checkpoint and filtered dataset from commit
-[`30eb7a01f7fcf1d42a795f188526a80e547110fd`](https://github.com/EricBoittier/mmml/commit/30eb7a01f7fcf1d42a795f188526a80e547110fd):
+[`30eb7a01f7fcf1d42a795f188526a80e547110fd`](https://github.com/EricBoittier/karml/commit/30eb7a01f7fcf1d42a795f188526a80e547110fd):
 
 | File | Role |
 |------|------|
@@ -16,40 +16,40 @@ Docs report (after running the pipeline):
 ## Environment
 
 ```bash
-cd /path/to/mmml
+cd /path/to/karml
 source examples/m/_env.sh
 ```
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `MMML_EXAMPLE_DEVICE` | `cpu` | `cpu` or `gpu`; sets `JAX_PLATFORMS` + `MMML_MLPOT_DEVICE` |
-| `MMML_CKPT` | `examples/m/model_ext.json` | Checkpoint (evaluate + MD) |
-| `MMML_DATA` | `examples/m/nh3_ch3cl_filtered.npz` | Eval NPZ |
-| `MMML_CGENFF_EXTRA_RTF` | `examples/m/top_ch3cl.rtf` | Enables `CH3CL` in compositions |
-| `MMML_CGENFF_EXTRA_PRM` | `examples/m/par_ch3cl.prm` | Bonded params for append `CH3CL` |
+| `KARML_EXAMPLE_DEVICE` | `cpu` | `cpu` or `gpu`; sets `JAX_PLATFORMS` + `KARML_MLPOT_DEVICE` |
+| `KARML_CKPT` | `examples/m/model_ext.json` | Checkpoint (evaluate + MD) |
+| `KARML_DATA` | `examples/m/nh3_ch3cl_filtered.npz` | Eval NPZ |
+| `KARML_CGENFF_EXTRA_RTF` | `examples/m/top_ch3cl.rtf` | Enables `CH3CL` in compositions |
+| `KARML_CGENFF_EXTRA_PRM` | `examples/m/par_ch3cl.prm` | Bonded params for append `CH3CL` |
 | `ARTIFACTS_DIR` | `artifacts/nh3_ch3cl` | Outputs |
 
 These examples run on **CPU by default** so results do not depend on which node
 they land on. To use the GPUs:
 
 ```bash
-MMML_EXAMPLE_DEVICE=gpu bash examples/m/run_all.sh
+KARML_EXAMPLE_DEVICE=gpu bash examples/m/run_all.sh
 ```
 
 Each script prints the resolved device, checkpoint and dataset once per run, so
-an `MMML_CKPT` left in a login profile — or a GPU request that silently fell
+an `KARML_CKPT` left in a login profile — or a GPU request that silently fell
 back to CPU — is visible before any compute starts. A GPU request additionally
 probes `jax.default_backend()` and warns when no CUDA build is installed
 (`uv sync --extra gpu`; RTX 50xx / Blackwell needs the cuda13 build). Skip that
-probe with `MMML_EXAMPLE_SKIP_DEVICE_PROBE=1`.
+probe with `KARML_EXAMPLE_SKIP_DEVICE_PROBE=1`.
 
-Device precedence: an explicitly set `MMML_EXAMPLE_DEVICE` wins over an inherited
-`JAX_PLATFORMS` / `MMML_MLPOT_DEVICE` that implies a *different* device, and the
+Device precedence: an explicitly set `KARML_EXAMPLE_DEVICE` wins over an inherited
+`JAX_PLATFORMS` / `KARML_MLPOT_DEVICE` that implies a *different* device, and the
 banner names what it overrode — a stale `export JAX_PLATFORMS=cpu` in a login
 profile must not silently downgrade a run that asked for the GPUs. Setting only
-`JAX_PLATFORMS` / `MMML_MLPOT_DEVICE` (without `MMML_EXAMPLE_DEVICE`) still works
+`JAX_PLATFORMS` / `KARML_MLPOT_DEVICE` (without `KARML_EXAMPLE_DEVICE`) still works
 as a per-variable override, and an inherited value that *agrees* with the request
-is kept verbatim, so `MMML_EXAMPLE_DEVICE=gpu JAX_PLATFORMS=cuda,cpu` keeps its
+is kept verbatim, so `KARML_EXAMPLE_DEVICE=gpu JAX_PLATFORMS=cuda,cpu` keeps its
 CPU fallback.
 
 ## Quick run (full report)
@@ -60,7 +60,7 @@ bash examples/m/run_all.sh
 
 Steps:
 
-1. `01_evaluate.sh` — `mmml physnet-evaluate --plots`
+1. `01_evaluate.sh` — `karml physnet-evaluate --plots`
 2. `run_md_smokes.sh` — free-space NVE/NVT
 3. `02_figures_and_report.py` — house-style figures + MkDocs page
 
@@ -101,12 +101,12 @@ Use `--traj-interval N` to thin frames (default every step).
 
 ```bash
 source examples/m/_env.sh
-uv run mmml md-system --config examples/m/yaml/free_nve_ase.yaml
-uv run mmml md-system --config examples/m/yaml/free_nve_jaxmd.yaml
-uv run mmml md-system --config examples/m/yaml/free_nve_pycharmm.yaml
-uv run mmml md-system --config examples/m/yaml/free_nvt_ase.yaml
-uv run mmml md-system --config examples/m/yaml/free_nvt_jaxmd.yaml
-uv run mmml md-system --config examples/m/yaml/free_nvt_pycharmm.yaml
+uv run karml md-system --config examples/m/yaml/free_nve_ase.yaml
+uv run karml md-system --config examples/m/yaml/free_nve_jaxmd.yaml
+uv run karml md-system --config examples/m/yaml/free_nve_pycharmm.yaml
+uv run karml md-system --config examples/m/yaml/free_nvt_ase.yaml
+uv run karml md-system --config examples/m/yaml/free_nvt_jaxmd.yaml
+uv run karml md-system --config examples/m/yaml/free_nvt_pycharmm.yaml
 ```
 
 Skip CHARMM-backed legs: `RUN_MD_SYSTEM=0 bash examples/m/run_md_smokes.sh`  
@@ -115,7 +115,7 @@ or `RUN_PYCHARMM=0` to keep ASE/JAX-MD `md-system` only when PyCHARMM is present
 ### Solvated boxes (`make-box`) + mechanical embedding
 
 Export a CGenFF-named solute PDB from the NPZ, then solvate with
-`mmml make-box` in **ACN**, **TIP3**, and **DMSO** (default **30 Å** cube):
+`karml make-box` in **ACN**, **TIP3**, and **DMSO** (default **30 Å** cube):
 
 ```bash
 source examples/m/_env.sh
@@ -134,8 +134,8 @@ Outputs: `artifacts/nh3_ch3cl/boxes/{acn,tip3,dmso}/model.{pdb,psf}` + `box.json
 bash examples/m/run_sol_tip3_30A.sh
 
 # Or stepwise after 08_make_boxes.sh:
-uv run mmml md-system --config examples/m/yaml/sol_tip3_30A_md.yaml
-uv run mmml md-system --config examples/m/yaml/mech_embed_from_box_tip3.yaml --run-all
+uv run karml md-system --config examples/m/yaml/sol_tip3_30A_md.yaml
+uv run karml md-system --config examples/m/yaml/mech_embed_from_box_tip3.yaml --run-all
 ```
 
 **Mechanical embedding** = ML on the AMM1+CH3CL complex once
@@ -146,7 +146,7 @@ shared `mol_id`). Not ML–MM electrostatic embedding.
 
 | Backend | Config |
 |---------|--------|
-| `jaxmd` + `jaxmd_unified: true` + `ml_resnames` | Shared `mmml.md` (`ml_intra` on solute complex + `mm_nonbonded`) |
+| `jaxmd` + `jaxmd_unified: true` + `ml_resnames` | Shared `karml.md` (`ml_intra` on solute complex + `mm_nonbonded`) |
 | `ase` / `pycharmm` | Hybrid calculator with `include_mm: true` |
 
 Composition campaigns (Packmol inside `md-system`; no make-box required).
@@ -154,17 +154,17 @@ Default **30 Å** PBC cube; solvent counts are smoke-sparse (`TIP3:12`, etc.) �
 use the make-box path with `USE_DENSITY=1` for production-like filling.
 
 ```bash
-uv run mmml md-system --config examples/m/yaml/mech_embed_tip3.yaml --run-all
-uv run mmml md-system --config examples/m/yaml/mech_embed_acn.yaml --run-all
-uv run mmml md-system --config examples/m/yaml/mech_embed_dmso.yaml --run-all
+uv run karml md-system --config examples/m/yaml/mech_embed_tip3.yaml --run-all
+uv run karml md-system --config examples/m/yaml/mech_embed_acn.yaml --run-all
+uv run karml md-system --config examples/m/yaml/mech_embed_dmso.yaml --run-all
 ```
 
 From make-box PDBs (after `08_make_boxes.sh`):
 
 ```bash
-uv run mmml md-system --config examples/m/yaml/mech_embed_from_box_tip3.yaml --run-all
-uv run mmml md-system --config examples/m/yaml/mech_embed_from_box_acn.yaml --run-all
-uv run mmml md-system --config examples/m/yaml/mech_embed_from_box_dmso.yaml --run-all
+uv run karml md-system --config examples/m/yaml/mech_embed_from_box_tip3.yaml --run-all
+uv run karml md-system --config examples/m/yaml/mech_embed_from_box_acn.yaml --run-all
+uv run karml md-system --config examples/m/yaml/mech_embed_from_box_dmso.yaml --run-all
 ```
 
 One-shot: `bash examples/m/run_mech_embed_smokes.sh`  
@@ -184,8 +184,8 @@ analogue). `kl.json` has `charges: true`.
 | `yaml/es_embed_from_box_tip3.yaml` | `q0` from make-box PDB | after `08_make_boxes.sh` |
 
 ```bash
-uv run mmml md-system --config examples/m/yaml/es_embed_tip3.yaml --run-all
-uv run mmml md-system --config examples/m/yaml/es_embed_dimer_latent.yaml --run-all
+uv run karml md-system --config examples/m/yaml/es_embed_tip3.yaml --run-all
+uv run karml md-system --config examples/m/yaml/es_embed_dimer_latent.yaml --run-all
 bash examples/m/run_es_embed_smokes.sh
 ```
 
@@ -215,7 +215,7 @@ Full matrix on TIP3 (`yaml/ewald_all_tip3.yaml`); ACN/DMSO subsets in
 bash examples/m/run_ewald_smokes.sh
 
 # One job:
-uv run mmml md-system --config examples/m/yaml/ewald_all_tip3.yaml --job-id ewald_pycharmm
+uv run karml md-system --config examples/m/yaml/ewald_all_tip3.yaml --job-id ewald_pycharmm
 ```
 
 Set `SCAFACOS_LIB=/path/to/libfcs.so` for the ScaFaCoS leg. Optional:
@@ -233,7 +233,7 @@ uv run python examples/m/07_export_neb_endpoints.py
 
 | Method | Gas phase | Explicit solvent (TIP3 / ACN / DMSO) |
 |--------|-----------|----------------------------------------|
-| **`mmml umbrella-sample`** | `engine: packed_ml` — batched all-ML NVT | `engine: hybrid_jaxmd` — ML reactive complex + MM solvent ([`yaml/umbrella_nc_tip3.yaml`](yaml/umbrella_nc_tip3.yaml), `14_umbrella_sample_sol.sh`) |
+| **`karml umbrella-sample`** | `engine: packed_ml` — batched all-ML NVT | `engine: hybrid_jaxmd` — ML reactive complex + MM solvent ([`yaml/umbrella_nc_tip3.yaml`](yaml/umbrella_nc_tip3.yaml), `14_umbrella_sample_sol.sh`) |
 | **ADUMB** (PyCHARMM adaptive umbrella) | `yaml/adumb_nc_distance.yaml`, `09_adumb_nc_distance.sh` | `yaml/adumb_nc_distance_{tip3,acn,dmso}.yaml` (`ml_resnames: [AMM1, CH3CL]`, `periodic_external` + `ewald`); `SOLVATED=1 SOLVENT=tip3 bash examples/m/09_adumb_nc_distance.sh` |
 | **NEB** (ASE nudged elastic band) | `yaml/neb.yaml`, `13_neb.sh` | Gas-phase path only (same endpoints) |
 | **DMC** (Diffusion Monte Carlo) | `15_dmc_basins.sh` on react/product XYZ | Gas-phase basins only (same endpoints) |
@@ -248,7 +248,7 @@ bash examples/m/run_reaction_path_smokes.sh
 **Studix GPU campaign** (seeds × temperatures × solvents, checkpoint
 `model_ext.json`): [`workflows/nh3_ch3cl_reaction_path/`](../../workflows/nh3_ch3cl_reaction_path/).
 
-### Fixed-bias umbrella (`mmml umbrella-sample`)
+### Fixed-bias umbrella (`karml umbrella-sample`)
 
 **Gas (`engine: packed_ml`)** — batched distance umbrella with PhysNet + JAX-MD
 Langevin NVT. Atom order: `Cl, N, C, H×3(N), H×3(C)` (same as NEB endpoints).
@@ -257,11 +257,11 @@ Langevin NVT. Atom order: `Cl, N, C, H×3(N), H×3(C)` (same as NEB endpoints).
 source examples/m/_env.sh
 bash examples/m/14_umbrella_sample_gas.sh
 # or:
-uv run mmml umbrella-sample --config examples/m/yaml/umbrella_nc_gas.yaml --overwrite
+uv run karml umbrella-sample --config examples/m/yaml/umbrella_nc_gas.yaml --overwrite
 # 2D Cl–C × N–C grid:
-uv run mmml umbrella-sample --config examples/m/yaml/umbrella_clc_cn_2d_gas.yaml --overwrite
+uv run karml umbrella-sample --config examples/m/yaml/umbrella_clc_cn_2d_gas.yaml --overwrite
 # MBAR post-processing:
-uv run mmml umbrella-mbar --run-dir artifacts/nh3_ch3cl/umbrella_nc_gas
+uv run karml umbrella-mbar --run-dir artifacts/nh3_ch3cl/umbrella_nc_gas
 ```
 
 **Solution (`engine: hybrid_jaxmd`)** — mechanical embedding: ML on the reactive
@@ -272,8 +272,8 @@ AMM1+CH3CL complex only; TIP3 (or other) solvent as MM. Per-window
 source examples/m/_env.sh
 bash examples/m/14_umbrella_sample_sol.sh
 # or after 08_make_boxes.sh:
-uv run mmml umbrella-sample --config examples/m/yaml/umbrella_nc_tip3.yaml --overwrite
-uv run mmml umbrella-mbar --run-dir artifacts/nh3_ch3cl/umbrella_nc_tip3
+uv run karml umbrella-sample --config examples/m/yaml/umbrella_nc_tip3.yaml --overwrite
+uv run karml umbrella-mbar --run-dir artifacts/nh3_ch3cl/umbrella_nc_tip3
 ```
 
 **Production (dense TIP3, 30 windows × 20 ps):** after
@@ -282,7 +282,7 @@ uv run mmml umbrella-mbar --run-dir artifacts/nh3_ch3cl/umbrella_nc_tip3
 ```bash
 bash examples/m/14_umbrella_sample_sol_prod.sh
 # optional: TIMESTEP_FS=0.25 NSTEPS=80000 bash examples/m/14_umbrella_sample_sol_prod.sh
-uv run mmml umbrella-mbar --run-dir artifacts/nh3_ch3cl/umbrella_nc_tip3_prod
+uv run karml umbrella-mbar --run-dir artifacts/nh3_ch3cl/umbrella_nc_tip3_prod
 ```
 
 Writes `umbrella_snapshots.npz` (includes `energies_unbiased_ev` +
@@ -298,7 +298,7 @@ source examples/m/_env.sh
 # Smoke (11 images):
 bash examples/m/13_neb.sh
 # Or via YAML:
-uv run mmml neb --config examples/m/yaml/neb.yaml --overwrite
+uv run karml neb --config examples/m/yaml/neb.yaml --overwrite
 # Dense band (~Asparagus 99-image setup):
 N_IMAGES=99 bash examples/m/13_neb.sh
 ```
@@ -308,7 +308,7 @@ Profile columns: reaction coordinate (Å), ΔE (kcal/mol), N–C and Cl–C dist
 
 Docs: [`docs/neb.md`](../../docs/neb.md).
 
-**Solvent NEB** is not wired yet (`mmml neb` is ASE + all-ML vacuum). For
+**Solvent NEB** is not wired yet (`karml neb` is ASE + all-ML vacuum). For
 solution free-energy profiles use the hybrid umbrella / ADUMB paths above
 (mechanical embedding on the make-box cell). A solvated NEB would need a
 hybrid ASE calculator (ML solute + MM solvent) and a policy for solvent DOFs
@@ -317,7 +317,7 @@ hybrid ASE calculator (ML solute + MM solvent) and a policy for solvent DOFs
 ### DMC (reactant / product basins)
 
 Vibrational ground-state estimates at the exported basin geometries (gas phase,
-9 atoms). Requires N and Cl support in `mmml dmc` (included in this repo).
+9 atoms). Requires N and Cl support in `karml dmc` (included in this repo).
 
 ```bash
 source examples/m/_env.sh
@@ -345,7 +345,7 @@ RXNCOR + `umbrella rxncor` (same ADUMB path as
 Requires CHARMM built with **ADUMB** and **ADUMBRXNCOR** (`?ADUMBRXN == 1`).
 `scripts/rebuild_charmm_mlpot.sh` adds that pref keyword by default. Without it,
 `umbrella rxncor` prints `Unknown umbrella specified` and heat often SIGSEGVs.
-The 1D difference window uses `min -3 max 3` — rebuild with the mmml `UM1RXN`
+The 1D difference window uses `min -3 max 3` — rebuild with the karml `UM1RXN`
 patch in `eadumb.F90` and point `CHARMM_LIB_DIR` at that install (not a stale
 PhysNet lib). RXNCOR **NAME** tokens for ADUMB are at most **4 characters**
 (`rdif`, `rcl`, `rcn`).

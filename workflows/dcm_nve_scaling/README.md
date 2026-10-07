@@ -11,9 +11,9 @@ Sibling to [dcm5_md_benchmark](../dcm5_md_benchmark/) (fixed DCM:5, multi-backen
 
 ## Prerequisites
 
-- `export MMML_CKPT=/path/to/dcm_physnet_ckpt`
-- GPU JAX (`uv sync --extra gpu`) **or** an activated conda/micromamba env with `jax` + `mmml` installed
-- Optional: `export MMML_PYTHON=/path/to/python` if Snakemake does not inherit your env (workflow scripts prefer `$CONDA_PREFIX/bin/python` over bare `python3` on PATH)
+- `export KARML_CKPT=/path/to/dcm_physnet_ckpt`
+- GPU JAX (`uv sync --extra gpu`) **or** an activated conda/micromamba env with `jax` + `karml` installed
+- Optional: `export KARML_PYTHON=/path/to/python` if Snakemake does not inherit your env (workflow scripts prefer `$CONDA_PREFIX/bin/python` over bare `python3` on PATH)
 - OpenMPI + rebuilt `libcharmm.so` for large clusters if you extend beyond N=10
 - `packmol` on PATH
 - `snakemake`
@@ -34,12 +34,12 @@ From [config.yaml](config.yaml):
 - `no_echeck: true` for the 0.5 ps NVE leg (in-run echeck stops ML USER clusters within ~1k steps; `run_job.py` still validates DCD length)
 - `save_forces_npz: true`, `forces_npz_interval: 1`
 - Packmol sphere `R = 18 * (N/60)^(1/3)` Å
-- **Free-space ML dimers:** `max_active_dimers = N(N−1)/2` (every unique pair evaluated each step; not the PBC density-aware cap with `max(4005, 6N)` floor). Unset `MMML_MLPOT_MAX_ACTIVE_DIMERS` unless you intentionally override this.
+- **Free-space ML dimers:** `max_active_dimers = N(N−1)/2` (every unique pair evaluated each step; not the PBC density-aware cap with `max(4005, 6N)` floor). Unset `KARML_MLPOT_MAX_ACTIVE_DIMERS` unless you intentionally override this.
 
 ## Run
 
 ```bash
-export MMML_CKPT=/path/to/your/dcm_ckpt
+export KARML_CKPT=/path/to/your/dcm_ckpt
 cd workflows/dcm_nve_scaling
 bash scripts/preflight.sh
 snakemake -n

@@ -12,8 +12,8 @@
 # Measure --ml-potential-mode bonded_intra on the O-H scan, replacing the
 # arithmetic in docs/hybrid-bonded-intra.md with a real curve.
 #
-# Runs from a synced copy of the feature branch ($HOME/mmml_bonded) on PYTHONPATH,
-# borrowing $HOME/mmml_npt's venv and artifacts -- mmml_npt is on main and has no
+# Runs from a synced copy of the feature branch ($HOME/karml_bonded) on PYTHONPATH,
+# borrowing $HOME/karml_npt's venv and artifacts -- karml_npt is on main and has no
 # bonded_intra. PYTHONPATH must win over the editable install or the old tree is
 # silently imported instead.
 #
@@ -29,14 +29,14 @@
 #        this mode does NOT fix. Both predictions are under test.
 set -uo pipefail
 
-SRC="${MMML_SRC:-$HOME/mmml_bonded}"
-REPO="${MMML_REPO:-$HOME/mmml_npt}"
-export MMML_SCICORE_CMAKE="${MMML_SCICORE_CMAKE:-CMake/3.31.8-GCCcore-14.3.0}"
-export MMML_SCICORE_TOOLCHAIN="${MMML_SCICORE_TOOLCHAIN:-foss/2025a}"
+SRC="${KARML_SRC:-$HOME/karml_bonded}"
+REPO="${KARML_REPO:-$HOME/karml_npt}"
+export KARML_SCICORE_CMAKE="${KARML_SCICORE_CMAKE:-CMake/3.31.8-GCCcore-14.3.0}"
+export KARML_SCICORE_TOOLCHAIN="${KARML_SCICORE_TOOLCHAIN:-foss/2025a}"
 # shellcheck disable=SC1091
 source "$REPO/scripts/scicore_env.sh"
-if [[ ! -f "$REPO/setup/charmm/libcharmm.so" && -f "$HOME/mmml/setup/charmm/libcharmm.so" ]]; then
-  export CHARMM_LIB_DIR="$HOME/mmml/setup/charmm" CHARMM_HOME="$HOME/mmml/setup/charmm"
+if [[ ! -f "$REPO/setup/charmm/libcharmm.so" && -f "$HOME/karml/setup/charmm/libcharmm.so" ]]; then
+  export CHARMM_LIB_DIR="$HOME/karml/setup/charmm" CHARMM_HOME="$HOME/karml/setup/charmm"
 fi
 source "$REPO/.venv/bin/activate"
 # cd into the SOURCE tree, not the artifact repo: python puts the cwd at
@@ -56,17 +56,17 @@ NPZ="$OUT_ROOT/intramolecular_scan.npz"
 [[ -f "$PSF" ]] || { echo "missing $PSF" >&2; exit 2; }
 
 # Prove the branch under test is the one being imported. Grep the printed path
-# rather than trusting the exit status: importing mmml pulls in pycharmm, whose
+# rather than trusting the exit status: importing karml pulls in pycharmm, whose
 # Fortran STOP overwrites the status with 0 at teardown, so a `|| exit` guard
 # here silently passes even when the assert fires. That is how the first run of
 # this job reached srun against the old tree.
 python -c "
-import mmml.cli.run.md_system as ms
-print('MMML_IMPORTED_FROM', ms.__file__)
+import karml.cli.run.md_system as ms
+print('KARML_IMPORTED_FROM', ms.__file__)
 print('HAS_BONDED_INTRA', any(a.dest == 'ml_potential_mode' for a in ms.build_parser()._actions))
 " 2>&1 | tee "$OUT_ROOT/import_check_${SLURM_ARRAY_TASK_ID:-0}.txt"
 grep -q "HAS_BONDED_INTRA True" "$OUT_ROOT/import_check_${SLURM_ARRAY_TASK_ID:-0}.txt" || {
-  echo "ABORT: imported tree has no --ml-potential-mode"; grep MMML_IMPORTED_FROM "$OUT_ROOT/import_check_${SLURM_ARRAY_TASK_ID:-0}.txt"; exit 3; }
+  echo "ABORT: imported tree has no --ml-potential-mode"; grep KARML_IMPORTED_FROM "$OUT_ROOT/import_check_${SLURM_ARRAY_TASK_ID:-0}.txt"; exit 3; }
 
 ARMS=("bonded_only" "bonded_full")
 IDX="${SLURM_ARRAY_TASK_ID:-0}"
@@ -92,7 +92,7 @@ nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -1
 scale_flags=()
 [[ -f "$SCALES" ]] && scale_flags=(--mm-lj-scales-file "$SCALES")
 
-python -m mmml.cli md-system \
+python -m karml.cli md-system \
   --backend jaxmd --setup pbc_nve \
   --composition "TIP3:2" \
   --box-size 30.0 \

@@ -7,9 +7,9 @@ from typing import Optional, Sequence, Union
 
 import numpy as np
 
-from mmml.interfaces.pycharmmInterface.calculator_utils import dimer_permutations
-from mmml.interfaces.pycharmmInterface.cutoffs import DEFAULT_MM_SWITCH_ON
-from mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domain import (
+from karml.interfaces.pycharmmInterface.calculator_utils import dimer_permutations
+from karml.interfaces.pycharmmInterface.cutoffs import DEFAULT_MM_SWITCH_ON
+from karml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domain import (
     SpatialDomainGrid,
     compute_monomer_coms,
     dimer_com_mic,
@@ -153,7 +153,7 @@ def build_all_rank_active_sets(
     mm_switch_on: float = DEFAULT_MM_SWITCH_ON,
 ) -> list[RankActiveSet]:
     """Build per-rank active sets with canonical dimer ownership."""
-    from mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.dedup import (
+    from karml.interfaces.pycharmmInterface.mlpot.mpi_spatial.dedup import (
         canonical_dimer_owner_ranks,
         deduplicate_rank_active_sets,
     )

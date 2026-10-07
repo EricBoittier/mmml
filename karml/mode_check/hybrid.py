@@ -165,17 +165,17 @@ def build_psf_and_attach_hybrid(
         raise ValueError(
             "mode-check vacuum hybrid has no PBC cell; lr_solver=ewald needs a box. "
             "Keep the default --lr-solver mic for vacuum FD/vib, or use "
-            "`mmml mode-check --pbc-fd --lr-solver ewald [--ewald-omit-self]`."
+            "`karml mode-check --pbc-fd --lr-solver ewald [--ewald-omit-self]`."
         )
 
-    from mmml.cli.base import resolve_checkpoint_paths
-    from mmml.cli.run.md_pbc_suite.ase import (
+    from karml.cli.base import resolve_checkpoint_paths
+    from karml.cli.run.md_pbc_suite.ase import (
         _build_cluster_psf_from_composition,
-        _factory_mmml,
+        _factory_karml,
         _residue_geometries_for_composition,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import write_charmm_psf
-    from mmml.interfaces.pycharmmInterface.nbonds_config import apply_vacuum_nbonds
+    from karml.interfaces.pycharmmInterface.mlpot.setup import write_charmm_psf
+    from karml.interfaces.pycharmmInterface.nbonds_config import apply_vacuum_nbonds
     import pycharmm.coor as coor
     import pandas as pd
 
@@ -240,7 +240,7 @@ def build_psf_and_attach_hybrid(
     else:
         atoms_per_arg = atoms_per_list
 
-    calc = _factory_mmml(
+    calc = _factory_karml(
         z=np.asarray(atoms.get_atomic_numbers(), dtype=int),
         r=atoms.get_positions(),
         n_mol=n_mol,

@@ -23,9 +23,9 @@ import pytest
 jax = pytest.importorskip("jax")
 import jax.numpy as jnp  # noqa: E402
 
-from mmml.md.energy import EnergyContext, available_terms  # noqa: E402
-from mmml.md.energy.terms import MLMMPolarisationTerm  # noqa: E402
-from mmml.md.system import FFParams, MolecularSystem  # noqa: E402
+from karml.md.energy import EnergyContext, available_terms  # noqa: E402
+from karml.md.energy.terms import MLMMPolarisationTerm  # noqa: E402
+from karml.md.system import FFParams, MolecularSystem  # noqa: E402
 
 ML_IDX = [0, 1]          # C, Cl -- the "solute"
 MM_IDX = [2, 3, 4]       # one water -- the "solvent"

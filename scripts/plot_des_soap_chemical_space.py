@@ -24,7 +24,7 @@ from sklearn.decomposition import PCA
 from sklearn.neighbors import NearestNeighbors
 from umap import UMAP
 
-from mmml.data.cgenff_dataset import (
+from karml.data.cgenff_dataset import (
     assign_frame_cgenff,
     find_covalent_components,
     format_composition,

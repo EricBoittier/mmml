@@ -4,7 +4,7 @@ import numpy as np
 from ase import Atoms
 from ase.calculators.calculator import Calculator
 
-from mmml.models.multipoles.electrostatics import (
+from karml.models.multipoles.electrostatics import (
     LearnedMolecularMultipoleElectrostatics,
 )
 

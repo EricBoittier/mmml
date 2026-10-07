@@ -10,8 +10,8 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import DecomposedMlpotCalculator
-from mmml.interfaces.pycharmmInterface.mlpot.ml_chunk_budget import MlChunkBudget, MlChunkLayout
+from karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import DecomposedMlpotCalculator
+from karml.interfaces.pycharmmInterface.mlpot.ml_chunk_budget import MlChunkBudget, MlChunkLayout
 
 # ETOH:181 in a 26 A box: 181 monomers + 4005 dimer slots in 17 x 256 chunks.
 LAYOUT = MlChunkLayout(n_monomers=181, max_active_dimers=4005, chunk_size=256, n_chunks=17)
@@ -53,7 +53,7 @@ def test_overflow_is_detected():
 
 
 def test_saturation_raises_instead_of_warning():
-    from mmml.interfaces.pycharmmInterface.mlpot.mlpot_sparse_dimer_policy import (
+    from karml.interfaces.pycharmmInterface.mlpot.mlpot_sparse_dimer_policy import (
         SparseDimerCapOverflow,
     )
 
@@ -71,7 +71,7 @@ def test_saturation_raises_instead_of_warning():
 
 
 def test_callback_raises_on_cap_overflow():
-    from mmml.interfaces.pycharmmInterface.mlpot.mlpot_sparse_dimer_policy import (
+    from karml.interfaces.pycharmmInterface.mlpot.mlpot_sparse_dimer_policy import (
         SparseDimerCapOverflow,
     )
 

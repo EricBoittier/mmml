@@ -3,18 +3,18 @@ import sys
 import numpy as np
 from pathlib import Path
 
-# Add mmml root to sys.path
+# Add karml root to sys.path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
     add_cluster_args,
     build_cluster_from_args_with_tag,
 )
-from mmml.interfaces.pycharmmInterface.cutoffs import add_handoff_cutoff_args
+from karml.interfaces.pycharmmInterface.cutoffs import add_handoff_cutoff_args
 
-import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+import karml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
 import pycharmm
 import pycharmm.energy as energy
 import pycharmm.coor as coor
@@ -30,14 +30,14 @@ def calculate_charmm_mm_energy_force():
     # Actually, in PyCHARMM, `pycharmm.lib.get_forces()` returns the forces?
     # Let's try `pycharmm.lingo.charmm_script("ENER")` and getting forces.
     
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_total_forces_kcalmol_A
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_total_forces_kcalmol_A
     
     force = charmm_total_forces_kcalmol_A()
     
     return e, np.asarray(force)
 
 def set_charmm_positions(pos):
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
+    from karml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
     sync_charmm_positions(pos)
 
 def fd_check(pos, step=1e-4):
@@ -84,9 +84,9 @@ def main():
 
     z, positions, n_monomers, tag = build_cluster_from_args_with_tag(args)
     
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import resolve_use_pbc, resolve_pbc_box_side
-    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import setup_charmm_environment
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import setup_default_nbonds
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import resolve_use_pbc, resolve_pbc_box_side
+    from karml.interfaces.pycharmmInterface.mlpot.pbc_env import setup_charmm_environment
+    from karml.interfaces.pycharmmInterface.mlpot.setup import setup_default_nbonds
     
     if not resolve_use_pbc(args):
         setup_default_nbonds()
@@ -94,7 +94,7 @@ def main():
         box_side = resolve_pbc_box_side(args, positions)
         setup_charmm_environment(use_pbc=True, cubic_box_side_A=box_side)
 
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
+    from karml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
     pos = np.asarray(get_charmm_positions_array(), dtype=np.float64)
     
     print(f"Testing CHARMM pure MM forces on {n_monomers} monomers ({len(z)} atoms)")

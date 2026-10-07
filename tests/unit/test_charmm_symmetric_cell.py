@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from mmml.interfaces.pycharmmInterface.crystal_cell import (
+from karml.interfaces.pycharmmInterface.crystal_cell import (
     CHARMM_ANGLE_RSMALL_DEG,
     cell_metric,
     charmm_symmetric_cell,

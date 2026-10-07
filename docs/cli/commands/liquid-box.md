@@ -1,4 +1,4 @@
-# `mmml liquid-box`
+# `karml liquid-box`
 
 Build/certify periodic liquid boxes (MM only).
 
@@ -6,13 +6,13 @@ Build/certify periodic liquid boxes (MM only).
 ## Usage
 
 ```bash
-mmml liquid-box --help
+karml liquid-box --help
 ```
 
 ## Options
 
 ```text
-usage: mmml liquid-box [-h] --composition COMPOSITION --output-dir OUTPUT_DIR
+usage: karml liquid-box [-h] --composition COMPOSITION --output-dir OUTPUT_DIR
                        [--profile {standard,dense,conservative}]
                        [--spacing SPACING] [--seed SEED]
                        [--temperature TEMPERATURE] [--dt-fs DT_FS]

@@ -12,14 +12,14 @@ import pytest
 jax = pytest.importorskip("jax")
 import jax.numpy as jnp  # noqa: E402
 
-from mmml.data.units import KCAL_MOL_TO_EV  # noqa: E402
-from mmml.md.energy import EnergyContext, available_terms  # noqa: E402
-from mmml.md.energy.terms import MMNonbondedTerm  # noqa: E402
-from mmml.md.system import FFParams, MolecularSystem  # noqa: E402
+from karml.data.units import KCAL_MOL_TO_EV  # noqa: E402
+from karml.md.energy import EnergyContext, available_terms  # noqa: E402
+from karml.md.energy.terms import MMNonbondedTerm  # noqa: E402
+from karml.md.system import FFParams, MolecularSystem  # noqa: E402
 
 
 def _system_and_ref():
-    from mmml.interfaces.pycharmmInterface.mm_system_energy import (
+    from karml.interfaces.pycharmmInterface.mm_system_energy import (
         CharmmNbondSettings,
         NonbondedSystemData,
     )
@@ -57,7 +57,7 @@ def _system_and_ref():
 
 
 def _reference_energy_eV(system, settings, nbdata):
-    from mmml.interfaces.pycharmmInterface.mm_system_energy import (
+    from karml.interfaces.pycharmmInterface.mm_system_energy import (
         nonbonded_energy_and_forces,
     )
 
@@ -202,7 +202,7 @@ def _ewald_system_and_ref(seed=7):
     jax_pme reference has no exclusions parameter at all -- see
     ewald_native.py's module docstring -- so this is the only apples-to-apples
     comparison available)."""
-    from mmml.interfaces.pycharmmInterface.mm_system_energy import (
+    from karml.interfaces.pycharmmInterface.mm_system_energy import (
         CharmmNbondSettings,
         NonbondedSystemData,
     )
@@ -239,7 +239,7 @@ def test_ewald_matches_jax_pme_reference():
     host path (nonbonded_energy_and_forces, lr_solver="jax_pme") to tight
     tolerance -- this is the actual physics check, not just "it runs"."""
     pytest.importorskip("jaxpme")
-    from mmml.interfaces.pycharmmInterface.mm_system_energy import (
+    from karml.interfaces.pycharmmInterface.mm_system_energy import (
         nonbonded_energy_and_forces,
     )
 

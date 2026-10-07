@@ -3,7 +3,7 @@
 
 User-run on a CHARMM node (not CI / agent sessions):
 
-  ./scripts/mmml-charmm-mpirun.sh python scripts/examples/charmm_build_protein_alad.py \\
+  ./scripts/karml-charmm-mpirun.sh python scripts/examples/charmm_build_protein_alad.py \\
     -o /tmp/alad_charmm
 
 Writes ``alad.pdb``, ``alad.psf``, and prints CHARMM total energy. Feed the artifacts
@@ -45,10 +45,10 @@ def _parse_args() -> argparse.Namespace:
 def main() -> int:
     args = _parse_args()
     try:
-        from mmml.interfaces.pycharmmInterface.import_pycharmm import ensure_pycharmm_loaded
+        from karml.interfaces.pycharmmInterface.import_pycharmm import ensure_pycharmm_loaded
 
         ensure_pycharmm_loaded()
-        from mmml.interfaces.pycharmmInterface.protein_charmm_build import (
+        from karml.interfaces.pycharmmInterface.protein_charmm_build import (
             charmm_total_energy_kcalmol,
             protein_toppar_paths,
             write_alad_artifacts,

@@ -63,7 +63,7 @@ if [[ -n "${RESTART:-}" ]]; then
   EXTRA+=(--restart "$RESTART")
 fi
 
-mmml efield-train \
+karml efield-train \
   --train-npz "$SPLITS/energies_forces_dipoles_train.npz" \
   --valid-npz "$SPLITS/energies_forces_dipoles_valid.npz" \
   --output-dir "$CKPT" \

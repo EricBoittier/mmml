@@ -1,10 +1,10 @@
 # Example: butane-like bond / angle / dihedral 1D + bond×dihedral 2D
 #
 # Run prepare-only (geometries for external QM/ML):
-#   mmml ic-scan --config examples/ic_scan/butane_like.yaml --prepare-only --output artifacts/ic_butane_prep
+#   karml ic-scan --config examples/ic_scan/butane_like.yaml --prepare-only --output artifacts/ic_butane_prep
 #
 # Or evaluate in-process with xTB:
-#   mmml ic-scan --config examples/ic_scan/butane_like.yaml --output artifacts/ic_butane_xtb --overwrite
+#   karml ic-scan --config examples/ic_scan/butane_like.yaml --output artifacts/ic_butane_xtb --overwrite
 
 structure: butane_like.xyz
 calculator: xtb

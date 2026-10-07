@@ -11,20 +11,20 @@
 #
 # Usage:
 #   cd ~/tests/boxes/domdec_dcm80_l82
-#   sbatch ~/mmml/scripts/slurm_probe_domdec.sh \
+#   sbatch ~/karml/scripts/slurm_probe_domdec.sh \
 #       --psf $PWD/model.psf --crd $PWD/model.crd --box 82 --ndir 8 --cutnb 10
 #
 # Or for the dense preset:
 #   cd ~/tests/boxes/domdec_dcm200_l50
-#   sbatch ~/mmml/scripts/slurm_probe_domdec.sh \
+#   sbatch ~/karml/scripts/slurm_probe_domdec.sh \
 #       --psf $PWD/model.psf --crd $PWD/model.crd --box 50 --ndir 8 --cutnb 6
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Activate mmml venv (adjust path if needed)
-source "${HOME}/mmml/.venv/bin/activate" 2>/dev/null || true
+# Activate karml venv (adjust path if needed)
+source "${HOME}/karml/.venv/bin/activate" 2>/dev/null || true
 
 echo "Host      : $(hostname)"
 echo "Date      : $(date)"

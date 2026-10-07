@@ -5,8 +5,8 @@
 # Do not use huge dilute boxes — molecules stay in the center and crystal build finds
 # zero images ("IMAGES NEED TO BE PRESENT").
 #
-# Default: MMML_MPI_NP=2; continued ENERGY line with domdec ndir 2 1 1.
-# Site c47 (/opt/charmm/c47*) rejects np=2; use a MMML native CHARMM executable instead.
+# Default: KARML_MPI_NP=2; continued ENERGY line with domdec ndir 2 1 1.
+# Site c47 (/opt/charmm/c47*) rejects np=2; use a KARML native CHARMM executable instead.
 #
 # Usage:
 #   ./scripts/run_domdec_dcm10_smoke.sh prep
@@ -15,11 +15,11 @@
 #   ./scripts/run_domdec_dcm10_smoke.sh all
 #
 # Environment overrides:
-#   MMML_ROOT=$HOME/mmml
+#   KARML_ROOT=$HOME/karml
 #   TESTS_ROOT=$HOME/tests
 #   N_DCM=10
 #   BOX_SIZE=40
-#   MMML_MPI_NP=2
+#   KARML_MPI_NP=2
 #   BOX_DIR=$TESTS_ROOT/boxes/domdec_dcm10_l40
 #   CHARMM_EXE=/path/to/charmm
 #   DOMDEC_C47_NDIR_RULE=auto|0|1
@@ -28,29 +28,29 @@
 set -euo pipefail
 
 PHASE="${1:-all}"
-MMML_ROOT="${MMML_ROOT:-$HOME/mmml}"
+KARML_ROOT="${KARML_ROOT:-$HOME/karml}"
 TESTS_ROOT="${TESTS_ROOT:-$HOME/tests}"
 N_DCM="${N_DCM:-10}"
 BOX_SIZE="${BOX_SIZE:-40}"
 BOX_DIR="${BOX_DIR:-}"
 PSF="${PSF:-}"
 CRD="${CRD:-}"
-MMML_MPI_NP="${MMML_MPI_NP:-2}"
-MPIRUN="${MMML_MPIRUN_WRAPPER:-$MMML_ROOT/scripts/mmml-charmm-mpirun.sh}"
-PY="${MMML_PYTHON:-$MMML_ROOT/.venv/bin/python}"
+KARML_MPI_NP="${KARML_MPI_NP:-2}"
+MPIRUN="${KARML_MPIRUN_WRAPPER:-$KARML_ROOT/scripts/karml-charmm-mpirun.sh}"
+PY="${KARML_PYTHON:-$KARML_ROOT/.venv/bin/python}"
 
-if [[ ! -d "$MMML_ROOT" ]]; then
-  echo "MMML_ROOT not found: $MMML_ROOT" >&2
+if [[ ! -d "$KARML_ROOT" ]]; then
+  echo "KARML_ROOT not found: $KARML_ROOT" >&2
   exit 1
 fi
 
-cd "$MMML_ROOT"
+cd "$KARML_ROOT"
 
-if [[ -f "$MMML_ROOT/scripts/resolve_mmml_env.sh" ]]; then
-  # shellcheck source=scripts/resolve_mmml_env.sh
-  source "$MMML_ROOT/scripts/resolve_mmml_env.sh"
-  mmml_resolve_env "$MMML_ROOT"
-  PY="${MMML_PYTHON:-$PY}"
+if [[ -f "$KARML_ROOT/scripts/resolve_karml_env.sh" ]]; then
+  # shellcheck source=scripts/resolve_karml_env.sh
+  source "$KARML_ROOT/scripts/resolve_karml_env.sh"
+  karml_resolve_env "$KARML_ROOT"
+  PY="${KARML_PYTHON:-$PY}"
 fi
 
 _infer_box_size_from_dir() {
@@ -102,7 +102,7 @@ resolve_domdec_box_artifacts() {
     local picked
     picked="$("$PY" - <<PY
 from pathlib import Path
-from mmml.utils.domdec_ndir import pick_domdec_prep_dir, _read_prep_box_side_A
+from karml.utils.domdec_ndir import pick_domdec_prep_dir, _read_prep_box_side_A
 
 picked = pick_domdec_prep_dir(
     Path(${boxes_root@Q}),
@@ -184,9 +184,9 @@ tier3_min_crystal_side() {
   # For np=2 this raises ValueError → fall back to the dense 40Å box size for the
   # build-verification smoke (np=2 is expected to fail with the NDIR constraint).
   "$PY" -c "
-from mmml.utils.domdec_ndir import min_domdec_crystal_side_A, _MIN_AXIS_NODES
+from karml.utils.domdec_ndir import min_domdec_crystal_side_A, _MIN_AXIS_NODES
 try:
-    print(min_domdec_crystal_side_A(${MMML_MPI_NP}, 15, 4))
+    print(min_domdec_crystal_side_A(${KARML_MPI_NP}, 15, 4))
 except ValueError:
     # np too small for c47 strict rule; return dense-box minimum for build smoke
     print(38.0)
@@ -215,7 +215,7 @@ prep() {
   prep_target_dir
   echo "== DOMDEC DCM:${N_DCM} prep =="
   echo "box: $BOX_DIR"
-  MMML_MPI_NP=1 "$MPIRUN" liquid-box \
+  KARML_MPI_NP=1 "$MPIRUN" liquid-box \
     --composition "DCM:${N_DCM}" \
     --box-size "$BOX_SIZE" \
     --target-density-g-cm3 1.326 \
@@ -237,7 +237,7 @@ validate() {
     echo "Missing PSF: $PSF (run prep first)" >&2
     exit 1
   }
-  "$PY" -m mmml.utils.domdec_psf_order "$PSF"
+  "$PY" -m karml.utils.domdec_psf_order "$PSF"
 }
 
 tier3() {
@@ -249,7 +249,7 @@ tier3() {
     exit 1
   }
   if [[ -z "${NATIVE_STATE_CMD:-}" ]]; then
-    NATIVE_STATE_CMD="MMML_MPI_NP=${MMML_MPI_NP} PSF='$PSF' CRD='$CRD' BOX_SIZE='$BOX_SIZE' BOX_DIR='$BOX_DIR' N_DCM='$N_DCM' bash '$MMML_ROOT/scripts/run_domdec_dcm10_native_charmm.sh'"
+    NATIVE_STATE_CMD="KARML_MPI_NP=${KARML_MPI_NP} PSF='$PSF' CRD='$CRD' BOX_SIZE='$BOX_SIZE' BOX_DIR='$BOX_DIR' N_DCM='$N_DCM' bash '$KARML_ROOT/scripts/run_domdec_dcm10_native_charmm.sh'"
   fi
   echo "$NATIVE_STATE_CMD"
   eval "$NATIVE_STATE_CMD"
@@ -259,9 +259,9 @@ tier3() {
     # This IS the expected outcome for np=2 build-smoke; the binary is correct.
     echo ""
     echo "== Tier 3 result: DOMDEC build CONFIRMED (KEY_DOMDEC==1) =="
-    echo "   np=${MMML_MPI_NP} is below the c47 minimum (need np>=8)."
+    echo "   np=${KARML_MPI_NP} is below the c47 minimum (need np>=8)."
     echo "   Box constraint: L >= 2·RCUT·8/7 ≈ 43 Å (RCUT=cutnb+group_radius≈19 Å)."
-    echo "   For MLPot liquid-density scaling use MMML spatial MPI (docs/pycharmm-mpi.md)."
+    echo "   For MLPot liquid-density scaling use KARML spatial MPI (docs/pycharmm-mpi.md)."
     exit 0
   fi
 }

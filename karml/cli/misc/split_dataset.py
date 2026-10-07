@@ -11,13 +11,13 @@ Supports:
 
 Usage:
     # Basic split (no conversion)
-    python -m mmml.cli.split_dataset data.npz -o output_dir --train 0.8 --valid 0.1 --test 0.1
+    python -m karml.cli.split_dataset data.npz -o output_dir --train 0.8 --valid 0.1 --test 0.1
     
     # With unit conversion (Hartree → eV)
-    python -m mmml.cli.split_dataset data.npz -o output_dir --convert-units
+    python -m karml.cli.split_dataset data.npz -o output_dir --convert-units
     
     # Split EFD + ESP grid files together
-    python -m mmml.cli.split_dataset \
+    python -m karml.cli.split_dataset \
         --efd energies_forces_dipoles.npz \
         --grid grids_esp.npz \
         -o training_data \
@@ -204,23 +204,23 @@ def main():
         epilog="""
 Examples:
   # Basic split
-  python -m mmml.cli.split_dataset data.npz -o splits/
+  python -m karml.cli.split_dataset data.npz -o splits/
   
   # Custom split ratios
-  python -m mmml.cli.split_dataset data.npz -o splits/ \\
+  python -m karml.cli.split_dataset data.npz -o splits/ \\
       --train 0.7 --valid 0.15 --test 0.15
   
   # With unit conversion (Hartree → eV)
-  python -m mmml.cli.split_dataset data.npz -o splits/ --convert-units
+  python -m karml.cli.split_dataset data.npz -o splits/ --convert-units
   
   # Split multiple related files (EFD + ESP grids)
-  python -m mmml.cli.split_dataset \\
+  python -m karml.cli.split_dataset \\
       --efd energies_forces_dipoles.npz \\
       --grid grids_esp.npz \\
       -o training_data --convert-units
   
   # Custom seed for different splits
-  python -m mmml.cli.split_dataset data.npz -o splits/ --seed 123
+  python -m karml.cli.split_dataset data.npz -o splits/ --seed 123
         """
     )
     

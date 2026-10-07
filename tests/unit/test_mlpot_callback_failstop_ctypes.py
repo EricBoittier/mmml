@@ -26,12 +26,12 @@ _SCRIPT = textwrap.dedent(
     from unittest.mock import MagicMock, patch
     import numpy as np
 
-    from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
-    from mmml.interfaces.pycharmmInterface.mlpot.callback_failstop import (
+    from karml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
+    from karml.interfaces.pycharmmInterface.mlpot.callback_failstop import (
         fail_closed_callback,
         set_mlpot_dynamics_armed,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import DecomposedMlpotCalculator
+    from karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import DecomposedMlpotCalculator
 
     failure, armed, marker = sys.argv[1], sys.argv[2] == "armed", Path(sys.argv[3])
     calc = DecomposedMlpotCalculator(
@@ -60,7 +60,7 @@ _SCRIPT = textwrap.dedent(
 
     cb = ctypes.CFUNCTYPE(ctypes.c_double, ctypes.c_int)(fail_closed_callback(_raw))
     set_mlpot_dynamics_armed(armed)
-    with patch("mmml.interfaces.pycharmmInterface.jax_device_policy.mlpot_jax_device_context",
+    with patch("karml.interfaces.pycharmmInterface.jax_device_policy.mlpot_jax_device_context",
                return_value=MagicMock(__enter__=MagicMock(), __exit__=MagicMock())):
         user = cb(n)
     print("NEXT_MD_STEP_REACHED user=%r error=%r" % (user, getattr(calc, "_last_callback_error", None)), flush=True)
@@ -87,7 +87,7 @@ def test_callback_failure_ends_process_86_before_next_step(failure, mode, tmp_pa
     assert proc.returncode == 86, out
     assert "NEXT_MD_STEP_REACHED" not in proc.stdout, out
     assert not marker.exists(), out
-    assert "MMML MLPOT CALLBACK FAILURE" in out, out
+    assert "KARML MLPOT CALLBACK FAILURE" in out, out
     expected = "Molecule extent" if failure == "extent" else "returned zero ML/MM pairs"
     assert expected in out, out
 

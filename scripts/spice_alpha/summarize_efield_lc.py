@@ -6,7 +6,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from mmml.data.efield_lc import format_lc_table, summarize_lc_runs
+from karml.data.efield_lc import format_lc_table, summarize_lc_runs
 
 
 def main(argv: list[str] | None = None) -> int:

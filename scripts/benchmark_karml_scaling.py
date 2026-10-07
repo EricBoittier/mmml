@@ -39,7 +39,7 @@ def _run_case(
         cmd = [
             python_exe,
             "-m",
-            "mmml.cli.run.md_pbc_suite.ase",
+            "karml.cli.run.md_pbc_suite.ase",
             "--only",
             "pbc_nve",
             "--n-molecules",
@@ -58,7 +58,7 @@ def _run_case(
         cmd = [
             python_exe,
             "-m",
-            "mmml.cli.run.md_pbc_suite.jaxmd",
+            "karml.cli.run.md_pbc_suite.jaxmd",
             "--ensemble",
             ensemble,
             "--n-molecules",
@@ -141,7 +141,7 @@ def main() -> int:
     p.add_argument("--ps", type=float, default=0.2)
     p.add_argument("--dt-fs", type=float, default=0.25)
     p.add_argument("--timeout-s", type=int, default=1200)
-    p.add_argument("--output-dir", type=Path, default=Path("artifacts/mmml_scaling"))
+    p.add_argument("--output-dir", type=Path, default=Path("artifacts/karml_scaling"))
     p.add_argument("--stop-on-fail", action="store_true")
     p.add_argument("--extra-arg", action="append", default=[], help="Extra arg forwarded to target script.")
     args = p.parse_args()

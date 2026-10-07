@@ -97,7 +97,7 @@ def main() -> int:
         return 1
 
     try:
-        from mmml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_PRM, psf
+        from karml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_PRM, psf
     except Exception:
         CGENFF_PRM = None
         psf = None  # type: ignore[assignment]
@@ -105,12 +105,12 @@ def main() -> int:
         print_fail("PyCHARMM/CGENFF not available")
         return 1
 
-    from mmml.interfaces.pycharmmInterface.jax_pme_hybrid_coulomb import (
+    from karml.interfaces.pycharmmInterface.jax_pme_hybrid_coulomb import (
         hybrid_jax_pme_coulomb_correction,
         hybrid_jax_pme_mm_lr_correction,
         intra_monomer_jax_pme_coulomb,
     )
-    from mmml.interfaces.pycharmmInterface.long_range_backend import (
+    from karml.interfaces.pycharmmInterface.long_range_backend import (
         compute_jax_pme_coulomb,
         jax_pme_host_device_name,
         per_atom_jax_pme_c6_sqrt_for_atoms,
@@ -211,7 +211,7 @@ def main() -> int:
         _print_row(label, first_ms, steady_ms)
 
     if not args.skip_wrapped_mm:
-        from mmml.interfaces.pycharmmInterface.mm_energy_forces import build_mm_energy_forces_fn
+        from karml.interfaces.pycharmmInterface.mm_energy_forces import build_mm_energy_forces_fn
 
         atoms_per = int(offsets[1] - offsets[0])
         common_kw = dict(

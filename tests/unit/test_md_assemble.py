@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from mmml.md import (
+from karml.md import (
     EnsembleSpec,
     RunConfig,
     SystemSpec,
@@ -14,7 +14,7 @@ from mmml.md import (
     build_hybrid_energy,
     get_builder,
 )
-from mmml.md.system import MolecularSystem
+from karml.md.system import MolecularSystem
 
 
 def _periodic_system(n_side: int = 3, spacing: float = 2.5) -> MolecularSystem:
@@ -30,7 +30,7 @@ def _periodic_system(n_side: int = 3, spacing: float = 2.5) -> MolecularSystem:
 def test_builder_registry_lists_and_resolves():
     names = available_builders()
     assert {"psf", "packmol", "pyxtal", "peptide_water"} <= set(names)
-    from mmml.md.builders import PsfSystemBuilder
+    from karml.md.builders import PsfSystemBuilder
 
     assert isinstance(get_builder("psf"), PsfSystemBuilder)
     with pytest.raises(KeyError, match="Unknown builder"):

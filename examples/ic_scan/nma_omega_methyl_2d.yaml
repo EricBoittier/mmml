@@ -7,7 +7,7 @@
 # Omit `mask` to use the covalent-topology default (recommended).
 # If you set `mask`, it MUST include a4 (CR for omega). Masking only HR* fails.
 #
-#   mmml ic-scan --config examples/ic_scan/nma_omega_methyl_2d.yaml \
+#   karml ic-scan --config examples/ic_scan/nma_omega_methyl_2d.yaml \
 #     --prepare-only --output artifacts/nma_omega_2d --overwrite
 
 structure: nma.xyz

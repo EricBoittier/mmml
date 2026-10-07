@@ -5,7 +5,7 @@ Usage:
     python train_runner.py --name my_experiment --epochs 100 --batch-size 2
     
 Or in Python:
-    from mmml.dcmnet.dcmnet.train_runner import run_training
+    from karml.dcmnet.dcmnet.train_runner import run_training
     run_training(name="my_experiment", num_epochs=100)
 """
 import argparse

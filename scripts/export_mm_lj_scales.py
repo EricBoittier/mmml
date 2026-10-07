@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Export fitted MM LJ sigma/epsilon scales from a training checkpoint into a
-sidecar JSON that ``mmml md-system --mm-lj-scales-file`` can consume.
+sidecar JSON that ``karml md-system --mm-lj-scales-file`` can consume.
 
 This is needed because the ``hybrid_mm.json`` written next to a training
 checkpoint carries only the *configuration* -- ``cgenff_type_names``, the
@@ -46,7 +46,7 @@ import numpy as np
 def load_scales(ckpt: Path, group: str) -> tuple[np.ndarray, np.ndarray]:
     import orbax.checkpoint as ocp
 
-    from mmml.utils.model_checkpoint import _restore_pytree_cpu_safe
+    from karml.utils.model_checkpoint import _restore_pytree_cpu_safe
 
     state = _restore_pytree_cpu_safe(ocp.PyTreeCheckpointer(), str(ckpt.absolute()))
     if group not in state:
@@ -121,7 +121,7 @@ def main(argv: list[str] | None = None) -> int:
 
     # Round-trip through the real loader rather than trusting the file we just
     # wrote -- it bounds-checks and will reject a payload MD would reject.
-    from mmml.models.mm_lj_scales import load_mm_lj_scales_sidecar
+    from karml.models.mm_lj_scales import load_mm_lj_scales_sidecar
 
     back = load_mm_lj_scales_sidecar(a.output)
     if back is None:

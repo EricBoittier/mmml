@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from mmml.interfaces.calculators.metatomic import (
+from karml.interfaces.calculators.metatomic import (
     DEFAULT_METATOMIC_DEVICE,
     METATOMIC_DEVICE_ENV,
     have_metatomic,

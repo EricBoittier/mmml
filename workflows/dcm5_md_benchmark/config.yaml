@@ -1,5 +1,5 @@
 # DCM:5 cross-backend MD benchmark — 2 ps smoke matrix.
-# Checkpoint path is resolved from MMML_CKPT at run time when checkpoint is "${MMML_CKPT}".
+# Checkpoint path is resolved from KARML_CKPT at run time when checkpoint is "${KARML_CKPT}".
 
 composition: "DCM:5"
 ps: 2.0
@@ -11,9 +11,9 @@ spacing: 5.0
 packmol_radius: 6.9
 packmol_tolerance: 1.0
 box_size: 25.0
-checkpoint: "${MMML_CKPT}"
+checkpoint: "${KARML_CKPT}"
 output_root: "results"
-mpirun_wrapper: "../../scripts/mmml-charmm-mpirun.sh"
+mpirun_wrapper: "../../scripts/karml-charmm-mpirun.sh"
 
 mm_switch_on: 7.0
 mm_switch_width: 5.0

@@ -120,7 +120,7 @@ def cmd_cell(args: argparse.Namespace) -> int:
     print_run_detail(monitor, cfg=cfg)
     traj = analyze_cell_trajectories(Path(monitor.out_dir))
     print("\nTrajectory / handoff:")
-    from mmml.utils.rich_report import print_colored_json
+    from karml.utils.rich_report import print_colored_json
 
     print_colored_json(traj)
     if args.output_dir:

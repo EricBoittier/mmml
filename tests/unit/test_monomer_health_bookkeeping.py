@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 import pytest
 
-from mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping import (
+from karml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping import (
     LEVEL_BAD,
     LEVEL_OK,
     LEVEL_WARN,
@@ -132,10 +132,10 @@ def test_monomer_health_config_from_args() -> None:
 
 
 @patch(
-    "mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping.collect_monomer_health_metrics"
+    "karml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping.collect_monomer_health_metrics"
 )
 @patch(
-    "mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping.resolve_monomer_offsets_for_ctx",
+    "karml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping.resolve_monomer_offsets_for_ctx",
     return_value=np.array([0, 2, 4], dtype=int),
 )
 def test_audit_monomer_health_flags_bad_monomer(
@@ -173,10 +173,10 @@ def test_audit_monomer_health_flags_bad_monomer(
 
 
 @patch(
-    "mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping.collect_monomer_health_metrics"
+    "karml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping.collect_monomer_health_metrics"
 )
 @patch(
-    "mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping.resolve_monomer_offsets_for_ctx",
+    "karml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping.resolve_monomer_offsets_for_ctx",
     return_value=np.array([0, 3, 6], dtype=int),
 )
 def test_audit_monomer_health_does_not_flag_normal_high_thermal_draw(
@@ -310,7 +310,7 @@ def test_select_systemic_velocity_warn_by_highest_grms() -> None:
 
 
 def test_emit_monomer_health_dot_matrix_plain(capsys: pytest.CaptureFixture[str]) -> None:
-    from mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping import (
+    from karml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping import (
         MonomerHealthEntry,
         MonomerHealthReport,
     )
@@ -335,7 +335,7 @@ def test_emit_monomer_health_dot_matrix_plain(capsys: pytest.CaptureFixture[str]
         flagged_warn=(),
         baseline_recorded=False,
     )
-    with patch("mmml.utils.rich_report.rich_enabled", return_value=False):
+    with patch("karml.utils.rich_report.rich_enabled", return_value=False):
         emit_monomer_health_dot_matrix(report, context="test", quiet=False)
     out = capsys.readouterr().out
     assert "DCM" in out
@@ -369,7 +369,7 @@ def test_emit_monomer_health_summarizes_systemic_velocity_only(
         flagged_warn=(),
         baseline_recorded=False,
     )
-    with patch("mmml.utils.rich_report.rich_enabled", return_value=False):
+    with patch("karml.utils.rich_report.rich_enabled", return_value=False):
         emit_monomer_health_dot_matrix(
             report, context="Fly-off", quiet=False, max_detail_rows=8
         )
@@ -380,21 +380,21 @@ def test_emit_monomer_health_summarizes_systemic_velocity_only(
 
 
 @patch(
-    "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.sync_charmm_velocities_akma"
+    "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.sync_charmm_velocities_akma"
 )
 @patch(
-    "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.velocities_are_pathological",
+    "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.velocities_are_pathological",
     return_value=False,
 )
 @patch(
-    "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.charmm_masses_amu",
+    "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.charmm_masses_amu",
     return_value=np.ones(4),
 )
 @patch(
-    "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.read_restart_velocities"
+    "karml.interfaces.pycharmmInterface.mlpot.dynamics_validation.read_restart_velocities"
 )
 @patch(
-    "mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping._current_velocities_akma"
+    "karml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping._current_velocities_akma"
 )
 def test_restore_monomer_velocities_splices_template_slice(
     current_vel: MagicMock,
@@ -403,7 +403,7 @@ def test_restore_monomer_velocities_splices_template_slice(
     _pathological: MagicMock,
     sync_vel: MagicMock,
 ) -> None:
-    from mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping import (
+    from karml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping import (
         restore_monomer_velocities_from_template,
     )
 
@@ -441,19 +441,19 @@ def test_restore_monomer_velocities_splices_template_slice(
 
 
 @patch(
-    "mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping.restore_flagged_monomers_from_template",
+    "karml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping.restore_flagged_monomers_from_template",
     return_value=True,
 )
 @patch(
-    "mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping.redraw_monomer_velocities",
+    "karml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping.redraw_monomer_velocities",
     return_value=True,
 )
 @patch(
-    "mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping.resolve_monomer_offsets_for_ctx",
+    "karml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping.resolve_monomer_offsets_for_ctx",
     return_value=np.array([0, 2, 4, 6], dtype=int),
 )
 @patch(
-    "mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping.audit_monomer_health"
+    "karml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping.audit_monomer_health"
 )
 @patch("pycharmm.coor.get_natom", return_value=6)
 def test_maybe_intervene_monomer_health_recovers_systemic_velocity_warn(
@@ -463,7 +463,7 @@ def test_maybe_intervene_monomer_health_recovers_systemic_velocity_warn(
     redraw: MagicMock,
     restore_template: MagicMock,
 ) -> None:
-    from mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping import (
+    from karml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping import (
         maybe_intervene_monomer_health,
     )
 
@@ -517,7 +517,7 @@ def test_maybe_intervene_monomer_health_recovers_systemic_velocity_warn(
     )
 
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.invalidate_mlpot_calculator_caches",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics.invalidate_mlpot_calculator_caches",
     ) as invalidate:
         recovered = maybe_intervene_monomer_health(
             ctx,
@@ -534,19 +534,19 @@ def test_maybe_intervene_monomer_health_recovers_systemic_velocity_warn(
 
 
 @patch(
-    "mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping.restore_flagged_monomers_from_template",
+    "karml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping.restore_flagged_monomers_from_template",
     return_value=True,
 )
 @patch(
-    "mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping.redraw_monomer_velocities",
+    "karml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping.redraw_monomer_velocities",
     return_value=True,
 )
 @patch(
-    "mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping.resolve_monomer_offsets_for_ctx",
+    "karml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping.resolve_monomer_offsets_for_ctx",
     return_value=np.array([0, 2, 4, 6], dtype=int),
 )
 @patch(
-    "mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping.audit_monomer_health"
+    "karml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping.audit_monomer_health"
 )
 @patch("pycharmm.coor.get_natom", return_value=6)
 def test_maybe_intervene_monomer_health_uses_caller_ramp_temperature(
@@ -561,7 +561,7 @@ def test_maybe_intervene_monomer_health_uses_caller_ramp_temperature(
     fallback — so a mid-ramp redraw does not inject velocities far hotter than
     the segment actually being run.
     """
-    from mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping import (
+    from karml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping import (
         maybe_intervene_monomer_health,
     )
 
@@ -593,7 +593,7 @@ def test_maybe_intervene_monomer_health_uses_caller_ramp_temperature(
     )
 
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.invalidate_mlpot_calculator_caches",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics.invalidate_mlpot_calculator_caches",
     ):
         recovered = maybe_intervene_monomer_health(
             ctx,
@@ -608,22 +608,22 @@ def test_maybe_intervene_monomer_health_uses_caller_ramp_temperature(
 
 
 @patch(
-    "mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping._run_per_monomer_jax_on_indices"
+    "karml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping._run_per_monomer_jax_on_indices"
 )
 @patch(
-    "mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping.restore_flagged_monomers_from_template",
+    "karml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping.restore_flagged_monomers_from_template",
     return_value=True,
 )
 @patch(
-    "mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping.redraw_monomer_velocities",
+    "karml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping.redraw_monomer_velocities",
     return_value=False,
 )
 @patch(
-    "mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping.resolve_monomer_offsets_for_ctx",
+    "karml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping.resolve_monomer_offsets_for_ctx",
     return_value=np.array([0, 2, 4], dtype=int),
 )
 @patch(
-    "mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping.audit_monomer_health"
+    "karml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping.audit_monomer_health"
 )
 @patch("pycharmm.coor.get_natom", return_value=4)
 def test_maybe_intervene_templates_only_geometry_bad(
@@ -634,7 +634,7 @@ def test_maybe_intervene_templates_only_geometry_bad(
     restore_template: MagicMock,
     jax_mini: MagicMock,
 ) -> None:
-    from mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping import (
+    from karml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping import (
         maybe_intervene_monomer_health,
     )
 
@@ -680,7 +680,7 @@ def test_maybe_intervene_templates_only_geometry_bad(
         ),
     )
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.invalidate_mlpot_calculator_caches",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics.invalidate_mlpot_calculator_caches",
     ):
         ok = maybe_intervene_monomer_health(
             ctx, overlap, context="HEAT", global_step=500
@@ -699,20 +699,20 @@ def test_maybe_intervene_templates_only_geometry_bad(
 
 
 @patch(
-    "mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping._run_per_monomer_jax_on_indices"
+    "karml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping._run_per_monomer_jax_on_indices"
 )
 @patch(
-    "mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping.restore_flagged_monomers_from_template"
+    "karml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping.restore_flagged_monomers_from_template"
 )
 @patch(
-    "mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping.redraw_monomer_velocities"
+    "karml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping.redraw_monomer_velocities"
 )
 @patch(
-    "mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping.resolve_monomer_offsets_for_ctx",
+    "karml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping.resolve_monomer_offsets_for_ctx",
     return_value=np.array([0, 2, 4], dtype=int),
 )
 @patch(
-    "mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping.audit_monomer_health"
+    "karml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping.audit_monomer_health"
 )
 @patch("pycharmm.coor.get_natom", return_value=4)
 def test_maybe_intervene_adumb_skips_template_restore(
@@ -724,7 +724,7 @@ def test_maybe_intervene_adumb_skips_template_restore(
     jax_mini: MagicMock,
 ) -> None:
     """ADUMB must not template-restore: inter-monomer COMs stay OOR → UM1RXN."""
-    from mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping import (
+    from karml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping import (
         maybe_intervene_monomer_health,
     )
 
@@ -772,7 +772,7 @@ def test_maybe_intervene_adumb_skips_template_restore(
         monomer_health=MonomerHealthConfig(verbose=False),
     )
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.restraints.reinstall_adumb_rxncor_walls_from_workflow_args"
+        "karml.interfaces.pycharmmInterface.mlpot.restraints.reinstall_adumb_rxncor_walls_from_workflow_args"
     ) as reinstall:
         out = maybe_intervene_monomer_health(
             ctx, overlap, context="HEAT", global_step=2000
@@ -786,13 +786,13 @@ def test_maybe_intervene_adumb_skips_template_restore(
 
 
 def test_maybe_rebaseline_heat_once() -> None:
-    from mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping import (
+    from karml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping import (
         maybe_rebaseline_monomer_health_after_heat_velocities,
     )
 
     ctx = SimpleNamespace()
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping.record_monomer_health_baseline",
+        "karml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping.record_monomer_health_baseline",
         return_value=object(),
     ) as rec:
         assert maybe_rebaseline_monomer_health_after_heat_velocities(
@@ -805,7 +805,7 @@ def test_maybe_rebaseline_heat_once() -> None:
 
 
 def test_com_unwrap_flags_rigid_flyoff() -> None:
-    from mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping import (
+    from karml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping import (
         MonomerHealthConfig,
         _update_com_unwrap_state,
         flag_geometry_problem_monomers,
@@ -844,19 +844,19 @@ def test_com_unwrap_flags_rigid_flyoff() -> None:
     )
     with (
         patch(
-            "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+            "karml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
             return_value=pos,
         ),
         patch(
-            "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard._overlap_cell",
+            "karml.interfaces.pycharmmInterface.mlpot.overlap_guard._overlap_cell",
             return_value=cell,
         ),
         patch(
-            "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.charmm_masses_amu",
+            "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.charmm_masses_amu",
             return_value=np.ones(6),
         ),
         patch(
-            "mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping._flag_bond_stretch_monomers",
+            "karml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping._flag_bond_stretch_monomers",
             return_value={},
         ),
     ):
@@ -872,7 +872,7 @@ def test_com_unwrap_flags_rigid_flyoff() -> None:
 
 
 def test_bond_stretch_flags_geometry() -> None:
-    from mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping import (
+    from karml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping import (
         _flag_bond_stretch_monomers,
     )
 
@@ -881,7 +881,7 @@ def test_bond_stretch_flags_geometry() -> None:
     pos = ref.copy()
     pos[1, 0] = 3.0  # 3× stretch of first bond
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.monomer_geometry_limits.psf_bond_pairs_0based",
+        "karml.interfaces.pycharmmInterface.mlpot.monomer_geometry_limits.psf_bond_pairs_0based",
         return_value=[(0, 1), (0, 2)],
     ):
         flagged = _flag_bond_stretch_monomers(
@@ -897,7 +897,7 @@ def test_bond_stretch_flags_geometry() -> None:
 
 def test_intra_contact_flag_works_on_read_only_positions_and_does_not_modify_them() -> None:
     """CHARMM hands out a read-only coordinate view; the intra-contact audit must copy it."""
-    from mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping import (
+    from karml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping import (
         MonomerHealthConfig,
         flag_geometry_problem_monomers,
     )
@@ -919,19 +919,19 @@ def test_intra_contact_flag_works_on_read_only_positions_and_does_not_modify_the
     )
     with (
         patch(
-            "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+            "karml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
             return_value=pos,
         ),
         patch(
-            "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard._overlap_cell",
+            "karml.interfaces.pycharmmInterface.mlpot.overlap_guard._overlap_cell",
             return_value=None,
         ),
         patch(
-            "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard._bond_exclusion_pairs",
+            "karml.interfaces.pycharmmInterface.mlpot.overlap_guard._bond_exclusion_pairs",
             return_value=set(),
         ),
         patch(
-            "mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping._flag_bond_stretch_monomers",
+            "karml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping._flag_bond_stretch_monomers",
             return_value={},
         ),
     ):

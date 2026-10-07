@@ -1,9 +1,9 @@
 # Mode A + full-box nvalchemiops PME (matches train_fixed_nvalchemiops_pme.yaml)
 #   E_Coulomb = E_PME(all atoms, q_CGenFF)   # many-to-many; no exclusions
 #
-#   mmml md-system --config examples/hybrid_mm_charges/md_fixed_nvalchemiops_pme.yaml --run-all
+#   karml md-system --config examples/hybrid_mm_charges/md_fixed_nvalchemiops_pme.yaml --run-all
 #
-# Requires: PBC setup, mmml[nvalchemiops-pme], Mode A hybrid checkpoint.
+# Requires: PBC setup, karml[nvalchemiops-pme], Mode A hybrid checkpoint.
 # --no-periodic-charmm-vdw keeps LJ off (same as train mm_include_lj: false).
 
 defaults:

@@ -21,7 +21,7 @@ def _fail(msg: str) -> None:
 def main() -> int:
     ok = True
 
-    ckpt = Path(os.environ.get("MMML_CKPT", REPO_ROOT / "examples/ckpts_json/DESdimers_params.json"))
+    ckpt = Path(os.environ.get("KARML_CKPT", REPO_ROOT / "examples/ckpts_json/DESdimers_params.json"))
     if ckpt.is_file():
         _ok(f"checkpoint {ckpt}")
     else:
@@ -58,17 +58,17 @@ def main() -> int:
         ok = False
 
     try:
-        from mmml.interfaces.pyxtal_placement import have_pyxtal
+        from karml.interfaces.pyxtal_placement import have_pyxtal
 
         if have_pyxtal():
-            _ok("pyxtal (optional, from mmml[chem])")
+            _ok("pyxtal (optional, from karml[chem])")
         else:
             print("INFO: pyxtal not installed (optional; uv sync --extra chem)")
     except Exception as exc:
         print(f"INFO: pyxtal probe skipped: {exc}")
 
     try:
-        from mmml.interfaces.pycharmmInterface.nl_reference import have_vesin
+        from karml.interfaces.pycharmmInterface.nl_reference import have_vesin
 
         if have_vesin():
             _ok("vesin (md-cpu / nl-validation)")
@@ -80,11 +80,11 @@ def main() -> int:
         ok = False
 
     try:
-        import mmml
+        import karml
 
-        _ok(f"mmml {getattr(mmml, '__version__', '?')}")
+        _ok(f"karml {getattr(karml, '__version__', '?')}")
     except Exception as exc:
-        _fail(f"mmml import: {exc}")
+        _fail(f"karml import: {exc}")
         ok = False
 
     return 0 if ok else 1

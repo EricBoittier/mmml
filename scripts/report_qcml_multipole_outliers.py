@@ -7,7 +7,7 @@ import argparse
 import json
 from pathlib import Path
 
-from mmml.data.orbax_shards import partition_shards
+from karml.data.orbax_shards import partition_shards
 
 try:
     from scripts.train_qcml_multipoles import compute_target_statistics

@@ -6,7 +6,7 @@ import json
 
 import pytest
 
-from mmml.utils import rich_report
+from karml.utils import rich_report
 
 
 def _recording_console():
@@ -16,7 +16,7 @@ def _recording_console():
 
 
 def test_compact_reporter_mixes_status_summary_and_table_without_borders(monkeypatch):
-    monkeypatch.delenv("MMML_NO_RICH", raising=False)
+    monkeypatch.delenv("KARML_NO_RICH", raising=False)
     console = _recording_console()
     report = rich_report.get_reporter(console=console)
 
@@ -44,7 +44,7 @@ def test_compact_reporter_validates_shape_and_status():
 
 
 def test_print_colored_json_is_valid_json_and_has_semantic_styles(monkeypatch):
-    monkeypatch.delenv("MMML_NO_RICH", raising=False)
+    monkeypatch.delenv("KARML_NO_RICH", raising=False)
     console = _recording_console()
     payload = {
         "summary": "/tmp/cutoff_sweep_summary.json",
@@ -92,15 +92,15 @@ def test_print_colored_python_repr_rich_and_plain(monkeypatch, capsys):
     rich_report.print_colored_python_repr(value)
     assert "CalculatorConfig" in capsys.readouterr().out
 
-    monkeypatch.setenv("MMML_NO_RICH", "1")
+    monkeypatch.setenv("KARML_NO_RICH", "1")
     rich_report.print_colored_python_repr(value)
     assert "cutoff_A=6.0" in capsys.readouterr().out
 
 
 @pytest.fixture(autouse=True)
 def _no_rich(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("MMML_NO_RICH", "1")
-    monkeypatch.delenv("MMML_QUIET", raising=False)
+    monkeypatch.setenv("KARML_NO_RICH", "1")
+    monkeypatch.delenv("KARML_QUIET", raising=False)
     rich_report._console.cache_clear()
 
 
@@ -113,12 +113,12 @@ def test_emit_tagged_plain(capsys) -> None:
 def test_emit_jax_compile_pass_plain(capsys) -> None:
     rich_report.emit_jax_compile_pass("test_kernel", 0, 1.23)
     out = capsys.readouterr().out
-    assert "mmml: JAX compile timer [test_kernel] pass 1 (compile+run): 1.23s" in out
+    assert "karml: JAX compile timer [test_kernel] pass 1 (compile+run): 1.23s" in out
 
 
 def test_emit_jax_compile_session_summary_plain(capsys) -> None:
     lines = [
-        "mmml: JAX compile timers — estimated compile=1.00s, run=0.50s",
+        "karml: JAX compile timers — estimated compile=1.00s, run=0.50s",
         "  test_kernel: compile≈1.00s, run≈0.50s (pass1=1.50s)",
     ]
     rich_report.emit_jax_compile_session_summary(lines)
@@ -143,7 +143,7 @@ def test_emit_charmm_block_suppressed_by_default(capsys) -> None:
 
 
 def test_emit_status_respects_quiet(capsys, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("MMML_QUIET", "1")
+    monkeypatch.setenv("KARML_QUIET", "1")
     rich_report.emit_status(True, "hidden")
     assert capsys.readouterr().out == ""
 
@@ -220,8 +220,8 @@ def test_emit_hybrid_ml_setup_plain(capsys) -> None:
 def test_startup_reports_are_borderless_and_collapse_repeated_sizes(
     monkeypatch, capsys
 ) -> None:
-    monkeypatch.delenv("MMML_NO_RICH", raising=False)
-    monkeypatch.setenv("MMML_RICH", "1")
+    monkeypatch.delenv("KARML_NO_RICH", raising=False)
+    monkeypatch.setenv("KARML_RICH", "1")
     rich_report._console.cache_clear()
 
     class _Model:
@@ -229,8 +229,8 @@ def test_startup_reports_are_borderless_and_collapse_repeated_sizes(
         cutoff = 8.0
 
     rich_report.emit_charmm_env(
-        cgenff_rtf="/repo/mmml/data/charmm/top.rtf",
-        cgenff_prm="/repo/mmml/data/charmm/par.prm",
+        cgenff_rtf="/repo/karml/data/charmm/top.rtf",
+        cgenff_prm="/repo/karml/data/charmm/par.prm",
         charmm_home="/repo/setup/charmm",
         charmm_lib_dir="/repo/setup/charmm",
     )
@@ -252,7 +252,7 @@ def test_startup_reports_are_borderless_and_collapse_repeated_sizes(
 
 
 def test_physnet_dictionary_report_is_vertical_and_keeps_all_model_fields() -> None:
-    from mmml.models.physnetjax.physnetjax.utils.pretty_printer import (
+    from karml.models.physnetjax.physnetjax.utils.pretty_printer import (
         print_dict_as_table,
     )
 
@@ -343,7 +343,7 @@ def test_collect_ml_energy_terms_flags_loaded_mbd() -> None:
 
 
 def test_resolve_companion_mbd_auto_and_missing(tmp_path) -> None:
-    from mmml.models.mbd.calculator import resolve_companion_mbd
+    from karml.models.mbd.calculator import resolve_companion_mbd
 
     present = tmp_path / "mbd.json"
     present.write_text("{}")
@@ -376,7 +376,7 @@ def test_resolve_companion_mbd_auto_and_missing(tmp_path) -> None:
 
 
 def test_resolve_companion_mbd_remaps_cluster_path_to_examples() -> None:
-    from mmml.models.mbd.calculator import resolve_companion_mbd
+    from karml.models.mbd.calculator import resolve_companion_mbd
 
     recorded = "/mmhome/boittier/home/qcml_runs/mbd_restart_20260711-100037/epoch-0100"
     load_path, weight, missing = resolve_companion_mbd(
@@ -392,7 +392,7 @@ def test_resolve_companion_mbd_remaps_cluster_path_to_examples() -> None:
 
 
 def test_remap_missing_mbd_checkpoint_matches_run_stamp() -> None:
-    from mmml.models.mbd.calculator import remap_missing_mbd_checkpoint
+    from karml.models.mbd.calculator import remap_missing_mbd_checkpoint
 
     remapped = remap_missing_mbd_checkpoint(
         "/mmhome/boittier/home/qcml_runs/mbd_restart_20260711-100037/epoch-0100"

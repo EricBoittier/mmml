@@ -6,19 +6,19 @@ WORKFLOW_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 REPO_ROOT="$(cd "$WORKFLOW_ROOT/../.." && pwd)"
 cd "$REPO_ROOT"
 
-CFG="${MMML_WORKFLOW_CONFIG:-config.pc-bach.cpu.yaml}"
+CFG="${KARML_WORKFLOW_CONFIG:-config.pc-bach.cpu.yaml}"
 if [[ "${1:-}" == "--config" ]]; then
   CFG="${2:?--config requires path}"
 fi
 
-export MMML_CLUSTER="${MMML_CLUSTER:-pc-bach}"
+export KARML_CLUSTER="${KARML_CLUSTER:-pc-bach}"
 # shellcheck source=../../../scripts/pc_bach_env.sh
 source "$REPO_ROOT/scripts/pc_bach_env.sh"
 
-# shellcheck source=../../../scripts/resolve_mmml_env.sh
-source "$REPO_ROOT/scripts/resolve_mmml_env.sh"
-mmml_resolve_env "$REPO_ROOT"
-PY="${MMML_PYTHON}"
+# shellcheck source=../../../scripts/resolve_karml_env.sh
+source "$REPO_ROOT/scripts/resolve_karml_env.sh"
+karml_resolve_env "$REPO_ROOT"
+PY="${KARML_PYTHON}"
 
 echo "=== pc-bach Step 1: tier lib checks (config=${CFG}) ==="
 
@@ -28,7 +28,7 @@ import sys
 from pathlib import Path
 sys.path.insert(0, '${WORKFLOW_ROOT}/scripts')
 from campaign_lib import iter_matrix_cells, load_config
-from mmml.interfaces.pycharmmInterface.mlpot.mlpot_limits import (
+from karml.interfaces.pycharmmInterface.mlpot.mlpot_limits import (
     estimate_ml_atoms,
     select_npr_tier_for_build,
     tier_max_npr,

@@ -166,11 +166,11 @@ def overlap_chunk_restart_glob_pattern(restart_stem: str) -> str:
 
 def staged_artifact_paths(out_dir: PathLike, tag: str) -> dict[str, Path]:
     """Standard staged-workflow artifact paths under ``out_dir``."""
-    from mmml.interfaces.pycharmmInterface.mlpot.minimize_artifacts import (
+    from karml.interfaces.pycharmmInterface.mlpot.minimize_artifacts import (
         BONDED_MM_AFTER_HEAT,
         BONDED_MM_AFTER_MINI,
         CHARMM_MM_PRE,
-        MLPOT_MMML,
+        MLPOT_KARML,
         legacy_charmm_mm_dcd,
         snapshot_file_paths,
     )
@@ -179,7 +179,7 @@ def staged_artifact_paths(out_dir: PathLike, tag: str) -> dict[str, Path]:
     pretreat_dir = out / "pretreat"
     legacy = mini_paths(out)
     mm = snapshot_file_paths(pretreat_dir, CHARMM_MM_PRE, tag)
-    mmml = snapshot_file_paths(out, MLPOT_MMML, tag)
+    karml = snapshot_file_paths(out, MLPOT_KARML, tag)
     bonded_mini = snapshot_file_paths(out, BONDED_MM_AFTER_MINI, tag)
     bonded_heat = snapshot_file_paths(out, BONDED_MM_AFTER_HEAT, tag)
     return {
@@ -193,12 +193,12 @@ def staged_artifact_paths(out_dir: PathLike, tag: str) -> dict[str, Path]:
         "charmm_mm_pdb": mm["pdb"],
         "charmm_mm_psf": mm["psf"],
         "charmm_mm_energy_json": mm["energy_json"],
-        "mlpot_mmml_crd": mmml["crd"],
-        "mlpot_mmml_pdb": mmml["pdb"],
-        "mlpot_mmml_psf": mmml["psf"],
-        "mlpot_mmml_dcd": mmml["dcd"],
-        "mlpot_mmml_xyz": mmml["xyz"],
-        "mlpot_mmml_energy_json": mmml["energy_json"],
+        "mlpot_karml_crd": karml["crd"],
+        "mlpot_karml_pdb": karml["pdb"],
+        "mlpot_karml_psf": karml["psf"],
+        "mlpot_karml_dcd": karml["dcd"],
+        "mlpot_karml_xyz": karml["xyz"],
+        "mlpot_karml_energy_json": karml["energy_json"],
         "bonded_mm_after_mini_crd": bonded_mini["crd"],
         "bonded_mm_after_mini_pdb": bonded_mini["pdb"],
         "bonded_mm_after_heat_crd": bonded_heat["crd"],

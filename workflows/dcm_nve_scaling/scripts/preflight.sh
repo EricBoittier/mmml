@@ -4,15 +4,15 @@ WORKFLOW_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 REPO_ROOT="$(cd "$WORKFLOW_ROOT/../.." && pwd)"
 cd "$REPO_ROOT"
 
-if [[ -z "${MMML_CKPT:-}" ]]; then
-  echo "MMML_CKPT is not set. Export your DCM PhysNet checkpoint directory." >&2
+if [[ -z "${KARML_CKPT:-}" ]]; then
+  echo "KARML_CKPT is not set. Export your DCM PhysNet checkpoint directory." >&2
   exit 1
 fi
 
-# shellcheck source=../../../scripts/resolve_mmml_env.sh
-source "$REPO_ROOT/scripts/resolve_mmml_env.sh"
-mmml_resolve_env "$REPO_ROOT"
-PY="${MMML_PYTHON}"
+# shellcheck source=../../../scripts/resolve_karml_env.sh
+source "$REPO_ROOT/scripts/resolve_karml_env.sh"
+karml_resolve_env "$REPO_ROOT"
+PY="${KARML_PYTHON}"
 
 "$PY" -c "
 from pathlib import Path
@@ -25,5 +25,5 @@ resolve_checkpoint(str(cfg['checkpoint']))
 print('Preflight OK')
 "
 
-echo "MMML_CKPT=${MMML_CKPT}"
+echo "KARML_CKPT=${KARML_CKPT}"
 echo "Per-step output: dcd_nsavc=dyn_nprint=nprint=1"

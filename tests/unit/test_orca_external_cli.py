@@ -8,7 +8,7 @@ import sys
 
 def test_orca_server_cli_help() -> None:
     proc = subprocess.run(
-        [sys.executable, "-m", "mmml.cli.__main__", "orca-server", "--help"],
+        [sys.executable, "-m", "karml.cli.__main__", "orca-server", "--help"],
         capture_output=True,
         text=True,
         check=False,
@@ -20,7 +20,7 @@ def test_orca_server_cli_help() -> None:
 
 def test_orca_client_cli_help() -> None:
     proc = subprocess.run(
-        [sys.executable, "-m", "mmml.cli.__main__", "orca-client", "--help"],
+        [sys.executable, "-m", "karml.cli.__main__", "orca-client", "--help"],
         capture_output=True,
         text=True,
         check=False,
@@ -31,7 +31,7 @@ def test_orca_client_cli_help() -> None:
 
 def test_orca_external_cli_help() -> None:
     proc = subprocess.run(
-        [sys.executable, "-m", "mmml.cli.__main__", "orca-external", "--help"],
+        [sys.executable, "-m", "karml.cli.__main__", "orca-external", "--help"],
         capture_output=True,
         text=True,
         check=False,

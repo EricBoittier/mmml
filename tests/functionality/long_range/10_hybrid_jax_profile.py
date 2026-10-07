@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""Profile hybrid jax-pme LR (cProfile + JAX trace + MMML timer hooks).
+"""Profile hybrid jax-pme LR (cProfile + JAX trace + KARML timer hooks).
 
 No PyCHARMM required. Use for steady-state hybrid correction and compile
-breakdown before/after ``MMML_JAX_PME_INTRA_MODE`` changes.
+breakdown before/after ``KARML_JAX_PME_INTRA_MODE`` changes.
 
 Examples
 --------
   # Wall-clock + jax-pme component labels (stderr)
-  MMML_JAX_PME_PROFILE=1 MMML_JAX_COMPILE_TIMERS=1 JAX_PLATFORMS=cpu \\
+  KARML_JAX_PME_PROFILE=1 KARML_JAX_COMPILE_TIMERS=1 JAX_PLATFORMS=cpu \\
     uv run python tests/functionality/long_range/10_hybrid_jax_profile.py
 
   # Python cProfile (writes summary + .prof next to --out-dir)
@@ -47,7 +47,7 @@ def _parse_args() -> argparse.Namespace:
         "--intra-mode",
         choices=("cross", "full_minus_intra", "both"),
         default="both",
-        help="MMML_JAX_PME_INTRA_MODE to profile (default: compare both)",
+        help="KARML_JAX_PME_INTRA_MODE to profile (default: compare both)",
     )
     parser.add_argument(
         "--cprofile",
@@ -69,12 +69,12 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--enable-jax-pme-profile",
         action="store_true",
-        help="Set MMML_JAX_PME_PROFILE=1 for component stderr labels",
+        help="Set KARML_JAX_PME_PROFILE=1 for component stderr labels",
     )
     parser.add_argument(
         "--enable-compile-timers",
         action="store_true",
-        help="Set MMML_JAX_COMPILE_TIMERS=1 and print summary at end",
+        help="Set KARML_JAX_COMPILE_TIMERS=1 and print summary at end",
     )
     return parser.parse_args()
 
@@ -82,10 +82,10 @@ def _parse_args() -> argparse.Namespace:
 def _synthetic_system(args: argparse.Namespace):
     from jaxpme import prefactors as jpref
 
-    from mmml.interfaces.pycharmmInterface.jax_pme_hybrid_coulomb import (
+    from karml.interfaces.pycharmmInterface.jax_pme_hybrid_coulomb import (
         hybrid_jax_pme_mm_lr_correction,
     )
-    from mmml.interfaces.pycharmmInterface.long_range_backend import (
+    from karml.interfaces.pycharmmInterface.long_range_backend import (
         per_atom_jax_pme_c6_sqrt_for_atoms,
     )
 
@@ -169,11 +169,11 @@ def _profile_mode(
     args: argparse.Namespace,
     out_dir: Path,
 ) -> float:
-    os.environ["MMML_JAX_PME_INTRA_MODE"] = mode
-    from mmml.interfaces.pycharmmInterface.jax_pme_cross_monomer import (
+    os.environ["KARML_JAX_PME_INTRA_MODE"] = mode
+    from karml.interfaces.pycharmmInterface.jax_pme_cross_monomer import (
         consume_cross_monomer_profile,
     )
-    from mmml.utils.jax_gpu_warmup import reset_jax_compile_timers
+    from karml.utils.jax_gpu_warmup import reset_jax_compile_timers
 
     if args.enable_compile_timers:
         reset_jax_compile_timers()
@@ -215,7 +215,7 @@ def _profile_mode(
             print(f"    {label}: mean={stats['mean_ms']:.2f} ms  n={int(stats['n'])}")
 
     if args.enable_compile_timers:
-        from mmml.utils.jax_gpu_warmup import maybe_log_jax_compile_timers
+        from karml.utils.jax_gpu_warmup import maybe_log_jax_compile_timers
 
         maybe_log_jax_compile_timers()
 
@@ -231,13 +231,13 @@ def main() -> int:
         return 1
 
     if args.enable_jax_pme_profile:
-        os.environ["MMML_JAX_PME_PROFILE"] = "1"
+        os.environ["KARML_JAX_PME_PROFILE"] = "1"
     if args.enable_compile_timers:
-        os.environ["MMML_JAX_COMPILE_TIMERS"] = "1"
+        os.environ["KARML_JAX_COMPILE_TIMERS"] = "1"
 
     args.out_dir.mkdir(parents=True, exist_ok=True)
 
-    from mmml.interfaces.pycharmmInterface.mlpot.ml_profile import (
+    from karml.interfaces.pycharmmInterface.mlpot.ml_profile import (
         write_profile_git_metadata,
     )
 

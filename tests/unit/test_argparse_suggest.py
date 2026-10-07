@@ -6,7 +6,7 @@ import argparse
 
 import pytest
 
-from mmml.cli.argparse_suggest import (
+from karml.cli.argparse_suggest import (
     SuggestingArgumentParser,
     format_unrecognized_suggestions,
     option_strings_from_parser,
@@ -42,7 +42,7 @@ def test_format_unrecognized_suggestions_appends_did_you_mean():
 
 
 def test_suggesting_argument_parser_error_includes_suggestion(capsys):
-    p = SuggestingArgumentParser(prog="mmml md-system")
+    p = SuggestingArgumentParser(prog="karml md-system")
     p.add_argument("--steps-per-recording", type=int, default=100)
     p.add_argument("--jax-md-update-interval", type=int, default=1)
     with pytest.raises(SystemExit) as exc:

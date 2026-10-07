@@ -8,7 +8,7 @@ from unittest import mock
 import numpy as np
 import pytest
 
-from mmml.interfaces.pycharmmInterface.long_range_backend import (
+from karml.interfaces.pycharmmInterface.long_range_backend import (
     JaxPmeLongRangeSolver,
     compute_jax_pme_coulomb,
     create_lr_solver,
@@ -40,7 +40,7 @@ def test_resolve_jax_pme_method_defaults_to_ewald():
 
 def test_create_lr_solver_jax_pme():
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.long_range_backend.pick_lr_solver",
+        "karml.interfaces.pycharmmInterface.long_range_backend.pick_lr_solver",
         return_value="jax_pme",
     ):
         solver = create_lr_solver("jax_pme")
@@ -50,12 +50,12 @@ def test_create_lr_solver_jax_pme():
 
 @pytest.mark.parametrize("method", ["ewald", "pme", "p3m"])
 def test_compute_jax_pme_coulomb_matches_common_helper(method: str, monkeypatch):
-    from mmml.interfaces.pycharmmInterface.long_range_backend import (
+    from karml.interfaces.pycharmmInterface.long_range_backend import (
         _cached_jax_pme_calculator,
         _cached_jax_pme_power_law_evaluator,
     )
 
-    monkeypatch.setenv("MMML_JAX_PME_MESH_MAX", "64")
+    monkeypatch.setenv("KARML_JAX_PME_MESH_MAX", "64")
     _cached_jax_pme_calculator.cache_clear()
     _cached_jax_pme_power_law_evaluator.cache_clear()
     system = ion_dimer_system(separation_A=5.0, box_length_A=30.0)
@@ -89,12 +89,12 @@ def test_jax_pme_methods_agree_on_cscl(method: str):
 
 
 def test_jax_pme_host_device_defaults_to_cpu(monkeypatch):
-    monkeypatch.delenv("MMML_JAX_PME_DEVICE", raising=False)
+    monkeypatch.delenv("KARML_JAX_PME_DEVICE", raising=False)
     assert jax_pme_host_device_name() == "cpu"
 
 
 def test_jax_pme_host_eval_context_uses_cpu_default_device(monkeypatch):
-    monkeypatch.delenv("MMML_JAX_PME_DEVICE", raising=False)
+    monkeypatch.delenv("KARML_JAX_PME_DEVICE", raising=False)
     import jax
 
     class _FakeDevice:
@@ -118,13 +118,13 @@ def test_jax_pme_host_eval_context_uses_cpu_default_device(monkeypatch):
 
 
 def test_jax_pme_host_eval_context_noop_when_gpu_requested(monkeypatch):
-    monkeypatch.setenv("MMML_JAX_PME_DEVICE", "gpu")
+    monkeypatch.setenv("KARML_JAX_PME_DEVICE", "gpu")
     with jax_pme_host_eval_context():
         pass
 
 
 def test_jax_pme_pure_callback_host_context_disables_jit(monkeypatch):
-    monkeypatch.delenv("MMML_JAX_PME_DEVICE", raising=False)
+    monkeypatch.delenv("KARML_JAX_PME_DEVICE", raising=False)
     import jax
 
     calls: list[str] = []
@@ -165,12 +165,12 @@ def test_materialize_jax_pme_host_numpy_returns_host_arrays():
 
 
 def test_pick_lr_solver_auto_is_mic_when_scafacos_absent(monkeypatch):
-    monkeypatch.delenv("MMML_LR_SOLVER", raising=False)
+    monkeypatch.delenv("KARML_LR_SOLVER", raising=False)
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.long_range_backend.have_scafacos",
+        "karml.interfaces.pycharmmInterface.long_range_backend.have_scafacos",
         return_value=False,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.long_range_backend.have_jax_pme",
+        "karml.interfaces.pycharmmInterface.long_range_backend.have_jax_pme",
         return_value=True,
     ):
         assert pick_lr_solver("auto") == "mic"

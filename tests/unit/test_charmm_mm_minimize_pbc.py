@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
     CharmmMmMinimizeConfig,
     _prepare_charmm_mm_minimize_list_frequencies,
 )
@@ -54,25 +54,25 @@ def test_prepare_charmm_mm_minimize_list_frequencies_harmonizes_to_nstep() -> No
 
 
 def test_minimize_charmm_mm_only_prepares_pbc_list_frequencies_before_sd() -> None:
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import minimize_charmm_mm_only
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import minimize_charmm_mm_only
 
     pycharmm = MagicMock()
     minimize = MagicMock()
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._import_pycharmm_modules",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._import_pycharmm_modules",
         return_value=(pycharmm, MagicMock(), MagicMock(), minimize, MagicMock()),
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.block_terms.apply_charmm_mm_block",
+        "karml.interfaces.pycharmmInterface.mlpot.block_terms.apply_charmm_mm_block",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         return_value=__import__("numpy").zeros((10, 3)),
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.probe_charmm_cubic_box_side_A",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.probe_charmm_cubic_box_side_A",
         return_value=(32.0, "pbound"),
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.restore_charmm_cubic_crystal_lattice",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.restore_charmm_cubic_crystal_lattice",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_charmm_mm_minimize_list_frequencies",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_charmm_mm_minimize_list_frequencies",
         return_value=50,
     ) as prepare_freq:
         minimize_charmm_mm_only(
@@ -89,26 +89,26 @@ def test_minimize_charmm_mm_only_prepares_pbc_list_frequencies_before_sd() -> No
 
 
 def test_minimize_charmm_mm_only_restores_pbc_after_cgenff_param_suspend() -> None:
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import minimize_charmm_mm_only
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import minimize_charmm_mm_only
 
     pycharmm = MagicMock()
     minimize = MagicMock()
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._import_pycharmm_modules",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._import_pycharmm_modules",
         return_value=(pycharmm, MagicMock(), MagicMock(), minimize, MagicMock()),
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.block_terms.apply_charmm_mm_block",
+        "karml.interfaces.pycharmmInterface.mlpot.block_terms.apply_charmm_mm_block",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         return_value=__import__("numpy").zeros((10, 3)),
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_charmm_mm_minimize_list_frequencies",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_charmm_mm_minimize_list_frequencies",
         return_value=50,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.probe_charmm_cubic_box_side_A",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.probe_charmm_cubic_box_side_A",
         return_value=(32.0, "pbound"),
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.restore_charmm_cubic_crystal_lattice",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.restore_charmm_cubic_crystal_lattice",
     ) as restore_lattice:
         minimize_charmm_mm_only(
             CharmmMmMinimizeConfig(nstep_sd=10, nstep_abnr=0, use_pbc=True, verbose=False)

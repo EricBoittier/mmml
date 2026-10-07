@@ -25,11 +25,11 @@ from typing import Optional, Sequence, Union
 
 import numpy as np
 
-from mmml.interfaces.pycharmmInterface.cutoffs import (
+from karml.interfaces.pycharmmInterface.cutoffs import (
     DEFAULT_ML_SWITCH_WIDTH,
     DEFAULT_MM_SWITCH_ON,
 )
-from mmml.interfaces.pycharmmInterface.mlpot.mlpot_sparse_dimer_policy import (
+from karml.interfaces.pycharmmInterface.mlpot.mlpot_sparse_dimer_policy import (
     mic_displacement_numpy,
 )
 
@@ -55,7 +55,7 @@ def halo_radius_from_cutoffs(
     physnet_cutoff: float = DEFAULT_PHYSNET_CUTOFF_A,
     monomer_extent_A: float = 0.0,
 ) -> float:
-    """Build halo radius from a :class:`~mmml.interfaces.pycharmmInterface.cutoffs.CutoffParameters`."""
+    """Build halo radius from a :class:`~karml.interfaces.pycharmmInterface.cutoffs.CutoffParameters`."""
     mm_switch_on = float(getattr(cutoff_params, "mm_switch_on", DEFAULT_MM_SWITCH_ON))
     ml_switch_width = float(
         getattr(cutoff_params, "ml_switch_width", DEFAULT_ML_SWITCH_WIDTH)
@@ -240,7 +240,7 @@ class DomdecAlignedGrid:
 
     def _build(self) -> None:
         """(Re)query DOMDEC state and rebuild the inner ``SpatialDomainGrid``."""
-        from mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domdec_atoms import (
+        from karml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domdec_atoms import (
             get_ndir,
             is_domdec_active,
         )
@@ -323,7 +323,7 @@ class DomdecAlignedGrid:
         """
         if not (self._domdec_active and self.use_ctypes_arrays):
             return np.empty(0, dtype=np.int32)
-        from mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domdec_atoms import (
+        from karml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domdec_atoms import (
             get_local_atom_indices,
         )
 
@@ -337,7 +337,7 @@ class DomdecAlignedGrid:
         """
         if not (self._domdec_active and self.use_ctypes_arrays):
             return np.empty(0, dtype=np.int32)
-        from mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domdec_atoms import (
+        from karml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domdec_atoms import (
             get_ghost_atom_indices,
         )
 

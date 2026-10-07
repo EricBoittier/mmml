@@ -103,7 +103,7 @@ def ml_bonded_copy_prm_text(
     angles: dict[tuple[str, str, str], float],
 ) -> str:
     """FLEX parameter file: copy types plus their zero-force bonds/angles."""
-    lines = ["* mmml: ML copies of CGenFF atom types (zero bonded force constants)", "*", ""]
+    lines = ["* karml: ML copies of CGenFF atom types (zero bonded force constants)", "*", ""]
     if masses:
         lines.append("ATOMS")
         lines += [f"MASS -1 {name:<8s} {mass:10.5f}" for name, mass in masses.items()]
@@ -150,11 +150,11 @@ def apply_ml_type_copies(
     number of copied types and of bond/angle parameter rows written.
     """
     if pycharmm is None:
-        from mmml.interfaces.pycharmmInterface.mlpot.block_terms import _import_pycharmm
+        from karml.interfaces.pycharmmInterface.mlpot.block_terms import _import_pycharmm
 
         pycharmm = _import_pycharmm()
     param = getattr(pycharmm, "param", None) or importlib.import_module("pycharmm.param")
-    from mmml.interfaces.pycharmmInterface.nbonds_config import read_cgenff_prm
+    from karml.interfaces.pycharmmInterface.nbonds_config import read_cgenff_prm
 
     restore_ml_atom_types(pycharmm=pycharmm)
     lib = pycharmm.lib.charmm
@@ -197,7 +197,7 @@ def apply_ml_type_copies(
             rows[kind][key] = value
 
     text = ml_bonded_copy_prm_text(masses, rows["bonds"], rows["angles"])  # type: ignore[arg-type]
-    with tempfile.TemporaryDirectory(prefix="mmml_mltypes_") as tmp:
+    with tempfile.TemporaryDirectory(prefix="karml_mltypes_") as tmp:
         path = Path(tmp) / "ml_type_copies.prm"
         path.write_text(text)
         read_cgenff_prm(path, append=True)
@@ -228,7 +228,7 @@ def restore_ml_atom_types(*, pycharmm: Any = None) -> bool:
     if not _copies:
         return False
     if pycharmm is None:
-        from mmml.interfaces.pycharmmInterface.mlpot.block_terms import _import_pycharmm
+        from karml.interfaces.pycharmmInterface.mlpot.block_terms import _import_pycharmm
 
         pycharmm = _import_pycharmm()
     for code, name in _copies.values():

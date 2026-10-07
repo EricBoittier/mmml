@@ -30,8 +30,8 @@ from matplotlib.colors import Normalize
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(_REPO_ROOT))
 
-from mmml.analysis.dimer_molecules import PAIR_SCAN_CONFIG, ORIENTED_MONOMERS
-from mmml.analysis.dimer_scans import build_rigid_dimer_2d
+from karml.analysis.dimer_molecules import PAIR_SCAN_CONFIG, ORIENTED_MONOMERS
+from karml.analysis.dimer_scans import build_rigid_dimer_2d
 from plot_utils import (
     BACKEND_LABELS,
     load_and_enrich,

@@ -53,11 +53,11 @@ def compare_pme_kernel_kcalmol(
     """Train hybrid PME helper vs MD NumPy wrapper (kcal/mol)."""
     import jax.numpy as jnp
 
-    from mmml.interfaces.pycharmmInterface.long_range_backend import (
+    from karml.interfaces.pycharmmInterface.long_range_backend import (
         compute_nvalchemiops_pme_coulomb,
         estimate_nvalchemiops_pme_real_space_cutoff,
     )
-    from mmml.models.nvalchemiops_hybrid_coulomb import (
+    from karml.models.nvalchemiops_hybrid_coulomb import (
         hybrid_nvalchemiops_pme_coulomb_energy,
     )
 
@@ -118,12 +118,12 @@ def compare_hybrid_emm_eV(
     """``hybrid_forward`` ``e_mm`` (eV) vs MD full-box Coulomb (eV)."""
     import jax.numpy as jnp
 
-    from mmml.data.units import KCAL_MOL_TO_EV
-    from mmml.interfaces.pycharmmInterface.long_range_backend import (
+    from karml.data.units import KCAL_MOL_TO_EV
+    from karml.interfaces.pycharmmInterface.long_range_backend import (
         compute_nvalchemiops_pme_coulomb,
         estimate_nvalchemiops_pme_real_space_cutoff,
     )
-    from mmml.models.hybrid_energy import hybrid_forward
+    from karml.models.hybrid_energy import hybrid_forward
 
     i = int(index)
     Z = np.asarray(data["Z"])[i]
@@ -154,7 +154,7 @@ def compare_hybrid_emm_eV(
     epsilons = jnp.asarray(data["cgenff_master_epsilons"])
 
     if checkpoint is not None:
-        from mmml.cli.misc.physnet_evaluate import _load_physnet_checkpoint
+        from karml.cli.misc.physnet_evaluate import _load_physnet_checkpoint
 
         _, params, model = _load_physnet_checkpoint(Path(checkpoint), int(Z.shape[0]))
         model_apply = model.apply
@@ -251,11 +251,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = p.parse_args(argv)
 
-    from mmml.interfaces.pycharmmInterface.long_range_backend import have_nvalchemiops_pme
+    from karml.interfaces.pycharmmInterface.long_range_backend import have_nvalchemiops_pme
 
     if not have_nvalchemiops_pme():
         print(
-            "nvalchemiops not available (install mmml[nvalchemiops-pme])",
+            "nvalchemiops not available (install karml[nvalchemiops-pme])",
             file=sys.stderr,
         )
         return 2

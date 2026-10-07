@@ -7,13 +7,13 @@ Input: NPZ with R (n_samples, n_atoms, 3), Z, N (e.g. from normal-mode-sample)
 Output: NPZ with R, Z, N, E, F, Dxyz, esp, esp_grid (if --esp), Ef (if --EF)
 
 Usage:
-    mmml pyscf-evaluate -i out/06_sampled.npz -o out/07_evaluated.npz
-    mmml pyscf-evaluate -i out/06_sampled.npz -o out/07_evaluated.npz --esp
-    mmml pyscf-evaluate -i traj.npz -o out.npz --EF
-    mmml pyscf-evaluate -i traj.npz -o out.npz --EF --efield 0,0,0.01
-    mmml pyscf-evaluate -i traj.npz -o out.npz --efield=-0.01,0,0
-    mmml pyscf-evaluate -i traj.npz -o out.npz --EF --no-efield-include-nuclear-energy
-    mmml pyscf-evaluate -i traj.npz -o out.npz --add-random-noise 0.1
+    karml pyscf-evaluate -i out/06_sampled.npz -o out/07_evaluated.npz
+    karml pyscf-evaluate -i out/06_sampled.npz -o out/07_evaluated.npz --esp
+    karml pyscf-evaluate -i traj.npz -o out.npz --EF
+    karml pyscf-evaluate -i traj.npz -o out.npz --EF --efield 0,0,0.01
+    karml pyscf-evaluate -i traj.npz -o out.npz --efield=-0.01,0,0
+    karml pyscf-evaluate -i traj.npz -o out.npz --EF --no-efield-include-nuclear-energy
+    karml pyscf-evaluate -i traj.npz -o out.npz --add-random-noise 0.1
 """
 
 from __future__ import annotations
@@ -209,7 +209,7 @@ def main() -> int:
         args.efield_enabled = True
 
     try:
-        from mmml.interfaces.pyscf4gpuInterface.calcs import compute_dft_batch
+        from karml.interfaces.pyscf4gpuInterface.calcs import compute_dft_batch
     except ModuleNotFoundError as e:
         if "cupy" in str(e).lower() or "gpu4pyscf" in str(e).lower():
             print("Error: pyscf-evaluate requires cupy and gpu4pyscf.", file=sys.stderr)

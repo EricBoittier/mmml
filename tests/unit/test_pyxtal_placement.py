@@ -20,27 +20,27 @@ def test_have_pyxtal_false_when_missing(monkeypatch):
         return real_import(name, *args, **kwargs)
 
     monkeypatch.setattr(builtins, "__import__", fake_import)
-    from mmml.interfaces.pyxtal_placement import have_pyxtal
+    from karml.interfaces.pyxtal_placement import have_pyxtal
 
     assert have_pyxtal() is False
 
 
 def test_parse_supercell_reps():
-    from mmml.interfaces.pyxtal_placement import parse_supercell_reps
+    from karml.interfaces.pyxtal_placement import parse_supercell_reps
 
     assert parse_supercell_reps("2,2,2") == (2, 2, 2)
     assert parse_supercell_reps("2x1x3") == (2, 1, 3)
 
 
 def test_parse_stoichiometry_defaults_and_repeat():
-    from mmml.interfaces.pyxtal_placement import parse_stoichiometry
+    from karml.interfaces.pyxtal_placement import parse_stoichiometry
 
     assert parse_stoichiometry(["a.xyz", "b.xyz"], None, [3]) == [3, 3]
     assert parse_stoichiometry(["a.xyz"], None, None) == [2]
 
 
 def test_resolve_pyxtal_dcm_defaults() -> None:
-    from mmml.interfaces.pyxtal_placement import (
+    from karml.interfaces.pyxtal_placement import (
         resolve_pyxtal_molecule_spec,
         resolve_pyxtal_space_group,
         resolve_pyxtal_supercell_for_composition,
@@ -60,7 +60,7 @@ def test_resolve_pyxtal_dcm_defaults() -> None:
 def test_crystal_mass_density_and_scale():
     from ase import Atoms
 
-    from mmml.interfaces.pyxtal_placement import (
+    from karml.interfaces.pyxtal_placement import (
         crystal_mass_density_g_cm3,
         scale_atoms_cell_to_density,
     )
@@ -77,7 +77,7 @@ def test_crystal_mass_density_and_scale():
 def test_scale_atoms_cell_rejects_bad_density():
     from ase import Atoms
 
-    from mmml.interfaces.pyxtal_placement import scale_atoms_cell_to_density
+    from karml.interfaces.pyxtal_placement import scale_atoms_cell_to_density
 
     atoms = Atoms("C", positions=[[0, 0, 0]], cell=[5, 5, 5], pbc=True)
     with pytest.raises(ValueError, match="positive"):
@@ -87,7 +87,7 @@ def test_scale_atoms_cell_rejects_bad_density():
 def test_build_molecular_crystal_random_mock(tmp_path, monkeypatch):
     from ase import Atoms
 
-    from mmml.interfaces.pyxtal_placement import (
+    from karml.interfaces.pyxtal_placement import (
         MolecularCrystalBuildRequest,
         build_molecular_crystal_random,
     )
@@ -112,7 +112,7 @@ def test_build_molecular_crystal_random_mock(tmp_path, monkeypatch):
             )
 
     monkeypatch.setattr(
-        "mmml.interfaces.pyxtal_placement._import_pyxtal",
+        "karml.interfaces.pyxtal_placement._import_pyxtal",
         lambda: FakePyxtal,
     )
     req = MolecularCrystalBuildRequest(
@@ -131,7 +131,7 @@ def test_build_molecular_crystal_random_mock(tmp_path, monkeypatch):
 def test_atoms_to_reference_npz(tmp_path):
     from ase import Atoms
 
-    from mmml.interfaces.pyxtal_placement import atoms_to_reference_npz
+    from karml.interfaces.pyxtal_placement import atoms_to_reference_npz
 
     atoms = Atoms(
         symbols="HOH",
@@ -149,7 +149,7 @@ def test_atoms_to_reference_npz(tmp_path):
 def test_optimize_ase_atoms_emt():
     from ase import Atoms
 
-    from mmml.interfaces.aseInterface.pyxtal_optimize import optimize_ase_atoms
+    from karml.interfaces.aseInterface.pyxtal_optimize import optimize_ase_atoms
 
     atoms = Atoms("H2", positions=[[0, 0, 0], [0, 0, 0.74]], cell=[10, 10, 10], pbc=True)
 
@@ -174,10 +174,10 @@ def test_optimize_ase_atoms_emt():
         return a
 
     with mock.patch(
-        "mmml.interfaces.aseInterface.pyxtal_optimize.attach_emt_calculator",
+        "karml.interfaces.aseInterface.pyxtal_optimize.attach_emt_calculator",
         side_effect=attach,
     ), mock.patch(
-        "mmml.interfaces.aseInterface.pyxtal_optimize._optimizer_class",
+        "karml.interfaces.aseInterface.pyxtal_optimize._optimizer_class",
         return_value=FakeOpt,
     ):
         result = optimize_ase_atoms(atoms, use_emt=True, max_steps=5)

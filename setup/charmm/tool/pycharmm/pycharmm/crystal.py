@@ -372,7 +372,7 @@ def set_cubic_side(length: float, *, cutoff: float | None = None) -> bool:
     """Define a cubic crystal of ``length`` Å via ``crystal_define_cubic``.
 
     For full PBC setup (build + IMAGE), use
-    ``mmml...pbc_env.prepare_charmm_pbc`` instead.
+    ``karml...pbc_env.prepare_charmm_pbc`` instead.
     """
     if not define_cubic(length):
         return False

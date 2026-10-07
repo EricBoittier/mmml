@@ -1,7 +1,7 @@
 # TRIA + TIP3 mechanical embedding via md-system + interaction policy.
 #
 # Prerequisite (CHARMM node):
-#   uv run mmml md-embedding build -o artifacts/md_embedding/aaa --n-waters 10
+#   uv run karml md-embedding build -o artifacts/md_embedding/aaa --n-waters 10
 #   # writes model.psf / model.crd / model.pdb + box.json
 #
 # Smoke campaign (jaxmd-unified). Legs chain via ``depends_on``. The default
@@ -16,13 +16,13 @@
 # ``pressure`` is treated as bar by EnsembleSpec (CLI help still says atm).
 # Dilute aaa boxes need ``barostat_tau`` raised (see npt job) or NPT NaNs.
 #
-#   export MMML_CKPT=examples/spooky_so3lr_muon3_epoch0013.json   # optional
-#   uv run mmml md-system \
+#   export KARML_CKPT=examples/spooky_so3lr_muon3_epoch0013.json   # optional
+#   uv run karml md-system \
 #     --config examples/tria_md_system/yaml/campaign_nvt_npt_nve.yaml \
 #     --run-all
 #
 # Single leg:
-#   uv run mmml md-system --config ... --job-id nve
+#   uv run karml md-system --config ... --job-id nve
 
 defaults:
   from_pdb: artifacts/md_embedding/aaa/model.pdb

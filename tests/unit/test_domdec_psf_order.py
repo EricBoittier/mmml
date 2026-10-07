@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from mmml.utils.domdec_psf_order import find_domdec_hydrogen_order_issues
+from karml.utils.domdec_psf_order import find_domdec_hydrogen_order_issues
 
 
 def _write_psf(path: Path, atom_lines: list[str], bonds: list[tuple[int, int]]) -> None:

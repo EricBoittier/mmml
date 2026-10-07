@@ -10,8 +10,8 @@
 
 set -euo pipefail
 
-ROOT="${MMML_ROOT:-$HOME/mmml}"
-PY="${MMML_PYTHON:-$ROOT/.venv/bin/python}"
+ROOT="${KARML_ROOT:-$HOME/karml}"
+PY="${KARML_PYTHON:-$ROOT/.venv/bin/python}"
 CACHE="${CACHE:-$HOME/orbax_cache/qcml_multipoles_traceless}"
 RUN_TAG="${RUN_TAG:-$(date +%Y%m%d-%H%M%S)}"
 TARGET_DEGREE="${TARGET_DEGREE:?Set TARGET_DEGREE to 1, 2, or 3}"

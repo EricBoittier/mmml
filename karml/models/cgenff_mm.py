@@ -85,7 +85,7 @@ def _pair_epsilon(eps: Array, iu: Array, ju: Array) -> Array:
 
     A *negative* product cannot arise from the CGenFF tables, whose epsilons are
     non-negative, only from an epsilon scale driven below zero.  Training bounds
-    the scales away from that (:data:`mmml.models.mm_lj_scales.MM_LJ_EPSILON_SCALE_BOUNDS`);
+    the scales away from that (:data:`karml.models.mm_lj_scales.MM_LJ_EPSILON_SCALE_BOUNDS`);
     here such a pair contributes nothing rather than NaN-ing the whole system.
     """
     prod = eps[iu] * eps[ju]
@@ -228,7 +228,7 @@ def cgenff_mm_energy(
 
     Returns kcal/mol.  Padding-safe (``type_idx``/``mol_id`` < 0) and vmap-safe.
     """
-    from mmml.interfaces.pycharmmInterface.calculator_utils import mm_switch_scale
+    from karml.interfaces.pycharmmInterface.calculator_utils import mm_switch_scale
 
     valid = type_idx >= 0
     safe_idx = jnp.where(valid, type_idx, 0)

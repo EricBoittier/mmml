@@ -1,6 +1,6 @@
 """Top-level CLI dispatch, exit-status handling, and JAX_PLATFORMS scrubbing.
 
-``mmml/cli/__main__.py`` is the entry point for all 64 subcommands and one of
+``karml/cli/__main__.py`` is the entry point for all 64 subcommands and one of
 the most-edited files in the tree, at 32.5% coverage. Two things here fail
 silently:
 
@@ -26,9 +26,9 @@ from pathlib import Path
 
 import pytest
 
-from mmml.cli.registry import _DISPATCH_COMMANDS
+from karml.cli.registry import _DISPATCH_COMMANDS
 
-_MAIN_PY = Path(__file__).resolve().parents[2] / "mmml" / "cli" / "__main__.py"
+_MAIN_PY = Path(__file__).resolve().parents[2] / "karml" / "cli" / "__main__.py"
 
 
 def _dispatched_commands() -> set[str]:
@@ -83,13 +83,13 @@ def test_command_names_are_shell_safe():
 
 
 def _run_cli(args: list[str], env_extra: dict[str, str] | None = None):
-    """Run ``python -m mmml.cli`` in a subprocess (dispatch calls ``os._exit``)."""
+    """Run ``python -m karml.cli`` in a subprocess (dispatch calls ``os._exit``)."""
     import os
 
-    env = {**os.environ, "MMML_DISABLE_CHARMM": "1", "MMML_QUIET": "1"}
+    env = {**os.environ, "KARML_DISABLE_CHARMM": "1", "KARML_QUIET": "1"}
     env.update(env_extra or {})
     return subprocess.run(
-        [sys.executable, "-m", "mmml.cli", *args],
+        [sys.executable, "-m", "karml.cli", *args],
         capture_output=True,
         text=True,
         timeout=300,
@@ -101,7 +101,7 @@ def _run_cli(args: list[str], env_extra: dict[str, str] | None = None):
 def test_no_command_prints_help_and_succeeds():
     proc = _run_cli([])
     assert proc.returncode == 0, proc.stderr
-    assert "mmml" in (proc.stdout + proc.stderr).lower()
+    assert "karml" in (proc.stdout + proc.stderr).lower()
 
 
 def test_unknown_command_fails_with_a_nonzero_status():
@@ -118,7 +118,7 @@ def test_help_flag_succeeds():
 
 
 def test_commands_subcommand_lists_registered_commands():
-    """``mmml commands`` prints a *grouped* listing; not every registered name
+    """``karml commands`` prints a *grouped* listing; not every registered name
     appears (``doctor`` and ``env`` are referenced in the footer instead), so
     this checks that the grouped body is populated rather than demanding all 64.
     """
@@ -129,7 +129,7 @@ def test_commands_subcommand_lists_registered_commands():
     listed = [c for c in _DISPATCH_COMMANDS if c in out]
     assert len(listed) >= 20, f"only {len(listed)} of {len(_DISPATCH_COMMANDS)} listed"
     for name in ("md-system", "make-res"):
-        assert name in out, f"{name} missing from `mmml commands` output"
+        assert name in out, f"{name} missing from `karml commands` output"
 
 
 # --- exit status ------------------------------------------------------------
@@ -141,7 +141,7 @@ def test_commands_subcommand_lists_registered_commands():
 def _hard_exit_status(code: int) -> int:
     proc = subprocess.run(
         [sys.executable, "-c",
-         f"from mmml.cli.__main__ import _hard_exit; _hard_exit({code})"],
+         f"from karml.cli.__main__ import _hard_exit; _hard_exit({code})"],
         capture_output=True, text=True, timeout=300,
         cwd=str(_MAIN_PY.parents[2]),
     )
@@ -162,7 +162,7 @@ def test_zero_exits_cleanly():
 def test_none_is_treated_as_success():
     proc = subprocess.run(
         [sys.executable, "-c",
-         "from mmml.cli.__main__ import _hard_exit; _hard_exit(None)"],
+         "from karml.cli.__main__ import _hard_exit; _hard_exit(None)"],
         capture_output=True, text=True, timeout=300,
         cwd=str(_MAIN_PY.parents[2]),
     )
@@ -173,7 +173,7 @@ def test_cli_wrapper_converts_an_exception_into_a_nonzero_status():
     """``cli()`` must not let a traceback escape as exit 0."""
     proc = subprocess.run(
         [sys.executable, "-c",
-         "import mmml.cli.__main__ as m; m.main = lambda: (_ for _ in ()).throw(RuntimeError('boom')); m.cli()"],
+         "import karml.cli.__main__ as m; m.main = lambda: (_ for _ in ()).throw(RuntimeError('boom')); m.cli()"],
         capture_output=True, text=True, timeout=300,
         cwd=str(_MAIN_PY.parents[2]),
     )
@@ -184,7 +184,7 @@ def test_cli_wrapper_converts_an_exception_into_a_nonzero_status():
 def test_cli_wrapper_preserves_an_explicit_systemexit_code():
     proc = subprocess.run(
         [sys.executable, "-c",
-         "import mmml.cli.__main__ as m; m.main = lambda: (_ for _ in ()).throw(SystemExit(7)); m.cli()"],
+         "import karml.cli.__main__ as m; m.main = lambda: (_ for _ in ()).throw(SystemExit(7)); m.cli()"],
         capture_output=True, text=True, timeout=300,
         cwd=str(_MAIN_PY.parents[2]),
     )
@@ -194,7 +194,7 @@ def test_cli_wrapper_preserves_an_explicit_systemexit_code():
 def test_cli_wrapper_passes_through_a_plain_return_code():
     proc = subprocess.run(
         [sys.executable, "-c",
-         "import mmml.cli.__main__ as m; m.main = lambda: 3; m.cli()"],
+         "import karml.cli.__main__ as m; m.main = lambda: 3; m.cli()"],
         capture_output=True, text=True, timeout=300,
         cwd=str(_MAIN_PY.parents[2]),
     )
@@ -211,12 +211,12 @@ def test_cli_wrapper_passes_through_a_plain_return_code():
 def _platforms_after_import(env_extra: dict[str, str]) -> str:
     import os
 
-    env = {**os.environ, "MMML_DISABLE_CHARMM": "1", **env_extra}
+    env = {**os.environ, "KARML_DISABLE_CHARMM": "1", **env_extra}
     env.pop("JAX_PLATFORMS", None)
     env.update({k: v for k, v in env_extra.items()})
     proc = subprocess.run(
         [sys.executable, "-c",
-         "import mmml.cli.__main__; import os; print(os.environ.get('JAX_PLATFORMS', '<unset>'))"],
+         "import karml.cli.__main__; import os; print(os.environ.get('JAX_PLATFORMS', '<unset>'))"],
         capture_output=True, text=True, timeout=300, env=env,
         cwd=str(_MAIN_PY.parents[2]),
     )

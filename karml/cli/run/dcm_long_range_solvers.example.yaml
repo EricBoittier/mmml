@@ -1,16 +1,16 @@
 # Hybrid DCM liquid mini-run for long-range Coulomb solver comparison.
 #
-# Used by ~/mmml/scripts/run_dcm_long_range_workflow.sh (Phase B).
+# Used by ~/karml/scripts/run_dcm_long_range_workflow.sh (Phase B).
 # Override solver flags on the CLI or via LR_SOLVERS / JAX_PME_METHODS env.
 #
 # Quick manual run (jax-pme Ewald, switched LJ pairs):
-#   export MMML_CKPT=~/mmml/mmml/models/physnetjax/defaults/hf_json/<ckpt>.json
-#   MMML_MPI_NP=1 ~/mmml/scripts/mmml-charmm-mpirun.sh md-system \
-#     --config ~/mmml/mmml/cli/run/dcm_long_range_solvers.example.yaml \
+#   export KARML_CKPT=~/karml/karml/models/physnetjax/defaults/hf_json/<ckpt>.json
+#   KARML_MPI_NP=1 ~/karml/scripts/karml-charmm-mpirun.sh md-system \
+#     --config ~/karml/karml/cli/run/dcm_long_range_solvers.example.yaml \
 #     --from-psf ~/tests/boxes/dcm60_l32/model.psf \
 #     --from-crd ~/tests/boxes/dcm60_l32/model.crd \
 #     --lr-solver jax_pme --jax-pme-method ewald \
-#     --checkpoint "$MMML_CKPT" -o ~/tests/runs/dcm60_jax_pme_ewald
+#     --checkpoint "$KARML_CKPT" -o ~/tests/runs/dcm60_jax_pme_ewald
 
 include:
   - presets/certified-box-handoff.yaml

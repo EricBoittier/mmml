@@ -14,7 +14,7 @@
 #   DRY_RUN=1 bash examples/m/11_adumb_windows.sh    # print per-window commands
 #   XIS="1.0 1.5" bash examples/m/11_adumb_windows.sh # subset
 #
-# Cluster: run DRY_RUN=1 to get one self-contained `mmml md-system` command per
+# Cluster: run DRY_RUN=1 to get one self-contained `karml md-system` command per
 # window, then submit each as its own sbatch job to sample the replicas in
 # parallel (they share nothing but the read-only NPZ/checkpoint).
 set -euo pipefail
@@ -33,11 +33,11 @@ if ! uv run python -c "import pycharmm" >/dev/null 2>&1; then
   exit 0
 fi
 
-if [[ -z "${MMML_CGENFF_EXTRA_RTF:-}" ]]; then
-  echo "WARN: MMML_CGENFF_EXTRA_RTF unset — CH3CL will not be in CGenFF"
+if [[ -z "${KARML_CGENFF_EXTRA_RTF:-}" ]]; then
+  echo "WARN: KARML_CGENFF_EXTRA_RTF unset — CH3CL will not be in CGenFF"
 fi
-if [[ -z "${MMML_CGENFF_EXTRA_PRM:-}" ]]; then
-  echo "WARN: MMML_CGENFF_EXTRA_PRM unset — CG331–CLGA1 bond/angle may be missing"
+if [[ -z "${KARML_CGENFF_EXTRA_PRM:-}" ]]; then
+  echo "WARN: KARML_CGENFF_EXTRA_PRM unset — CG331–CLGA1 bond/angle may be missing"
 fi
 
 echo "=== ADUMB full-range replicas seeded across xi: ${XIS} ==="
@@ -64,7 +64,7 @@ for xi in ${XIS}; do
   # Seed preservation (SEED_PRESERVE=1, default): skip the full-CGenFF MM pre-min
   # and isolated-monomer PhysNet mini so a broken/dissociated seed is not relaxed
   # back to the reactant geometry before dynamics (the hybrid ML BFGS is kept).
-  CMD=(uv run mmml md-system
+  CMD=(uv run karml md-system
     --config "${CFG}"
     --output-dir "${OUT}"
     --composition "${SOLUTE}"

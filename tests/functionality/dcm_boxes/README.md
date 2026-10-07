@@ -14,18 +14,18 @@ uv run pytest tests/unit/test_dcm_box27_calculator.py tests/unit/test_jax_mm_spo
 These build synthetic toy geometries and evaluate the hybrid calculator with
 `--jax-mm-spoof` (JAX CGenFF bonded clone instead of PhysNet).
 
-## Phase A — certify boxes (`mmml liquid-box`)
+## Phase A — certify boxes (`karml liquid-box`)
 
 On a CHARMM GPU node:
 
 ```bash
-export MMML_ROOT=~/mmml
-MPIRUN="$MMML_ROOT/scripts/mmml-charmm-mpirun.sh"
+export KARML_ROOT=~/karml
+MPIRUN="$KARML_ROOT/scripts/karml-charmm-mpirun.sh"
 
 for frac in 0.5 0.75 1.0 1.25 1.5; do
   tag=$(echo "$frac" | tr -d '.')
   N=$(uv run python -c "from workflows.pbc_solvent_burst.scripts.bulk_density import n_monomers_at_bulk_density; print(min(32, n_monomers_at_bulk_density('DCM', 27.0, $frac)))")
-  MMML_MPI_NP=1 "$MPIRUN" liquid-box \
+  KARML_MPI_NP=1 "$MPIRUN" liquid-box \
     --composition "DCM:${N}" \
     --box-size 27 \
     --bulk-density-fraction "$frac" \
@@ -44,8 +44,8 @@ JAX bonded clone (optionally parameterized from the cluster PSF). Switched MM pa
 still exercise the normal hybrid path.
 
 ```bash
-MMML_MPI_NP=1 "$MPIRUN" md-system \
-  --config "$MMML_ROOT/mmml/cli/run/dcm27_liquid_box.example.yaml" \
+KARML_MPI_NP=1 "$MPIRUN" md-system \
+  --config "$KARML_ROOT/karml/cli/run/dcm27_liquid_box.example.yaml" \
   --from-psf ~/tests/boxes/dcm27_rho100/model.psf \
   --from-crd ~/tests/boxes/dcm27_rho100/model.crd \
   --jax-mm-spoof \
@@ -55,7 +55,7 @@ MMML_MPI_NP=1 "$MPIRUN" md-system \
 ```
 
 Pass criteria: `mini` stage completes without MLpot registration / checkpoint errors;
-`mlpot_mmml_energy.json` (or stage summary) shows finite hybrid energy.
+`mlpot_karml_energy.json` (or stage summary) shows finite hybrid energy.
 
 ## CHARMM NL parity (optional)
 
@@ -75,4 +75,4 @@ uv run python tests/functionality/neighbor_lists/07_liquid_density_nl.py \
 
 - [Liquid box workflow](../../../docs/liquid-box-workflow.md)
 - [CHARMM CGenFF JAX clone](../../../docs/cgenff-jax-clone.md)
-- Example YAML: `mmml/cli/run/dcm27_liquid_box.example.yaml`
+- Example YAML: `karml/cli/run/dcm27_liquid_box.example.yaml`

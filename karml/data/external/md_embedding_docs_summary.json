@@ -5,7 +5,7 @@
     "num_epochs": 8,
     "train_frames": 12500,
     "valid_frames": 1249,
-    "checkpoint_json": "/home/ericb/mmml/artifacts/md_embedding/aaa_docs/aaa_smoke_params.json",
+    "checkpoint_json": "/home/ericb/karml/artifacts/md_embedding/aaa_docs/aaa_smoke_params.json",
     "best_valid_loss": 102.65313720703125
   },
   "evaluation": {

@@ -8,7 +8,7 @@ from unittest import mock
 import numpy as np
 import pytest
 
-from mmml.interfaces.scafacosInterface.scafacos_session import (
+from karml.interfaces.scafacosInterface.scafacos_session import (
     ScaFaCoSUnavailable,
     compute_scafacos_coulomb,
     have_scafacos,
@@ -18,7 +18,7 @@ from mmml.interfaces.scafacosInterface.scafacos_session import (
 
 def test_have_scafacos_false_when_lib_missing():
     with mock.patch(
-        "mmml.interfaces.scafacosInterface.scafacos_session.load_scafacos_library",
+        "karml.interfaces.scafacosInterface.scafacos_session.load_scafacos_library",
         side_effect=ScaFaCoSUnavailable("missing"),
     ):
         assert have_scafacos() is False
@@ -53,12 +53,12 @@ def test_compute_scafacos_coulomb_calls_session(tmp_path):
             return None
 
         def run_coulomb(self, positions, charges):
-            from mmml.interfaces.scafacosInterface.scafacos_session import CoulombFieldResult
+            from karml.interfaces.scafacosInterface.scafacos_session import CoulombFieldResult
 
             return CoulombFieldResult(energy_kcalmol=-5.0, forces_kcalmol_A=forces)
 
     with mock.patch(
-        "mmml.interfaces.scafacosInterface.scafacos_session.ScaFaCoSSession",
+        "karml.interfaces.scafacosInterface.scafacos_session.ScaFaCoSSession",
         FakeSession,
     ):
         out = compute_scafacos_coulomb(pos, chg, box_length_A=20.0, method="p3m")

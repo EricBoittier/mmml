@@ -18,8 +18,8 @@ For Noda generalised 2D correlation, add --noda (with --transient).
 
 Usage:
   # Correlation IR + VCD from an MD trajectory
-  mmml-spectra-md --trajectory md.traj --params params.json
-  # or: python -m mmml.spectra.spectra_md --trajectory md.traj --params params.json
+  karml-spectra-md --trajectory md.traj --params params.json
+  # or: python -m karml.spectra.spectra_md --trajectory md.traj --params params.json
 
   # Transient VCD (e.g. after switching on E-field at t=0)
   python spectra_md.py --trajectory md.traj --params params.json \\
@@ -63,7 +63,7 @@ try:
 except ImportError:
     _HAS_H5PY = False
 
-from mmml.models.efield.ase_calc_EF import AseCalculatorEF
+from karml.models.efield.ase_calc_EF import AseCalculatorEF
 
 # =====================================================================
 # Constants
@@ -244,7 +244,7 @@ def compute_magnetic_dipoles(positions, velocities, charges):
 def load_hdf5_trajectory(path):
     """Load positions, velocities, and metadata from an HDF5 trajectory.
 
-    Reads files written by ``mmml.utils.hdf5_reporter.HDF5Reporter``.
+    Reads files written by ``karml.utils.hdf5_reporter.HDF5Reporter``.
 
     Returns
     -------
@@ -1275,8 +1275,8 @@ def main(args=None):
     # For Raman, we also need the raw model & params
     raman_model = raman_params = None
     if getattr(args, 'raman', False):
-        from mmml.models.efield.ase_calc_EF import load_params, load_config
-        from mmml.models.efield.training import MessagePassingModel
+        from karml.models.efield.ase_calc_EF import load_params, load_config
+        from karml.models.efield.training import MessagePassingModel
 
         params_path = Path(args.params)
         raman_params = load_params(params_path)
@@ -1595,7 +1595,7 @@ def main(args=None):
     # ================================================================
     traj_frames = first_traj_frames
     if args.method in ('harmonic', 'both'):
-        from mmml.models.efield.calc_spectra import (
+        from karml.models.efield.calc_spectra import (
             compute_normal_modes,
             compute_ir,
             compute_vcd,

@@ -15,7 +15,7 @@ def _write_packmol_like_pdb(
 ) -> None:
     """Write minimal ATOM records (serial, resid, name, xyz)."""
     lines = [
-        "REMARK   mmml test packmol output",
+        "REMARK   karml test packmol output",
         "CRYST1   200.000   200.000   200.000  90.00  90.00  90.00 P 1           1",
     ]
     for serial, resid, name, (x, y, z) in records:
@@ -28,7 +28,7 @@ def _write_packmol_like_pdb(
 
 
 def test_assign_packmol_pdb_to_psf_order_reorders_by_resid_and_name(tmp_path):
-    from mmml.interfaces.pycharmmInterface.packmol_placement import (
+    from karml.interfaces.pycharmmInterface.packmol_placement import (
         assign_packmol_pdb_to_psf_order,
     )
 
@@ -60,7 +60,7 @@ def test_assign_packmol_pdb_to_psf_order_reorders_by_resid_and_name(tmp_path):
 
 
 def test_assign_packmol_pdb_to_psf_order_rejects_mismatched_keys(tmp_path):
-    from mmml.interfaces.pycharmmInterface.packmol_placement import (
+    from karml.interfaces.pycharmmInterface.packmol_placement import (
         assign_packmol_pdb_to_psf_order,
     )
 
@@ -78,7 +78,7 @@ def test_assign_packmol_pdb_to_psf_order_rejects_mismatched_keys(tmp_path):
 
 
 def test_assign_packmol_pdb_to_psf_order_rejects_flat_cluster(tmp_path):
-    from mmml.interfaces.pycharmmInterface.packmol_placement import (
+    from karml.interfaces.pycharmmInterface.packmol_placement import (
         assign_packmol_pdb_to_psf_order,
     )
 

@@ -3,7 +3,7 @@
   "started_at": "2026-07-05T06:56:58.008856+00:00",
   "finished_at": "2026-07-05T07:05:47.997777+00:00",
   "exit_code": 2,
-  "command": "mmml md-system --composition DCM:4 --no-periodic-charmm-vdw --backend pycharmm --n-prod 1 --n-equil 0 --output-dir scratch/md_out --skip-if-crd-exists --tag test",
+  "command": "karml md-system --composition DCM:4 --no-periodic-charmm-vdw --backend pycharmm --n-prod 1 --n-equil 0 --output-dir scratch/md_out --skip-if-crd-exists --tag test",
   "setup": "pbc_nve",
   "backend": "pycharmm",
   "output_dir": "scratch/md_out",

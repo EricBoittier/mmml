@@ -7,7 +7,7 @@ from typing import Any, Callable
 
 import numpy as np
 
-from mmml.md.system import MolecularSystem, SystemSpec
+from karml.md.system import MolecularSystem, SystemSpec
 
 __all__ = ["PackmolSystemBuilder", "PyxtalSystemBuilder", "PeptideWaterSystemBuilder"]
 
@@ -16,7 +16,7 @@ def _composition(spec: SystemSpec) -> list[tuple[str, int]]:
     if not spec.composition:
         raise ValueError(f"{spec.builder} builder requires SystemSpec.composition")
     # Lazy import keeps the shared MD package free of PyCHARMM at import time.
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import parse_composition
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import parse_composition
 
     return parse_composition(spec.composition)
 
@@ -84,7 +84,7 @@ def _lower_optional_psf(
     if psf_path is None:
         return system
     if psf_builder is None:
-        from mmml.md.builders.psf import PsfSystemBuilder
+        from karml.md.builders.psf import PsfSystemBuilder
 
         psf_builder = PsfSystemBuilder()
     lowered = psf_builder.build(
@@ -132,7 +132,7 @@ class PackmolSystemBuilder:
         params.setdefault("cube_side", spec.box_size)
         fn = self.build_fn
         if fn is None:
-            from mmml.cli.run.md_pbc_suite.cluster import build_packmol_composition_cluster
+            from karml.cli.run.md_pbc_suite.cluster import build_packmol_composition_cluster
 
             fn = build_packmol_composition_cluster
         z, positions, sizes, residues = fn(composition=composition, seed=spec.seed, **params)
@@ -163,7 +163,7 @@ class PyxtalSystemBuilder:
         composition = _composition(spec)
         fn = self.build_fn
         if fn is None:
-            from mmml.cli.run.md_pbc_suite.cluster import build_pyxtal_composition_cluster
+            from karml.cli.run.md_pbc_suite.cluster import build_pyxtal_composition_cluster
 
             fn = build_pyxtal_composition_cluster
         z, positions, sizes, residues = fn(composition=composition, seed=spec.seed, **params)
@@ -197,7 +197,7 @@ class PeptideWaterSystemBuilder:
             params.setdefault("n_waters", spec.n_molecules)
         fn = self.build_fn
         if fn is None:
-            from mmml.interfaces.pycharmmInterface.trialanine_water_box import (
+            from karml.interfaces.pycharmmInterface.trialanine_water_box import (
                 build_trialanine_water_box_in_charmm,
             )
 
@@ -205,13 +205,13 @@ class PeptideWaterSystemBuilder:
         result = fn(seed=spec.seed, **params)
         get_z = self.atomic_numbers_fn
         if get_z is None:
-            from mmml.interfaces.pycharmmInterface.utils import get_Z_from_psf
+            from karml.interfaces.pycharmmInterface.utils import get_Z_from_psf
 
             get_z = get_Z_from_psf
         z = np.asarray(get_z(), dtype=np.int32)
         builder = self.psf_builder
         if builder is None:
-            from mmml.md.builders.psf import PsfSystemBuilder
+            from karml.md.builders.psf import PsfSystemBuilder
 
             builder = PsfSystemBuilder()
         prm_paths = [result.cgenff_prm, *result.cmap_extra_prm_files]

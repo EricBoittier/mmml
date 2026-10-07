@@ -23,10 +23,10 @@ export REPO_ROOT
 
 export JAX_PLATFORMS="${JAX_PLATFORMS:-cpu}"
 export JAX_ENABLE_X64="${JAX_ENABLE_X64:-1}"
-export MMML_MLPOT_DEVICE="${MMML_MLPOT_DEVICE:-cpu}"
-export MMML_JAX_WARMUP_DEVICE="${MMML_JAX_WARMUP_DEVICE:-cpu}"
-export MMML_CKPT="${MMML_CKPT:-${REPO_ROOT}/examples/ckpts_json/DESdimers_params.json}"
-export MMML_MM_NL_BACKEND="${MMML_MM_NL_BACKEND:-auto}"
+export KARML_MLPOT_DEVICE="${KARML_MLPOT_DEVICE:-cpu}"
+export KARML_JAX_WARMUP_DEVICE="${KARML_JAX_WARMUP_DEVICE:-cpu}"
+export KARML_CKPT="${KARML_CKPT:-${REPO_ROOT}/examples/ckpts_json/DESdimers_params.json}"
+export KARML_MM_NL_BACKEND="${KARML_MM_NL_BACKEND:-auto}"
 
 ARTIFACTS_DIR="${ARTIFACTS_DIR:-${REPO_ROOT}/artifacts/md_cpu}"
 mkdir -p "${ARTIFACTS_DIR}"

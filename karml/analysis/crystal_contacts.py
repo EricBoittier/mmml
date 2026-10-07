@@ -54,7 +54,7 @@ class Contact:
 
 def molecular_frames(atoms: Any) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Unwrap a cell into whole molecules; return ``(mol_id, positions, cell)``."""
-    from mmml.analysis.lattice_energy import unwrap_molecules
+    from karml.analysis.lattice_energy import unwrap_molecules
 
     cell = np.asarray(atoms.cell.array, dtype=np.float64)
     mol_id, positions = unwrap_molecules(
@@ -139,7 +139,7 @@ def element_pair_contacts(
     """
     from ase.data import atomic_numbers
 
-    from mmml.analysis.lattice_energy import lattice_shift_vectors, molecular_reach_A
+    from karml.analysis.lattice_energy import lattice_shift_vectors, molecular_reach_A
 
     mol_id, positions, cell = molecular_frames(atoms)
     z = np.asarray(atoms.get_atomic_numbers(), dtype=int)

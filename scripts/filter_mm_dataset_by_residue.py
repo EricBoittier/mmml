@@ -12,7 +12,7 @@ allowlist, chosen either explicitly (``--residues``) or as the ``--top N``
 residues by frame count. It reports what that costs in frames and what it buys
 in per-type sampling floor.
 
-Requires ``cgenff_res_name`` -- written by ``mmml prepare-mm-dataset``.
+Requires ``cgenff_res_name`` -- written by ``karml prepare-mm-dataset``.
 """
 
 from __future__ import annotations
@@ -24,7 +24,7 @@ from pathlib import Path
 
 import numpy as np
 
-from mmml.data.cgenff_dataset import load_reference
+from karml.data.cgenff_dataset import load_reference
 
 
 def residue_counts(res_name: np.ndarray) -> Counter:
@@ -72,7 +72,7 @@ def main(argv: list[str] | None = None) -> int:
     data = dict(np.load(a.npz, allow_pickle=True))
     if "cgenff_res_name" not in data:
         raise SystemExit(
-            f"{a.npz} has no 'cgenff_res_name'. Re-run `mmml prepare-mm-dataset` "
+            f"{a.npz} has no 'cgenff_res_name'. Re-run `karml prepare-mm-dataset` "
             "-- older enriched NPZs predate that field."
         )
     res_name = np.asarray(data["cgenff_res_name"]).astype(str)

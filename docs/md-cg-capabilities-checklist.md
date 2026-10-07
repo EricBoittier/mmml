@@ -1,6 +1,6 @@
 # `md-system` / `cg_jaxmd`: capabilities checklist
 
-What the shared `mmml/md/` stack can do today, with POV-Ray figures of the
+What the shared `karml/md/` stack can do today, with POV-Ray figures of the
 cells and the energy split, and runnable examples for each path. Status
 marks: ✅ done and tested, 🚧 partial, ⬜ open.
 
@@ -16,8 +16,8 @@ md-system CLI ─┘                                      ↓
                               JaxmdDriver | RigidBodySampler
 ```
 
-`mmml.md` owns the system, the terms, the neighbor policy, the driver, and
-the sampler. `mmml md-system` is the supported CLI. A cg-style JSON file is
+`karml.md` owns the system, the terms, the neighbor policy, the driver, and
+the sampler. `karml md-system` is the supported CLI. A cg-style JSON file is
 lowered into the same `RunConfig`. `examples/cg_jaxmd.py` stays the frozen
 scientific reference; `examples/cg_jaxmd_unified.py` is the thin front end
 on the shared pipeline.
@@ -26,7 +26,7 @@ on the shared pipeline.
 
 ## 1. Capability checklist
 
-| Capability | Legacy `cg_jaxmd.py` | Shared `mmml.md` | `md-system --jaxmd-unified` |
+| Capability | Legacy `cg_jaxmd.py` | Shared `karml.md` | `md-system --jaxmd-unified` |
 |---|:---:|:---:|:---:|
 | FIRE, NVE, NVT (Langevin or Nosé–Hoover) | ✅ | ✅ | ✅ |
 | NPT (Nosé–Hoover piston; `pressure` is bar) | — | ✅ | ✅ |
@@ -150,7 +150,7 @@ not build a box.
 registered terms. This is what `examples/cg_jaxmd_unified.py` runs.
 
 ```python
-from mmml.md.lowering import runconfig_from_cg_config
+from karml.md.lowering import runconfig_from_cg_config
 
 cfg = {
     "checkpoint": "examples/sppoky-epoch-0010_params.json",
@@ -186,12 +186,12 @@ the physical terms, so a rigid-body move feels them too.
 
 ```python
 import numpy as np
-from mmml.md.assemble import assemble_and_run, build_hybrid_energy
-from mmml.md.config import EnsembleSpec, RunConfig
-from mmml.md.energy.terms.dihedral import DihedralRestraint, DihedralRestraintTerm
-from mmml.md.energy.terms.rxncoor import ReactionCoordinateBiasTerm
-from mmml.md.restraints import LinearDistanceCV
-from mmml.md.system import MolecularSystem, SystemSpec
+from karml.md.assemble import assemble_and_run, build_hybrid_energy
+from karml.md.config import EnsembleSpec, RunConfig
+from karml.md.energy.terms.dihedral import DihedralRestraint, DihedralRestraintTerm
+from karml.md.energy.terms.rxncoor import ReactionCoordinateBiasTerm
+from karml.md.restraints import LinearDistanceCV
+from karml.md.system import MolecularSystem, SystemSpec
 
 system = MolecularSystem(
     R=np.array([[0., 0., 0.], [1.8, 0., 0.], [4.8, 0., 0.]]),
@@ -233,7 +233,7 @@ windows use `rxncoor` with the same CV as the gas-phase sampler; see
 Checkpoint present, no `--ff`: terms are `ml_intra` + `mm_nonbonded`.
 
 ```bash
-uv run mmml md-system --setup pbc_nve --backend jaxmd --jaxmd-unified \
+uv run karml md-system --setup pbc_nve --backend jaxmd --jaxmd-unified \
   --composition "TIP3:4" --box-size 15.0 \
   --checkpoint examples/sppoky-epoch-0010_params.json \
   --dt-fs 1.0 --ps 0.01 --seed 42
@@ -252,7 +252,7 @@ Packmol composition, unified JAX-MD leg of
 
 ```bash
 source examples/m/_env.sh
-uv run mmml md-system --config examples/m/yaml/mech_embed_tip3.yaml --run-all
+uv run karml md-system --config examples/m/yaml/mech_embed_tip3.yaml --run-all
 ```
 
 The unified leg is `composition: "AMM1:1,CH3CL:1,TIP3:12"`, `box_size: 30`,
@@ -263,7 +263,7 @@ The same ownership from a prebuilt PDB
 `box.json` supply topology and the cell:
 
 ```bash
-uv run mmml md-system --config examples/m/yaml/sol_tip3_30A_md.yaml
+uv run karml md-system --config examples/m/yaml/sol_tip3_30A_md.yaml
 ```
 
 Trialanine uses an interaction-policy file instead of a hand-written residue
@@ -272,8 +272,8 @@ ML provider and every pair to CGenFF. The campaign lowers that to
 `ml_resnames: [TRIA]`.
 
 ```bash
-uv run mmml md-embedding build -o artifacts/md_embedding/aaa --n-waters 10
-uv run mmml md-system \
+uv run karml md-embedding build -o artifacts/md_embedding/aaa --n-waters 10
+uv run karml md-system \
   --config examples/tria_md_system/yaml/campaign_nvt_npt_nve.yaml \
   --run-all
 ```
@@ -320,7 +320,7 @@ Fresh NVT (Langevin from `--seed`). This is the default restart behaviour
 for a run that has nothing to continue:
 
 ```bash
-uv run mmml md-system --setup pbc_nvt --backend jaxmd --jaxmd-unified \
+uv run karml md-system --setup pbc_nvt --backend jaxmd --jaxmd-unified \
   --composition "TIP3:4" --box-size 15.0 \
   --checkpoint examples/sppoky-epoch-0010_params.json \
   --dt-fs 0.5 --ps 0.5 --seed 0 \
@@ -331,7 +331,7 @@ Continue that leg. Default flags restore the Langevin RNG and the momenta,
 and skip FIRE:
 
 ```bash
-uv run mmml md-system --setup pbc_nvt --backend jaxmd --jaxmd-unified \
+uv run karml md-system --setup pbc_nvt --backend jaxmd --jaxmd-unified \
   --composition "TIP3:4" --box-size 15.0 \
   --checkpoint examples/sppoky-epoch-0010_params.json \
   --dt-fs 0.5 --ps 0.5 --seed 0 \
@@ -344,7 +344,7 @@ The trialanine campaign does the same across `depends_on`: `npt` continues
 comes from the geometry handoff.
 
 ```bash
-uv run mmml md-system \
+uv run karml md-system \
   --config examples/tria_md_system/yaml/campaign_nvt_npt_nve.yaml \
   --run-all
 ```
@@ -352,7 +352,7 @@ uv run mmml md-system \
 Draw new Maxwell velocities on the continue (chain and RNG start over too):
 
 ```bash
-uv run mmml md-system --setup pbc_nvt --backend jaxmd --jaxmd-unified \
+uv run karml md-system --setup pbc_nvt --backend jaxmd --jaxmd-unified \
   --composition "TIP3:4" --box-size 15.0 \
   --checkpoint examples/sppoky-epoch-0010_params.json \
   --dt-fs 0.5 --ps 0.5 --seed 0 \
@@ -366,7 +366,7 @@ momenta would describe the pre-minimization geometry, so the restart is
 dropped:
 
 ```bash
-uv run mmml md-system --setup pbc_nvt --backend jaxmd --jaxmd-unified \
+uv run karml md-system --setup pbc_nvt --backend jaxmd --jaxmd-unified \
   --composition "TIP3:4" --box-size 15.0 \
   --checkpoint examples/sppoky-epoch-0010_params.json \
   --dt-fs 0.5 --ps 0.5 --seed 0 \
@@ -378,7 +378,7 @@ uv run mmml md-system --setup pbc_nvt --backend jaxmd --jaxmd-unified \
 Keep the npz and the handoff, and skip the DCD:
 
 ```bash
-uv run mmml md-system --setup pbc_nve --backend jaxmd --jaxmd-unified \
+uv run karml md-system --setup pbc_nve --backend jaxmd --jaxmd-unified \
   --composition "TIP3:4" --box-size 15.0 \
   --checkpoint examples/sppoky-epoch-0010_params.json \
   --dt-fs 0.5 --ps 0.5 --seed 0 \
@@ -400,7 +400,7 @@ the smoke. The denser 200-water / 30 Å recipe is
 A block temperature schedule on any NVT or NPT leg:
 
 ```bash
-uv run mmml md-system --setup pbc_nvt --backend jaxmd --jaxmd-unified \
+uv run karml md-system --setup pbc_nvt --backend jaxmd --jaxmd-unified \
   --composition "TIP3:4" --box-size 15.0 \
   --checkpoint examples/sppoky-epoch-0010_params.json \
   --temperature-schedule '200->300:0.25,300:0.75' \
@@ -416,7 +416,7 @@ Default intermolecular FF with `--sampler rigid` and no checkpoint is CGenFF
 (`mm_nonbonded` only):
 
 ```bash
-uv run mmml md-system --setup pbc_nvt --backend jaxmd --jaxmd-unified \
+uv run karml md-system --setup pbc_nvt --backend jaxmd --jaxmd-unified \
   --sampler rigid --ff cgenff \
   --composition "TIP3:4" --box-size 15.0 --ps 0.1 --seed 42
 ```
@@ -426,7 +426,7 @@ at build, then scores classical electrostatics, QDO dispersion, and
 intermolecular ZBL (`cuton=0.1` Å, `cutoff=0.6` Å) during the MC:
 
 ```bash
-uv run mmml md-system --setup pbc_nvt --backend jaxmd --jaxmd-unified \
+uv run karml md-system --setup pbc_nvt --backend jaxmd --jaxmd-unified \
   --sampler rigid --ff zbl-mbd-multipoles \
   --composition "TIP3:4" --box-size 15.0 --ps 0.1 --seed 42
 ```
@@ -449,7 +449,7 @@ supported route; that file does not set `--jaxmd-unified`.
 
 `ml_mm_pol` adds the classical induction `−½ Σ αᵢ |Eᵢ|²` from the MM field
 on the solute. It is a registered term
-(`mmml/md/energy/terms/ml_mm_pol.py`) and is not selected by the unified CLI.
+(`karml/md/energy/terms/ml_mm_pol.py`) and is not selected by the unified CLI.
 
 Long-range solvers `jax_pme`, `nvalchemiops_pme`, and `scafacos` evaluate on
 the ASE face. The jitted face raises `NotImplementedError` for anything
@@ -475,6 +475,6 @@ other than `mic`.
 - [Design & decisions](md-cg-unification-design.md) — architecture and the roadmap this page summarizes.
 - [Handoff notes](md-cg-unification-handoff.md) — implementation notes for the open rows.
 - [Hybrid ML/MM decomposition](hybrid-mlmm-decomposition.md) — the term split.
-- [`md-system` YAML configs](md-system-configs.md) and [`mmml md-system`](cli/commands/md-system.md).
+- [`md-system` YAML configs](md-system-configs.md) and [`karml md-system`](cli/commands/md-system.md).
 - `workflows/unified_backend_sweep/README.md` — FIRE, NVE, NVT, NPT, and rigid MC on one small TIP3 box.
 - `workflows/mixed_calculator_sweep/` — NVE checks for the peptide–water route.

@@ -9,7 +9,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from mmml.interfaces.pycharmmInterface.mlpot.mlpot_gpu_policy import (
+from karml.interfaces.pycharmmInterface.mlpot.mlpot_gpu_policy import (
     effective_ml_gpu_count,
     resolve_ml_gpu_count,
 )
@@ -51,7 +51,7 @@ def run_chunked_model_apply(
     every used slot lies in those chunks (see ``mlpot.ml_chunk_budget``).
     ``n_eval_chunks`` takes precedence over ``n_valid``.
     """
-    from mmml.interfaces.pycharmmInterface.mlpot.ml_profile import (
+    from karml.interfaces.pycharmmInterface.mlpot.ml_profile import (
         get_mlpot_profile_stats,
         mlpot_profiling_enabled,
     )

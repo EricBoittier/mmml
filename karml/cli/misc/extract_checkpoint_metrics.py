@@ -6,7 +6,7 @@ This tool extracts loss values and metrics from Orbax checkpoint files
 and creates comprehensive training plots with log-scale loss.
 
 Usage:
-    python -m mmml.cli.extract_checkpoint_metrics \
+    python -m karml.cli.extract_checkpoint_metrics \
         checkpoints/run/run-uuid/ \
         --output training_plots.png \
         --log-loss
@@ -23,7 +23,7 @@ import re
 
 from matplotlib.lines import Line2D
 
-from mmml.utils.plotting.styles import (
+from karml.utils.plotting.styles import (
     DEFAULT_PLOT_STYLE,
     PlotStyle,
     apply_plot_style,
@@ -978,13 +978,13 @@ def build_parser() -> argparse.ArgumentParser:
         epilog="""
 Examples:
   # Plot glycol training with log scale
-  python -m mmml.cli.extract_checkpoint_metrics \\
+  python -m karml.cli.extract_checkpoint_metrics \\
       examples/glycol/checkpoints/glycol_production/glycol_production-*/ \\
       --output glycol_training.png \\
       --log-loss
   
   # Without log scale
-  python -m mmml.cli.extract_checkpoint_metrics \\
+  python -m karml.cli.extract_checkpoint_metrics \\
       checkpoints/run/run-uuid/ \\
       --output training.png
         """
@@ -1130,7 +1130,7 @@ def main():
         print("\n✅ ANALYSIS COMPLETE!")
         print("\nTo evaluate the best checkpoint:")
         best_epoch = int(metrics['epochs'][np.nanargmin(metrics['valid_loss'])])
-        print("  python -m mmml.cli.evaluate_model \\")
+        print("  python -m karml.cli.evaluate_model \\")
         print(f"      {args.checkpoint_dir}/epoch-{best_epoch} \\")
         print("      --test-data splits/data_test.npz")
     

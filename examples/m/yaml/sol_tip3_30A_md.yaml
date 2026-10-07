@@ -13,7 +13,7 @@
 #
 #   bash examples/m/run_sol_tip3_30A.sh
 #   # or:
-#   uv run mmml md-system --config examples/m/yaml/sol_tip3_30A_md.yaml
+#   uv run karml md-system --config examples/m/yaml/sol_tip3_30A_md.yaml
 
 from_pdb: artifacts/nh3_ch3cl/boxes/tip3/model.pdb
 checkpoint: examples/m/model_ext.json

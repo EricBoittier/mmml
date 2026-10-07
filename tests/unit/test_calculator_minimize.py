@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 import pytest
 
-from mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize import (
+from karml.interfaces.pycharmmInterface.mlpot.calculator_minimize import (
     HybridCalculatorFireConfig,
     HybridCalculatorMinimizeConfig,
     _BestMinimizationFrame,
@@ -29,7 +29,7 @@ def test_spike_fmax_limit_uses_factor_and_floor():
 
 
 def test_annotate_ase_optimizer_log_line_adds_kcal_mol():
-    from mmml.data.units import EV_TO_KCAL_MOL
+    from karml.data.units import EV_TO_KCAL_MOL
 
     header = "      Step     Time          Energy          fmax"
     annotated_header = annotate_ase_optimizer_log_line(header)
@@ -43,7 +43,7 @@ def test_annotate_ase_optimizer_log_line_adds_kcal_mol():
 
 
 def test_dual_unit_logfile_is_treated_as_open_by_ase():
-    from mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize import (
+    from karml.interfaces.pycharmmInterface.mlpot.calculator_minimize import (
         _DualUnitAseOptimizerLog,
         ase_optimizer_dual_unit_logfile,
     )
@@ -75,7 +75,7 @@ def test_dual_unit_logfile_is_treated_as_open_by_ase():
 def test_hybrid_minimize_atoms_rewraps_charmm_pbc_molecules():
     from types import SimpleNamespace
 
-    from mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize import (
+    from karml.interfaces.pycharmmInterface.mlpot.calculator_minimize import (
         _hybrid_minimize_atoms,
     )
 
@@ -109,7 +109,7 @@ def test_hybrid_minimize_atoms_moves_straddling_molecules_by_lattice_vectors_onl
     # face must keep its periodic contacts: a lattice shift only, no inward nudge.
     from types import SimpleNamespace
 
-    from mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize import (
+    from karml.interfaces.pycharmmInterface.mlpot.calculator_minimize import (
         _hybrid_minimize_atoms,
     )
 
@@ -134,7 +134,7 @@ def test_hybrid_minimize_atoms_moves_straddling_molecules_by_lattice_vectors_onl
 def test_hybrid_minimize_atoms_leaves_open_boundary_coordinates_unchanged():
     from types import SimpleNamespace
 
-    from mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize import (
+    from karml.interfaces.pycharmmInterface.mlpot.calculator_minimize import (
         _hybrid_minimize_atoms,
     )
 
@@ -405,7 +405,7 @@ def test_restore_best_on_abort_uses_force_not_energy():
 
 
 def test_historical_best_restores_when_later_mini_regresses():
-    from mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize import (
+    from karml.interfaces.pycharmmInterface.mlpot.calculator_minimize import (
         CalculatorMiniHistoricalBest,
         _maybe_restore_calculator_mini_historical_best,
         _update_calculator_mini_historical_best,
@@ -446,7 +446,7 @@ def test_historical_best_restores_when_later_mini_regresses():
 
 
 def test_clear_calculator_mini_historical_best_drops_preheat_frame():
-    from mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize import (
+    from karml.interfaces.pycharmmInterface.mlpot.calculator_minimize import (
         CalculatorMiniHistoricalBest,
         _maybe_restore_calculator_mini_historical_best,
         clear_calculator_mini_historical_best,
@@ -547,7 +547,7 @@ def test_resolve_calculator_mini_safe_grms_reads_yaml_keys():
 
 
 def test_parse_md_system_args_accepts_safe_grms_yaml_keys(tmp_path):
-    from mmml.cli.run.md_system import parse_md_system_args
+    from karml.cli.run.md_system import parse_md_system_args
 
     cfg = tmp_path / "safe_grms.yaml"
     cfg.write_text(
@@ -617,7 +617,7 @@ def test_run_hybrid_calculator_bfgs_stops_on_safe_grms():
 
 
 def test_commit_hybrid_calculator_mini_defer_path_skips_update_and_calls_prime():
-    from mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize import (
+    from karml.interfaces.pycharmmInterface.mlpot.calculator_minimize import (
         _commit_hybrid_calculator_mini_result,
     )
 
@@ -630,21 +630,21 @@ def test_commit_hybrid_calculator_mini_defer_path_skips_update_and_calls_prime()
     best = _BestMinimizationFrame(atoms)
 
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.sync_charmm_lists_after_mini",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics.sync_charmm_lists_after_mini",
     ) as sync_lists, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.invalidate_mlpot_calculator_caches",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics.invalidate_mlpot_calculator_caches",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.mlpot_skip_charmm_ener_force_before_first_sd",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.mlpot_skip_charmm_ener_force_before_first_sd",
         return_value=True,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.prime_charmm_hybrid_energy_before_mlpot_sd",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.prime_charmm_hybrid_energy_before_mlpot_sd",
     ) as prime, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize.mlpot_hybrid_grms_from_calculator",
+        "karml.interfaces.pycharmmInterface.mlpot.calculator_minimize.mlpot_hybrid_grms_from_calculator",
         return_value=0.5,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize._update_calculator_mini_historical_best",
+        "karml.interfaces.pycharmmInterface.mlpot.calculator_minimize._update_calculator_mini_historical_best",
     ):
         grms = _commit_hybrid_calculator_mini_result(
             mlpot_ctx,
@@ -664,7 +664,7 @@ def test_commit_hybrid_calculator_mini_defer_path_skips_update_and_calls_prime()
 
 
 def test_commit_hybrid_calculator_mini_defer_path_restores_historical_best():
-    from mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize import (
+    from karml.interfaces.pycharmmInterface.mlpot.calculator_minimize import (
         _commit_hybrid_calculator_mini_result,
     )
 
@@ -677,28 +677,28 @@ def test_commit_hybrid_calculator_mini_defer_path_restores_historical_best():
     best = _BestMinimizationFrame(atoms)
 
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.sync_charmm_lists_after_mini",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics.sync_charmm_lists_after_mini",
     ) as sync_lists, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.invalidate_mlpot_calculator_caches",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics.invalidate_mlpot_calculator_caches",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.mlpot_skip_charmm_ener_force_before_first_sd",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.mlpot_skip_charmm_ener_force_before_first_sd",
         return_value=True,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.prime_charmm_hybrid_energy_before_mlpot_sd",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.prime_charmm_hybrid_energy_before_mlpot_sd",
     ) as prime, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize.mlpot_hybrid_grms_from_calculator",
+        "karml.interfaces.pycharmmInterface.mlpot.calculator_minimize.mlpot_hybrid_grms_from_calculator",
         return_value=0.5,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.invalidate_mlpot_pre_sd_ener_probe",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.invalidate_mlpot_pre_sd_ener_probe",
     ) as invalidate_probe, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize._update_calculator_mini_historical_best",
+        "karml.interfaces.pycharmmInterface.mlpot.calculator_minimize._update_calculator_mini_historical_best",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize._maybe_restore_calculator_mini_historical_best",
+        "karml.interfaces.pycharmmInterface.mlpot.calculator_minimize._maybe_restore_calculator_mini_historical_best",
         return_value=(0.1, -2.0, 0.4, True),
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.charmm_grms_after_ener_force",
+        "karml.interfaces.pycharmmInterface.mlpot.cli_common.charmm_grms_after_ener_force",
     ) as ener_force:
         grms = _commit_hybrid_calculator_mini_result(
             mlpot_ctx,
@@ -721,7 +721,7 @@ def test_commit_hybrid_calculator_mini_defer_path_restores_historical_best():
 
 
 def test_commit_hybrid_calculator_mini_non_defer_restores_historical_best():
-    from mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize import (
+    from karml.interfaces.pycharmmInterface.mlpot.calculator_minimize import (
         _commit_hybrid_calculator_mini_result,
     )
 
@@ -734,23 +734,23 @@ def test_commit_hybrid_calculator_mini_non_defer_restores_historical_best():
     best = _BestMinimizationFrame(atoms)
 
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.sync_charmm_lists_after_mini",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics.sync_charmm_lists_after_mini",
     ) as sync_lists, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.invalidate_mlpot_calculator_caches",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics.invalidate_mlpot_calculator_caches",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.mlpot_skip_charmm_ener_force_before_first_sd",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.mlpot_skip_charmm_ener_force_before_first_sd",
         return_value=False,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.charmm_grms_after_ener_force",
+        "karml.interfaces.pycharmmInterface.mlpot.cli_common.charmm_grms_after_ener_force",
     ) as ener_force, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize.mlpot_hybrid_grms_from_calculator",
+        "karml.interfaces.pycharmmInterface.mlpot.calculator_minimize.mlpot_hybrid_grms_from_calculator",
         return_value=0.5,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize._update_calculator_mini_historical_best",
+        "karml.interfaces.pycharmmInterface.mlpot.calculator_minimize._update_calculator_mini_historical_best",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize._maybe_restore_calculator_mini_historical_best",
+        "karml.interfaces.pycharmmInterface.mlpot.calculator_minimize._maybe_restore_calculator_mini_historical_best",
         return_value=(0.1, -2.0, 0.4, True),
     ):
         grms = _commit_hybrid_calculator_mini_result(
@@ -772,7 +772,7 @@ def test_commit_hybrid_calculator_mini_non_defer_restores_historical_best():
 
 
 def test_safe_grms_stop_allowed_requires_low_grms_and_low_fmax():
-    from mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize import (
+    from karml.interfaces.pycharmmInterface.mlpot.calculator_minimize import (
         safe_grms_stop_allowed,
     )
 
@@ -810,8 +810,8 @@ def test_safe_grms_stop_allowed_requires_low_grms_and_low_fmax():
 def test_calculator_mini_skips_models_without_spherical_fn(monkeypatch):
     from types import SimpleNamespace
 
-    from mmml.interfaces.pycharmmInterface.mlpot import calculator_minimize as cm
-    from mmml.interfaces.pycharmmInterface.mlpot import cli_common
+    from karml.interfaces.pycharmmInterface.mlpot import calculator_minimize as cm
+    from karml.interfaces.pycharmmInterface.mlpot import cli_common
 
     monkeypatch.setattr(cli_common, "charmm_grms_after_ener_force", lambda: 3.5)
     ctx = SimpleNamespace(pyCModel=object(), ml_Z=[6, 1])

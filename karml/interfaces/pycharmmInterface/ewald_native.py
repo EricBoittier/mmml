@@ -164,7 +164,7 @@ def ewald_exclusion_correction(R, q, cell, excl_i, excl_j, alpha):
     import jax.numpy as jnp
     import jax.scipy.special as jsp
 
-    from mmml.interfaces.pycharmmInterface.pbc_utils_jax import mic_displacement
+    from karml.interfaces.pycharmmInterface.pbc_utils_jax import mic_displacement
 
     if excl_i.shape[0] == 0:
         return jnp.array(0.0, dtype=R.dtype)

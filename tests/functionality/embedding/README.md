@@ -1,4 +1,4 @@
-# Solvated peptide MD embedding (`mmml md-embedding`)
+# Solvated peptide MD embedding (`karml md-embedding`)
 
 CHARMM-node smoke steps for partial MLpot on a peptide in explicit TIP3 solvent.
 Unit tests live in `tests/unit/test_md_embedding_cli.py` (no CHARMM).
@@ -9,16 +9,16 @@ Design: [`docs/examples/md-embedding-design.md`](../../../docs/examples/md-embed
 
 - PyCHARMM + CHARMM (same as `md-system` / `liquid-box`)
 - JAX + GPU optional for training; CPU smoke is fine for 30-epoch aaa model
-- `uv sync` in the `mmml` repo root
+- `uv sync` in the `karml` repo root
 
 ## 1. Train (no CHARMM)
 
 ```bash
-cd /path/to/mmml
-uv run mmml md-embedding train -o artifacts/md_embedding/aaa
+cd /path/to/karml
+uv run karml md-embedding train -o artifacts/md_embedding/aaa
 ```
 
-By default the train phase uses **`mmml fix-and-split`** (`--preserve-units`) for a reproducible
+By default the train phase uses **`karml fix-and-split`** (`--preserve-units`) for a reproducible
 90/10 split and `units_manifest.json` under `splits/`. Use `--simple-split` to skip fix-and-split.
 Structure plots (ASE bonds, docs style) land in `figures/peptide_frame0.png` unless `--no-plot`.
 
@@ -32,13 +32,13 @@ Pass criteria:
 Fast split-only check:
 
 ```bash
-uv run mmml md-embedding train -o artifacts/md_embedding/aaa --skip-train
+uv run karml md-embedding train -o artifacts/md_embedding/aaa --skip-train
 ```
 
 ## 2. Build box (CHARMM)
 
 ```bash
-uv run mmml md-embedding build -o artifacts/md_embedding/aaa --n-waters 10 --box-side-A 28
+uv run karml md-embedding build -o artifacts/md_embedding/aaa --n-waters 10 --box-side-A 28
 ```
 
 Pass criteria:
@@ -51,7 +51,7 @@ Pass criteria:
 ## 3. Run partial MLpot (CHARMM + checkpoint)
 
 ```bash
-uv run mmml md-embedding run -o artifacts/md_embedding/aaa \
+uv run karml md-embedding run -o artifacts/md_embedding/aaa \
   --checkpoint artifacts/md_embedding/aaa/aaa_smoke_params.json \
   --mini-nstep 20
 ```

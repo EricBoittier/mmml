@@ -1,4 +1,4 @@
-# `mmml physnet-md`
+# `karml physnet-md`
 
 PhysNet MD sampling.
 
@@ -6,13 +6,13 @@ PhysNet MD sampling.
 ## Usage
 
 ```bash
-mmml physnet-md --help
+karml physnet-md --help
 ```
 
 ## Options
 
 ```text
-usage: mmml physnet-md [-h] --checkpoint CHECKPOINT (--structure STRUCTURE |
+usage: karml physnet-md [-h] --checkpoint CHECKPOINT (--structure STRUCTURE |
                        --data DATA) [-o OUTPUT_DIR] [--temperature TEMPERATURE]
                        [--timestep TIMESTEP] [--nsteps-ase NSTEPS_ASE]
                        [--nsteps-jaxmd NSTEPS_JAXMD] [--printfreq PRINTFREQ]
@@ -62,10 +62,10 @@ Other options:
 
 CLI for PhysNet molecular dynamics sampling with ASE and JAX-MD. Runs NVT
 Langevin (ASE) and NVT Nose-Hoover (JAX-MD) using a trained PhysNet checkpoint
-as the energy/force calculator. Usage: mmml physnet-md --checkpoint
-out/ckpts/cybz_physnet --structure molecule.xyz -o out/ mmml physnet-md
+as the energy/force calculator. Usage: karml physnet-md --checkpoint
+out/ckpts/cybz_physnet --structure molecule.xyz -o out/ karml physnet-md
 --checkpoint out/ckpts/cybz_physnet --data
-splits/energies_forces_dipoles_train.npz -o out/ mmml physnet-md --checkpoint
+splits/energies_forces_dipoles_train.npz -o out/ karml physnet-md --checkpoint
 out/ckpts/cybz_physnet --data splits/train.npz -o out/ --n-replicas 4
 ```
 

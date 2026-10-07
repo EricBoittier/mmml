@@ -1,4 +1,4 @@
-"""Unit tests for mmml liquid-box (profiles, certification, report)."""
+"""Unit tests for karml liquid-box (profiles, certification, report)."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from mmml.interfaces.pycharmmInterface.mlpot.liquid_box_build import (
+from karml.interfaces.pycharmmInterface.mlpot.liquid_box_build import (
     BOX_JSON,
     REPORT_MD,
     LiquidBoxBuildResult,
@@ -44,7 +44,7 @@ def _args(**overrides) -> argparse.Namespace:
 
 def test_liquid_box_spacing_default_allows_dense_liquids():
     """4 Å COM pitch sits at MeOH liquid mean (~4.1 Å) and blocks density."""
-    from mmml.cli.run.liquid_box import build_parser
+    from karml.cli.run.liquid_box import build_parser
 
     args = build_parser().parse_args(
         ["--composition", "MEOH:8", "--output-dir", "/tmp/lb"]
@@ -61,7 +61,7 @@ def test_apply_liquid_box_profile_dense_enables_liquid_prep():
     assert args.box_auto == "density"
     # Density-sized cells must not be resized by lattice ABNR.
     assert int(args.mini_lattice_abnr_steps) == 0
-    from mmml.utils.intermonomer_geometry import DEFAULT_PRE_MLPOT_OVERLAP_MIN_A
+    from karml.utils.intermonomer_geometry import DEFAULT_PRE_MLPOT_OVERLAP_MIN_A
 
     assert float(args.min_intermonomer_atom_distance) == pytest.approx(
         DEFAULT_PRE_MLPOT_OVERLAP_MIN_A
@@ -69,7 +69,7 @@ def test_apply_liquid_box_profile_dense_enables_liquid_prep():
 
 
 def test_certify_density_against_target_fails_on_large_drift():
-    from mmml.interfaces.pycharmmInterface.mlpot.liquid_box_build import (
+    from karml.interfaces.pycharmmInterface.mlpot.liquid_box_build import (
         certify_density_against_target,
     )
 
@@ -89,8 +89,8 @@ def test_certify_density_against_target_fails_on_large_drift():
 
 
 def test_liquid_box_uses_packmol_by_default():
-    from mmml.cli.run.liquid_box import build_parser
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import use_packmol_placement
+    from karml.cli.run.liquid_box import build_parser
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import use_packmol_placement
 
     parser = build_parser()
     args = parser.parse_args(
@@ -109,8 +109,8 @@ def test_liquid_box_uses_packmol_by_default():
 
 
 def test_liquid_box_density_auto_sizes_packmol_cube():
-    from mmml.cli.run.liquid_box import build_parser
-    from mmml.interfaces.pycharmmInterface.packmol_placement import (
+    from karml.cli.run.liquid_box import build_parser
+    from karml.interfaces.pycharmmInterface.packmol_placement import (
         resolve_packmol_cube_side_from_args,
     )
 
@@ -146,7 +146,7 @@ def test_apply_liquid_box_profile_conservative_caps_bulk_fraction():
 
 
 def test_estimate_density_g_cm3_round_trip():
-    from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import (
+    from karml.interfaces.pycharmmInterface.mlpot.box_sizing import (
         cubic_box_side_from_target_density,
         total_mass_g_for_composition,
     )
@@ -257,7 +257,7 @@ def test_write_liquid_box_artifacts(tmp_path: Path):
     assert payload["n_molecules"] == 10
     report = (out / REPORT_MD).read_text(encoding="utf-8")
     assert "Liquid box report" in report
-    assert "mmml md-system" in report
+    assert "karml md-system" in report
 
 
 def test_render_liquid_box_report_fail_includes_message():
@@ -276,7 +276,7 @@ def test_render_liquid_box_report_fail_includes_message():
 
 
 def test_liquid_box_cli_parser_requires_composition():
-    from mmml.cli.run.liquid_box import build_parser
+    from karml.cli.run.liquid_box import build_parser
 
     parser = build_parser()
     with pytest.raises(SystemExit):
@@ -290,7 +290,7 @@ def test_liquid_box_cli_parser_requires_composition():
 
 
 def test_liquid_box_cli_parser_accepts_box_size_and_box_auto_count():
-    from mmml.cli.run.liquid_box import build_parser
+    from karml.cli.run.liquid_box import build_parser
 
     parser = build_parser()
     ns = parser.parse_args(
@@ -313,8 +313,8 @@ def test_liquid_box_cli_parser_accepts_box_size_and_box_auto_count():
 
 def test_composition_tag_from_liquid_box_args_without_residue():
     """liquid-box uses --composition only; cluster tag must not require --residue."""
-    from mmml.cli.run.liquid_box import build_parser
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+    from karml.cli.run.liquid_box import build_parser
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
         composition_tag,
         parse_composition,
     )
@@ -333,8 +333,8 @@ def test_composition_tag_from_liquid_box_args_without_residue():
 
 def test_liquid_box_args_resolve_dcd_nsavc_without_flag():
     """Mini box equil must not require md-system-only --dcd-nsavc."""
-    from mmml.cli.run.liquid_box import build_parser
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import resolve_dcd_nsavc_for_args
+    from karml.cli.run.liquid_box import build_parser
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import resolve_dcd_nsavc_for_args
 
     parser = build_parser()
     args = parser.parse_args(
@@ -348,8 +348,8 @@ def test_liquid_box_args_resolve_dcd_nsavc_without_flag():
 
 
 def test_liquid_box_pretreat_cpt_echeck_disabled_by_default():
-    from mmml.cli.run.liquid_box import build_parser
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+    from karml.cli.run.liquid_box import build_parser
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
         resolve_charmm_mm_pretreat_cpt_echeck,
     )
 
@@ -361,7 +361,7 @@ def test_liquid_box_pretreat_cpt_echeck_disabled_by_default():
 
 
 def test_liquid_box_pretreat_cpt_echeck_explicit_override():
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
         resolve_charmm_mm_pretreat_cpt_echeck,
     )
 
@@ -380,13 +380,13 @@ def test_apply_liquid_box_profile_dense_sets_no_echeck():
 
 
 def test_configure_liquid_box_mini_equil_uses_fixed_box_nvt():
-    from mmml.interfaces.pycharmmInterface.mlpot.box_equil import (
+    from karml.interfaces.pycharmmInterface.mlpot.box_equil import (
         configure_liquid_box_mini_equil_args,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import (
+    from karml.interfaces.pycharmmInterface.mlpot.box_sizing import (
         should_run_mini_box_equil,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.run_workflow import (
+    from karml.interfaces.pycharmmInterface.mlpot.run_workflow import (
         _pretreat_use_fixed_box_nvt,
     )
 
@@ -406,7 +406,7 @@ def test_configure_liquid_box_mini_equil_uses_fixed_box_nvt():
 
 
 def test_pretreat_fixed_nvt_flag_without_box_size():
-    from mmml.interfaces.pycharmmInterface.mlpot.run_workflow import (
+    from karml.interfaces.pycharmmInterface.mlpot.run_workflow import (
         _pretreat_use_fixed_box_nvt,
     )
 
@@ -418,7 +418,7 @@ def test_apply_charmm_dynamics_echeck_kw_sets_global_state(monkeypatch):
     import sys
     import types
 
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         apply_charmm_dynamics_echeck_kw,
     )
 
@@ -440,7 +440,7 @@ def test_apply_charmm_dynamics_timestep_kw_sets_global_state(monkeypatch):
     import sys
     import types
 
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         apply_charmm_dynamics_timestep_kw,
     )
 
@@ -458,7 +458,7 @@ def test_apply_charmm_dynamics_timestep_kw_sets_global_state(monkeypatch):
 
 
 def test_mm_geometry_safe_rejects_catastrophic_grms():
-    from mmml.interfaces.pycharmmInterface.mlpot.box_equil import (
+    from karml.interfaces.pycharmmInterface.mlpot.box_equil import (
         MAX_MM_PRETREAT_DYNAMICS_GRMS,
         mm_geometry_safe_for_pretreat_dynamics,
     )
@@ -474,7 +474,7 @@ def test_mm_geometry_safe_rejects_catastrophic_grms():
 def test_run_mini_lattice_abnr_skips_when_grms_unsafe(monkeypatch):
     import argparse
 
-    from mmml.interfaces.pycharmmInterface.mlpot.box_lattice_abnr import (
+    from karml.interfaces.pycharmmInterface.mlpot.box_lattice_abnr import (
         run_mini_lattice_abnr,
     )
 
@@ -486,11 +486,11 @@ def test_run_mini_lattice_abnr_skips_when_grms_unsafe(monkeypatch):
         quiet=False,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.box_equil.measure_mm_pretreat_grms",
+        "karml.interfaces.pycharmmInterface.mlpot.box_equil.measure_mm_pretreat_grms",
         lambda: 1.0e8,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.box_lattice_abnr.get_charmm_positions_array",
+        "karml.interfaces.pycharmmInterface.mlpot.box_lattice_abnr.get_charmm_positions_array",
         lambda: __import__("numpy").zeros((4, 3)),
     )
     side, ran = run_mini_lattice_abnr(args, box_side=32.0, use_pbc=True)

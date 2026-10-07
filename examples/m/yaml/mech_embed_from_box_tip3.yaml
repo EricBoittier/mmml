@@ -1,6 +1,6 @@
 # Mechanical embedding from a make-box artifact (after 08_make_boxes.sh).
 #   bash examples/m/08_make_boxes.sh
-#   uv run mmml md-system --config examples/m/yaml/mech_embed_from_box_tip3.yaml --run-all
+#   uv run karml md-system --config examples/m/yaml/mech_embed_from_box_tip3.yaml --run-all
 #
 # Sibling box.json next to model.pdb supplies the cell. ASE / legacy JAX-MD /
 # PyCHARMM only (``--jaxmd-unified`` is packmol-composition-only today).

@@ -1,4 +1,4 @@
-# `mmml pyscf-evaluate-mp2`
+# `karml pyscf-evaluate-mp2`
 
 Batch MP2 evaluation.
 
@@ -6,13 +6,13 @@ Batch MP2 evaluation.
 ## Usage
 
 ```bash
-mmml pyscf-evaluate-mp2 --help
+karml pyscf-evaluate-mp2 --help
 ```
 
 ## Options
 
 ```text
-usage: mmml pyscf-evaluate-mp2 [-h] -i INPUT [-o OUTPUT] [--method {dft,mp2}]
+usage: karml pyscf-evaluate-mp2 [-h] -i INPUT [-o OUTPUT] [--method {dft,mp2}]
                                [--basis BASIS] [--xc XC] [--spin SPIN]
                                [--charge CHARGE] [--no-energy] [--no-gradient]
                                [--no-dipole] [--esp] [--esp-cpu-fallback] [--EF]

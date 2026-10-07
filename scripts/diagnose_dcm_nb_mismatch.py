@@ -6,10 +6,10 @@ selective CHARMM BLOCK (unsafe under mpirun).
 
 Examples (CHARMM node)::
 
-    ./scripts/mmml-charmm-mpirun.sh python scripts/diagnose_dcm_nb_mismatch.py \\
+    ./scripts/karml-charmm-mpirun.sh python scripts/diagnose_dcm_nb_mismatch.py \\
       -o artifacts/dcm_nb_parity
 
-    ./scripts/mmml-charmm-mpirun.sh python scripts/diagnose_dcm_nb_mismatch.py \\
+    ./scripts/karml-charmm-mpirun.sh python scripts/diagnose_dcm_nb_mismatch.py \\
       -o artifacts/dcm_nb_parity --anchor --perturb-seed 31
 """
 
@@ -91,15 +91,15 @@ def main() -> int:
     if args.anchor:
         args.n_monomers = 52
         args.box_side_A = 28.0
-    os.environ.setdefault("MMML_LR_SOLVER", "mic")
+    os.environ.setdefault("KARML_LR_SOLVER", "mic")
 
-    from mmml.interfaces.pycharmmInterface.dcm_liquid_box import (
+    from karml.interfaces.pycharmmInterface.dcm_liquid_box import (
         build_dcm_liquid_box_in_charmm,
         dcm_liquid_box_coords_path,
         reload_dcm_liquid_box_in_charmm,
     )
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import ensure_pycharmm_loaded
-    from mmml.interfaces.pycharmmInterface.liquid_nb_parity import (
+    from karml.interfaces.pycharmmInterface.import_pycharmm import ensure_pycharmm_loaded
+    from karml.interfaces.pycharmmInterface.liquid_nb_parity import (
         collect_and_render_liquid_nb_parity,
         monomer_id_from_offsets,
         render_liquid_markdown_report,

@@ -35,7 +35,7 @@ import e3x
 import jax
 import jax.numpy as jnp
 import numpy as np
-from mmml.utils.rotations import rotate_batched_vectors, sample_random_rotations
+from karml.utils.rotations import rotate_batched_vectors, sample_random_rotations
 
 
 def restart_params_only(

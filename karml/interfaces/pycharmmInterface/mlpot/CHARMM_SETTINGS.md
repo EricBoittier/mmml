@@ -1,6 +1,6 @@
 # CHARMM / PyCHARMM settings by workflow mode
 
-Reference for `mmml md-system --backend pycharmm` and `tests/functionality/mlpot/*`.
+Reference for `karml md-system --backend pycharmm` and `tests/functionality/mlpot/*`.
 CLI flags live in `cli_common.add_charmm_output_args()`; stage builders in `dynamics.py`; orchestration in `staged_workflow.py`.
 
 ## Console verbosity (global)
@@ -33,13 +33,13 @@ CLI flags live in `cli_common.add_charmm_output_args()`; stage builders in `dyna
 Example for rare heating banners:
 
 ```bash
-mmml md-system ... --dyn-nprint 2000 --dyn-iprfrq 5000 --heat-ihtfrq 2000
+karml md-system ... --dyn-nprint 2000 --dyn-iprfrq 5000 --heat-ihtfrq 2000
 ```
 
 Finer temperature ramp (more rescales, more console):
 
 ```bash
-mmml md-system ... --heat-ihtfrq 40
+karml md-system ... --heat-ihtfrq 40
 ```
 
 ## Stage → integrator & thermostat
@@ -117,7 +117,7 @@ Use `--allow-incomplete-dynamics` only for debugging. For heat tests on small cl
 |------|---------|
 | `--mlpot-mm-internal-scale` | CGENFF BOND/ANGL/DIHE weight on ML atoms during MLpot (0=off, 0.1=soft MM internal; ELEC/VDW off) |
 | `--bonded-mm-mini` | Opt-in CHARMM bonded-only recovery SD after selected stages (default off; PBC `crystal free` / CGENFF APPEND can stall) |
-| `MMML_ALLOW_PSF_DELETE_RELOAD=1` | Deprecated `DELETE ATOM` + PSF reload for debugging only (segfaults on MPI-linked CHARMM after MLpot) |
+| `KARML_ALLOW_PSF_DELETE_RELOAD=1` | Deprecated `DELETE ATOM` + PSF reload for debugging only (segfaults on MPI-linked CHARMM after MLpot) |
 | `--fix-resids` / `--constrain-resids` | `cons_fix` in mini pass 2 / MD |
 | `--quiet` | Low `PRNLev` + coarse print |
 | `--charmm-sd-steps` / `--charmm-abnr-steps` | MM pre-min before MLpot |

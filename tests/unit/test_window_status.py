@@ -67,7 +67,7 @@ files_to_reset = _ws.files_to_reset
 scan_windows = _ws.scan_windows
 window_log_relax_steps = _ws.window_log_relax_steps
 
-from mmml.umbrella.hybrid_windows import save_window_checkpoint  # noqa: E402
+from karml.umbrella.hybrid_windows import save_window_checkpoint  # noqa: E402
 
 
 def _window(out: Path, wid: int, *, status: str, relax: int | None = None):

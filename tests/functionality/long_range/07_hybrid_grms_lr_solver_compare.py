@@ -45,7 +45,7 @@ def main() -> int:
     parser.add_argument("--verbose", action="store_true")
     args = parser.parse_args()
 
-    from mmml.interfaces.pycharmmInterface.lr_solver_grms_compare import (
+    from karml.interfaces.pycharmmInterface.lr_solver_grms_compare import (
         LrSolverGrmsRow,
         parse_solver_comparison_tsv,
         probe_hybrid_grms_at_certified_box,
@@ -79,7 +79,7 @@ def main() -> int:
             )
     elif args.psf is not None and args.crd is not None and args.checkpoint is not None:
         try:
-            from mmml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_PRM
+            from karml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_PRM
         except Exception:
             CGENFF_PRM = None
         if CGENFF_PRM is None:

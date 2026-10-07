@@ -49,7 +49,7 @@ def main() -> None:
     args = p.parse_args()
 
     params, config = _ev.restore_checkpoint(Path(args.checkpoint).resolve())
-    from mmml.utils.model_checkpoint import infer_trainable_zbl_config
+    from karml.utils.model_checkpoint import infer_trainable_zbl_config
 
     config = infer_trainable_zbl_config(config, params)
     args.predict_charges = config.get("predict_charges", config.get("charges", False))

@@ -1,4 +1,4 @@
-# `mmml efield-evaluate`
+# `karml efield-evaluate`
 
 Evaluate external electric-field PhysNet.
 
@@ -6,13 +6,13 @@ Evaluate external electric-field PhysNet.
 ## Usage
 
 ```bash
-mmml efield-evaluate --help
+karml efield-evaluate --help
 ```
 
 ## Options
 
 ```text
-usage: mmml efield-evaluate [-h] [--params PARAMS] [--config CONFIG]
+usage: karml efield-evaluate [-h] [--params PARAMS] [--config CONFIG]
                             [--data DATA] [--test-npz TEST_NPZ]
                             [--output-dir OUTPUT_DIR] [--batch-size BATCH_SIZE]
                             [--num-test NUM_TEST] [--model-config MODEL_CONFIG]
@@ -52,7 +52,7 @@ Output & artifacts:
                         Output directory for plots and metrics
   --save-output-npz     Save evaluation outputs (predictions, targets) to NPZ
                         file
-  --output-h5 PATH      Write HDF5 trajectory for mmml gui
+  --output-h5 PATH      Write HDF5 trajectory for karml gui
                         (R,Z,N,E,E_pred,F,F_pred,Dxyz,Dxyz_pred,Ef). Requires
                         h5py.
 

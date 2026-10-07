@@ -7,7 +7,7 @@
   "min_contact_A": 2.0,
   "n_rays": 64,
   "n_r": 36,
-  "csv": "/mmhome/boittier/home/mmml/artifacts/lj_scales/dense_dt_campaign/overbind_ablation/lever2_on5_ft/ft_on5_matched_components.csv",
+  "csv": "/mmhome/boittier/home/karml/artifacts/lj_scales/dense_dt_campaign/overbind_ablation/lever2_on5_ft/ft_on5_matched_components.csv",
   "mean_of_ray_minima_kcal": -8.10513426578045,
   "mean_soft_well_kcal": -5.871097196400166,
   "median_soft_well_kcal": -2.2775568971633913,

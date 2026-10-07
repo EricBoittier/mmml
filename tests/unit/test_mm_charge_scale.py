@@ -11,7 +11,7 @@ jnp = pytest.importorskip("jax.numpy")
 
 
 def test_apply_mm_charge_scale_identity_and_validation():
-    from mmml.interfaces.pycharmmInterface.mm_energy_forces import apply_mm_charge_scale
+    from karml.interfaces.pycharmmInterface.mm_energy_forces import apply_mm_charge_scale
 
     q = np.array([0.4, -0.8, 0.4])
     assert apply_mm_charge_scale(q, 1.0) is q
@@ -46,8 +46,8 @@ def test_jax_mic_coulomb_scales_with_charge_scale_squared():
 
 
 def test_resolve_md_charge_scale_from_tuner_sidecar(tmp_path):
-    from mmml.models.mm_lj_scales import resolve_md_charge_scale
-    from mmml.models.mm_nonbonded_tune import MonomerNonbonded, TuneParams, lj_sidecar_payload
+    from karml.models.mm_lj_scales import resolve_md_charge_scale
+    from karml.models.mm_nonbonded_tune import MonomerNonbonded, TuneParams, lj_sidecar_payload
 
     ff = MonomerNonbonded.from_arrays(
         ["CG331", "OG311"], [0.1, -0.1], {"CG331": 2.05, "OG311": 1.765},

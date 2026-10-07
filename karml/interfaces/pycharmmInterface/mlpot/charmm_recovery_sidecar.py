@@ -18,8 +18,8 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 
 if TYPE_CHECKING:
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import BondedMmMiniConfig
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import BondedMmMiniConfig
+    from karml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
 
 PathLike = str | Path
 
@@ -59,7 +59,7 @@ def sidecar_worker_script() -> Path:
 
 
 def mpirun_launcher_script() -> Path:
-    return _repo_root() / "scripts" / "mmml-charmm-mpirun.sh"
+    return _repo_root() / "scripts" / "karml-charmm-mpirun.sh"
 
 
 def _resolve_topology_psf(ctx: Any, topology_psf: PathLike | None) -> Path:
@@ -87,7 +87,7 @@ def _export_sidecar_snapshot(
 ) -> tuple[Path, Path]:
     import pycharmm.write as write
 
-    from mmml.interfaces.pycharmmInterface.mlpot.bonded_jax_recovery import (
+    from karml.interfaces.pycharmmInterface.mlpot.bonded_jax_recovery import (
         resolve_recovery_psf_source,
     )
 
@@ -147,11 +147,11 @@ def run_charmm_recovery_sidecar(
     work_dir: PathLike | None = None,
 ) -> float | None:
     """Run bonded recovery in a subprocess with an isolated full-CGENFF CHARMM session."""
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_grms
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_grms
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         read_crd_coordinates,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+    from karml.interfaces.pycharmmInterface.mlpot.setup import (
         get_charmm_positions_array,
         sync_charmm_positions,
     )
@@ -159,7 +159,7 @@ def run_charmm_recovery_sidecar(
     pos_before = np.asarray(get_charmm_positions_array(), dtype=np.float64, copy=True)
     cleanup_dir: tempfile.TemporaryDirectory[str] | None = None
     if work_dir is None:
-        cleanup_dir = tempfile.TemporaryDirectory(prefix="mmml_charmm_sidecar_")
+        cleanup_dir = tempfile.TemporaryDirectory(prefix="karml_charmm_sidecar_")
         work = Path(cleanup_dir.name)
     else:
         work = Path(work_dir).expanduser().resolve()
@@ -171,7 +171,7 @@ def run_charmm_recovery_sidecar(
     manifest_path = manifest.write(work / "manifest.json")
     cmd = _sidecar_command(manifest_path)
     env = os.environ.copy()
-    env.setdefault("MMML_MPI_NP", "1")
+    env.setdefault("KARML_MPI_NP", "1")
 
     if config.verbose:
         print(
@@ -210,7 +210,7 @@ def run_charmm_recovery_sidecar(
     sync_charmm_positions(pos_after)
 
     if config.verbose:
-        from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
             _print_bonded_recovery_geometry_diff,
         )
 

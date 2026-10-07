@@ -15,21 +15,21 @@ from typing import Any, Mapping
 import numpy as np
 import yaml
 
-from mmml.acquisition.labels import (
+from karml.acquisition.labels import (
     LabelCache,
     build_backend,
     labels_to_npz,
 )
-from mmml.acquisition.linear_student import (
+from karml.acquisition.linear_student import (
     LinearStudent,
     init_linear_student,
     init_linear_teacher,
 )
-from mmml.acquisition.md_eval import outcome_to_dict, run_nve
-from mmml.acquisition.metrics import evaluate_predictions
-from mmml.acquisition.pca import assert_no_leakage, project_jacobian_rows
-from mmml.acquisition.report import selection_overlap, size_dependence, write_report
-from mmml.acquisition.representations import (
+from karml.acquisition.md_eval import outcome_to_dict, run_nve
+from karml.acquisition.metrics import evaluate_predictions
+from karml.acquisition.pca import assert_no_leakage, project_jacobian_rows
+from karml.acquisition.report import selection_overlap, size_dependence, write_report
+from karml.acquisition.representations import (
     activation_energy_alignment,
     extract_activations,
     extract_energy_jacobians,
@@ -39,13 +39,13 @@ from mmml.acquisition.representations import (
     fit_jacobian_basis,
     linear_readout_pooled_equals_energy_grad,
 )
-from mmml.acquisition.selection import (
+from karml.acquisition.selection import (
     farthest_point_sampling,
     greedy_doptimal,
     largest_norm_indices,
     stratified_random,
 )
-from mmml.acquisition.splits import (
+from karml.acquisition.splits import (
     SPLIT_CANDIDATE,
     SPLIT_SEED,
     SPLIT_TEST,
@@ -55,8 +55,8 @@ from mmml.acquisition.splits import (
     build_pool,
     subset_arrays,
 )
-from mmml.acquisition.synthetic import default_seed_groups, make_smoke_pool
-from mmml.acquisition.train import TrainSettings, finetune_linear, predict_dataset
+from karml.acquisition.synthetic import default_seed_groups, make_smoke_pool
+from karml.acquisition.train import TrainSettings, finetune_linear, predict_dataset
 
 METHODS = (
     "stratified_random",

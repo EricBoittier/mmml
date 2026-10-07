@@ -13,7 +13,7 @@ def _truthy(name: str, default: bool = False) -> bool:
     return raw.strip().lower() in ("1", "yes", "true")
 
 
-_SPATIAL_ENV = "MMML_MLPOT_SPATIAL_MPI"
+_SPATIAL_ENV = "KARML_MLPOT_SPATIAL_MPI"
 
 
 def spatial_mpi_enabled(explicit: bool | None = None) -> bool:
@@ -46,10 +46,10 @@ def pin_cuda_for_spatial_mpi() -> bool:
     Must run before the first ``import jax`` on each rank so JAX does not all
     attach to physical GPU 0 (``CUDA_ERROR_DEVICE_UNAVAILABLE`` on rank > 0).
     """
-    jax_mode = (os.environ.get("MMML_JAX_MODE") or "").strip().lower()
+    jax_mode = (os.environ.get("KARML_JAX_MODE") or "").strip().lower()
     if not spatial_mpi_enabled() and jax_mode != "gpu-per-rank":
         return False
-    if not _truthy("MMML_MPI_PIN_GPU_PER_RANK", default=True):
+    if not _truthy("KARML_MPI_PIN_GPU_PER_RANK", default=True):
         return False
     local = _mpi_local_rank_index()
     if local is None:
@@ -59,7 +59,7 @@ def pin_cuda_for_spatial_mpi() -> bool:
 
 
 def sync_spatial_mpi_env(*, explicit: bool | None = None) -> bool:
-    """Set ``MMML_MLPOT_SPATIAL_MPI=1`` when spatial ML is requested."""
+    """Set ``KARML_MLPOT_SPATIAL_MPI=1`` when spatial ML is requested."""
     if explicit is True or (explicit is None and spatial_mpi_enabled()):
         os.environ[_SPATIAL_ENV] = "1"
         return True

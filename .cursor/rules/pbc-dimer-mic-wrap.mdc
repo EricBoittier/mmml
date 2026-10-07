@@ -1,6 +1,6 @@
 ---
 description: Do NOT “fix” PBC ML-dimer MIC wrap by removing stop_gradient or using smooth MIC+VJP
-globs: mmml/interfaces/pycharmmInterface/mmml_calculator.py,mmml/interfaces/pycharmmInterface/pbc_utils_jax.py,mmml/cli/run/jaxmd_runner.py,docs/**/*pbc*,docs/**/*hybrid*,docs/**/*nve*
+globs: karml/interfaces/pycharmmInterface/karml_calculator.py,karml/interfaces/pycharmmInterface/pbc_utils_jax.py,karml/cli/run/jaxmd_runner.py,docs/**/*pbc*,docs/**/*hybrid*,docs/**/*nve*
 alwaysApply: false
 ---
 
@@ -10,7 +10,7 @@ alwaysApply: false
 
 NVE force–energy preflight can fail (~relerr 0.2+) on liquid boxes. It is
 tempting to blame `jax.lax.stop_gradient` on the MIC lattice shift that wraps
-monomer B in `mmml_calculator` (`_wrap_dimer_coords`), then:
+monomer B in `karml_calculator` (`_wrap_dimer_coords`), then:
 
 1. remove `stop_gradient`, and/or
 2. switch the wrap to `mic_displacement_smooth`, and/or
@@ -25,7 +25,7 @@ forces near ±L/2.
 ## Correct production behavior
 
 - **Keep** exact MIC + `stop_gradient` on the dimer-B lattice shift in
-  `mmml_calculator.py` (both wrap sites: ML forward and `apply_dimer_switching`).
+  `karml_calculator.py` (both wrap sites: ML forward and `apply_dimer_switching`).
 - `use_smooth_mic=True` is for **minimization gradients on other paths only**,
   not for making the ML-dimer wrap differentiable.
 - `wrap_dimer_monomer_b(..., detach_shift=True, smooth=False)` is the MD

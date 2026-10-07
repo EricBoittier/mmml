@@ -45,7 +45,7 @@ import pycharmm.atom_info as atom_info
 
 def _resolve_read_path(filename: str) -> str:
     try:
-        from mmml.interfaces.pycharmmInterface.charmm_paths import charmm_fortran_path
+        from karml.interfaces.pycharmmInterface.charmm_paths import charmm_fortran_path
     except ImportError:
         return filename
     fortran_path, _alias = charmm_fortran_path(filename, for_write=False)

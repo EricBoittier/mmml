@@ -1,38 +1,38 @@
 # PyCHARMM MPI — design (Phases 0–2)
 
-How MMML uses OpenMPI-linked `libcharmm.so`, what the [pyCHARMM Workshop MPI examples](https://github.com/BrooksResearchGroup-UM/pyCHARMM-Workshop) teach, and the roadmap through **Tier 2 spatial ML**.
+How KARML uses OpenMPI-linked `libcharmm.so`, what the [pyCHARMM Workshop MPI examples](https://github.com/BrooksResearchGroup-UM/pyCHARMM-Workshop) teach, and the roadmap through **Tier 2 spatial ML**.
 
 Related:
 
 - [`docs/mlpot-spatial-mpi.md`](mlpot-spatial-mpi.md) — spatial ML decomposition design
 - [`docs/pycharmm-threading.md`](pycharmm-threading.md) — CPU threads, JAX/XLA pools, and `htop` interpretation
-- [`tests/functionality/mlpot/SPATIAL_MPI_DOMDEC.md`](https://github.com/EricBoittier/mmml/blob/main/tests/functionality/mlpot/SPATIAL_MPI_DOMDEC.md) — Tier 3 DOMDEC spike (out of scope here)
-- [`mmml/interfaces/pycharmmInterface/charmm_mpi.py`](https://github.com/EricBoittier/mmml/blob/main/mmml/interfaces/pycharmmInterface/charmm_mpi.py) — runtime bootstrap
+- [`tests/functionality/mlpot/SPATIAL_MPI_DOMDEC.md`](https://github.com/EricBoittier/karml/blob/main/tests/functionality/mlpot/SPATIAL_MPI_DOMDEC.md) — Tier 3 DOMDEC spike (out of scope here)
+- [`karml/interfaces/pycharmmInterface/charmm_mpi.py`](https://github.com/EricBoittier/karml/blob/main/karml/interfaces/pycharmmInterface/charmm_mpi.py) — runtime bootstrap
 - [PyCHARMM C API: PBC box & pressure](pycharmm-c-api-pbc-box-pressure.md) — `crystal_*`, `dynamics_run_kw`, `PIXX` / `PR**` on KEY_LIBRARY builds
 
 ---
 
 ## Problem statement
 
-GPU-cluster `libcharmm.so` builds are **MPI-linked**. Serial `python -m mmml md-system` **may** segfault in Fortran `upinb` or MLpot `send_coord_to_recip` on some stacks (historically DCM clusters where high thread counts, JAX/CUDA warmup, MPI bootstrap, and module-library choices were correlated). Treat `OMP_NUM_THREADS>1` as a performance/stability variable to validate on each stack, not as a proven root cause. Mitigations:
+GPU-cluster `libcharmm.so` builds are **MPI-linked**. Serial `python -m karml md-system` **may** segfault in Fortran `upinb` or MLpot `send_coord_to_recip` on some stacks (historically DCM clusters where high thread counts, JAX/CUDA warmup, MPI bootstrap, and module-library choices were correlated). Treat `OMP_NUM_THREADS>1` as a performance/stability variable to validate on each stack, not as a proven root cause. Mitigations:
 
-1. Launch under the **same OpenMPI** as `libcharmm.so` (`./scripts/mmml-charmm-mpirun.sh`)
+1. Launch under the **same OpenMPI** as `libcharmm.so` (`./scripts/karml-charmm-mpirun.sh`)
 2. Defer JAX GPU warmup until after MLpot SD on MPI builds (launcher default)
-3. Do not enable DOMDEC for MLpot production; `domdec off` is an opt-in guard (`MMML_FORCE_DOMDEC_OFF=1`) for streams that enabled it
+3. Do not enable DOMDEC for MLpot production; `domdec off` is an opt-in guard (`KARML_FORCE_DOMDEC_OFF=1`) for streams that enabled it
 4. Default to `OMP_NUM_THREADS=1` for conservative startup; opt into higher values with `--charmm-omp-threads N`
 
-**Node validation:** the serial-vs-mpirun probe (`08_serial_vs_mpirun_md_system.py`) passed on **gpu09** (June 2026): serial `python md-system` and `MMML_MPI_NP=1` mpirun both completed the ACO:2 hybrid mini with matching outcomes. The blanket segfault claim is **environment-dependent** — re-run the probe after OpenMPI / module / `libcharmm.so` changes or on a new node.
+**Node validation:** the serial-vs-mpirun probe (`08_serial_vs_mpirun_md_system.py`) passed on **gpu09** (June 2026): serial `python md-system` and `KARML_MPI_NP=1` mpirun both completed the ACO:2 hybrid mini with matching outcomes. The blanket segfault claim is **environment-dependent** — re-run the probe after OpenMPI / module / `libcharmm.so` changes or on a new node.
 
 ```bash
-export MMML_CKPT=/path/to/checkpoint.json
+export KARML_CKPT=/path/to/checkpoint.json
 python tests/functionality/mlpot/08_serial_vs_mpirun_md_system.py --run-both \
-  --checkpoint "$MMML_CKPT" \
+  --checkpoint "$KARML_CKPT" \
   --output-dir artifacts/serial_vs_mpirun_$(date +%Y%m%d_%H%M%S)
 ```
 
-Writes `serial_vs_mpirun.json` with exit codes, elapsed time, and env snapshot (`MMML_MLPOT_DEVICE`, `OMP_NUM_THREADS`, etc.). Config: `mmml/cli/run/md_system.serial_mpi_probe.example.yaml`.
+Writes `serial_vs_mpirun.json` with exit codes, elapsed time, and env snapshot (`KARML_MLPOT_DEVICE`, `OMP_NUM_THREADS`, etc.). Config: `karml/cli/run/md_system.serial_mpi_probe.example.yaml`.
 
-**Production / Slurm / `np>1`:** still use `mmml-charmm-mpirun.sh` even when the probe passes — correct MPI bootstrap, OMP pin, GPU-per-rank, and deferred JAX.
+**Production / Slurm / `np>1`:** still use `karml-charmm-mpirun.sh` even when the probe passes — correct MPI bootstrap, OMP pin, GPU-per-rank, and deferred JAX.
 
 ### Launch policy: uv, MPI ranks, and JAX are orthogonal
 
@@ -44,18 +44,18 @@ rank.
 
 ```bash
 # One MPI rank, one JAX GPU (the conservative production preset)
-uv run mmml mpi-launch --preset single -- md-system --config run.yaml
+uv run karml mpi-launch --preset single -- md-system --config run.yaml
 
 # One MPI rank, multithreaded CPU JAX; CHARMM remains at one OpenMP thread
-uv run mmml mpi-launch --preset cpu --jax-cpu-threads 16 -- \
+uv run karml mpi-launch --preset cpu --jax-cpu-threads 16 -- \
   md-system --config run.yaml
 
 # Explicit topology: four ranks, JAX only on rank 0
-uv run mmml mpi-launch --mpi-ranks 4 --jax-mode rank0 -- \
+uv run karml mpi-launch --mpi-ranks 4 --jax-mode rank0 -- \
   md-system --config run.yaml
 
 # Spatial ML: one pinned GPU per MPI rank
-uv run mmml mpi-launch --preset spatial --mpi-ranks 4 -- \
+uv run karml mpi-launch --preset spatial --mpi-ranks 4 -- \
   md-system --config run.yaml --ml-spatial-mpi
 ```
 
@@ -69,7 +69,7 @@ The two dimensions are intentionally independent:
 `--preset single`, `--preset cpu`, and `--preset spatial` are aliases, not
 separate architectures. `--dry-run` prints the resolved environment and
 wrapper command. `--strict-resources` rejects configurations whose rank ×
-thread budget exceeds `SLURM_CPUS_PER_TASK`, `MMML_ALLOCATED_CPUS`, or the
+thread budget exceeds `SLURM_CPUS_PER_TASK`, `KARML_ALLOCATED_CPUS`, or the
 detected host CPU count.
 
 For CPU JAX, `--jax-cpu-threads` configures XLA's Eigen pool while
@@ -78,9 +78,9 @@ process, so the launcher checks the larger per-rank pool for oversubscription;
 it does not force `OMP_NUM_THREADS=1` when a different CHARMM thread count is
 explicitly requested.
 
-The workshop [3SimpleMPIExample](https://github.com/BrooksResearchGroup-UM/pyCHARMM-Workshop/tree/main/3SimpleMPIExample) shows a **different** pattern: embarrassingly parallel φ/ψ minimizations with `mpi4py` — no coupled MLpot callbacks. MMML needs both:
+The workshop [3SimpleMPIExample](https://github.com/BrooksResearchGroup-UM/pyCHARMM-Workshop/tree/main/3SimpleMPIExample) shows a **different** pattern: embarrassingly parallel φ/ψ minimizations with `mpi4py` — no coupled MLpot callbacks. KARML needs both:
 
-| Pattern | Workshop | MMML tier |
+| Pattern | Workshop | KARML tier |
 |---------|----------|-----------|
 | Independent CHARMM jobs sharded by rank | 3SimpleMPI | Phase 0 smoke |
 | One hybrid system, `np=1`, stable MLpot | — | **Tier 1** (Phase 1) |
@@ -94,13 +94,13 @@ The workshop [3SimpleMPIExample](https://github.com/BrooksResearchGroup-UM/pyCHA
 ```mermaid
 flowchart LR
   subgraph tier1 ["Tier 1 — np=1 production"]
-    A1["mmml-charmm-mpirun.sh"]
+    A1["karml-charmm-mpirun.sh"]
     A2["DOMDEC not enabled for MLpot"]
     A3["Dual-GPU pmap optional"]
   end
 
   subgraph tier2 ["Tier 2 — spatial ML"]
-    B1["MMML_MPI_NP=N"]
+    B1["KARML_MPI_NP=N"]
     B2["--ml-spatial-mpi"]
     B3["1 GPU / rank"]
     B4["rank-0 I/O"]
@@ -119,28 +119,28 @@ flowchart LR
 
 | Item | Path | Status |
 |------|------|--------|
-| MPI environment check CLI | `mmml mpi-check` | Implemented |
+| MPI environment check CLI | `karml mpi-check` | Implemented |
 | Serial vs mpirun md-system probe | `tests/functionality/mlpot/08_serial_vs_mpirun_md_system.py` | Implemented |
 | Workshop φ/ψ smoke script | `tests/functionality/charmm/mpi_alad_phi_psi.py` | Implemented |
-| Launcher script | `scripts/mmml-charmm-mpirun.sh` | Existing |
+| Launcher script | `scripts/karml-charmm-mpirun.sh` | Existing |
 | This design doc | `docs/pycharmm-mpi.md` | This file |
 
-### `mmml mpi-check`
+### `karml mpi-check`
 
 ```bash
-mmml mpi-check              # human summary, exit 0 if launcher OK
-mmml mpi-check --json         # machine-readable report
-mmml mpi-check --strict       # exit 1 on warnings (e.g. mpi4py missing)
-mmml mpi-check --tier2        # also validate Tier 2 spatial MPI + GPU env
-mmml mpi-check --tier3        # survey Tier 3 DOMDEC blockers (informational)
+karml mpi-check              # human summary, exit 0 if launcher OK
+karml mpi-check --json         # machine-readable report
+karml mpi-check --strict       # exit 1 on warnings (e.g. mpi4py missing)
+karml mpi-check --tier2        # also validate Tier 2 spatial MPI + GPU env
+karml mpi-check --tier3        # survey Tier 3 DOMDEC blockers (informational)
 ```
 
 Reports: `CHARMM_LIB_DIR`, MPI-linked detection, `mpirun` path, rank/size under launch, mpi4py, JAX device, recommended launch line. With `--tier2`, adds MLpot spatial-MPI GPU footgun checks via `spatial_mpi_validate.py`. With `--tier3`, reports DOMDEC API blockers via `tier3_domdec_validate.py`.
 
 Tier 3 is intentionally split into check status and production status:
 
-- `mmml mpi-check --tier3` exits 0 when the DOMDEC survey completes, but still reports `blocked: true` while PyCHARMM local/ghost atom metadata is unavailable.
-- `mmml mpi-check --tier3 --strict` exits non-zero while Tier 3 production remains blocked.
+- `karml mpi-check --tier3` exits 0 when the DOMDEC survey completes, but still reports `blocked: true` while PyCHARMM local/ghost atom metadata is unavailable.
+- `karml mpi-check --tier3 --strict` exits non-zero while Tier 3 production remains blocked.
 - Use Tier 2 spatial MPI for ML decomposition until the PyCHARMM API blocker and DOMDEC+MLpot coexistence spike are resolved.
 
 ### CHARMM MPI test suite (CI)
@@ -153,12 +153,12 @@ pytest tests/charmm_mpi/ -m "charmm_mpi and not pycharmm" -q
 ./scripts/ci/run_pycharmm_smoke_pytest.sh -q tests/charmm_mpi/test_mpi_live_energy.py
 ```
 
-See [`tests/charmm_mpi/README.md`](https://github.com/EricBoittier/mmml/blob/main/tests/charmm_mpi/README.md).
+See [`tests/charmm_mpi/README.md`](https://github.com/EricBoittier/karml/blob/main/tests/charmm_mpi/README.md).
 
 ### Workshop smoke (user-run on CHARMM node)
 
 ```bash
-MMML_MPI_NP=4 ./scripts/mmml-charmm-mpirun.sh python \
+KARML_MPI_NP=4 ./scripts/karml-charmm-mpirun.sh python \
   tests/functionality/charmm/mpi_alad_phi_psi.py --n-phi 12 --n-psi 12
 ```
 
@@ -166,14 +166,14 @@ MMML_MPI_NP=4 ./scripts/mmml-charmm-mpirun.sh python \
 
 ### Serial vs mpirun md-system probe (user-run on GPU CHARMM node)
 
-Compares true serial `python md-system` (`MMML_NO_MPI_RERUN=1`) against `MMML_MPI_NP=1` via `mmml-charmm-mpirun.sh` on the same minimal hybrid workflow (ACO:2, MLpot registration + SD mini).
+Compares true serial `python md-system` (`KARML_NO_MPI_RERUN=1`) against `KARML_MPI_NP=1` via `karml-charmm-mpirun.sh` on the same minimal hybrid workflow (ACO:2, MLpot registration + SD mini).
 
 ```bash
 python tests/functionality/mlpot/08_serial_vs_mpirun_md_system.py --dry-run   # anywhere
 
-export MMML_CKPT=/path/to/checkpoint.json
+export KARML_CKPT=/path/to/checkpoint.json
 python tests/functionality/mlpot/08_serial_vs_mpirun_md_system.py --run-both \
-  --checkpoint "$MMML_CKPT"
+  --checkpoint "$KARML_CKPT"
 ```
 
 **Pass (gpu09, June 2026):** both exit 0; energies/trajectory outputs match within normal FP noise. **Interpretation:** serial Tier-1 `md-system` is OK on that node; keep mpirun for production and `np>1`.
@@ -190,7 +190,7 @@ python tests/functionality/mlpot/08_serial_vs_mpirun_md_system.py --run-both \
 
 | Item | Description | Status |
 |------|-------------|--------|
-| Generalized mpirun re-exec | `maybe_rerun_mmml_under_mpirun(subcommand, argv)` | Implemented |
+| Generalized mpirun re-exec | `maybe_rerun_karml_under_mpirun(subcommand, argv)` | Implemented |
 | `liquid-box` MPI bootstrap | Re-exec under `mpirun -np 1` when needed | Implemented |
 | Slurm example | `docs/examples/slurm_mlpot_mpi.sh` | Implemented |
 | Auto-rerun for `md-system` | Existing | Existing |
@@ -199,7 +199,7 @@ python tests/functionality/mlpot/08_serial_vs_mpirun_md_system.py --run-both \
 
 ```bash
 export CHARMM_LIB_DIR=/path/to/tier/lib
-MMML_MPI_NP=1 ./scripts/mmml-charmm-mpirun.sh md-system \
+KARML_MPI_NP=1 ./scripts/karml-charmm-mpirun.sh md-system \
   --composition DCM:90 --box-size 32 \
   --backend pycharmm --md-stages mini,heat \
   --checkpoint /path/to/params.json \
@@ -210,12 +210,12 @@ MMML_MPI_NP=1 ./scripts/mmml-charmm-mpirun.sh md-system \
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `MMML_MPI_NP` | `1` | `mpirun -np` count |
-| `MMML_NO_MPI_RERUN` | off | Disable auto re-exec under mpirun |
-| `MMML_MPIRUN` | auto | Override `mpirun` path |
-| `MMML_CHARMM_OMP_THREADS` | `1` | Pin CHARMM OpenMP threads; set via `mmml md-system --charmm-omp-threads N` or YAML `charmm_omp_threads: N`. When explicit, MMML also uses `N` as the default MKL/OpenBLAS/NumExpr/JAX compile thread budget unless those env vars are already exported. |
-| `MMML_DEFER_JAX_WARMUP_UNTIL_AFTER_SD` | off | Opt-in: defer JAX until after MLpot SD (legacy) |
-| `MMML_MLPOT_RANK0_BRIDGE` | `1` | Rank 0 runs MLpot when `np>1` |
+| `KARML_MPI_NP` | `1` | `mpirun -np` count |
+| `KARML_NO_MPI_RERUN` | off | Disable auto re-exec under mpirun |
+| `KARML_MPIRUN` | auto | Override `mpirun` path |
+| `KARML_CHARMM_OMP_THREADS` | `1` | Pin CHARMM OpenMP threads; set via `karml md-system --charmm-omp-threads N` or YAML `charmm_omp_threads: N`. When explicit, KARML also uses `N` as the default MKL/OpenBLAS/NumExpr/JAX compile thread budget unless those env vars are already exported. |
+| `KARML_DEFER_JAX_WARMUP_UNTIL_AFTER_SD` | off | Opt-in: defer JAX until after MLpot SD (legacy) |
+| `KARML_MLPOT_RANK0_BRIDGE` | `1` | Rank 0 runs MLpot when `np>1` |
 
 ### CHARMM rebuild notes
 
@@ -223,7 +223,7 @@ MMML_MPI_NP=1 ./scripts/mmml-charmm-mpirun.sh md-system \
 reports `Could NOT find FFTW`, see [`docs/fftw-build.md`](fftw-build.md) — on a
 workstation, `sudo apt install libfftw3-dev` then
 `export FFTW_ROOT=/usr FFTWF_ROOT=/usr` is usually enough; for `libcharmm.so` on
-clusters, run `bash scripts/build_fftw_pic.sh` once and set `MMML_FFTW_ROOT`.
+clusters, run `bash scripts/build_fftw_pic.sh` once and set `KARML_FFTW_ROOT`.
 
 ```bash
 ./scripts/rebuild_charmm_mlpot.sh              # DOMDEC on (default)
@@ -241,7 +241,7 @@ clusters, run `bash scripts/build_fftw_pic.sh` once and set `MMML_FFTW_ROOT`.
 | Item | Path | Status |
 |------|------|--------|
 | Spatial MPI design | `docs/mlpot-spatial-mpi.md` | Existing |
-| Tier 2 env validation | `spatial_mpi_validate.py`, `mmml mpi-check --tier2` | Implemented |
+| Tier 2 env validation | `spatial_mpi_validate.py`, `karml mpi-check --tier2` | Implemented |
 | Integration tests (mocked JAX) | `test_mlpot_spatial_mpi_integration.py` | Implemented |
 | Tier 2 smoke script | `tests/functionality/mlpot/06_spatial_mpi_tier2_smoke.py` | Implemented (user-run) |
 | Rank-0 I/O helpers | `mpi_rank_io.py` | Implemented (stub + hooks) |
@@ -252,9 +252,9 @@ clusters, run `bash scripts/build_fftw_pic.sh` once and set `MMML_FFTW_ROOT`.
 ### Tier 2 launch
 
 ```bash
-export MMML_MLPOT_SPATIAL_MPI=1
-export MMML_MPI_PIN_GPU_PER_RANK=1   # set by launcher when spatial MPI on
-MMML_MPI_NP=4 ./scripts/mmml-charmm-mpirun.sh md-system \
+export KARML_MLPOT_SPATIAL_MPI=1
+export KARML_MPI_PIN_GPU_PER_RANK=1   # set by launcher when spatial MPI on
+KARML_MPI_NP=4 ./scripts/karml-charmm-mpirun.sh md-system \
   --composition DCM:200 --box-size 35 \
   --ml-spatial-mpi --ml-gpu-count 1 --ml-batch-size 128 \
   --md-stages mini \
@@ -282,7 +282,7 @@ CHARMM integration still runs on all ranks without DOMDEC ownership metadata; on
 | MLpot JAX compile | per-rank (spatial) or 0 only (bridge) |
 | `mpi-check` / diagnostics | all ranks print; JSON on 0 |
 
-Use `mmml.interfaces.pycharmmInterface.mpi_rank_io` helpers.
+Use `karml.interfaces.pycharmmInterface.mpi_rank_io` helpers.
 
 ### Testing matrix — what is and is not covered
 
@@ -291,7 +291,7 @@ Use `mmml.interfaces.pycharmmInterface.mpi_rank_io` helpers.
 | Domain slab + halo ownership | `tests/unit/test_mpi_spatial.py` | — |
 | Spatial batch indices | `tests/unit/test_mlpot_spatial_batch.py` | — |
 | Rank-0 bridge vs allreduce policy | `tests/unit/test_mlpot_mpi_bridge.py`, `test_mlpot_spatial_mpi_integration.py` | — |
-| Tier 2 env footguns | `tests/unit/test_spatial_mpi_tier2_validate.py` | `mmml mpi-check --tier2` |
+| Tier 2 env footguns | `tests/unit/test_spatial_mpi_tier2_validate.py` | `karml mpi-check --tier2` |
 | Tier 2 validate module | `spatial_mpi_validate.py` | `validate_tier2_spatial_mpi_env()` |
 | Hybrid callback under `mpirun` (mocked JAX) | `tests/functionality/mlpot/06_spatial_mpi_tier2_smoke.py` | same script on cluster |
 | CHARMM `energy.show()` with MLpot registered | — | `06_spatial_mpi_tier2_smoke.py --charmm-ener` |
@@ -304,29 +304,29 @@ Pre-flight on a GPU node:
 
 ```bash
 # Serial pre-flight (expected warnings OK)
-mmml mpi-check --tier2 --prelaunch --strict
+karml mpi-check --tier2 --prelaunch --strict
 
 # Dry-run argv/YAML (no CHARMM)
 python tests/functionality/mlpot/07_md_system_spatial_mpi_mini.py --dry-run
 
 # Callback smoke under mpirun
-MMML_MPI_NP=2 MMML_MLPOT_SPATIAL_MPI=1 ./scripts/mmml-charmm-mpirun.sh python \
+KARML_MPI_NP=2 KARML_MLPOT_SPATIAL_MPI=1 ./scripts/karml-charmm-mpirun.sh python \
   tests/functionality/mlpot/06_spatial_mpi_tier2_smoke.py
 
 # Full mini (set checkpoint path)
-export MMML_CKPT=/path/to/DESdimers_params.json
-MMML_MPI_NP=2 MMML_MLPOT_SPATIAL_MPI=1 ./scripts/mmml-charmm-mpirun.sh md-system \
-  --config mmml/cli/run/md_system.spatial_mpi.example.yaml \
-  --checkpoint "$MMML_CKPT"
+export KARML_CKPT=/path/to/DESdimers_params.json
+KARML_MPI_NP=2 KARML_MLPOT_SPATIAL_MPI=1 ./scripts/karml-charmm-mpirun.sh md-system \
+  --config karml/cli/run/md_system.spatial_mpi.example.yaml \
+  --checkpoint "$KARML_CKPT"
 
 # Strict check under launch (after exporting spatial env)
-MMML_MPI_NP=2 MMML_MLPOT_SPATIAL_MPI=1 ./scripts/mmml-charmm-mpirun.sh mpi-check --tier2 --strict
+KARML_MPI_NP=2 KARML_MLPOT_SPATIAL_MPI=1 ./scripts/karml-charmm-mpirun.sh mpi-check --tier2 --strict
 ```
 
 ### Pass criteria (user-run)
 
-1. `06_spatial_mpi_tier2_smoke.py` exits 0 under `MMML_MPI_NP>=2` (allreduced energy matches sum of per-rank contributions)
-2. `MMML_MPI_NP=2` mini on DCM:20 completes without segfault
+1. `06_spatial_mpi_tier2_smoke.py` exits 0 under `KARML_MPI_NP>=2` (allreduced energy matches sum of per-rank contributions)
+2. `KARML_MPI_NP=2` mini on DCM:20 completes without segfault
 3. Total energy matches `np=1` within `0.01` kcal/mol after mini
 4. Wall time for MLpot SD decreases vs rank-0 bridge (informational)
 
@@ -334,38 +334,38 @@ MMML_MPI_NP=2 MMML_MLPOT_SPATIAL_MPI=1 ./scripts/mmml-charmm-mpirun.sh mpi-check
 
 | Issue | Symptom | Mitigation |
 |-------|---------|------------|
-| Serial `python` with MPI-linked `libcharmm.so` | May segfault in `upinb` / `send_coord_to_recip` (stack-dependent) | `./scripts/mmml-charmm-mpirun.sh`; run `08_serial_vs_mpirun` on new nodes |
-| JAX GPU warmup before MLpot SD | Rare on current builds | Default: immediate GPU warmup; opt-in defer via `MMML_DEFER_JAX_WARMUP_UNTIL_AFTER_SD=1` |
-| `OMP_NUM_THREADS > 1` with MPI CHARMM | NL races / crashes | `MMML_CHARMM_OMP_THREADS=1` (launcher pins) |
-| `np>1` + `--ml-gpu-count > 1` | GPU oversubscription / OOM | `--ml-gpu-count 1` + `MMML_MPI_PIN_GPU_PER_RANK=1` |
-| `np>1` without `--ml-spatial-mpi` | Correct but no ML speedup (rank-0 bridge) | Set `MMML_MLPOT_SPATIAL_MPI=1` and pass `--ml-spatial-mpi` |
-| `MMML_MLPOT_RANK0_BRIDGE=0` without spatial MPI | Every rank runs full MLpot incorrectly | Keep default `1`; only disable with spatial MPI for debug |
-| DOMDEC on + MLpot + JAX | Segfault | Do not enable DOMDEC for production MLpot; if a stream enabled it, `MMML_FORCE_DOMDEC_OFF=1` can send one guarded `domdec off` |
-| Mismatched OpenMPI vs `libcharmm.so` | `mpirun` launch failures | `mmml mpi-check`, set `MMML_MPIRUN` |
-| `mpi_size >` visible JAX GPUs | Ranks share one GPU | SLURM `CUDA_VISIBLE_DEVICES` per task or lower `MMML_MPI_NP` |
+| Serial `python` with MPI-linked `libcharmm.so` | May segfault in `upinb` / `send_coord_to_recip` (stack-dependent) | `./scripts/karml-charmm-mpirun.sh`; run `08_serial_vs_mpirun` on new nodes |
+| JAX GPU warmup before MLpot SD | Rare on current builds | Default: immediate GPU warmup; opt-in defer via `KARML_DEFER_JAX_WARMUP_UNTIL_AFTER_SD=1` |
+| `OMP_NUM_THREADS > 1` with MPI CHARMM | NL races / crashes | `KARML_CHARMM_OMP_THREADS=1` (launcher pins) |
+| `np>1` + `--ml-gpu-count > 1` | GPU oversubscription / OOM | `--ml-gpu-count 1` + `KARML_MPI_PIN_GPU_PER_RANK=1` |
+| `np>1` without `--ml-spatial-mpi` | Correct but no ML speedup (rank-0 bridge) | Set `KARML_MLPOT_SPATIAL_MPI=1` and pass `--ml-spatial-mpi` |
+| `KARML_MLPOT_RANK0_BRIDGE=0` without spatial MPI | Every rank runs full MLpot incorrectly | Keep default `1`; only disable with spatial MPI for debug |
+| DOMDEC on + MLpot + JAX | Segfault | Do not enable DOMDEC for production MLpot; if a stream enabled it, `KARML_FORCE_DOMDEC_OFF=1` can send one guarded `domdec off` |
+| Mismatched OpenMPI vs `libcharmm.so` | `mpirun` launch failures | `karml mpi-check`, set `KARML_MPIRUN` |
+| `mpi_size >` visible JAX GPUs | Ranks share one GPU | SLURM `CUDA_VISIBLE_DEVICES` per task or lower `KARML_MPI_NP` |
 
-Run `mmml mpi-check --tier2` before long jobs; it encodes most of the above.
+Run `karml mpi-check --tier2` before long jobs; it encodes most of the above.
 
 ### Tier 3 DOMDEC smoke
 
 DOMDEC + MLpot is still experimental. After rebuilding CHARMM with DOMDEC enabled, use the tiny opt-in ENER smoke before any SD/dynamics:
 
 ```bash
-export MMML_CKPT=/path/to/DESdimers_params.json
-MMML_MPI_NP=1 MMML_DOMDEC_MLPOT_SMOKE=1 \
-  ./scripts/mmml-charmm-mpirun.sh python \
+export KARML_CKPT=/path/to/DESdimers_params.json
+KARML_MPI_NP=1 KARML_DOMDEC_MLPOT_SMOKE=1 \
+  ./scripts/karml-charmm-mpirun.sh python \
   tests/functionality/mlpot/09_domdec_mlpot_smoke.py \
-  --checkpoint "$MMML_CKPT" \
+  --checkpoint "$KARML_CKPT" \
   --residue OCOH --n-molecules 1 --box-side 32
 ```
 
 Run the same-script baseline without sending `domdec on`:
 
 ```bash
-MMML_MPI_NP=1 MMML_DOMDEC_MLPOT_SMOKE=1 \
-  ./scripts/mmml-charmm-mpirun.sh python \
+KARML_MPI_NP=1 KARML_DOMDEC_MLPOT_SMOKE=1 \
+  ./scripts/karml-charmm-mpirun.sh python \
   tests/functionality/mlpot/09_domdec_mlpot_smoke.py \
-  --checkpoint "$MMML_CKPT" \
+  --checkpoint "$KARML_CKPT" \
   --residue OCOH --n-molecules 1 --box-side 32 \
   --no-domdec-command
 ```
@@ -374,18 +374,18 @@ Pass: the script exits 0 and prints finite `ENER` / `USER` terms. Failures to re
 
 Observed on `pc-bach` (June 2026):
 
-- `MMML_MPI_NP=1`, `domdec on`, `OCOH:1`, MLpot registration, and `ENER` pass.
+- `KARML_MPI_NP=1`, `domdec on`, `OCOH:1`, MLpot registration, and `ENER` pass.
 - The same `OCOH:1` smoke without explicit `domdec on` also passes with matching energies.
-- `MMML_MPI_NP=2` does not reach DOMDEC or MLpot when topology is constructed from PyCHARMM. It hangs or aborts during CHARMM setup (`crystal free`, `DELETE ATOM`, `read rtf`, or minimal `MASS` RTF loading depending on which earlier step is skipped).
+- `KARML_MPI_NP=2` does not reach DOMDEC or MLpot when topology is constructed from PyCHARMM. It hangs or aborts during CHARMM setup (`crystal free`, `DELETE ATOM`, `read rtf`, or minimal `MASS` RTF loading depending on which earlier step is skipped).
 - `ACO` / `MEOH` are not valid active-DOMDEC probes in their current generated PSF order because DOMDEC `groupxfast` requires hydrogens to be adjacent to their bonded heavy atoms.
 
 Conclusion: true multi-rank DOMDEC testing must start from a CHARMM-native/prebuilt state. Do not use simultaneous PyCHARMM `read.rtf()` / topology generation on all ranks as the Tier 3 entry point.
 
 **Supported `np>1` topology entry (June 2026):** `bootstrap_topology_mpi()` in
-[`charmm_mpi.py`](https://github.com/EricBoittier/mmml/blob/main/mmml/interfaces/pycharmmInterface/charmm_mpi.py). Bisect
-hangs with [`tests/functionality/charmm/mpi_pycharmm_read_gate.py`](https://github.com/EricBoittier/mmml/blob/main/tests/functionality/charmm/mpi_pycharmm_read_gate.py)
-and [`scripts/run_mpi_pycharmm_read_gate.sh`](https://github.com/EricBoittier/mmml/blob/main/scripts/run_mpi_pycharmm_read_gate.sh).
-See [`tests/functionality/charmm/README_mpi_read_gate.md`](https://github.com/EricBoittier/mmml/blob/main/tests/functionality/charmm/README_mpi_read_gate.md).
+[`charmm_mpi.py`](https://github.com/EricBoittier/karml/blob/main/karml/interfaces/pycharmmInterface/charmm_mpi.py). Bisect
+hangs with [`tests/functionality/charmm/mpi_pycharmm_read_gate.py`](https://github.com/EricBoittier/karml/blob/main/tests/functionality/charmm/mpi_pycharmm_read_gate.py)
+and [`scripts/run_mpi_pycharmm_read_gate.sh`](https://github.com/EricBoittier/karml/blob/main/scripts/run_mpi_pycharmm_read_gate.sh).
+See [`tests/functionality/charmm/README_mpi_read_gate.md`](https://github.com/EricBoittier/karml/blob/main/tests/functionality/charmm/README_mpi_read_gate.md).
 
 Next Tier 3 path:
 
@@ -399,14 +399,14 @@ For the DCM:10 scaffold:
 ```bash
 bash scripts/run_domdec_dcm10_smoke.sh prep      # dense ~40 Å DCM:10 (PBC images within cutnb)
 bash scripts/run_domdec_dcm10_smoke.sh validate
-bash scripts/run_domdec_dcm10_smoke.sh tier3     # MMML_MPI_NP=2, NDIR 2 1 1
+bash scripts/run_domdec_dcm10_smoke.sh tier3     # KARML_MPI_NP=2, NDIR 2 1 1
 ```
 
-Tier 3 uses the **prep lattice as-is** (~40 Å dense box). Inflating `crystal define` without re-prepping removes PBC images. Site **c47** (`/opt/charmm/c47*`) rejects `np=2` NDIR; use a **MMML native CHARMM** executable for the small-box gate:
+Tier 3 uses the **prep lattice as-is** (~40 Å dense box). Inflating `crystal define` without re-prepping removes PBC images. Site **c47** (`/opt/charmm/c47*`) rejects `np=2` NDIR; use a **KARML native CHARMM** executable for the small-box gate:
 
 ```bash
 bash scripts/rebuild_charmm_native_exec.sh   # as_library=OFF; installs setup/charmm/charmm
-CHARMM_EXE=$MMML_ROOT/setup/charmm/charmm bash scripts/run_domdec_dcm10_smoke.sh tier3
+CHARMM_EXE=$KARML_ROOT/setup/charmm/charmm bash scripts/run_domdec_dcm10_smoke.sh tier3
 ```
 
 **DOMDEC requires COLFFT + FFTW/MKL** in the CMake build (`setup/charmm/CMakeLists.txt` turns
@@ -417,7 +417,7 @@ On the cluster: `module load FFTW`, then `export FFTW_ROOT=${EBROOTFFTW}` before
 CGENFF `NBFIX` warnings on older c47 are harmless at `bomlev -2`.
 
 Tier 3 native input uses a **single continued ENERGY command** per vendored
-[`setup/charmm/doc/domdec.info`](https://github.com/EricBoittier/mmml/blob/main/setup/charmm/doc/domdec.info) (Syntax + Example 1).
+[`setup/charmm/doc/domdec.info`](https://github.com/EricBoittier/karml/blob/main/setup/charmm/doc/domdec.info) (Syntax + Example 1).
 ``energy.info`` attaches DOMDec via ``[ domdec-spec ]`` on ENERGY — not a separate
 ``nbonds`` block plus bare ``energy``:
 
@@ -439,18 +439,18 @@ one-shot **ENER** gate only.
 
 ### DLPack loose coupling — where it applies
 
-DLPack (`__dlpack__` / `from_dlpack`) gives **zero-copy GPU array interchange** between JAX and CuPy. It is implemented in [`nl_gpu.py`](https://github.com/EricBoittier/mmml/blob/main/mmml/interfaces/pycharmmInterface/nl_gpu.py) for the **MM neighbor-list rebuild** path, not for CHARMM↔MLpot force handoff.
+DLPack (`__dlpack__` / `from_dlpack`) gives **zero-copy GPU array interchange** between JAX and CuPy. It is implemented in [`nl_gpu.py`](https://github.com/EricBoittier/karml/blob/main/karml/interfaces/pycharmmInterface/nl_gpu.py) for the **MM neighbor-list rebuild** path, not for CHARMM↔MLpot force handoff.
 
 | Path | DLPack? | Benefit |
 |------|---------|---------|
-| `jaxmd_runner` PBC + `MMML_MM_NL_DEVICE=gpu` / `--mm-nl-device gpu` | Yes — positions stay on JAX GPU → CuPy Vesin → JAX `pair_idx` | Avoids D2H/H2D for NL rebuild each block |
+| `jaxmd_runner` PBC + `KARML_MM_NL_DEVICE=gpu` / `--mm-nl-device gpu` | Yes — positions stay on JAX GPU → CuPy Vesin → JAX `pair_idx` | Avoids D2H/H2D for NL rebuild each block |
 
 **Cluster CUDA note (gpu08-class hosts):** if `/usr/local/cuda` points at an ancient toolkit (e.g. CUDA 9.0), CuPy NVRTC fails compiling `cuda_fp16.hpp` (`cannot open source file "utility"`). `ensure_cupy_cuda_path()` in `nl_gpu.py` redirects `CUDA_PATH` to the pip `nvidia-cuda-runtime` headers before the first JIT. Blackwell GPUs also need `vesin>=0.6.1` (sm_120).
 | PyCHARMM MLpot callback (`hybrid_mlpot.py`) | **No** — coords arrive on **host** from Fortran | Must copy H2D for JAX forward; DLPack cannot skip this |
 | Spatial MPI force merge (`force_exchange.py`) | **No** — numpy host arrays + MPI allreduce | Correctness path; not a GPU tensor pipeline |
 | `mm_energy_forces.py` when positions already device-resident | Yes (same as NL GPU path) | Faster MM energy when simulation state lives on GPU |
 
-**When to invest in DLPack:** JAX-MD or other runners that keep positions on device across steps. **When not to:** PyCHARMM hybrid MD until Fortran exposes GPU coordinates (Tier 3+ / upstream). See [`NONBOND_LISTS.md`](https://github.com/EricBoittier/mmml/blob/main/mmml/interfaces/pycharmmInterface/mlpot/NONBOND_LISTS.md) GPU section and `tests/functionality/neighbor_lists/11_gpu_nl_sync_profile.py` for timing validation.
+**When to invest in DLPack:** JAX-MD or other runners that keep positions on device across steps. **When not to:** PyCHARMM hybrid MD until Fortran exposes GPU coordinates (Tier 3+ / upstream). See [`NONBOND_LISTS.md`](https://github.com/EricBoittier/karml/blob/main/karml/interfaces/pycharmmInterface/mlpot/NONBOND_LISTS.md) GPU section and `tests/functionality/neighbor_lists/11_gpu_nl_sync_profile.py` for timing validation.
 
 ### Known limitations (Phase 2 / Phase 3)
 
@@ -465,13 +465,13 @@ DLPack (`__dlpack__` / `from_dlpack`) gives **zero-copy GPU array interchange** 
 ### Phase 0
 
 - [x] `docs/pycharmm-mpi.md`
-- [x] `mmml mpi-check`
+- [x] `karml mpi-check`
 - [x] `tests/functionality/charmm/mpi_alad_phi_psi.py`
 - [x] Update `tests/functionality/charmm/README.md`
 
 ### Phase 1
 
-- [x] `maybe_rerun_mmml_under_mpirun()` generalization
+- [x] `maybe_rerun_karml_under_mpirun()` generalization
 - [x] `liquid-box` MPI bootstrap
 - [x] `run-pycharmm` MPI bootstrap
 - [x] `docs/examples/slurm_mlpot_mpi.sh`
@@ -481,7 +481,7 @@ DLPack (`__dlpack__` / `from_dlpack`) gives **zero-copy GPU array interchange** 
 - [x] `mpi_rank_io.py` helpers
 - [x] Rank-0 gating in `recovery_progress` / `liquid_box_build` writes
 - [x] Rank-0 DCD gating in `staged_workflow` (`gate_charmm_trajectory_io`, `rank0_trajectory_path`)
-- [x] `spatial_mpi_validate.py` + `mmml mpi-check --tier2`
+- [x] `spatial_mpi_validate.py` + `karml mpi-check --tier2`
 - [x] Mocked MLpot callback integration tests (`test_mlpot_spatial_mpi_integration.py`)
 - [x] Tier 2 smoke script (`06_spatial_mpi_tier2_smoke.py`)
 - [x] CHARMM MPI test suite (`tests/charmm_mpi/`) in CI
@@ -491,7 +491,7 @@ DLPack (`__dlpack__` / `from_dlpack`) gives **zero-copy GPU array interchange** 
 ### Phase 3
 
 - [x] DOMDEC API survey (`domdec_info.py`, `tier3_domdec_validate.py`)
-- [x] `mmml mpi-check --tier3` (informational)
+- [x] `karml mpi-check --tier3` (informational)
 - [x] `domdec_atoms.py` — ctypes reader for `domdec_common` / `domdec_local` scalars and allocatable arrays (`natoml`, `loc2glo_ind`, `atoml`)
 - [x] `DomdecAlignedGrid` — auto-reads NDIR, exposes `get_local_atom_indices()` / `get_ghost_atom_indices()` / `molecules_owned_by_this_rank()` / `molecules_in_ghost_halo()`
 - [x] `make_domdec_aligned_grid` + `build_domdec_spatial_batch_indices` in `batch_builder.py` — DOMDEC-aware owned-monomer selection wired into spatial batch builder
@@ -505,4 +505,4 @@ DLPack (`__dlpack__` / `from_dlpack`) gives **zero-copy GPU array interchange** 
 
 - [3SimpleMPIExample](https://github.com/BrooksResearchGroup-UM/pyCHARMM-Workshop/tree/main/3SimpleMPIExample) — mpi4py task parallel CHARMM
 - [5Aladipeptide_HFBString_MPI](https://github.com/BrooksResearchGroup-UM/pyCHARMM-Workshop/tree/main/5Aladipeptide_HFBString_MPI) — temporarily disabled upstream
-- [`scripts/mmml-charmm-mpirun.sh`](https://github.com/EricBoittier/mmml/blob/main/scripts/mmml-charmm-mpirun.sh)
+- [`scripts/karml-charmm-mpirun.sh`](https://github.com/EricBoittier/karml/blob/main/scripts/karml-charmm-mpirun.sh)

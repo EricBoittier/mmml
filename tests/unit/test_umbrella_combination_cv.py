@@ -12,9 +12,9 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from mmml.md.restraints import LinearDistanceCV
-from mmml.umbrella.config import UmbrellaConfig, WindowSchedule
-from mmml.umbrella.energy import (
+from karml.md.restraints import LinearDistanceCV
+from karml.umbrella.config import UmbrellaConfig, WindowSchedule
+from karml.umbrella.energy import (
     numpy_bias_matrix,
     numpy_bias_matrix_nd,
     packed_bias_energies,
@@ -246,7 +246,7 @@ def test_numpy_bias_matrix_nd_uses_the_full_difference_cv():
 
 
 def test_mbar_recovers_a_combination_cv_from_cv_spec():
-    from mmml.umbrella.mbar import _snap_cvs
+    from karml.umbrella.mbar import _snap_cvs
 
     snap = {
         "atom_i": 2,
@@ -259,7 +259,7 @@ def test_mbar_recovers_a_combination_cv_from_cv_spec():
 
 
 def test_mbar_falls_back_to_atom_indices_for_legacy_snapshots():
-    from mmml.umbrella.mbar import _snap_cvs
+    from karml.umbrella.mbar import _snap_cvs
 
     assert _snap_cvs({"atom_i": 2, "atom_j": 0}) == [LinearDistanceCV.distance(2, 0)]
     assert _snap_cvs(
@@ -270,8 +270,8 @@ def test_mbar_falls_back_to_atom_indices_for_legacy_snapshots():
 def test_snapshot_cv_spec_survives_a_save_load_round_trip(tmp_path):
     import json
 
-    from mmml.umbrella.io import load_snapshots, save_snapshots
-    from mmml.umbrella.mbar import _snap_cvs
+    from karml.umbrella.io import load_snapshots, save_snapshots
+    from karml.umbrella.mbar import _snap_cvs
 
     cv_specs = [{"pairs": [[2, 0], [2, 1]], "coefficients": [1.0, -1.0]}]
     path = save_snapshots(
@@ -294,7 +294,7 @@ def test_snapshot_cv_spec_survives_a_save_load_round_trip(tmp_path):
 
 
 def test_antisymmetric_seeding_hits_each_window_center():
-    from mmml.umbrella.structure import pack_window_seeds
+    from karml.umbrella.structure import pack_window_seeds
 
     targets = (-1.5, -0.5, 0.0, 0.5, 1.5)
     packed = pack_window_seeds(
@@ -311,7 +311,7 @@ def test_antisymmetric_seeding_hits_each_window_center():
 
 def test_antisymmetric_seeding_keeps_both_distances_bonded_length():
     """xi alone is degenerate; seeds must stay compact, not dissociated."""
-    from mmml.umbrella.structure import pack_window_seeds
+    from karml.umbrella.structure import pack_window_seeds
 
     targets = (-1.5, 0.0, 1.5)
     packed = pack_window_seeds(
@@ -331,7 +331,7 @@ def test_antisymmetric_seeding_keeps_both_distances_bonded_length():
 
 
 def test_stretch_seeding_refuses_a_cv_it_cannot_invert():
-    from mmml.umbrella.structure import pack_window_seeds
+    from karml.umbrella.structure import pack_window_seeds
 
     same_sign = LinearDistanceCV(pairs=((2, 0), (2, 1)), coefficients=(1.0, 1.0))
     with pytest.raises(ValueError, match="opposite-sign"):

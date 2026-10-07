@@ -50,7 +50,7 @@ _STAGE_MARKERS: list[tuple[str, re.Pattern[str]]] = [
     ("mini", re.compile(r"MLpot SD minimize|minimize_with_mlpot", re.I)),
     ("heat", re.compile(r"heat segment|MLpot heat|CHARMM MM pretreat heat", re.I)),
     ("equi", re.compile(r"md_stage.*equi|NPT equil|ps_equi", re.I)),
-    ("jaxmd", re.compile(r"JAX-MD|jaxmd_burst|mmml md-system.*jaxmd", re.I)),
+    ("jaxmd", re.compile(r"JAX-MD|jaxmd_burst|karml md-system.*jaxmd", re.I)),
     ("packmol", re.compile(r"Packmol|packmol", re.I)),
 ]
 
@@ -196,7 +196,7 @@ def last_log_stage(text: str) -> str | None:
 
 def _read_restart_step(path: Path) -> int | None:
     try:
-        from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
             read_restart_last_step,
         )
 
@@ -207,7 +207,7 @@ def _read_restart_step(path: Path) -> int | None:
 
 def _restart_has_bad_coords(path: Path) -> bool:
     try:
-        from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
             restart_has_nonfinite_coordinates,
         )
 

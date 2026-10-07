@@ -1,6 +1,6 @@
 """Vibrational spectra (IR, Raman, VCD) from MD trajectories and EF models."""
 
-from mmml.spectra.spectra_md import (
+from karml.spectra.spectra_md import (
     autocorrelation,
     compute_magnetic_dipoles,
     compute_polarizability_batched,

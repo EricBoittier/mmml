@@ -1,4 +1,4 @@
-# `mmml make-res`
+# `karml make-res`
 
 CGENFF residue → PDB/PSF/topology.
 
@@ -6,13 +6,13 @@ CGENFF residue → PDB/PSF/topology.
 ## Usage
 
 ```bash
-mmml make-res --help
+karml make-res --help
 ```
 
 ## Options
 
 ```text
-usage: mmml make-res [-h] [--res RES] [--list-residues] [--no-pager]
+usage: karml make-res [-h] [--res RES] [--list-residues] [--no-pager]
                      [--skip-energy-show]
 
 Generate a CGENFF residue (PDB, PSF, topology) via PyCHARMM.
@@ -34,8 +34,8 @@ Other options:
   --no-pager          With --list-residues, print the table to stdout instead of
                       piping to less.
 
-Examples: mmml make-res --list-residues mmml make-res --list-residues --no-pager
-| grep -i acetone mmml make-res --res ACO
+Examples: karml make-res --list-residues karml make-res --list-residues --no-pager
+| grep -i acetone karml make-res --res ACO
 ```
 
 ## Visual examples

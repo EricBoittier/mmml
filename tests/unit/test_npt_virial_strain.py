@@ -31,7 +31,7 @@ jax_md = pytest.importorskip("jax_md")
 from jax_md import energy as jmd_energy  # noqa: E402
 from jax_md import quantity, simulate, space  # noqa: E402
 
-import mmml.cli.run.jaxmd_runner as runner  # noqa: E402
+import karml.cli.run.jaxmd_runner as runner  # noqa: E402
 
 SIGMA = 3.4  # Angstrom (argon-like)
 EPS = 0.0104  # eV

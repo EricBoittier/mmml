@@ -6,7 +6,7 @@ integrating with an undefined USER energy; the job then wrote its restart,
 stage summary and ``next_run`` advice and exited 0 (a 7 ps CGenFF validation
 NVE was lost this way). See ``mlpot/callback_failstop.py``.
 
-Each case runs ``mmml md-system`` (3 ethanol, vacuum, CPU) in a child process:
+Each case runs ``karml md-system`` (3 ethanol, vacuum, CPU) in a child process:
 
 * ``extent``: from the 6th energy call inside dynamics, the MM pair update
   raises the molecule-extent ``ValueError`` (the #215 failure) inside the
@@ -39,7 +39,7 @@ from tests.conftest import can_import_pycharmm
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 _CKPT = _REPO_ROOT / "examples" / "ckpts_json" / "DESdimers_params.json"
 EXIT_CODE = 86
-BANNER = "MMML MLPOT CALLBACK FAILURE"
+BANNER = "KARML MLPOT CALLBACK FAILURE"
 
 pytestmark = [
     pytest.mark.pycharmm,
@@ -54,7 +54,7 @@ pytestmark = [
 
 # Child driver: patch DecomposedMlpotCalculator.calculate_charmm to log every
 # CHARMM energy call (and whether it happens inside dynamics), inject the fault,
-# then run the real `mmml md-system` CLI in this process.
+# then run the real `karml md-system` CLI in this process.
 _DRIVER = r"""
 import sys
 from pathlib import Path
@@ -62,7 +62,7 @@ from pathlib import Path
 mode, fail_at, log_path = sys.argv[1], int(sys.argv[2]), Path(sys.argv[3])
 md_argv = sys.argv[4:]
 
-from mmml.interfaces.pycharmmInterface.mlpot import hybrid_mlpot as hm
+from karml.interfaces.pycharmmInterface.mlpot import hybrid_mlpot as hm
 
 _orig = hm.DecomposedMlpotCalculator.calculate_charmm
 _DYN_FRAMES = {"run_dynamics", "_run_dynamics_via_c_api"}
@@ -110,9 +110,9 @@ def _patched(self, *args):
 
 hm.DecomposedMlpotCalculator.calculate_charmm = _patched
 
-from mmml.cli.__main__ import main
+from karml.cli.__main__ import main
 
-sys.argv = ["mmml", *md_argv]
+sys.argv = ["karml", *md_argv]
 rc = main()
 _log(f"main returned {rc}")
 raise SystemExit(rc)
@@ -134,10 +134,10 @@ _DONE_ARTIFACTS = (
 def _run_case(tmp_path: Path, mode: str, fail_at: int, *extra: str):
     env = dict(os.environ)
     for key in (
-        "MMML_MLPOT_CALLBACK_FAIL_EXIT_CODE",
-        "MMML_MLPOT_ALLOW_MISSING_CALLBACK_PAIRS",
-        "MMML_MLPOT_ALLOW_PERIODIC_COULOMB_FAILURE",
-        "MMML_MM_PAIR_SOURCE",
+        "KARML_MLPOT_CALLBACK_FAIL_EXIT_CODE",
+        "KARML_MLPOT_ALLOW_MISSING_CALLBACK_PAIRS",
+        "KARML_MLPOT_ALLOW_PERIODIC_COULOMB_FAILURE",
+        "KARML_MM_PAIR_SOURCE",
     ):
         env.pop(key, None)
     env.update(
@@ -145,9 +145,9 @@ def _run_case(tmp_path: Path, mode: str, fail_at: int, *extra: str):
             "PYTHONPATH": os.pathsep.join(p for p in (str(_REPO_ROOT), env.get("PYTHONPATH", "")) if p),
             "JAX_PLATFORMS": "cpu",
             "CUDA_VISIBLE_DEVICES": "",
-            "MMML_MLPOT_DEVICE": "cpu",
-            "MMML_NO_CHARMM_MPI": "1",
-            "MMML_NO_MPI_RERUN": "1",
+            "KARML_MLPOT_DEVICE": "cpu",
+            "KARML_NO_CHARMM_MPI": "1",
+            "KARML_NO_MPI_RERUN": "1",
         }
     )
     calls = tmp_path / "calls.log"

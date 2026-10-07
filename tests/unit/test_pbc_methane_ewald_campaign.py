@@ -177,12 +177,12 @@ def test_methane_bulk_count_positive() -> None:
 
 
 def test_meth_residue_and_monomer_bundled() -> None:
-    from mmml.analysis.residue_geometry import bundled_monomer_pdb, known_solvent_density_kg_m3
-    from mmml.interfaces.pycharmmInterface.cgenff_residues import (
+    from karml.analysis.residue_geometry import bundled_monomer_pdb, known_solvent_density_kg_m3
+    from karml.interfaces.pycharmmInterface.cgenff_residues import (
         normalize_cgenff_residue_name,
         require_cgenff_residue_name,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.mlpot_limits import estimate_ml_atoms
+    from karml.interfaces.pycharmmInterface.mlpot.mlpot_limits import estimate_ml_atoms
 
     assert normalize_cgenff_residue_name("CH4") == "METH"
     assert normalize_cgenff_residue_name("methane") == "METH"

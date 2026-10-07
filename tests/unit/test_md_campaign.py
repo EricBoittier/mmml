@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from mmml.cli.run.md_config import (
+from karml.cli.run.md_config import (
     expand_repeated_jobs,
     merge_campaign_job_config,
     topological_job_order,
@@ -38,7 +38,7 @@ def _sample_campaign() -> dict:
 def test_resolve_campaign_namespace_paths_vs_config(tmp_path: Path) -> None:
     from argparse import Namespace
 
-    from mmml.cli.run.md_campaign import resolve_campaign_namespace_paths
+    from karml.cli.run.md_campaign import resolve_campaign_namespace_paths
 
     cfg_dir = tmp_path / "cfgs" / "yaml"
     cfg_dir.mkdir(parents=True)
@@ -57,7 +57,7 @@ def test_run_single_backend_honors_jaxmd_unified(monkeypatch):
     from argparse import Namespace
     from unittest import mock
 
-    from mmml.cli.run import md_campaign
+    from karml.cli.run import md_campaign
 
     called: dict[str, object] = {}
 
@@ -66,7 +66,7 @@ def test_run_single_backend_honors_jaxmd_unified(monkeypatch):
         return 0
 
     monkeypatch.setattr(
-        "mmml.cli.run.md_system_unified.run_unified_jaxmd",
+        "karml.cli.run.md_system_unified.run_unified_jaxmd",
         _fake_unified,
     )
     monkeypatch.setattr(md_campaign, "clear_handoff_context", lambda: None)
@@ -104,7 +104,7 @@ def test_campaign_continue_from_h5_honors_frame() -> None:
     """HDF5 NVE restarts must pass continue_from_frame into load_handoff."""
     from pathlib import Path
 
-    from mmml.cli.run import md_campaign as mc
+    from karml.cli.run import md_campaign as mc
 
     src = Path(mc.__file__).read_text(encoding="utf-8")
     assert 'frame=int(merged.get("continue_from_frame"' in src
@@ -114,7 +114,7 @@ def test_jaxmd_pre_min_defaults_to_fire_first() -> None:
     """Rough hybrid surfaces should not open with ASE BFGS by default."""
     from pathlib import Path
 
-    from mmml.cli.run.md_pbc_suite import jaxmd as jaxmd_suite
+    from karml.cli.run.md_pbc_suite import jaxmd as jaxmd_suite
 
     src = Path(jaxmd_suite.__file__).read_text(encoding="utf-8")
     assert 'default="fire-first"' in src
@@ -126,7 +126,7 @@ def test_compatible_h5_per_atom_array_drops_stale_natoms() -> None:
     """Traj export must not apply DCM:120 velocities onto a DCM:180 frame."""
     import numpy as np
 
-    from mmml.cli.run.md_pbc_suite.jaxmd import _compatible_h5_per_atom_array
+    from karml.cli.run.md_pbc_suite.jaxmd import _compatible_h5_per_atom_array
 
     stale = np.zeros((3, 600, 3), dtype=float)
     ok = np.zeros((3, 900, 3), dtype=float)
@@ -144,14 +144,14 @@ def test_compatible_h5_per_atom_array_drops_stale_natoms() -> None:
 
 
 def test_unique_output_dir_if_exists_keeps_missing_path(tmp_path) -> None:
-    from mmml.cli.run.md_campaign import _unique_output_dir_if_exists
+    from karml.cli.run.md_campaign import _unique_output_dir_if_exists
 
     missing = tmp_path / "fresh_campaign"
     assert _unique_output_dir_if_exists(missing, resume=False) == missing.resolve()
 
 
 def test_unique_output_dir_if_exists_adds_uuid_suffix(tmp_path) -> None:
-    from mmml.cli.run.md_campaign import _unique_output_dir_if_exists
+    from karml.cli.run.md_campaign import _unique_output_dir_if_exists
 
     existing = tmp_path / "dcm_large_25"
     existing.mkdir()
@@ -163,7 +163,7 @@ def test_unique_output_dir_if_exists_adds_uuid_suffix(tmp_path) -> None:
 
 
 def test_unique_output_dir_if_exists_honors_resume(tmp_path) -> None:
-    from mmml.cli.run.md_campaign import _unique_output_dir_if_exists
+    from karml.cli.run.md_campaign import _unique_output_dir_if_exists
 
     existing = tmp_path / "campaign"
     existing.mkdir()
@@ -173,7 +173,7 @@ def test_unique_output_dir_if_exists_honors_resume(tmp_path) -> None:
 def test_resume_requested_cli_aliases() -> None:
     from argparse import Namespace
 
-    from mmml.cli.run.md_config import (
+    from karml.cli.run.md_config import (
         campaign_resume_enabled,
         normalize_resume_flags,
         resume_requested,
@@ -201,7 +201,7 @@ def test_resume_requested_cli_aliases() -> None:
 
 
 def test_parse_md_system_resume_syncs_campaign_flag() -> None:
-    from mmml.cli.run.md_system import parse_md_system_args
+    from karml.cli.run.md_system import parse_md_system_args
 
     args = parse_md_system_args(["--resume"])
     assert args.resume is True
@@ -213,7 +213,7 @@ def test_parse_md_system_resume_syncs_campaign_flag() -> None:
 
 
 def test_parse_md_system_tracks_explicit_lr_cli_flags() -> None:
-    from mmml.cli.run.md_system import parse_md_system_args
+    from karml.cli.run.md_system import parse_md_system_args
 
     args = parse_md_system_args(
         [
@@ -233,7 +233,7 @@ def test_parse_md_system_tracks_explicit_lr_cli_flags() -> None:
 
 
 def test_lookup_resolved_output_dir_prefers_in_run_path(tmp_path) -> None:
-    from mmml.cli.run.md_campaign import _lookup_resolved_output_dir
+    from karml.cli.run.md_campaign import _lookup_resolved_output_dir
 
     campaign = _sample_campaign()
     resolved = {"equil": (tmp_path / "equil_run_abc12345").resolve()}
@@ -242,7 +242,7 @@ def test_lookup_resolved_output_dir_prefers_in_run_path(tmp_path) -> None:
 
 
 def test_resolve_output_dir_repeat_subdirs(tmp_path) -> None:
-    from mmml.cli.run.md_campaign import _resolve_output_dir
+    from karml.cli.run.md_campaign import _resolve_output_dir
 
     merged = {"output_dir": str(tmp_path / "jaxmd_nve"), "repeat": 4}
     assert _resolve_output_dir(merged, "jaxmd_nve.0", rep=0) == (
@@ -260,7 +260,7 @@ def test_resolve_output_dir_repeat_subdirs(tmp_path) -> None:
 def test_explicit_cli_output_dir_overrides_single_job(tmp_path) -> None:
     from argparse import Namespace
 
-    from mmml.cli.run.md_campaign import _explicit_cli_output_dir
+    from karml.cli.run.md_campaign import _explicit_cli_output_dir
 
     args = Namespace(output_dir=str(tmp_path / "elsewhere"), _cli_explicit={"output_dir"})
     got = _explicit_cli_output_dir(args, [("prod", "prod", 0)])
@@ -271,7 +271,7 @@ def test_explicit_cli_output_dir_ignores_non_cli_value(tmp_path) -> None:
     """A default or YAML-sourced output_dir must not displace the per-job path."""
     from argparse import Namespace
 
-    from mmml.cli.run.md_campaign import _explicit_cli_output_dir
+    from karml.cli.run.md_campaign import _explicit_cli_output_dir
 
     args = Namespace(output_dir=str(tmp_path / "default"), _cli_explicit=set())
     assert _explicit_cli_output_dir(args, [("prod", "prod", 0)]) is None
@@ -280,7 +280,7 @@ def test_explicit_cli_output_dir_ignores_non_cli_value(tmp_path) -> None:
 def test_explicit_cli_output_dir_rejects_multi_run_campaign(tmp_path) -> None:
     from argparse import Namespace
 
-    from mmml.cli.run.md_campaign import _explicit_cli_output_dir
+    from karml.cli.run.md_campaign import _explicit_cli_output_dir
 
     args = Namespace(output_dir=str(tmp_path / "one"), _cli_explicit={"output_dir"})
     with pytest.raises(ValueError, match="--campaign-output-dir"):
@@ -314,7 +314,7 @@ def _campaign_yaml_with_placeholder_checkpoint(tmp_path: Path) -> Path:
 
 def test_cli_checkpoint_overrides_unresolvable_config_placeholder(tmp_path: Path) -> None:
     """A CLI --checkpoint must win before the config value is checked for existence."""
-    from mmml.cli.run.md_system import parse_md_system_args
+    from karml.cli.run.md_system import parse_md_system_args
 
     cfg = _campaign_yaml_with_placeholder_checkpoint(tmp_path)
     real = tmp_path / "params.json"
@@ -328,7 +328,7 @@ def test_cli_checkpoint_overrides_unresolvable_config_placeholder(tmp_path: Path
 
 
 def test_config_placeholder_checkpoint_still_rejected_without_cli(tmp_path: Path) -> None:
-    from mmml.cli.run.md_system import parse_md_system_args
+    from karml.cli.run.md_system import parse_md_system_args
 
     cfg = _campaign_yaml_with_placeholder_checkpoint(tmp_path)
     with pytest.raises(FileNotFoundError, match="Checkpoint not found"):
@@ -346,7 +346,7 @@ def test_merge_campaign_job_config_does_not_require_checkpoint(tmp_path: Path) -
 
 
 def test_validate_campaign_checkpoint(tmp_path: Path) -> None:
-    from mmml.cli.run.md_config import validate_campaign_checkpoint
+    from karml.cli.run.md_config import validate_campaign_checkpoint
 
     real = tmp_path / "params.json"
     real.write_text("{}", encoding="utf-8")
@@ -362,7 +362,7 @@ def test_validate_campaign_checkpoint(tmp_path: Path) -> None:
 def test_apply_campaign_cli_overrides_ml_flags() -> None:
     from argparse import Namespace
 
-    from mmml.cli.run.md_campaign import apply_campaign_cli_overrides
+    from karml.cli.run.md_campaign import apply_campaign_cli_overrides
 
     merged = {"backend": "pycharmm", "ml_gpu_count": 1, "ml_batch_size": 64}
     parent = Namespace(
@@ -440,7 +440,7 @@ def test_apply_campaign_cli_overrides_ml_flags() -> None:
 def test_apply_campaign_cli_overrides_lr_flags_when_explicit() -> None:
     from argparse import Namespace
 
-    from mmml.cli.run.md_campaign import apply_campaign_cli_overrides
+    from karml.cli.run.md_campaign import apply_campaign_cli_overrides
 
     merged = {
         "backend": "pycharmm",
@@ -478,7 +478,7 @@ def test_apply_campaign_cli_overrides_lr_flags_when_explicit() -> None:
 def test_apply_campaign_cli_overrides_lr_flags_skip_implicit_defaults() -> None:
     from argparse import Namespace
 
-    from mmml.cli.run.md_campaign import apply_campaign_cli_overrides
+    from karml.cli.run.md_campaign import apply_campaign_cli_overrides
 
     merged = {
         "backend": "pycharmm",
@@ -507,8 +507,8 @@ def test_apply_campaign_cli_overrides_lr_flags_skip_implicit_defaults() -> None:
 
 
 def test_namespace_from_merged_preserves_no_periodic_charmm_vdw() -> None:
-    from mmml.cli.run import md_system
-    from mmml.cli.run.md_campaign import namespace_from_merged
+    from karml.cli.run import md_system
+    from karml.cli.run.md_campaign import namespace_from_merged
 
     args = namespace_from_merged(
         {
@@ -531,7 +531,7 @@ def test_namespace_from_merged_preserves_no_periodic_charmm_vdw() -> None:
 
 
 def test_namespace_from_merged_defaults_bonded_mm_mini_off_pycharmm() -> None:
-    from mmml.cli.run.md_campaign import namespace_from_merged
+    from karml.cli.run.md_campaign import namespace_from_merged
 
     args = namespace_from_merged(
         {
@@ -545,7 +545,7 @@ def test_namespace_from_merged_defaults_bonded_mm_mini_off_pycharmm() -> None:
 
 
 def test_namespace_from_merged_bonded_mm_mini_always() -> None:
-    from mmml.cli.run.md_campaign import namespace_from_merged
+    from karml.cli.run.md_campaign import namespace_from_merged
 
     merged = {
         "backend": "pycharmm",
@@ -562,7 +562,7 @@ def test_namespace_from_merged_bonded_mm_mini_always() -> None:
 
 
 def test_namespace_from_merged_keeps_extra_args_last() -> None:
-    from mmml.cli.run.md_campaign import namespace_from_merged
+    from karml.cli.run.md_campaign import namespace_from_merged
 
     merged = merge_campaign_job_config(_sample_campaign(), "prod")
     merged["continue_from"] = "/tmp/handoff/state.npz"
@@ -575,7 +575,7 @@ def test_namespace_from_merged_keeps_extra_args_last() -> None:
 
 
 def test_namespace_from_merged_charmm_image_min_distance_flag() -> None:
-    from mmml.cli.run.md_campaign import namespace_from_merged
+    from karml.cli.run.md_campaign import namespace_from_merged
 
     args = namespace_from_merged(
         {
@@ -590,7 +590,7 @@ def test_namespace_from_merged_charmm_image_min_distance_flag() -> None:
 def test_build_command_jaxmd_liquid_packmol_default_includes_placement_argv() -> None:
     from argparse import Namespace
 
-    from mmml.cli.run.md_system import build_command
+    from karml.cli.run.md_system import build_command
 
     args = Namespace(
         backend="jaxmd",
@@ -633,7 +633,7 @@ def test_build_command_jaxmd_liquid_packmol_default_includes_placement_argv() ->
 def test_build_command_jaxmd_grid_builder_omits_packmol_argv() -> None:
     from argparse import Namespace
 
-    from mmml.cli.run.md_system import build_command
+    from karml.cli.run.md_system import build_command
 
     args = Namespace(
         backend="jaxmd",
@@ -674,7 +674,7 @@ def test_build_command_jaxmd_grid_builder_omits_packmol_argv() -> None:
 def test_build_command_forwards_jaxmd_neighbor_tuning_args() -> None:
     from argparse import Namespace
 
-    from mmml.cli.run.md_system import build_command
+    from karml.cli.run.md_system import build_command
 
     args = Namespace(
         backend="jaxmd",
@@ -718,7 +718,7 @@ def test_build_command_forwards_jaxmd_neighbor_tuning_args() -> None:
 def test_build_command_forwards_skip_jit_warmup() -> None:
     from argparse import Namespace
 
-    from mmml.cli.run.md_system import build_command
+    from karml.cli.run.md_system import build_command
 
     args = Namespace(
         backend="jaxmd",
@@ -757,7 +757,7 @@ def test_build_command_forwards_skip_jit_warmup() -> None:
 def test_build_command_filters_campaign_flags_from_extra_args() -> None:
     from argparse import Namespace
 
-    from mmml.cli.run.md_system import build_command
+    from karml.cli.run.md_system import build_command
 
     args = Namespace(
         backend="jaxmd",
@@ -800,7 +800,7 @@ def test_build_command_filters_campaign_flags_from_extra_args() -> None:
 
 
 def test_resolve_dcd_nsavc_caps_frames_for_short_legs() -> None:
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import resolve_dcd_nsavc
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import resolve_dcd_nsavc
 
     assert resolve_dcd_nsavc(dcd_nsavc=1, nstep=400, dcd_max_frames=25) == 16
     assert resolve_dcd_nsavc(dcd_nsavc=1, nstep=400, dcd_max_frames=0) == 1
@@ -808,7 +808,7 @@ def test_resolve_dcd_nsavc_caps_frames_for_short_legs() -> None:
 
 
 def test_strip_campaign_metadata_keys_drops_setup_compare_fields() -> None:
-    from mmml.cli.run.md_campaign import strip_campaign_metadata_keys
+    from karml.cli.run.md_campaign import strip_campaign_metadata_keys
 
     raw = {
         "setup_variant": "liquid_prep_dense",

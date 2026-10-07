@@ -62,7 +62,7 @@ def main() -> None:
         writer.writerows(rows)
 
     lines = [
-        "# Unified mmml.md backend sweep",
+        "# Unified karml.md backend sweep",
         "",
         "This smoke test only records 2-3 frames per setting (see README's",
         '"What backend means here"), so `fluctuation`/`trend` below are much',

@@ -83,7 +83,7 @@ def test_build_md_system_argv_per_step_flags(
 ) -> None:
     ckpt = tmp_path / "ckpt"
     ckpt.mkdir()
-    monkeypatch.setenv("MMML_CKPT", str(ckpt))
+    monkeypatch.setenv("KARML_CKPT", str(ckpt))
     argv = build_md_system_argv(cfg, 7)
     assert "--composition" in argv
     assert composition_string(7) in argv

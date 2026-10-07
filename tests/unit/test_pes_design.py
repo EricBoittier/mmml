@@ -5,7 +5,7 @@ from pathlib import Path
 
 import numpy as np
 
-from mmml.cli.misc.pes_design import main
+from karml.cli.misc.pes_design import main
 
 
 def test_pes_design_filters_selects_and_plots(tmp_path: Path):

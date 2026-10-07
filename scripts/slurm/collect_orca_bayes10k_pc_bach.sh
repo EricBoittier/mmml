@@ -9,7 +9,7 @@
 #SBATCH --mem=16G
 
 set -euo pipefail
-REPO="${MMML_REPO:-$HOME/mmml}"
+REPO="${KARML_REPO:-$HOME/karml}"
 CAMPAIGN="${LJ_BAYES10K_DIR:-$REPO/artifacts/lj_scales_bayes_10k}"
 cd "$REPO"
 export PATH="$HOME/.local/bin:$PATH" UV_NO_SYNC=1

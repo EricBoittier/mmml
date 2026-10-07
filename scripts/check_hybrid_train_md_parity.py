@@ -116,7 +116,7 @@ def _to_psf_order(data, i, n_real):
     """
     import pycharmm
 
-    from mmml.interfaces.pycharmmInterface.utils import get_Z_from_psf
+    from karml.interfaces.pycharmmInterface.utils import get_Z_from_psf
 
     psf_q = np.asarray(pycharmm.psf.get_charges())[:n_real]
     psf_Z = np.asarray(get_Z_from_psf())[:n_real]
@@ -209,8 +209,8 @@ def _setup_charmm_psf(resid: str, n_monomers: int) -> int:
     """
     import pycharmm
 
-    from mmml.interfaces.pycharmmInterface import setupRes
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import (
+    from karml.interfaces.pycharmmInterface import setupRes
+    from karml.interfaces.pycharmmInterface.import_pycharmm import (
         pycharmm_quiet,
         reset_block,
     )
@@ -293,11 +293,11 @@ def main() -> int:
 
     import jax.numpy as jnp
 
-    from mmml.cli.misc.physnet_evaluate import _load_physnet_checkpoint
-    from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
-    from mmml.interfaces.pycharmmInterface.mmml_calculator import setup_calculator
-    from mmml.models.hybrid_energy import hybrid_forward
-    from mmml.models.mm_charge_mode import (
+    from karml.cli.misc.physnet_evaluate import _load_physnet_checkpoint
+    from karml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
+    from karml.interfaces.pycharmmInterface.karml_calculator import setup_calculator
+    from karml.models.hybrid_energy import hybrid_forward
+    from karml.models.mm_charge_mode import (
         mm_charge_mode_needs_q_ml,
         resolve_hybrid_mm_charge_mode,
     )

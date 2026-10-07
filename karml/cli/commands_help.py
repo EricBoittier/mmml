@@ -1,21 +1,21 @@
-"""``mmml commands`` and ``mmml examples`` — browse help without wall-of-text ``-h``."""
+"""``karml commands`` and ``karml examples`` — browse help without wall-of-text ``-h``."""
 
 from __future__ import annotations
 
 import argparse
 import sys
 
-from mmml.cli.help_text import format_commands_help, format_examples_help
-from mmml.cli.help_style import print_cli_text
-from mmml.cli.registry import format_audit_report
+from karml.cli.help_text import format_commands_help, format_examples_help
+from karml.cli.help_style import print_cli_text
+from karml.cli.registry import format_audit_report
 
 
 def build_commands_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="mmml commands",
-        description="List MMML subcommands by category.",
+        prog="karml commands",
+        description="List KARML subcommands by category.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="Per-command flags: mmml <command> --help",
+        epilog="Per-command flags: karml <command> --help",
     )
     parser.add_argument(
         "--audit",
@@ -27,10 +27,10 @@ def build_commands_parser() -> argparse.ArgumentParser:
 
 def build_examples_parser() -> argparse.ArgumentParser:
     return argparse.ArgumentParser(
-        prog="mmml examples",
+        prog="karml examples",
         description="Copy-paste example invocations.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="Interactive setup: mmml configure",
+        epilog="Interactive setup: karml configure",
     )
 
 

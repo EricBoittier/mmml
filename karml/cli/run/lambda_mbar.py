@@ -19,7 +19,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--run-dir",
         type=Path,
         required=True,
-        help="Output directory from mmml md-system --setup lambda_ti or scripts/meoh_dimer_lambda_ti.py",
+        help="Output directory from karml md-system --setup lambda_ti or scripts/meoh_dimer_lambda_ti.py",
     )
     parser.add_argument(
         "--checkpoint",
@@ -59,7 +59,7 @@ def _temperature_from_summary(run_dir: Path, override: float | None) -> float:
 
 
 def main() -> int:
-    from mmml.cli.run.lambda_dynamics import (
+    from karml.cli.run.lambda_dynamics import (
         MbarConfig,
         merge_mbar_into_summary,
         parse_couple_residue_numbers,

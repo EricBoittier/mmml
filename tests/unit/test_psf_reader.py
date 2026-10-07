@@ -7,7 +7,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from mmml.utils.psf_reader import read_psf_atom_types
+from karml.utils.psf_reader import read_psf_atom_types
 
 REPO = Path(__file__).resolve().parents[2]
 

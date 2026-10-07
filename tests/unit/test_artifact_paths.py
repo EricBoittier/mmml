@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from mmml.interfaces.pycharmmInterface.mlpot.artifact_paths import (
+from karml.interfaces.pycharmmInterface.mlpot.artifact_paths import (
     alternate_overlap_scratch,
     is_overlap_scratch_restart_path,
     overlap_chunk_dcd_paths,
@@ -12,8 +12,8 @@ from mmml.interfaces.pycharmmInterface.mlpot.artifact_paths import (
     overlap_restart_slot_paths,
     staged_artifact_paths,
 )
-from mmml.interfaces.pycharmmInterface.mlpot.minimize_artifacts import (
-    MLPOT_MMML,
+from karml.interfaces.pycharmmInterface.mlpot.minimize_artifacts import (
+    MLPOT_KARML,
     rescue_snapshot_spec,
     snapshot_file_paths,
 )
@@ -29,8 +29,8 @@ def test_staged_paths_use_short_names(tmp_path: Path) -> None:
 
 
 def test_snapshot_stems_omit_tag(tmp_path: Path) -> None:
-    assert MLPOT_MMML.stem("dcm_8") == "02_mini"
-    paths = snapshot_file_paths(tmp_path, MLPOT_MMML, "dcm_8")
+    assert MLPOT_KARML.stem("dcm_8") == "02_mini"
+    paths = snapshot_file_paths(tmp_path, MLPOT_KARML, "dcm_8")
     assert paths["crd"].name == "02_mini.crd"
 
 
@@ -72,8 +72,8 @@ def test_overlap_chunk_restart_naming(tmp_path: Path) -> None:
 
 
 def test_vmd_script_uses_basename_paths(tmp_path: Path) -> None:
-    from mmml.interfaces.pycharmmInterface.mlpot.artifact_paths import VMD_TCL
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import write_vmd_load_script
+    from karml.interfaces.pycharmmInterface.mlpot.artifact_paths import VMD_TCL
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import write_vmd_load_script
 
     topo = tmp_path / "model.psf"
     traj = tmp_path / "heat.0000.dcd"
@@ -92,7 +92,7 @@ def test_vmd_script_uses_basename_paths(tmp_path: Path) -> None:
     assert "mol addfile {heat.0000.dcd}" in text
     assert "mol representation NewCartoon" in text
     assert "mol representation VDW 0.300000" in text
-    assert "Shared mmml style" in text
+    assert "Shared karml style" in text
     assert "mol representation DynamicBonds 1.750000 0.220000" in text
     assert "mol representation DynamicBonds 2.400000 0.220000" in text
     assert "color Element H silver" in text
@@ -104,7 +104,7 @@ def test_vmd_script_uses_basename_paths(tmp_path: Path) -> None:
     assert "color Structure {Alpha Helix} red2" in text
     assert "color change rgb gray 0.565 0.565 0.565" in text
     assert "color Element Fe orange2" in text
-    assert "mmml_set_element 54.50 56.50 Fe" in text
+    assert "karml_set_element 54.50 56.50 Fe" in text
     assert "mol ssrecalc top" in text
     assert "resname HEME" in text
     assert "resname ALA ARG ASN ASP CYS GLN GLU GLY HIS HSD HSE HSP" in text
@@ -112,7 +112,7 @@ def test_vmd_script_uses_basename_paths(tmp_path: Path) -> None:
 
 
 def test_vmd_script_keeps_trajectory_subdir(tmp_path: Path) -> None:
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import write_vmd_load_script
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import write_vmd_load_script
 
     topo = tmp_path / "model.psf"
     pretreat = tmp_path / "pretreat"
@@ -133,7 +133,7 @@ def test_vmd_script_keeps_trajectory_subdir(tmp_path: Path) -> None:
 
 
 def test_vmd_help_cds_into_job_dir(tmp_path: Path, capsys) -> None:
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import print_vmd_load_help
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import print_vmd_load_help
 
     topo = tmp_path / "model.psf"
     traj = tmp_path / "nve.dcd"

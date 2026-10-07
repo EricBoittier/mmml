@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run one DCM:3 NVE job (preset × geometry) via mmml md-system."""
+"""Run one DCM:3 NVE job (preset × geometry) via karml md-system."""
 
 from __future__ import annotations
 
@@ -28,7 +28,7 @@ def _repo_root() -> Path:
 
 
 def _resolve_mpirun_wrapper(cfg: dict) -> Path:
-    raw = Path(str(cfg.get("mpirun_wrapper", "../../scripts/mmml-charmm-mpirun.sh")))
+    raw = Path(str(cfg.get("mpirun_wrapper", "../../scripts/karml-charmm-mpirun.sh")))
     if raw.is_absolute():
         return raw
     return (workflow_root() / raw).resolve()
@@ -66,7 +66,7 @@ def main() -> int:
         return rc
 
     tag = composition_tag(cfg)
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         assert_stage_dynamics_completed,
     )
 

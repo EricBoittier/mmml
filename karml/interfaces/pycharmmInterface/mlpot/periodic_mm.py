@@ -91,11 +91,11 @@ def resolve_mm_nonbond_mode(args: Any | None) -> MmNonbondMode:
 
 def resolve_lr_solver_arg(args: Any | None) -> str | None:
     if args is None:
-        return os.environ.get("MMML_LR_SOLVER")
+        return os.environ.get("KARML_LR_SOLVER")
     explicit = getattr(args, "lr_solver", None)
     if explicit is not None and str(explicit).strip():
         return str(explicit).strip().lower()
-    return os.environ.get("MMML_LR_SOLVER")
+    return os.environ.get("KARML_LR_SOLVER")
 
 
 def resolve_periodic_charmm_vdw(args: Any | None) -> bool:
@@ -132,7 +132,7 @@ def resolve_periodic_charmm_vdw(args: Any | None) -> bool:
 def build_periodic_mm_config(args: Any | None) -> PeriodicMmConfig | None:
     if resolve_mm_nonbond_mode(args) != "periodic_external":
         return None
-    from mmml.interfaces.pycharmmInterface.long_range_backend import pick_lr_solver
+    from karml.interfaces.pycharmmInterface.long_range_backend import pick_lr_solver
 
     lr = pick_lr_solver(resolve_lr_solver_arg(args))
     if lr not in ("scafacos", "jax_pme", "nvalchemiops_pme", "ewald"):
@@ -145,7 +145,7 @@ def build_periodic_mm_config(args: Any | None) -> PeriodicMmConfig | None:
         getattr(args, "scafacos_method", None)
         or os.environ.get("SCAFACOS_METHOD", "ewald")
     ).strip()
-    from mmml.interfaces.pycharmmInterface.long_range_backend import resolve_jax_pme_method
+    from karml.interfaces.pycharmmInterface.long_range_backend import resolve_jax_pme_method
 
     jax_pme_method = resolve_jax_pme_method(
         getattr(args, "jax_pme_method", None) or os.environ.get("JAX_PME_METHOD")
@@ -172,7 +172,7 @@ def validate_periodic_mm_args(
     box_side_A: float | None,
 ) -> PeriodicMmConfig:
     """Validate CLI/stage prerequisites for periodic external MM."""
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
         resolve_charmm_use_pbc,
         resolve_mlpot_use_pbc,
     )
@@ -204,8 +204,8 @@ def validate_periodic_mm_args(
     cfg = build_periodic_mm_config(args)
     assert cfg is not None
 
-    from mmml.interfaces.scafacosInterface.scafacos_session import have_scafacos
-    from mmml.interfaces.pycharmmInterface.long_range_backend import (
+    from karml.interfaces.scafacosInterface.scafacos_session import have_scafacos
+    from karml.interfaces.pycharmmInterface.long_range_backend import (
         have_jax_pme,
         have_nvalchemiops_pme,
     )
@@ -213,7 +213,7 @@ def validate_periodic_mm_args(
     if cfg.uses_scafacos and not have_scafacos():
         raise ValueError(
             "periodic_external with lr_solver=scafacos requires libfcs on "
-            "LD_LIBRARY_PATH or SCAFACOS_LIB. See mmml/interfaces/scafacosInterface/README.md"
+            "LD_LIBRARY_PATH or SCAFACOS_LIB. See karml/interfaces/scafacosInterface/README.md"
         )
     if cfg.uses_jax_pme and not have_jax_pme():
         raise ValueError(
@@ -233,7 +233,7 @@ def min_cubic_box_for_periodic_mm(
     cluster_extent_A: float | None = None,
 ) -> float:
     """Lower bound on cubic L for periodic external MM (Å)."""
-    from mmml.interfaces.pycharmmInterface.nbonds_config import (
+    from karml.interfaces.pycharmmInterface.nbonds_config import (
         PBC_NBOND_BOX_MARGIN_A,
         pbc_nbond_cutoffs,
     )

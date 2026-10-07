@@ -1,19 +1,19 @@
 """Linear-combination-of-distances collective variable.
 
-Generalises the single-pair :class:`~mmml.md.restraints.distance.DistanceRestraint`
+Generalises the single-pair :class:`~karml.md.restraints.distance.DistanceRestraint`
 CV to ``xi(R) = sum_d c_d * |r_{j_d} - r_{i_d}|``. The motivating case is the SN2
 antisymmetric stretch used as the Menshutkin reaction coordinate,
 ``xi = r(C-X) - r(C-N)`` (Turan, Brickel & Meuwly, *J. Phys. Chem. B* **126**,
 1951 (2022)), but plain distances (one pair, ``c = 1``) are the degenerate case,
 so the same object drives both the gas-phase packed umbrella sampler
-(:mod:`mmml.umbrella`) and the solvated ``rxncoor`` energy term. Keeping one
+(:mod:`karml.umbrella`) and the solvated ``rxncoor`` energy term. Keeping one
 implementation is the point: a CV that disagrees between the two paths silently
 produces two incomparable free-energy profiles.
 
 Analytic gradients are provided because the packed sampler applies bias forces
 explicitly rather than differentiating the total energy -- autodiff through
 PhysNet's internal ``value_and_grad`` nests badly (see
-``mmml.umbrella.sample.run_umbrella_nvt``).
+``karml.umbrella.sample.run_umbrella_nvt``).
 """
 
 from __future__ import annotations
@@ -183,7 +183,7 @@ class LinearDistanceCV:
         """Per-pair ``r_j - r_i``, minimum-image when ``cell`` is given."""
         if cell is None:
             return [positions[j] - positions[i] for i, j in self.pairs]
-        from mmml.interfaces.pycharmmInterface.pbc_utils_jax import mic_displacement
+        from karml.interfaces.pycharmmInterface.pbc_utils_jax import mic_displacement
 
         return [mic_displacement(positions[i], positions[j], cell) for i, j in self.pairs]
 
@@ -203,7 +203,7 @@ class LinearDistanceCV:
     def value_batched(self, positions: Any, n_atoms: int, n_windows: int) -> Any:
         """CV per window for a packed ``(K*N, 3)`` array. Shape ``(K,)``.
 
-        The packed layout is the one :func:`mmml.umbrella.energy.build_packed_graph`
+        The packed layout is the one :func:`karml.umbrella.energy.build_packed_graph`
         produces: ``K`` tiled copies of an ``N``-atom system, window-major.
         """
         import jax.numpy as jnp
@@ -489,7 +489,7 @@ class BondRetentionWall:
     def _shortest_batched(self, positions: Any, n_atoms: int, n_windows: int) -> Any:
         """``min_p r_p`` per packed window. Shape ``(K,)``.
 
-        The packed layout used by :mod:`mmml.umbrella` stacks ``K`` copies of an
+        The packed layout used by :mod:`karml.umbrella` stacks ``K`` copies of an
         ``N``-atom system into one ``(K*N, 3)`` array, so each window's atom
         ``i`` lives at ``k*N + i``. Gas-phase packing, hence no cell.
         """

@@ -24,7 +24,7 @@ from pathlib import Path
 
 import numpy as np
 
-from mmml.models.mm_lj_scales import (
+from karml.models.mm_lj_scales import (
     MM_LJ_EPSILON_SCALE_BOUNDS,
     MM_LJ_SIGMA_SCALE_BOUNDS,
     find_learnable_lj_scales_sidecar,

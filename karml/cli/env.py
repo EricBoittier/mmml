@@ -1,4 +1,4 @@
-"""``mmml env`` — resolved paths, bundled checkpoints, and shell export hints."""
+"""``karml env`` — resolved paths, bundled checkpoints, and shell export hints."""
 
 from __future__ import annotations
 
@@ -10,34 +10,34 @@ from pathlib import Path
 from typing import Any
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
-_PRESETS_DIR = _REPO_ROOT / "mmml" / "cli" / "run" / "presets"
-_DCM_RESILIENT = _REPO_ROOT / "mmml" / "cli" / "run" / "dcm_liquid_workflow.resilient.example.yaml"
+_PRESETS_DIR = _REPO_ROOT / "karml" / "cli" / "run" / "presets"
+_DCM_RESILIENT = _REPO_ROOT / "karml" / "cli" / "run" / "dcm_liquid_workflow.resilient.example.yaml"
 
 
 def _repo_root() -> Path:
     try:
-        from mmml.interfaces.pycharmmInterface.charmm_paths import mmml_repo_root
+        from karml.interfaces.pycharmmInterface.charmm_paths import karml_repo_root
 
-        return mmml_repo_root()
+        return karml_repo_root()
     except Exception:
         return _REPO_ROOT
 
 
-def _resolve_mmml_ckpt() -> tuple[Path | None, str]:
+def _resolve_karml_ckpt() -> tuple[Path | None, str]:
     """Return (path, source) for the checkpoint ``resolve_checkpoint`` would use."""
-    explicit = (os.environ.get("MMML_CKPT") or os.environ.get("MMML_CHECKPOINT") or "").strip()
+    explicit = (os.environ.get("KARML_CKPT") or os.environ.get("KARML_CHECKPOINT") or "").strip()
     if explicit:
         p = Path(explicit).expanduser()
         if p.exists():
-            return p.resolve(), "MMML_CKPT"
-        return None, f"MMML_CKPT (missing: {p})"
+            return p.resolve(), "KARML_CKPT"
+        return None, f"KARML_CKPT (missing: {p})"
 
     try:
-        from mmml.interfaces.pycharmmInterface.mlpot.cli_common import resolve_checkpoint
+        from karml.interfaces.pycharmmInterface.mlpot.cli_common import resolve_checkpoint
 
         return resolve_checkpoint(None), "bundled/default search"
     except FileNotFoundError:
-        return None, "not found (set MMML_CKPT or pass --checkpoint)"
+        return None, "not found (set KARML_CKPT or pass --checkpoint)"
 
 
 def _resolve_spooky_ckpt() -> tuple[Path | None, str]:
@@ -50,7 +50,7 @@ def _resolve_spooky_ckpt() -> tuple[Path | None, str]:
         return None, f"SPOOKYNET_CKPT (missing: {p})"
 
     try:
-        from mmml.models.spookynet_calc import resolve_spooky_checkpoint
+        from karml.models.spookynet_calc import resolve_spooky_checkpoint
 
         return resolve_spooky_checkpoint(), "bundled/default search"
     except Exception:
@@ -67,7 +67,7 @@ def _resolve_mbd_ckpt() -> tuple[Path | None, str]:
         return None, f"MBD_CKPT (missing: {p})"
 
     try:
-        from mmml.models.mbd.calculator import resolve_mbd_checkpoint
+        from karml.models.mbd.calculator import resolve_mbd_checkpoint
 
         return resolve_mbd_checkpoint(), "bundled/default search"
     except Exception:
@@ -86,7 +86,7 @@ def _resolve_multipoles_ckpt() -> tuple[Path | None, str]:
         return None, f"MULTIPOLES_CKPT (missing: {p})"
 
     try:
-        from mmml.models.multipoles.electrostatics import resolve_multipoles_checkpoint
+        from karml.models.multipoles.electrostatics import resolve_multipoles_checkpoint
 
         return resolve_multipoles_checkpoint(), "bundled/default search"
     except Exception:
@@ -95,7 +95,7 @@ def _resolve_multipoles_ckpt() -> tuple[Path | None, str]:
 
 def _charmm_paths() -> dict[str, str | None]:
     try:
-        from mmml.interfaces.pycharmmInterface.charmm_paths import bootstrap_charmm_env
+        from karml.interfaces.pycharmmInterface.charmm_paths import bootstrap_charmm_env
 
         home, lib = bootstrap_charmm_env(repo_root=_repo_root())
         return {
@@ -108,14 +108,14 @@ def _charmm_paths() -> dict[str, str | None]:
 
 def _bundled_checkpoints() -> list[dict[str, Any]]:
     try:
-        from mmml.models.physnetjax.defaults import (
+        from karml.models.physnetjax.defaults import (
             HF_JSON_DIR,
             list_hf_physnet_models,
             resolve_hf_physnet_checkpoint,
         )
 
         aliases = (
-            ("mmml-default", "mmml-default"),
+            ("karml-default", "karml-default"),
             ("best-forces", "best-forces"),
             ("joint-default", "default"),
         )
@@ -153,7 +153,7 @@ def _bundled_checkpoints() -> list[dict[str, Any]]:
 
 
 def collect_env_report() -> dict[str, Any]:
-    phys_ckpt, phys_source = _resolve_mmml_ckpt()
+    phys_ckpt, phys_source = _resolve_karml_ckpt()
     spooky_ckpt, spooky_source = _resolve_spooky_ckpt()
     mbd_ckpt, mbd_source = _resolve_mbd_ckpt()
     mult_ckpt, mult_source = _resolve_multipoles_ckpt()
@@ -163,9 +163,9 @@ def collect_env_report() -> dict[str, Any]:
 
     return {
         "repo_root": str(_repo_root().resolve()),
-        "MMML_CKPT": str(phys_ckpt) if phys_ckpt is not None else None,
-        "MMML_CKPT_source": phys_source,
-        "MMML_CKPT_set": bool((os.environ.get("MMML_CKPT") or "").strip()),
+        "KARML_CKPT": str(phys_ckpt) if phys_ckpt is not None else None,
+        "KARML_CKPT_source": phys_source,
+        "KARML_CKPT_set": bool((os.environ.get("KARML_CKPT") or "").strip()),
         "SPOOKYNET_CKPT": str(spooky_ckpt) if spooky_ckpt is not None else None,
         "SPOOKYNET_CKPT_source": spooky_source,
         "SPOOKYNET_CKPT_set": bool((os.environ.get("SPOOKYNET_CKPT") or "").strip()),
@@ -186,7 +186,7 @@ def collect_env_report() -> dict[str, Any]:
         "model_defaults": {
             "physnet": {
                 "name": "PhysNet / Joint MLpot",
-                "env_var": "MMML_CKPT",
+                "env_var": "KARML_CKPT",
                 "path": str(phys_ckpt) if phys_ckpt is not None else None,
                 "source": phys_source,
                 "available": phys_ckpt is not None,
@@ -221,7 +221,7 @@ def export_lines(report: dict[str, Any] | None = None) -> list[str]:
     lines: list[str] = []
 
     model_vars = (
-        ("MMML_CKPT", "MMML_CKPT_set"),
+        ("KARML_CKPT", "KARML_CKPT_set"),
         ("SPOOKYNET_CKPT", "SPOOKYNET_CKPT_set"),
         ("MBD_CKPT", "MBD_CKPT_set"),
         ("MULTIPOLES_CKPT", "MULTIPOLES_CKPT_set"),
@@ -244,7 +244,7 @@ def export_lines(report: dict[str, Any] | None = None) -> list[str]:
 
 def render_env_report(report: dict[str, Any]) -> str:
     lines = [
-        "MMML Environment & Model Default Parameters Status",
+        "KARML Environment & Model Default Parameters Status",
         "==================================================",
         f"repo_root:        {report['repo_root']}",
     ]
@@ -294,15 +294,15 @@ def render_env_report(report: dict[str, Any]) -> str:
         lines.append("Suggested shell exports (only for unset vars):")
         lines.extend(f"  {line}" for line in exports)
     lines.append("")
-    lines.append("Tip: eval \"$(mmml env --export)\"  or  mmml env --export >> ~/.bashrc")
+    lines.append("Tip: eval \"$(karml env --export)\"  or  karml env --export >> ~/.bashrc")
     return "\n".join(lines)
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="mmml env",
+        prog="karml env",
         description=(
-            "Show resolved MMML environment paths and status of default model "
+            "Show resolved KARML environment paths and status of default model "
             "parameters (PhysNet, SpookyNet, MBD, Multipoles)."
         ),
     )
@@ -314,7 +314,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--export",
         action="store_true",
-        help="Print export lines only (for eval \"$(mmml env --export)\").",
+        help="Print export lines only (for eval \"$(karml env --export)\").",
     )
     return parser
 
@@ -325,7 +325,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.export:
         for line in export_lines(report):
             print(line)
-        return 0 if report.get("MMML_CKPT") else 1
+        return 0 if report.get("KARML_CKPT") else 1
     if args.json:
         print(json.dumps(report, indent=2))
         return 0

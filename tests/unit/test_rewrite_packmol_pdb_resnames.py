@@ -12,7 +12,7 @@ def _write_template(path: Path, lines: list[str]) -> None:
 
 
 def test_rewrite_packmol_pdb_resnames_restores_ch3cl(tmp_path: Path) -> None:
-    from mmml.interfaces.pycharmmInterface.packmol_placement import (
+    from karml.interfaces.pycharmmInterface.packmol_placement import (
         rewrite_packmol_pdb_resnames,
     )
 
@@ -73,13 +73,13 @@ def test_rewrite_packmol_pdb_resnames_restores_ch3cl(tmp_path: Path) -> None:
         float(ln[38:46])
         float(ln[46:54])
 
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+    from karml.interfaces.pycharmmInterface.mlpot.setup import (
         _residue_sequence_from_pdb,
     )
 
     assert _residue_sequence_from_pdb(packed) == ["AMM1", "CH3CL", "TIP3"]
     # Positions still finite / ordered.
-    from mmml.interfaces.pycharmmInterface.packmol_placement import (
+    from karml.interfaces.pycharmmInterface.packmol_placement import (
         _parse_pdb_atom_records,
     )
 

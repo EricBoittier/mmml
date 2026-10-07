@@ -139,10 +139,10 @@
 #   trajectories cannot answer those at all.
 # ---------------------------------------------------------------------------
 set -u
-cd /mmhome/andreychev/mmml/mmml
-export MENSH_CKPT="${MENSH_CKPT:-/mmhome/andreychev/mmml/mmml/ckpts/menshutkin_longrange/longrange-c2398efc-a6f3-478f-8a3b-af6c66cda0fc/epoch-1436}"
+cd /mmhome/andreychev/karml/karml
+export MENSH_CKPT="${MENSH_CKPT:-/mmhome/andreychev/karml/karml/ckpts/menshutkin_longrange/longrange-c2398efc-a6f3-478f-8a3b-af6c66cda0fc/epoch-1436}"
 source examples/menshutkin/_env.sh
-export MMML_EXAMPLE_DEVICE=gpu
+export KARML_EXAMPLE_DEVICE=gpu
 export CUDA_VISIBLE_DEVICES="${GPU:-1}"
 export PYTHONUNBUFFERED=1
 
@@ -162,7 +162,7 @@ EMB="${EMB:-mechanical-fluct}"
 # overridden the same way (5.6 in the script, 1.6 on the command line).
 # Set TAG instead of overriding --output-dir.
 TAG="${TAG:-}"
-OUT="/mmhome/andreychev/mmml/mmml/artifacts/menshutkin/pmf_full_${SOLVENT}${TAG:+_${TAG}}"
+OUT="/mmhome/andreychev/karml/karml/artifacts/menshutkin/pmf_full_${SOLVENT}${TAG:+_${TAG}}"
 
 EXTRA=()
 # FREEZE_CHARGE_FORCES is now OPT-IN, and defaults OFF.
@@ -183,7 +183,7 @@ EXTRA=()
 # --charge-gradient-scale LAM for a fractional response.
 [[ "${FREEZE_CHARGE_FORCES:-0}" == "1" ]] && EXTRA+=(--freeze-charge-forces)
 
-exec /mmhome/andreychev/mmml/mmml/.venv/bin/python -u \
+exec /mmhome/andreychev/karml/karml/.venv/bin/python -u \
   examples/menshutkin/07_solvated_pmf.py \
   --solvent "${SOLVENT}" --embedding "${EMB}" \
   --xi-min -1.3 --xi-max "${XI_MAX:-1.6}" --fine 0.1 --fine-to "${FINE_TO:-${XI_MAX:-1.6}}" --coarse 0.25 \

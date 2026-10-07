@@ -20,9 +20,9 @@ from typing import Any
 
 import numpy as np
 
-from mmml.data.units import CALCULATOR_UNITS
-from mmml.distill.acetone_pool import DIMER_ATOMS
-from mmml.distill.teacher_label import LabeledSample
+from karml.data.units import CALCULATOR_UNITS
+from karml.distill.acetone_pool import DIMER_ATOMS
+from karml.distill.teacher_label import LabeledSample
 
 KIND_MONOMER = 0
 KIND_DIMER = 1
@@ -200,7 +200,7 @@ def samples_to_arrays(
         "group_step": g_step,
         "group_phase": g_phase,
         "is_train": is_train.astype(np.int8),
-        "_mmml_units": np.array(json.dumps(units)),
+        "_karml_units": np.array(json.dumps(units)),
         "_split": mode,
         "_valid_groups": valid_groups,
     }
@@ -237,7 +237,7 @@ def write_distill_npz(
     def _subset(mask: np.ndarray) -> dict[str, Any]:
         out: dict[str, Any] = {}
         for key, value in payload.items():
-            if key == "_mmml_units":
+            if key == "_karml_units":
                 out[key] = value
                 continue
             arr = np.asarray(value)

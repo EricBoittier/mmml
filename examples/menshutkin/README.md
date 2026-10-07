@@ -335,7 +335,7 @@ The ladder for ML/MM is therefore its own:
 | 1. mechanical, fixed FF charges | not at all |
 | 1.5 `mechanical-fluct` | charges follow its **own geometry** only |
 | 2. **`--polarisation`** ← here | classical induced dipoles from the real MM field, in-vacuo α |
-| 3. field-conditioned ML | the network **takes the MM field as input** and predicts the polarised energy/charges (`mmml/models/efield`, NepoIP/MM) |
+| 3. field-conditioned ML | the network **takes the MM field as input** and predicts the polarised energy/charges (`karml/models/efield`, NepoIP/MM) |
 | 4. + polarisable MM | mutual; the solvent responds back |
 
 Rung 3 is the ML/MM analogue of QM/MM electrostatic embedding — the model

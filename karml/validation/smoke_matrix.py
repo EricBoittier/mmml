@@ -204,7 +204,7 @@ def run_smoke_matrix(
         "input_hashes": {
             name: _sha256(Path(value).expanduser())
             for name, value in os.environ.items()
-            if name.startswith("MMML_SMOKE_") and value
+            if name.startswith("KARML_SMOKE_") and value
         },
     }
     summary = {

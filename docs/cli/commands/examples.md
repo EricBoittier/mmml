@@ -1,25 +1,25 @@
-# `mmml examples`
+# `karml examples`
 
 Copy-paste example invocations.
 
 
-`mmml examples` prints copy-paste invocations for common workflows (boxes, MD
-campaigns, QM pipelines). For interactive YAML setup, use `mmml configure`.
+`karml examples` prints copy-paste invocations for common workflows (boxes, MD
+campaigns, QM pipelines). For interactive YAML setup, use `karml configure`.
 
 ```bash
-mmml examples
+karml examples
 ```
 
 ## Usage
 
 ```bash
-mmml examples --help
+karml examples --help
 ```
 
 !!! note
     No `build_parser()` hook — see module docstring or run the command without arguments for usage.
 
-Implementation: `mmml.cli.commands_help`
+Implementation: `karml.cli.commands_help`
 
 
 ## Related docs

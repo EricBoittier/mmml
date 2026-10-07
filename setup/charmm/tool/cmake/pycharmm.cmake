@@ -64,7 +64,7 @@ set(PIP_STAMP_FILE ${CMAKE_BINARY_DIR}/.pip_install_stamp)
 # Homebrew and Debian mark the base interpreter EXTERNALLY-MANAGED (PEP 668).
 # `pip install` then aborts, and this target is part of `all`, so the CHARMM
 # library build fails after it has already linked. A virtualenv (prefix !=
-# base_prefix) is still allowed to install. MMML imports the source tree
+# base_prefix) is still allowed to install. KARML imports the source tree
 # under tool/pycharmm, so skipping the system install is safe.
 set(_pycharmm_skip_pip OFF)
 execute_process(

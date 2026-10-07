@@ -28,7 +28,7 @@ DT_FS="${DT_FS:-0.25}"
 PS_PROD="${PS_PROD:-5}"
 
 # Experimental bulk liquid densities at ~298 K, from
-# mmml/interfaces/pycharmmInterface/mlpot/box_sizing.py::SOLVENT_BULK_PROPS.
+# karml/interfaces/pycharmmInterface/mlpot/box_sizing.py::SOLVENT_BULK_PROPS.
 declare -A RHO_BULK=( [DCM]=1.326 [ACO]=0.784 )
 declare -A N_ATOMS=(  [DCM]=5     [ACO]=10    )
 
@@ -71,14 +71,14 @@ run_cmd() {
   fi
 }
 
-# MLpot runs need the MPI-linked libcharmm launcher; plain `mmml` is fine for
+# MLpot runs need the MPI-linked libcharmm launcher; plain `karml` is fine for
 # MM-only and for the ASE / JAX-MD backends.
-MPIRUN_WRAPPER="${MPIRUN_WRAPPER:-${REPO_ROOT}/scripts/mmml-charmm-mpirun.sh}"
+MPIRUN_WRAPPER="${MPIRUN_WRAPPER:-${REPO_ROOT}/scripts/karml-charmm-mpirun.sh}"
 
 require_checkpoint() {
-  if [[ -z "${MMML_CKPT:-}" ]]; then
-    echo "MMML_CKPT is not set — export your PhysNet/SpookyNet checkpoint:" >&2
-    echo "  export MMML_CKPT=/path/to/DESdimers_params.json" >&2
+  if [[ -z "${KARML_CKPT:-}" ]]; then
+    echo "KARML_CKPT is not set — export your PhysNet/SpookyNet checkpoint:" >&2
+    echo "  export KARML_CKPT=/path/to/DESdimers_params.json" >&2
     return 1
   fi
 }

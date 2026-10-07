@@ -36,7 +36,7 @@ def wrap_positions_for_pbc(
         R_mapped = pbc_map_fn(jnp.asarray(positions))
         return np.asarray(jax.device_get(R_mapped))
     # MIC-only: wrap by monomer into primary cell (COM-based)
-    from mmml.interfaces.pycharmmInterface.cell_list import _wrap_groups_np
+    from karml.interfaces.pycharmmInterface.cell_list import _wrap_groups_np
     cell_matrix = np.diag([float(cell)] * 3) if np.isscalar(cell) else np.asarray(cell, dtype=np.float64)
     if cell_matrix.ndim == 1 and cell_matrix.shape[0] == 3:
         cell_matrix = np.diag(cell_matrix)
@@ -65,14 +65,14 @@ def minimize_structure(
     """Minimize structure using CHARMM and/or ASE BFGS."""
     import ase.io as ase_io
     import ase.optimize as ase_opt
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import coor
+    from karml.interfaces.pycharmmInterface.import_pycharmm import coor
     import pandas as pd
     import pycharmm
 
     if charmm:
         pycharmm.minimize.run_abnr(nstep=10000, tolenr=1e-6, tolgrd=1e-6)
         pycharmm.lingo.charmm_script("ENER")
-        from mmml.interfaces.pycharmmInterface.import_pycharmm import safe_energy_show
+        from karml.interfaces.pycharmmInterface.import_pycharmm import safe_energy_show
         safe_energy_show()
         atoms.set_positions(coor.get_positions())
         atoms = optimize_as_monomers(
@@ -144,7 +144,7 @@ def optimize_as_monomers(
 ) -> Any:
     """Optimize each monomer separately with ASE BFGS."""
     import ase.optimize as ase_opt
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import coor
+    from karml.interfaces.pycharmmInterface.import_pycharmm import coor
     import pandas as pd
 
     optimized_atoms_positions = np.zeros_like(atoms.get_positions())
@@ -233,7 +233,7 @@ def run_ase_md(
             masses=atoms.get_masses(),
         )
         atoms.set_positions(wrapped)
-        from mmml.interfaces.pycharmmInterface.import_pycharmm import coor
+        from karml.interfaces.pycharmmInterface.import_pycharmm import coor
         import pandas as pd
         xyz = pd.DataFrame(wrapped, columns=["x", "y", "z"])
         coor.set_positions(xyz)

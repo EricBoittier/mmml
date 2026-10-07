@@ -11,15 +11,15 @@ import sys
 
 import numpy as np
 
-from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
-from mmml.interfaces.pycharmmInterface.mm_energy_forces import (
+from karml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
+from karml.interfaces.pycharmmInterface.mm_energy_forces import (
     decompose_mlpot_mm_nb_eterms_kcalmol,
 )
-from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
     resolve_jax_pme_sr_cutoff_for_mlpot,
     resolve_lr_solver_for_mlpot,
 )
-from mmml.interfaces.pycharmmInterface.mlpot.mlpot_sparse_dimer_policy import (
+from karml.interfaces.pycharmmInterface.mlpot.mlpot_sparse_dimer_policy import (
     image_aware_dimer_com_distance_numpy,
 )
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from mmml.interfaces.pycharmmInterface.charmm_jax_trajectory_energy import (
+from karml.interfaces.pycharmmInterface.charmm_jax_trajectory_energy import (
     FrameEnergyComparison,
     TermTrajectoryStats,
     TrajectoryEnergyComparison,
@@ -15,7 +15,7 @@ from mmml.interfaces.pycharmmInterface.charmm_jax_trajectory_energy import (
     synthetic_trajectory_from_seed,
     term_deltas_from_component_maps,
 )
-from mmml.interfaces.pycharmmInterface.charmm_jax_energy_benchmark import (
+from karml.interfaces.pycharmmInterface.charmm_jax_energy_benchmark import (
     ForceDelta,
     TermDelta,
 )

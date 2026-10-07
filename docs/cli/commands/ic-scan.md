@@ -1,4 +1,4 @@
-# `mmml ic-scan`
+# `karml ic-scan`
 
 Bond/angle/dihedral scans (1D or N-D) for QM/ML.
 
@@ -9,7 +9,7 @@ BFGS-minimized). That mode needs `evaluate: energy` and cannot be combined with
 `--prepare-only`.
 
 ```bash
-mmml ic-scan \
+karml ic-scan \
   --config examples/ic_scan/acem_dihedrals_relaxed.yaml \
   --output artifacts/ic_scan/acem_xtb_relaxed \
   --overwrite
@@ -18,13 +18,13 @@ mmml ic-scan \
 ## Usage
 
 ```bash
-mmml ic-scan --help
+karml ic-scan --help
 ```
 
 ## Options
 
 ```text
-usage: mmml ic-scan [-h] --config CONFIG [--prepare-only] [--allow-partial]
+usage: karml ic-scan [-h] --config CONFIG [--prepare-only] [--allow-partial]
                     [--overwrite] --output OUTPUT
 
 Prepare and optionally evaluate bond/angle/dihedral scans from a config that

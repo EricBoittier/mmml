@@ -4,7 +4,7 @@ WORKFLOW_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 REPO_ROOT="$(cd "$WORKFLOW_ROOT/../.." && pwd)"
 cd "$REPO_ROOT"
 
-CFG="${MMML_WORKFLOW_CONFIG:-config.yaml}"
+CFG="${KARML_WORKFLOW_CONFIG:-config.yaml}"
 if [[ "${1:-}" == "--config" ]]; then
   CFG="${2:?--config requires path}"
 fi
@@ -14,10 +14,10 @@ else
   CFG_PATH="${WORKFLOW_ROOT}/${CFG}"
 fi
 
-# shellcheck source=../../../scripts/resolve_mmml_env.sh
-source "$REPO_ROOT/scripts/resolve_mmml_env.sh"
-mmml_resolve_env "$REPO_ROOT"
-PY="${MMML_PYTHON}"
+# shellcheck source=../../../scripts/resolve_karml_env.sh
+source "$REPO_ROOT/scripts/resolve_karml_env.sh"
+karml_resolve_env "$REPO_ROOT"
+PY="${KARML_PYTHON}"
 
 "$PY" -c "
 from pathlib import Path

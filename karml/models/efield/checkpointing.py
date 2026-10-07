@@ -97,7 +97,7 @@ def read_history(ckpt_dir: Path) -> list[dict[str, Any]]:
 
 def write_run_meta(ckpt_dir: Path, meta: dict[str, Any]) -> Path:
     payload = {
-        "format": "mmml-efield-run-meta-v1",
+        "format": "karml-efield-run-meta-v1",
         "updated_utc": utc_now_iso(),
         "hostname": socket.gethostname(),
         "slurm_job_id": os.environ.get("SLURM_JOB_ID"),
@@ -121,7 +121,7 @@ def best_valid_path(ckpt_dir: Path, run_uuid: str) -> Path:
 
 def write_best_valid(ckpt_dir: Path, run_uuid: str, record: dict[str, Any]) -> Path:
     path = best_valid_path(ckpt_dir, run_uuid)
-    write_json(path, {"format": "mmml-efield-best-valid-v1", **record, "uuid": run_uuid})
+    write_json(path, {"format": "karml-efield-best-valid-v1", **record, "uuid": run_uuid})
     point_symlink(Path(ckpt_dir) / "best-valid.json", path.name)
     return path
 

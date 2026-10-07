@@ -2,8 +2,8 @@
 # Native CHARMM cooperative READ control (no PyCHARMM) for MPI read-gate bisect.
 #
 # Usage:
-#   MMML_MPI_NP=2 ./scripts/run_native_charmm_read_gate.sh
-#   MMML_MPI_NP=4 ./scripts/run_native_charmm_read_gate.sh --with-restart
+#   KARML_MPI_NP=2 ./scripts/run_native_charmm_read_gate.sh
+#   KARML_MPI_NP=4 ./scripts/run_native_charmm_read_gate.sh --with-restart
 #
 # Requires a standalone charmm executable (library-only libcharmm.so is not enough):
 #   bash scripts/rebuild_charmm_native_exec.sh --clean
@@ -11,14 +11,14 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-MMML_MPI_NP="${MMML_MPI_NP:-1}"
-export MMML_MPI_NP
+KARML_MPI_NP="${KARML_MPI_NP:-1}"
+export KARML_MPI_NP
 
 PSF="${PSF:-$ROOT/artifacts/domdec_spatial_smoke/dcm_20mer.psf}"
 CRD="${CRD:-$ROOT/artifacts/domdec_spatial_smoke/dcm_20mer.crd}"
 RES="${RES:-$ROOT/artifacts/domdec_spatial_smoke/dcm_20mer.res}"
-RTF="${RTF:-$ROOT/mmml/data/charmm/top_all36_cgenff.rtf}"
-PRM="${PRM:-$ROOT/mmml/data/charmm/par_all36_cgenff.prm}"
+RTF="${RTF:-$ROOT/karml/data/charmm/top_all36_cgenff.rtf}"
+PRM="${PRM:-$ROOT/karml/data/charmm/par_all36_cgenff.prm}"
 WITH_RESTART=0
 
 while [[ $# -gt 0 ]]; do
@@ -84,7 +84,7 @@ done
 OUT_DIR="$ROOT/artifacts/domdec_spatial_smoke/native_read_gate"
 mkdir -p "$OUT_DIR"
 INP="$OUT_DIR/read_gate.inp"
-OUT="$OUT_DIR/read_gate_np${MMML_MPI_NP}.out"
+OUT="$OUT_DIR/read_gate_np${KARML_MPI_NP}.out"
 
 if [[ "$WITH_RESTART" == 1 ]]; then
   if [[ ! -f "$RES" ]]; then
@@ -122,10 +122,10 @@ stop
 EOF
 fi
 
-echo "run_native_charmm_read_gate: CHARMM_EXE=$CHARMM_EXE np=$MMML_MPI_NP" >&2
+echo "run_native_charmm_read_gate: CHARMM_EXE=$CHARMM_EXE np=$KARML_MPI_NP" >&2
 echo "run_native_charmm_read_gate: inp=$INP out=$OUT" >&2
 
-"$ROOT/scripts/mmml-charmm-mpirun.sh" "$CHARMM_EXE" -i "$INP" -o "$OUT"
+"$ROOT/scripts/karml-charmm-mpirun.sh" "$CHARMM_EXE" -i "$INP" -o "$OUT"
 
 echo "run_native_charmm_read_gate: grep NATOM / energy from $OUT" >&2
 grep -E 'NATOM|ENER|ABNORMAL|PSF has|Total energy' "$OUT" | tail -30 || true

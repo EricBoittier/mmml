@@ -8,8 +8,8 @@ Two questions in one streaming pass over the file:
    as a Hill formula, and tally monomers, unordered monomer pairs, elements and
    frame sizes.
 2. **What can hybrid ML/MM run on?**  Feed every ``--cgenff-stride``-th frame
-   through :func:`mmml.data.cgenff_dataset.assign_frame_cgenff` — the same call
-   ``mmml prepare-mm-dataset`` makes — and record the matched CGenFF ``RESI``
+   through :func:`karml.data.cgenff_dataset.assign_frame_cgenff` — the same call
+   ``karml prepare-mm-dataset`` makes — and record the matched CGenFF ``RESI``
    pair, or the reason the frame would be dropped.
 
 The JSON this writes is the input to
@@ -32,7 +32,7 @@ from pathlib import Path
 import numpy as np
 from ase.data import atomic_numbers
 
-from mmml.data.cgenff_dataset import (
+from karml.data.cgenff_dataset import (
     assign_frame_cgenff,
     find_covalent_components,
     format_composition,

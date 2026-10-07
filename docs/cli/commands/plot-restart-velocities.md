@@ -1,4 +1,4 @@
-# `mmml plot-restart-velocities`
+# `karml plot-restart-velocities`
 
 Plot |v| distributions and outliers from CHARMM .res files.
 
@@ -6,13 +6,13 @@ Plot |v| distributions and outliers from CHARMM .res files.
 ## Usage
 
 ```bash
-mmml plot-restart-velocities --help
+karml plot-restart-velocities --help
 ```
 
 ## Options
 
 ```text
-usage: mmml plot-restart-velocities [-h] [--stem STEM]
+usage: karml plot-restart-velocities [-h] [--stem STEM]
                                     [--z-threshold Z_THRESHOLD]
                                     [--output OUTPUT] [--dt-ps DT_PS]
                                     [--no-infer-velocities]

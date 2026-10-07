@@ -6,7 +6,7 @@ from argparse import Namespace
 
 import pytest
 
-from mmml.interfaces.pycharmmInterface.cutoffs import (
+from karml.interfaces.pycharmmInterface.cutoffs import (
     DEFAULT_ML_SWITCH_WIDTH,
     DEFAULT_MM_SWITCH_ON,
     DEFAULT_MM_SWITCH_WIDTH,
@@ -67,7 +67,7 @@ def _jaxmd_args(**overrides) -> Namespace:
 
 
 def test_build_command_jaxmd_forwards_handoff_and_cutoff_flags() -> None:
-    from mmml.cli.run.md_system import build_command
+    from karml.cli.run.md_system import build_command
 
     backend, argv = build_command(_jaxmd_args())
     assert backend == "jaxmd"
@@ -87,7 +87,7 @@ def test_build_command_jaxmd_forwards_handoff_and_cutoff_flags() -> None:
 
 
 def test_build_command_jaxmd_forwards_default_cutoffs_from_namespace() -> None:
-    from mmml.cli.run.md_system import build_command
+    from karml.cli.run.md_system import build_command
 
     backend, argv = build_command(
         _jaxmd_args(
@@ -107,7 +107,7 @@ def test_build_command_jaxmd_forwards_default_cutoffs_from_namespace() -> None:
 
 def test_build_command_jaxmd_forwards_nhc_barostat_tau() -> None:
     """Campaign YAML nhc_barostat_tau must reach jaxmd NpT (soft piston)."""
-    from mmml.cli.run.md_system import build_command
+    from karml.cli.run.md_system import build_command
 
     backend, argv = build_command(
         _jaxmd_args(setup="pbc_npt", nhc_barostat_tau=20000.0, nhc_tau=150.0)
@@ -120,7 +120,7 @@ def test_build_command_jaxmd_forwards_nhc_barostat_tau() -> None:
 
 
 def test_build_command_jaxmd_forwards_mm_lj_scales_file() -> None:
-    from mmml.cli.run.md_system import build_command
+    from karml.cli.run.md_system import build_command
 
     backend, argv = build_command(
         _jaxmd_args(mm_lj_scales_file="/tmp/hybrid_mm.json")
@@ -134,7 +134,7 @@ def test_jaxmd_suite_accepts_mm_lj_scales_file_flag() -> None:
     """md-system forwards --mm-lj-scales-file into jaxmd in-process argv; the
     suite parser must accept it (otherwise GPU1 direct md-system benches die
     with 'unrecognized arguments' before any MD)."""
-    from mmml.cli.run.md_pbc_suite import jaxmd as jaxmd_suite
+    from karml.cli.run.md_pbc_suite import jaxmd as jaxmd_suite
 
     argv = [
         "--ensemble",
@@ -160,7 +160,7 @@ def test_build_command_jaxmd_forwards_lr_solver_and_mm_charge_mode() -> None:
     got --lr-solver; --mm-charge-mode was forwarded nowhere at all), so a
     YAML defaults: {lr_solver: ewald, mm_charge_mode: latent} campaign job
     silently ran with mic + fixed CGenFF charges instead."""
-    from mmml.cli.run.md_system import build_command
+    from karml.cli.run.md_system import build_command
 
     backend, argv = build_command(
         _jaxmd_args(lr_solver="ewald", mm_charge_mode="latent", mm_charge_correction=False)
@@ -189,7 +189,7 @@ def test_jaxmd_jargs_forwards_mm_charge_mode_into_runner() -> None:
     to fixed and never freezes q_MM — the gate then fails for q0/latent*."""
     from pathlib import Path
 
-    src = Path("mmml/cli/run/md_pbc_suite/jaxmd.py").read_text(encoding="utf-8")
+    src = Path("karml/cli/run/md_pbc_suite/jaxmd.py").read_text(encoding="utf-8")
     assert "jargs = SimpleNamespace(" in src
     jargs_start = src.index("jargs = SimpleNamespace(")
     # End at the call that consumes jargs (avoids nested-paren fragility).
@@ -202,8 +202,8 @@ def test_jaxmd_and_ase_suites_accept_lr_solver_and_mm_charge_mode_flags() -> Non
     """The actual downstream parsers (md_pbc_suite/{jaxmd,ase}.py) must
     recognize these flags -- build_command forwarding them is necessary but
     not sufficient if the consuming argparse doesn't define them too."""
-    from mmml.cli.run.md_pbc_suite import ase as ase_suite
-    from mmml.cli.run.md_pbc_suite import jaxmd as jaxmd_suite
+    from karml.cli.run.md_pbc_suite import ase as ase_suite
+    from karml.cli.run.md_pbc_suite import jaxmd as jaxmd_suite
 
     common_argv = [
         "--lr-solver", "ewald",
@@ -226,7 +226,7 @@ def test_jaxmd_warmup_forwards_include_mm_flag() -> None:
     from pathlib import Path
 
     root = Path(__file__).resolve().parents[2]
-    jaxmd_src = (root / "mmml/cli/run/md_pbc_suite/jaxmd.py").read_text(encoding="utf-8")
+    jaxmd_src = (root / "karml/cli/run/md_pbc_suite/jaxmd.py").read_text(encoding="utf-8")
     warmup_block = jaxmd_src.split("warmup_hybrid_spherical_cutoff(", 1)[1][:500]
     assert "doMM=include_mm" in warmup_block
     assert 'getattr(args, "include_mm", True)' in jaxmd_src
@@ -237,7 +237,7 @@ def test_jaxmd_warmup_forwards_include_mm_flag() -> None:
 
 
 def test_build_command_jaxmd_forwards_do_ml_flags() -> None:
-    from mmml.cli.run.md_system import build_command
+    from karml.cli.run.md_system import build_command
 
     backend, argv = build_command(
         _jaxmd_args(do_ml=False, do_ml_dimer=False, include_mm=True)
@@ -251,7 +251,7 @@ def test_build_command_jaxmd_forwards_do_ml_flags() -> None:
 def test_jaxmd_setup_calculator_forwards_ewald_include_self() -> None:
     from pathlib import Path
 
-    src = Path("mmml/cli/run/md_pbc_suite/jaxmd.py").read_text(encoding="utf-8")
+    src = Path("karml/cli/run/md_pbc_suite/jaxmd.py").read_text(encoding="utf-8")
     assert "--ewald-omit-self" in src
     assert "ewald_include_self=not bool(getattr(args, \"ewald_omit_self\"" in src
     assert "ewald_include_intra=not bool(getattr(args, \"ewald_omit_self\"" in src
@@ -261,14 +261,14 @@ def test_ase_setup_calculator_forwards_ewald_include_intra() -> None:
     """jaxmd/ase must match hybrid_mlpot: --ewald-omit-self drops intra Coulomb."""
     from pathlib import Path
 
-    ase_src = Path("mmml/cli/run/md_pbc_suite/ase.py").read_text(encoding="utf-8")
+    ase_src = Path("karml/cli/run/md_pbc_suite/ase.py").read_text(encoding="utf-8")
     assert "ewald_include_intra=not bool(getattr(args, \"ewald_omit_self\"" in ase_src
     assert "ewald_include_intra=bool(ewald_include_intra)" in ase_src
     # Signature must accept the kwarg (not only the call site).
     assert "ewald_include_intra: bool = True" in ase_src
 
 def test_build_command_jaxmd_forwards_ml_gpu_and_profile_flags() -> None:
-    from mmml.cli.run.md_system import build_command
+    from karml.cli.run.md_system import build_command
 
     backend, argv = build_command(
         _jaxmd_args(ml_gpu_count=2, ml_batch_size=256, mlpot_profile=True)
@@ -282,7 +282,7 @@ def test_build_command_jaxmd_forwards_ml_gpu_and_profile_flags() -> None:
 
 
 def test_build_command_jaxmd_forwards_fire_min_steps() -> None:
-    from mmml.cli.run.md_system import build_command
+    from karml.cli.run.md_system import build_command
 
     backend, argv = build_command(_jaxmd_args(fire_min_steps=1000, fire_min_maxstep=0.05))
     assert backend == "jaxmd"

@@ -12,7 +12,7 @@ import numpy as np
 from jax import Array, jit
 
 if TYPE_CHECKING:
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import BondedMmMiniConfig
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import BondedMmMiniConfig
 
 PathLike = str | Path
 
@@ -66,7 +66,7 @@ def load_bonded_system_for_recovery(
     ml_atom_indices: Sequence[int] | None = None,
 ) -> tuple[Any, RecoveryPsfSource]:
     """Load MM-filtered CGENFF bonded topology for hybrid recovery."""
-    from mmml.interfaces.pycharmmInterface.cgenff_topology import (
+    from karml.interfaces.pycharmmInterface.cgenff_topology import (
         CgenffBondedSystem,
         filter_bonded_topology_for_mm,
         load_cgenff_bonded_from_psf,
@@ -107,7 +107,7 @@ def bonded_forces_grms_kcalmol_A(forces: np.ndarray | Array) -> float:
 
 def _freeze_atom_indices(ctx: Any, ml_atom_indices: Sequence[int]) -> np.ndarray:
     """Atoms whose coordinates must stay fixed during JAX bonded mini."""
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
+    from karml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
 
     n_atoms = int(get_charmm_positions_array().shape[0])
     frozen = set(int(i) for i in ml_atom_indices)
@@ -146,7 +146,7 @@ def _run_jax_bonded_fire(
     from jax_md import minimize as jax_minimize
     from jax_md import space
 
-    from mmml.interfaces.pycharmmInterface.cgenff_bonded import build_bonded_energy_fn
+    from karml.interfaces.pycharmmInterface.cgenff_bonded import build_bonded_energy_fn
 
     bonded_eval = build_bonded_energy_fn(
         system.topology,
@@ -222,11 +222,11 @@ def minimize_bonded_jax_recovery(
     topology_psf: PathLike | None = None,
 ) -> float | None:
     """Relax MM bonded strain in JAX; sync coords to CHARMM without detaching MLpot."""
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         invalidate_mlpot_calculator_caches,
         sync_charmm_lists_after_mini,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+    from karml.interfaces.pycharmmInterface.mlpot.setup import (
         get_charmm_positions_array,
         sync_charmm_positions,
     )
@@ -278,15 +278,15 @@ def minimize_bonded_jax_per_monomer_recovery(
     monomer_indices: Sequence[int] | None = None,
 ) -> float | None:
     """Relax internal bonded strain one monomer at a time (others frozen)."""
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         invalidate_mlpot_calculator_caches,
         sync_charmm_lists_after_mini,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping import (
+    from karml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping import (
         resolve_monomer_offsets_for_ctx,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import monomer_offsets
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+    from karml.interfaces.pycharmmInterface.mlpot.overlap_guard import monomer_offsets
+    from karml.interfaces.pycharmmInterface.mlpot.setup import (
         get_charmm_positions_array,
         sync_charmm_positions,
     )

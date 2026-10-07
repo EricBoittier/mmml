@@ -21,7 +21,7 @@ def _resolve_checkpoint_psf(mlpot_ctx: Any | None) -> Path | None:
 
 def _bond_stretch_summary(positions: np.ndarray, psf_path: Path) -> dict[str, float | int]:
     """Bond stretch stats from a cluster PSF + CGENFF parameters."""
-    from mmml.interfaces.pycharmmInterface.cgenff_topology import load_cgenff_bonded_from_psf
+    from karml.interfaces.pycharmmInterface.cgenff_topology import load_cgenff_bonded_from_psf
 
     pos = np.asarray(positions, dtype=np.float64)
     system = load_cgenff_bonded_from_psf(psf_path, pos)
@@ -47,7 +47,7 @@ def print_topology_composition_note(
 ) -> None:
     """Print live CHARMM PSF composition vs stored cluster PSF (never gates)."""
     try:
-        from mmml.interfaces.pycharmmInterface.mlpot.topology_recovery import (
+        from karml.interfaces.pycharmmInterface.mlpot.topology_recovery import (
             capture_topology_fingerprint_from_charmm,
             describe_fingerprint_diff,
             fingerprints_equivalent,

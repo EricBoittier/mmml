@@ -25,8 +25,8 @@ from __future__ import annotations
 import os
 import sys
 
-from mmml.analysis.acetone_crystal import ACETONE_CRYSTAL_PHASES, read_acetone_phase
-from mmml.analysis.lattice_energy import KCAL_MOL_TO_KJ_MOL, crystal_lattice_energy
+from karml.analysis.acetone_crystal import ACETONE_CRYSTAL_PHASES, read_acetone_phase
+from karml.analysis.lattice_energy import KCAL_MOL_TO_KJ_MOL, crystal_lattice_energy
 
 PHASE = os.environ.get("ACO_PHASE", "pbca_150k")
 CUTOFFS = (8.0, 10.0, 12.0, 14.0, 16.0)

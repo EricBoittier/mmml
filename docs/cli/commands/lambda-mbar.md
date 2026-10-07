@@ -1,4 +1,4 @@
-# `mmml lambda-mbar`
+# `karml lambda-mbar`
 
 MBAR post-processing for lambda TI.
 
@@ -6,13 +6,13 @@ MBAR post-processing for lambda TI.
 ## Usage
 
 ```bash
-mmml lambda-mbar --help
+karml lambda-mbar --help
 ```
 
 ## Options
 
 ```text
-usage: mmml lambda-mbar [-h] --run-dir RUN_DIR [--checkpoint CHECKPOINT]
+usage: karml lambda-mbar [-h] --run-dir RUN_DIR [--checkpoint CHECKPOINT]
                         [--temperature-K TEMPERATURE_K]
                         [--couple-residues COUPLE_RESIDUES]
                         [--ml-cutoff ML_CUTOFF] [--mm-switch-on MM_SWITCH_ON]
@@ -45,7 +45,7 @@ Diagnostics & safety:
   --mbar-verbose
 
 Other options:
-  --run-dir RUN_DIR     Output directory from mmml md-system --setup lambda_ti
+  --run-dir RUN_DIR     Output directory from karml md-system --setup lambda_ti
                         or scripts/meoh_dimer_lambda_ti.py
 ```
 

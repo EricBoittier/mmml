@@ -44,14 +44,14 @@ artifacts separate from any production tree.
 
 ```bash
 cd workflows/label_acquisition
-MMML_WORKFLOW_CONFIG=config.smoke.yaml bash scripts/snakemake_local.sh 2 -n
-MMML_WORKFLOW_CONFIG=config.smoke.yaml bash scripts/snakemake_local.sh 2
+KARML_WORKFLOW_CONFIG=config.smoke.yaml bash scripts/snakemake_local.sh 2 -n
+KARML_WORKFLOW_CONFIG=config.smoke.yaml bash scripts/snakemake_local.sh 2
 ```
 
 Python-only equivalent (no Snakemake):
 
 ```bash
-uv run mmml label-acquire --config workflows/label_acquisition/config.smoke.yaml -o /tmp/acq_smoke all
+uv run karml label-acquire --config workflows/label_acquisition/config.smoke.yaml -o /tmp/acq_smoke all
 ```
 
 Pass criteria: dry-run exits 0; smoke run writes `report/report.md`; mock

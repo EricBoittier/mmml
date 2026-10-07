@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 """
-CLI for the MMML molecular viewer GUI.
+CLI for the KARML molecular viewer GUI.
 
 Starts a FastAPI server that serves the React frontend and provides
 API endpoints for viewing molecular data files (NPZ, ASE traj, PDB).
 
 Usage:
-    mmml gui                    # Data dir defaults to cwd; load files from file browser
-    mmml gui --data-dir ./data --port 8000
-    mmml gui --file trajectory.npz
-    mmml gui --data-dir ./data --dev  # Development mode (no static files)
+    karml gui                    # Data dir defaults to cwd; load files from file browser
+    karml gui --data-dir ./data --port 8000
+    karml gui --file trajectory.npz
+    karml gui --data-dir ./data --dev  # Development mode (no static files)
 """
 
 import argparse
@@ -19,28 +19,28 @@ from pathlib import Path
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog='mmml gui',
-        description='Start the MMML molecular viewer server',
+        prog='karml gui',
+        description='Start the KARML molecular viewer server',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
   # Use current directory as data dir; load files from file browser
-  mmml gui
+  karml gui
 
   # Serve all molecular files from a specific directory
-  mmml gui --data-dir ./trajectories
+  karml gui --data-dir ./trajectories
 
   # Pre-load a single file
-  mmml gui --file simulation.npz
+  karml gui --file simulation.npz
 
   # Custom port
-  mmml gui --data-dir ./data --port 8080
+  karml gui --data-dir ./data --port 8080
 
   # Development mode (React dev server handles frontend)
-  mmml gui --data-dir ./data --dev
+  karml gui --data-dir ./data --dev
 
 Supported file formats:
-  - .npz  : MMML NPZ format (R, Z, E, F, D, etc.)
+  - .npz  : KARML NPZ format (R, Z, E, F, D, etc.)
   - .traj : ASE trajectory files
   - .pdb  : PDB protein/molecule files
         """
@@ -100,7 +100,7 @@ Supported file formats:
         '--enable-runner',
         action='store_true',
         help=(
-            'Enable the job runner: launch and live-stream `mmml md-system` runs '
+            'Enable the job runner: launch and live-stream `karml md-system` runs '
             'on this host via /api/jobs (SSE). Intended for remote/HPC use behind '
             'an SSH port-forward. Executes subprocesses, so keep it off public networks.'
         )
@@ -170,7 +170,7 @@ def main():
                 break
         
         if static_dir is None:
-            print("Warning: Frontend not built. Run 'npm run build' in mmml/gui/viewer/", file=sys.stderr)
+            print("Warning: Frontend not built. Run 'npm run build' in karml/gui/viewer/", file=sys.stderr)
             print("         Or use --dev flag to run in development mode", file=sys.stderr)
     
     # Create app
@@ -184,13 +184,13 @@ def main():
     # non-loopback interface unless the user explicitly opts in.
     if args.enable_runner and args.host not in ("127.0.0.1", "localhost", "::1"):
         import os as _os
-        if _os.environ.get("MMML_GUI_ALLOW_REMOTE_RUNNER") != "1":
+        if _os.environ.get("KARML_GUI_ALLOW_REMOTE_RUNNER") != "1":
             print(
                 f"Error: --enable-runner binds to {args.host} (non-loopback), which would "
                 "expose subprocess execution to the network.\n"
                 "        Prefer binding to 127.0.0.1 and reaching it over an SSH port-forward:\n"
                 "          ssh -N -L 8000:127.0.0.1:8000 user@remote-host\n"
-                "        To override intentionally, set MMML_GUI_ALLOW_REMOTE_RUNNER=1.",
+                "        To override intentionally, set KARML_GUI_ALLOW_REMOTE_RUNNER=1.",
                 file=sys.stderr,
             )
             return 1
@@ -208,7 +208,7 @@ def main():
     # Print startup message
     print()
     print("=" * 60)
-    print("MMML Molecular Viewer")
+    print("KARML Molecular Viewer")
     print("=" * 60)
     if args.data_dir:
         print(f"Data directory: {args.data_dir}")
@@ -219,7 +219,7 @@ def main():
     if args.dev:
         print()
         print("Development mode: API only")
-        print("Start frontend with: cd mmml/gui/viewer && npm run dev")
+        print("Start frontend with: cd karml/gui/viewer && npm run dev")
         print("Frontend will be at: http://localhost:5173")
     elif static_dir:
         print(f"Static files: {static_dir}")
@@ -234,7 +234,7 @@ def main():
     if args.enable_runner:
         print()
         print("Job runner: ENABLED")
-        print("  POST /api/jobs                - launch `mmml md-system ...`")
+        print("  POST /api/jobs                - launch `karml md-system ...`")
         print("  GET  /api/jobs/{id}/events    - live log/file/status stream (SSE)")
         print("  Remote use: ssh -N -L {p}:127.0.0.1:{p} user@host".format(p=args.port))
     print("=" * 60)

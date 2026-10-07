@@ -18,20 +18,20 @@ export JAX_ENABLE_X64="${JAX_ENABLE_X64:-1}"
 py() { uv run python "$@"; }
 
 echo "=== MCP build_smoke run_id=${RUN_ID} mode=${MODE} ==="
-py -c "from mmml.mcp.recipes import configure_run; import json; print(json.dumps(configure_run('${RUN_ID}', recipe='build_smoke', mode='${MODE}'), indent=2))"
+py -c "from karml.mcp.recipes import configure_run; import json; print(json.dumps(configure_run('${RUN_ID}', recipe='build_smoke', mode='${MODE}'), indent=2))"
 
 _stages=(make_res box_build hybrid_md_ase hybrid_md_jaxmd hybrid_md_pycharmm)
 for stage in "${_stages[@]}"; do
   echo "--- stage: ${stage} ---"
   if [[ "${DRY_RUN}" == "1" ]]; then
     py -c "
-from mmml.mcp.recipes import run_recipe_stage
+from karml.mcp.recipes import run_recipe_stage
 import json
 print(json.dumps(run_recipe_stage('${RUN_ID}', '${stage}', mode='${MODE}', dry_run=True), indent=2))
 "
   else
     py -c "
-from mmml.mcp.recipes import run_recipe_stage
+from karml.mcp.recipes import run_recipe_stage
 import json
 r = run_recipe_stage('${RUN_ID}', '${stage}', mode='${MODE}')
 print(json.dumps(r, indent=2))

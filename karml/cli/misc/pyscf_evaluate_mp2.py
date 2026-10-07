@@ -73,9 +73,9 @@ def main() -> int:
     # -------------------------
     try:
         if args.method == "mp2":
-            from mmml.interfaces.pyscf4gpuInterface.calcs_mp2 import compute_mp2_batch as compute_fn
+            from karml.interfaces.pyscf4gpuInterface.calcs_mp2 import compute_mp2_batch as compute_fn
         else:
-            from mmml.interfaces.pyscf4gpuInterface.calcs import compute_dft_batch as compute_fn
+            from karml.interfaces.pyscf4gpuInterface.calcs import compute_dft_batch as compute_fn
 
     except ModuleNotFoundError as e:
         if "cupy" in str(e).lower() or "gpu4pyscf" in str(e).lower():

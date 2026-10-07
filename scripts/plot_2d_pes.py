@@ -46,8 +46,8 @@ from scipy.ndimage import gaussian_filter
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(_REPO_ROOT))
 
-from mmml.analysis.dimer_molecules import PAIR_SCAN_CONFIG, ORIENTED_MONOMERS
-from mmml.analysis.dimer_scans import build_rigid_dimer_2d
+from karml.analysis.dimer_molecules import PAIR_SCAN_CONFIG, ORIENTED_MONOMERS
+from karml.analysis.dimer_scans import build_rigid_dimer_2d
 from plot_utils import (
     BACKEND_COLORS,
     BACKEND_LABELS,
@@ -60,7 +60,7 @@ from plot_utils import (
     render_dimer_atoms,
     robust_color_vmax,
 )
-from mmml.utils.plotting.styles import apply_plot_style
+from karml.utils.plotting.styles import apply_plot_style
 
 MAX_COLS = 4
 
@@ -750,12 +750,12 @@ def _build_forces_calc(backend: str | None, checkpoint: Path | None):
     if backend is None or backend == "none":
         return None, None
     if backend == "xtb":
-        from mmml.analysis.dimer_scans import make_xtb_calculator
+        from karml.analysis.dimer_scans import make_xtb_calculator
         return make_xtb_calculator(method="GFN2-xTB"), "GFN2-xTB"
     if backend == "spookynet":
         if checkpoint is None:
             raise ValueError("--forces-checkpoint is required for --forces-backend spookynet")
-        from mmml.models.spookynet_calc import SpookyNetCalculator
+        from karml.models.spookynet_calc import SpookyNetCalculator
         return SpookyNetCalculator(checkpoint=checkpoint), "SpookyNet"
     raise ValueError(f"Unknown forces backend: {backend}")
 

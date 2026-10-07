@@ -2,7 +2,7 @@
 """Export gas φ/ψ scan frames as umbrella ``seed_mode=frames`` NPZ for one CV.
 
 Picks the nearest scan column/row for each umbrella center along φ or ψ.
-Writes ``R`` + ``Z`` so ``mmml umbrella-sample`` can load the file directly.
+Writes ``R`` + ``Z`` so ``karml umbrella-sample`` can load the file directly.
 """
 
 from __future__ import annotations

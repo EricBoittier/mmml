@@ -10,7 +10,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from mmml.md.neighbor_cache import with_verlet_skin
+from karml.md.neighbor_cache import with_verlet_skin
 
 
 def _counting_neighbor_fn():

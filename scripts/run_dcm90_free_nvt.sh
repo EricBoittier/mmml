@@ -13,9 +13,9 @@
 #       ./scripts/rebuild_charmm_mlpot.sh
 #   - Launch under OpenMPI mpirun (libcharmm.so is MPI-linked; plain python segfaults
 #     after JAX GPU warmup on gpu nodes):
-#       ./scripts/mmml-charmm-mpirun.sh md-system ...
-#   - MMML_CKPT or examples/ckpts_json/DESdimers_params.json
-#   - packmol on PATH (mmml/generate/packmol or module)
+#       ./scripts/karml-charmm-mpirun.sh md-system ...
+#   - KARML_CKPT or examples/ckpts_json/DESdimers_params.json
+#   - packmol on PATH (karml/generate/packmol or module)
 
 set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -36,10 +36,10 @@ COMPOSITION_TAG="$(
 )"
 RUN_NAME="${COMPOSITION_TAG}_nvt"
 
-MPIRUN="${MMML_MPIRUN_WRAPPER:-$REPO_ROOT/scripts/mmml-charmm-mpirun.sh}"
+MPIRUN="${KARML_MPIRUN_WRAPPER:-$REPO_ROOT/scripts/karml-charmm-mpirun.sh}"
 #exec "$MPIRUN" 
 
-mmml md-system \
+karml md-system \
   --setup free_nvt \
   --backend pycharmm \
   --composition "$COMPOSITION" \

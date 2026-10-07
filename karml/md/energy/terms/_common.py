@@ -32,7 +32,7 @@ def resolve_ml_model(term: Any, ctx: Any) -> tuple[Any, Any]:
     """Resolve ``(model, params)`` from a term override or the energy context.
 
     ML terms are model-agnostic: the trained model/params come from the run
-    context (:class:`~mmml.md.energy.registry.EnergyContext`) unless the term was
+    context (:class:`~karml.md.energy.registry.EnergyContext`) unless the term was
     constructed with an explicit override.
     """
     model = term.model if getattr(term, "model", None) is not None else getattr(ctx, "model", None)

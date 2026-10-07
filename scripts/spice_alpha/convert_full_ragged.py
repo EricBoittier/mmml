@@ -9,7 +9,7 @@ import argparse
 import json
 from pathlib import Path
 
-from mmml.data.spice_alpha_ragged import SUBSETS, convert_hdf5_ragged
+from karml.data.spice_alpha_ragged import SUBSETS, convert_hdf5_ragged
 
 ap = argparse.ArgumentParser()
 ap.add_argument("h5_dir", type=Path)

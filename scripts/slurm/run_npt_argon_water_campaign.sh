@@ -21,25 +21,25 @@
 # pressure. Getting this wrong produces a gas and a meaningless density.
 #
 # Reference densities are NIST Chemistry WebBook saturation data (argon
-# C7440371, water C7732185); see mmml/data/reference_state_points.py, which
+# C7440371, water C7732185); see karml/data/reference_state_points.py, which
 # refuses to store a density that was not verified against a cited source.
 set -uo pipefail
 
-REPO="${MMML_REPO:-$HOME/mmml}"
+REPO="${KARML_REPO:-$HOME/karml}"
 cd "$REPO" || exit 1
 source .venv/bin/activate 2>/dev/null
 # Compute nodes have no outbound network; without these uv tries pypi and hangs.
 export UV_NO_SYNC=1 UV_OFFLINE=1
 
 # CHARMM ships no residue for Ar/Kr/Xe, so AR1 is unknown to the box builder
-# without this: `mmml liquid-box --composition AR1:1` dies with
+# without this: `karml liquid-box --composition AR1:1` dies with
 #   ValueError: Unknown CGenFF residue 'AR1'
 # The .str in the same directory is a *stream* file (it carries its own
 # `read rtf card append` directives) and cannot be used here -- these two are
 # the split-out plain RTF/PRM that `read.rtf(append=True)` can consume.
-_NG="$REPO/mmml/data/charmm"
-export MMML_CGENFF_EXTRA_RTF="${MMML_CGENFF_EXTRA_RTF:+$MMML_CGENFF_EXTRA_RTF:}$_NG/top_noble_gases_literature.rtf"
-export MMML_CGENFF_EXTRA_PRM="${MMML_CGENFF_EXTRA_PRM:+$MMML_CGENFF_EXTRA_PRM:}$_NG/par_noble_gases_literature.prm"
+_NG="$REPO/karml/data/charmm"
+export KARML_CGENFF_EXTRA_RTF="${KARML_CGENFF_EXTRA_RTF:+$KARML_CGENFF_EXTRA_RTF:}$_NG/top_noble_gases_literature.rtf"
+export KARML_CGENFF_EXTRA_PRM="${KARML_CGENFF_EXTRA_PRM:+$KARML_CGENFF_EXTRA_PRM:}$_NG/par_noble_gases_literature.prm"
 
 # pc-studix PyCHARMM environment. libcharmm.so links OpenCL and the repo venv
 # does not carry libOpenCL.so.1, so without this every `import pycharmm` dies
@@ -128,7 +128,7 @@ print(f'{V**(1/3):.3f} {nmol}')" "$rho" "$n" "$resid")
   # Box building is Packmol + CHARMM only -- no ML model is evaluated -- so it
   # is forced onto CPU. Left to autodetect, JAX grabs (or fails to grab) a GPU
   # and the CUDA init error is pure noise in the build log.
-  JAX_PLATFORMS=cpu uv run mmml liquid-box \
+  JAX_PLATFORMS=cpu uv run karml liquid-box \
     --composition "${resid}:${nmol}" --box-size "$L" \
     --temperature "$temp" \
     --output-dir "$out" || { echo "  FAILED box: $tag" >&2; return 1; }
@@ -157,7 +157,7 @@ b=json.load(open(sys.argv[1]))
 print(int(b['n_molecules']), float(b['box_side_A']))" "$box/box.json")
   # Load the certified box; do NOT let Packmol rebuild from --composition,
   # where RESI:1 would silently mean a one-molecule system.
-  uv run mmml md-system \
+  uv run karml md-system \
     --setup pbc_npt --backend jaxmd \
     --composition "${resid}:${nmol}" \
     --from-psf "$box/model.psf" --from-crd "$box/model.crd" \

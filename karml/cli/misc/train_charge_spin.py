@@ -6,7 +6,7 @@ This CLI tool trains a PhysNet model that accepts total molecular charge and
 total spin multiplicity as inputs, enabling multi-state predictions.
 
 Usage:
-    python -m mmml.cli.train_charge_spin \
+    python -m karml.cli.train_charge_spin \
         --data_path openqdc_packed_memmap \
         --batch_size 32 \
         --num_epochs 100 \
@@ -23,11 +23,11 @@ import jax
 import jax.numpy as jnp
 from flax.training import orbax_utils, train_state
 
-from mmml.models.physnetjax.physnetjax.models.model_charge_spin import EF_ChargeSpinConditioned
-from mmml.models.physnetjax.physnetjax.training.optimizer import get_optimizer
-from mmml.models.physnetjax.physnetjax.restart.restart import orbax_checkpointer
-from mmml.models.physnetjax.physnetjax.directories import BASE_CKPT_DIR
-from mmml.data.packed_memmap_loader import PackedMemmapLoader, split_loader
+from karml.models.physnetjax.physnetjax.models.model_charge_spin import EF_ChargeSpinConditioned
+from karml.models.physnetjax.physnetjax.training.optimizer import get_optimizer
+from karml.models.physnetjax.physnetjax.restart.restart import orbax_checkpointer
+from karml.models.physnetjax.physnetjax.directories import BASE_CKPT_DIR
+from karml.data.packed_memmap_loader import PackedMemmapLoader, split_loader
 
 
 def train_step_charge_spin(

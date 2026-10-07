@@ -7,7 +7,7 @@ from unittest import mock
 import numpy as np
 import pytest
 
-from mmml.interfaces.pycharmmInterface.mlpot.restraints import (
+from karml.interfaces.pycharmmInterface.mlpot.restraints import (
     AdumbRcGuard,
     adumb_rc_wall_droff,
     check_adumb_rc_before_overlap_chunk,
@@ -17,17 +17,17 @@ from mmml.interfaces.pycharmmInterface.mlpot.restraints import (
 
 
 def test_adumb_rc_walls_backend_defaults_to_resd(monkeypatch: pytest.MonkeyPatch) -> None:
-    from mmml.interfaces.pycharmmInterface.mlpot.restraints import adumb_rc_walls_backend
+    from karml.interfaces.pycharmmInterface.mlpot.restraints import adumb_rc_walls_backend
 
-    monkeypatch.delenv("MMML_ADUMB_RC_WALL_BACKEND", raising=False)
-    monkeypatch.delenv("MMML_ADUMB_RC_MMFP_WALLS", raising=False)
+    monkeypatch.delenv("KARML_ADUMB_RC_WALL_BACKEND", raising=False)
+    monkeypatch.delenv("KARML_ADUMB_RC_MMFP_WALLS", raising=False)
     assert adumb_rc_walls_backend() == "resd"
 
 
 def test_adumb_rc_walls_backend_legacy_mmfp_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    from mmml.interfaces.pycharmmInterface.mlpot.restraints import adumb_rc_walls_backend
+    from karml.interfaces.pycharmmInterface.mlpot.restraints import adumb_rc_walls_backend
 
-    monkeypatch.setenv("MMML_ADUMB_RC_MMFP_WALLS", "1")
+    monkeypatch.setenv("KARML_ADUMB_RC_MMFP_WALLS", "1")
     assert adumb_rc_walls_backend() == "mmfp"
 
 
@@ -40,10 +40,10 @@ def test_measure_adumb_rc_distances_from_coords() -> None:
     y = np.zeros(3, dtype=np.float64)
     z = np.zeros(3, dtype=np.float64)
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.restraints._unique_atom_index_by_name",
+        "karml.interfaces.pycharmmInterface.mlpot.restraints._unique_atom_index_by_name",
         side_effect=[0, 1],
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.restraints._positions_xyz",
+        "karml.interfaces.pycharmmInterface.mlpot.restraints._positions_xyz",
         return_value=(x, y, z),
     ):
         dists = measure_adumb_rc_distances((("CL1", "C1"),))
@@ -53,7 +53,7 @@ def test_measure_adumb_rc_distances_from_coords() -> None:
 def test_check_adumb_rc_raises_at_hard_limit() -> None:
     guard = AdumbRcGuard(rcmax=8.0, rcwall=500.0, pairs=(("CL1", "C1"),))
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.restraints.prepare_adumb_rc_before_overlap_chunk",
+        "karml.interfaces.pycharmmInterface.mlpot.restraints.prepare_adumb_rc_before_overlap_chunk",
         return_value=True,
     ):
         with pytest.raises(RuntimeError, match="internal: prepare_adumb_rc"):
@@ -73,12 +73,12 @@ def test_prepare_adumb_rc_rewinds_from_numbered_restart(tmp_path) -> None:
     good.write_text("!X\n", encoding="utf-8")
     dists = iter([{"C1-N1": 8.475}, {"C1-N1": 6.5}])
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.restraints.measure_adumb_rc_distances",
+        "karml.interfaces.pycharmmInterface.mlpot.restraints.measure_adumb_rc_distances",
         side_effect=lambda *_a, **_k: next(dists),
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.restraints.install_adumb_rxncor_distance_walls",
+        "karml.interfaces.pycharmmInterface.mlpot.restraints.install_adumb_rxncor_distance_walls",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.restore_charmm_state_from_restart",
+        "karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.restore_charmm_state_from_restart",
     ) as restore:
         retry = prepare_adumb_rc_before_overlap_chunk(
             guard,
@@ -100,13 +100,13 @@ def test_measure_adumb_bond_difference_xi() -> None:
         return {"N1": 0, "C1": 1, "CL1": 2}[name]
 
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.restraints._unique_atom_index_by_name",
+        "karml.interfaces.pycharmmInterface.mlpot.restraints._unique_atom_index_by_name",
         side_effect=_idx,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.restraints._positions_xyz",
+        "karml.interfaces.pycharmmInterface.mlpot.restraints._positions_xyz",
         return_value=(x, y, z),
     ):
-        from mmml.interfaces.pycharmmInterface.mlpot.restraints import (
+        from karml.interfaces.pycharmmInterface.mlpot.restraints import (
             measure_adumb_bond_difference_xi,
         )
 
@@ -135,15 +135,15 @@ def test_prepare_adumb_rc_rewinds_when_xi_out_of_window(tmp_path) -> None:
         ]
     )
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.restraints.measure_adumb_bond_difference_xi",
+        "karml.interfaces.pycharmmInterface.mlpot.restraints.measure_adumb_bond_difference_xi",
         side_effect=lambda *_a, **_k: next(xi_vals),
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.restraints.measure_adumb_rc_distances",
+        "karml.interfaces.pycharmmInterface.mlpot.restraints.measure_adumb_rc_distances",
         side_effect=lambda *_a, **_k: next(dists),
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.restraints.install_adumb_rxncor_distance_walls",
+        "karml.interfaces.pycharmmInterface.mlpot.restraints.install_adumb_rxncor_distance_walls",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.restore_charmm_state_from_restart",
+        "karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.restore_charmm_state_from_restart",
     ) as restore:
         retry = prepare_adumb_rc_before_overlap_chunk(
             guard,
@@ -158,7 +158,7 @@ def test_prepare_adumb_rc_rewinds_when_xi_out_of_window(tmp_path) -> None:
 
 def test_prepare_adumb_near_wall_triggers_force_rewind(tmp_path) -> None:
     """RC at RESD onset must rewind before the next iasvel=1 chunk."""
-    from mmml.interfaces.pycharmmInterface.mlpot.restraints import (
+    from karml.interfaces.pycharmmInterface.mlpot.restraints import (
         AdumbRcGuard,
         prepare_adumb_rc_before_overlap_chunk,
     )
@@ -181,15 +181,15 @@ def test_prepare_adumb_near_wall_triggers_force_rewind(tmp_path) -> None:
         ]
     )
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.restraints.measure_adumb_bond_difference_xi",
+        "karml.interfaces.pycharmmInterface.mlpot.restraints.measure_adumb_bond_difference_xi",
         return_value=None,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.restraints.measure_adumb_rc_distances",
+        "karml.interfaces.pycharmmInterface.mlpot.restraints.measure_adumb_rc_distances",
         side_effect=lambda *_a, **_k: next(dists),
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.restraints.install_adumb_rxncor_distance_walls",
+        "karml.interfaces.pycharmmInterface.mlpot.restraints.install_adumb_rxncor_distance_walls",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.restore_charmm_state_from_restart",
+        "karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.restore_charmm_state_from_restart",
     ) as restore:
         retry = prepare_adumb_rc_before_overlap_chunk(
             guard,
@@ -204,7 +204,7 @@ def test_prepare_adumb_near_wall_triggers_force_rewind(tmp_path) -> None:
 
 def test_prepare_adumb_rejects_restore_still_past_wall_onset(tmp_path) -> None:
     """umbmax-ok but wall-pressed restore must not be accepted (UM1RXN trap)."""
-    from mmml.interfaces.pycharmmInterface.mlpot.restraints import (
+    from karml.interfaces.pycharmmInterface.mlpot.restraints import (
         AdumbRcGuard,
         prepare_adumb_rc_before_overlap_chunk,
     )
@@ -232,15 +232,15 @@ def test_prepare_adumb_rejects_restore_still_past_wall_onset(tmp_path) -> None:
         state["restored"] = path
 
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.restraints.measure_adumb_bond_difference_xi",
+        "karml.interfaces.pycharmmInterface.mlpot.restraints.measure_adumb_bond_difference_xi",
         return_value=None,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.restraints.measure_adumb_rc_distances",
+        "karml.interfaces.pycharmmInterface.mlpot.restraints.measure_adumb_rc_distances",
         side_effect=_dists,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.restraints.install_adumb_rxncor_distance_walls",
+        "karml.interfaces.pycharmmInterface.mlpot.restraints.install_adumb_rxncor_distance_walls",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.restore_charmm_state_from_restart",
+        "karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.restore_charmm_state_from_restart",
         side_effect=_restore,
     ) as restore:
         retry = prepare_adumb_rc_before_overlap_chunk(
@@ -256,7 +256,7 @@ def test_prepare_adumb_rejects_restore_still_past_wall_onset(tmp_path) -> None:
 
 
 def test_prepare_adumb_near_wall_no_safe_restart_raises(tmp_path) -> None:
-    from mmml.interfaces.pycharmmInterface.mlpot.restraints import (
+    from karml.interfaces.pycharmmInterface.mlpot.restraints import (
         AdumbRcGuard,
         prepare_adumb_rc_before_overlap_chunk,
     )
@@ -272,15 +272,15 @@ def test_prepare_adumb_near_wall_no_safe_restart_raises(tmp_path) -> None:
     bad = tmp_path / "heat.0169.res"
     bad.write_text("pressed\n", encoding="utf-8")
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.restraints.measure_adumb_bond_difference_xi",
+        "karml.interfaces.pycharmmInterface.mlpot.restraints.measure_adumb_bond_difference_xi",
         return_value=None,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.restraints.measure_adumb_rc_distances",
+        "karml.interfaces.pycharmmInterface.mlpot.restraints.measure_adumb_rc_distances",
         return_value={"CL1-C1": 3.0, "C1-N1": 11.15},
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.restraints.install_adumb_rxncor_distance_walls",
+        "karml.interfaces.pycharmmInterface.mlpot.restraints.install_adumb_rxncor_distance_walls",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.restore_charmm_state_from_restart",
+        "karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.restore_charmm_state_from_restart",
     ):
         with pytest.raises(RuntimeError, match="safe limit"):
             prepare_adumb_rc_before_overlap_chunk(
@@ -294,7 +294,7 @@ def test_prepare_adumb_near_wall_no_safe_restart_raises(tmp_path) -> None:
 
 def test_prepare_adumb_force_rewind_returns_false_without_raise(tmp_path) -> None:
     """force_rewind must not raise when no usable restart exists (warn mode)."""
-    from mmml.interfaces.pycharmmInterface.mlpot.restraints import (
+    from karml.interfaces.pycharmmInterface.mlpot.restraints import (
         AdumbRcGuard,
         prepare_adumb_rc_before_overlap_chunk,
     )
@@ -307,13 +307,13 @@ def test_prepare_adumb_force_rewind_returns_false_without_raise(tmp_path) -> Non
     stage = tmp_path / "heat.res"
     # No numbered / baseline files.
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.restraints.measure_adumb_bond_difference_xi",
+        "karml.interfaces.pycharmmInterface.mlpot.restraints.measure_adumb_bond_difference_xi",
         return_value=None,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.restraints.measure_adumb_rc_distances",
+        "karml.interfaces.pycharmmInterface.mlpot.restraints.measure_adumb_rc_distances",
         return_value={"CL1-C1": 3.0, "C1-N1": 3.0},
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.restraints.install_adumb_rxncor_distance_walls",
+        "karml.interfaces.pycharmmInterface.mlpot.restraints.install_adumb_rxncor_distance_walls",
     ):
         retry = prepare_adumb_rc_before_overlap_chunk(
             guard,
@@ -327,7 +327,7 @@ def test_prepare_adumb_force_rewind_returns_false_without_raise(tmp_path) -> Non
 
 
 def test_prepare_adumb_force_rewind_falls_back_to_baseline(tmp_path) -> None:
-    from mmml.interfaces.pycharmmInterface.mlpot.restraints import (
+    from karml.interfaces.pycharmmInterface.mlpot.restraints import (
         AdumbRcGuard,
         prepare_adumb_rc_before_overlap_chunk,
     )
@@ -342,15 +342,15 @@ def test_prepare_adumb_force_rewind_falls_back_to_baseline(tmp_path) -> None:
     baseline = tmp_path / "baseline.res"
     baseline.write_text("base\n", encoding="utf-8")
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.restraints.measure_adumb_bond_difference_xi",
+        "karml.interfaces.pycharmmInterface.mlpot.restraints.measure_adumb_bond_difference_xi",
         return_value=None,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.restraints.measure_adumb_rc_distances",
+        "karml.interfaces.pycharmmInterface.mlpot.restraints.measure_adumb_rc_distances",
         return_value={"CL1-C1": 2.0, "C1-N1": 2.5},
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.restraints.install_adumb_rxncor_distance_walls",
+        "karml.interfaces.pycharmmInterface.mlpot.restraints.install_adumb_rxncor_distance_walls",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.restore_charmm_state_from_restart",
+        "karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.restore_charmm_state_from_restart",
     ) as restore:
         retry = prepare_adumb_rc_before_overlap_chunk(
             guard,
@@ -365,7 +365,7 @@ def test_prepare_adumb_force_rewind_falls_back_to_baseline(tmp_path) -> None:
 
 
 def test_parse_adumb_umbrella_bounds_negative_min() -> None:
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
         parse_adumb_umbrella_bounds,
     )
 
@@ -378,11 +378,11 @@ def test_parse_adumb_umbrella_bounds_negative_min() -> None:
 
 def test_parse_adumb_umbrella_bounds_skips_distance_only_rcl() -> None:
     """Distance umbrella on rcl must not arm the xi=r(ClC)-r(CN) soft window."""
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
         adumb_umbrella_is_bond_difference,
         parse_adumb_umbrella_bounds,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.restraints import (
+    from karml.interfaces.pycharmmInterface.mlpot.restraints import (
         adumb_rc_wall_pairs_for_name,
     )
 
@@ -398,7 +398,7 @@ def test_parse_adumb_umbrella_bounds_skips_distance_only_rcl() -> None:
     assert adumb_rc_wall_pairs_for_name("rcl") == (("CL1", "C1"),)
     assert adumb_rc_wall_pairs_for_name("rcn") == (("C1", "N1"),)
     assert adumb_rc_wall_pairs_for_name("rdif") == (("CL1", "C1"), ("C1", "N1"))
-    from mmml.interfaces.pycharmmInterface.mlpot.restraints import (
+    from karml.interfaces.pycharmmInterface.mlpot.restraints import (
         adumb_rc_wall_pairs_for_names,
     )
 
@@ -409,7 +409,7 @@ def test_parse_adumb_umbrella_bounds_skips_distance_only_rcl() -> None:
 
 
 def test_charmm_output_indicates_failure_detects_unrecognized() -> None:
-    from mmml.interfaces.pycharmmInterface.mlpot.restraints import (
+    from karml.interfaces.pycharmmInterface.mlpot.restraints import (
         _charmm_output_indicates_failure,
     )
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-10-mer MEOH cluster: MMML-only MD comparisons (PBC vs vacuum).
+10-mer MEOH cluster: KARML-only MD comparisons (PBC vs vacuum).
 
 Runs (when --all):
   - NVE VelocityVerlet
@@ -49,24 +49,24 @@ from ase.optimize import BFGS
 from ase.optimize.fire import FIRE
 from ase.calculators.calculator import PropertyNotImplementedError
 
-import mmml.interfaces.pycharmmInterface.import_pycharmm as pyci
-from mmml.cli.base import resolve_checkpoint_paths
-from mmml.interfaces.pycharmmInterface.import_pycharmm import reset_block, reset_block_no_internal
-from mmml.interfaces.pycharmmInterface.cutoffs import (
+import karml.interfaces.pycharmmInterface.import_pycharmm as pyci
+from karml.cli.base import resolve_checkpoint_paths
+from karml.interfaces.pycharmmInterface.import_pycharmm import reset_block, reset_block_no_internal
+from karml.interfaces.pycharmmInterface.cutoffs import (
     DEFAULT_MM_SWITCH_ON,
     DEFAULT_MM_SWITCH_WIDTH,
 )
-from mmml.interfaces.pycharmmInterface.mmml_calculator import CutoffParameters, setup_calculator
-from mmml.interfaces.pycharmmInterface.mm_energy_forces import (
+from karml.interfaces.pycharmmInterface.karml_calculator import CutoffParameters, setup_calculator
+from karml.interfaces.pycharmmInterface.mm_energy_forces import (
     DEFAULT_JAX_MD_SKIN_DISTANCE_A,
     _get_actual_psf_charges,
 )
-from mmml.interfaces.pycharmmInterface.mlpot.cli_common import parse_composition
-from mmml.utils.geometry_checks import assert_no_intermonomer_atom_overlap
-from mmml.utils.jax_gpu_warmup import warmup_ase_mmml_energy_forces
-from mmml.interfaces.pycharmmInterface.utils import get_Z_from_psf
-from mmml.cli.run.md_pbc_suite.cluster import _build_psf_ordered_cluster
-from mmml.paths import default_meoh_template_pdb
+from karml.interfaces.pycharmmInterface.mlpot.cli_common import parse_composition
+from karml.utils.geometry_checks import assert_no_intermonomer_atom_overlap
+from karml.utils.jax_gpu_warmup import warmup_ase_karml_energy_forces
+from karml.interfaces.pycharmmInterface.utils import get_Z_from_psf
+from karml.cli.run.md_pbc_suite.cluster import _build_psf_ordered_cluster
+from karml.paths import default_meoh_template_pdb
 
 _parse_composition = parse_composition
 
@@ -82,7 +82,7 @@ def _load_pycharmm_modules() -> None:
 
     if read is not None:
         return
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import ensure_pycharmm_loaded
+    from karml.interfaces.pycharmmInterface.import_pycharmm import ensure_pycharmm_loaded
 
     if not ensure_pycharmm_loaded():
         raise RuntimeError(
@@ -129,7 +129,7 @@ def _has_resolved_geometry(coords: np.ndarray, min_span: float = 1.0e-4) -> bool
 
 
 def _read_cgenff_toppar(*, enable_drude: bool = False) -> None:
-    from mmml.interfaces.pycharmmInterface.nbonds_config import read_cgenff_toppar
+    from karml.interfaces.pycharmmInterface.nbonds_config import read_cgenff_toppar
 
     read_cgenff_toppar(enable_drude=enable_drude)
 
@@ -144,7 +144,7 @@ def _reset_pycharmm_system() -> None:
 
 def _make_res_minimize(nbxmod: int, nstep: int = 1000) -> None:
     """Run the same nonbonded/minimization recipe used by make-res."""
-    from mmml.interfaces.pycharmmInterface.nbonds_config import apply_vacuum_nbonds
+    from karml.interfaces.pycharmmInterface.nbonds_config import apply_vacuum_nbonds
 
     pyci.pycharmm_quiet()
     apply_vacuum_nbonds(nbxmod=nbxmod)
@@ -155,7 +155,7 @@ def _generate_residue_with_make_res_recipe(
     residue: str,
 ) -> tuple[np.ndarray, list[str], np.ndarray]:
     """Generate one residue in PyCHARMM using make-res style coordinate relaxation."""
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import prepare_charmm_vacuum
+    from karml.interfaces.pycharmmInterface.mlpot.setup import prepare_charmm_vacuum
 
     _reset_pycharmm_system()
     prepare_charmm_vacuum()
@@ -163,14 +163,14 @@ def _generate_residue_with_make_res_recipe(
     import pycharmm
     pycharmm.settings.set_bomb_level(-5)
     read.sequence_string(residue)
-    from mmml.interfaces.pycharmmInterface.heme_library import (
+    from karml.interfaces.pycharmmInterface.heme_library import (
         heme_reference_positions,
         is_heme_library_residue,
         segment_terminal_patches,
     )
 
     gen.new_segment(seg_name="TMP", setup_ic=True, **segment_terminal_patches())
-    from mmml.interfaces.pycharmmInterface.nbonds_config import ic_prm_fill
+    from karml.interfaces.pycharmmInterface.nbonds_config import ic_prm_fill
 
     ic_prm_fill(replace_all=True)
     ic.build()
@@ -192,7 +192,7 @@ def _generate_residue_with_make_res_recipe(
             z = np.asarray(get_Z_from_psf(), dtype=int)
             return placed, atom_names, z
 
-    from mmml.interfaces.pycharmmInterface.heme_electronic import is_protein_ion
+    from karml.interfaces.pycharmmInterface.heme_electronic import is_protein_ion
 
     if is_protein_ion(residue) and initial.shape[0] == 1:
         # A sodium has no internal geometry. The heme build seats it on a
@@ -334,7 +334,7 @@ def _load_packmol_sphere_positions(
     atoms_per_list: list[int],
     psf_atom_names: list[str],
 ) -> np.ndarray:
-    from mmml.interfaces.pycharmmInterface.packmol_placement import (
+    from karml.interfaces.pycharmmInterface.packmol_placement import (
         assign_packmol_pdb_to_psf_order,
     )
 
@@ -349,7 +349,7 @@ def _residue_geometries_for_composition(
     composition: list[tuple[str, int]],
 ) -> dict[str, tuple[np.ndarray, list[str], np.ndarray]]:
     """Relaxed monomer coords, atom names, and Z per residue type (SD-only cluster recipe)."""
-    from mmml.cli.run.md_pbc_suite.cluster import relax_monomer_geometry_for_cluster
+    from karml.cli.run.md_pbc_suite.cluster import relax_monomer_geometry_for_cluster
 
     residue_geometries: dict[str, tuple[np.ndarray, list[str], np.ndarray]] = {}
     for residue, _count in composition:
@@ -368,7 +368,7 @@ def _residue_geometries_for_packmol(
     verbose: bool = True,
 ) -> dict[str, tuple[np.ndarray, list[str], np.ndarray]]:
     """Minimized monomer geometries (PSF order) for Packmol input PDBs."""
-    from mmml.cli.run.md_pbc_suite.cluster import build_minimized_monomer_for_packmol
+    from karml.cli.run.md_pbc_suite.cluster import build_minimized_monomer_for_packmol
 
     residue_geometries: dict[str, tuple[np.ndarray, list[str], np.ndarray]] = {}
     for residue, _count in composition:
@@ -406,16 +406,16 @@ def _build_cluster_psf_topology_only(
     for residue, count in composition:
         sequence_items.extend([residue] * int(count))
     sequence = " ".join(sequence_items)
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import prepare_charmm_vacuum
+    from karml.interfaces.pycharmmInterface.mlpot.setup import prepare_charmm_vacuum
 
     _reset_pycharmm_system()
     prepare_charmm_vacuum()
     _read_cgenff_toppar()
     read.sequence_string(sequence)
-    from mmml.interfaces.pycharmmInterface.heme_library import segment_terminal_patches
+    from karml.interfaces.pycharmmInterface.heme_library import segment_terminal_patches
 
     gen.new_segment(seg_name="CLST", setup_ic=True, **segment_terminal_patches())
-    from mmml.interfaces.pycharmmInterface.nbonds_config import ic_prm_fill
+    from karml.interfaces.pycharmmInterface.nbonds_config import ic_prm_fill
 
     ic_prm_fill(replace_all=True)
     ic.build()
@@ -440,7 +440,7 @@ def _build_cluster_psf_from_composition(
     else:
         for residue, _count in composition:
             if residue not in residue_geometries:
-                from mmml.cli.run.md_pbc_suite.cluster import relax_monomer_geometry_for_cluster
+                from karml.cli.run.md_pbc_suite.cluster import relax_monomer_geometry_for_cluster
 
                 residue_geometries[residue] = relax_monomer_geometry_for_cluster(residue)
 
@@ -448,16 +448,16 @@ def _build_cluster_psf_from_composition(
     for residue, count in composition:
         sequence_items.extend([residue] * int(count))
     sequence = " ".join(sequence_items)
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import prepare_charmm_vacuum
+    from karml.interfaces.pycharmmInterface.mlpot.setup import prepare_charmm_vacuum
 
     _reset_pycharmm_system()
     prepare_charmm_vacuum()
     _read_cgenff_toppar()
     read.sequence_string(sequence)
-    from mmml.interfaces.pycharmmInterface.heme_library import segment_terminal_patches
+    from karml.interfaces.pycharmmInterface.heme_library import segment_terminal_patches
 
     gen.new_segment(seg_name="CLST", setup_ic=True, **segment_terminal_patches())
-    from mmml.interfaces.pycharmmInterface.nbonds_config import ic_prm_fill
+    from karml.interfaces.pycharmmInterface.nbonds_config import ic_prm_fill
 
     ic_prm_fill(replace_all=True)
     ic.build()
@@ -522,7 +522,7 @@ def _build_cluster_from_composition_packmol(
     geometry_store: Any | None = None,
     monomer_pdb_templates: dict[str, Path] | None = None,
 ) -> tuple[np.ndarray, np.ndarray, list[int], list[str]]:
-    from mmml.cli.run.md_pbc_suite.cluster import build_packmol_composition_cluster
+    from karml.cli.run.md_pbc_suite.cluster import build_packmol_composition_cluster
 
     return build_packmol_composition_cluster(
         composition=composition,
@@ -573,7 +573,7 @@ def _build_cluster_from_composition_pyxtal(
     trim_to_composition: bool = True,
     geometry_store: Any | None = None,
 ) -> tuple[np.ndarray, np.ndarray, list[int], list[str]]:
-    from mmml.cli.run.md_pbc_suite.cluster import build_pyxtal_composition_cluster
+    from karml.cli.run.md_pbc_suite.cluster import build_pyxtal_composition_cluster
 
     return build_pyxtal_composition_cluster(
         composition=composition,
@@ -598,7 +598,7 @@ def _build_cluster_from_composition_pyxtal(
 
 
 def resolve_cluster_packmol(args: argparse.Namespace) -> bool:
-    from mmml.interfaces.pycharmmInterface.packmol_placement import resolve_packmol_use
+    from karml.interfaces.pycharmmInterface.packmol_placement import resolve_packmol_use
 
     return resolve_packmol_use(
         composition=getattr(args, "composition", None),
@@ -609,7 +609,7 @@ def resolve_cluster_packmol(args: argparse.Namespace) -> bool:
 
 
 def resolve_cluster_pyxtal(args: argparse.Namespace) -> bool:
-    from mmml.interfaces.pyxtal_placement import resolve_pyxtal_use
+    from karml.interfaces.pyxtal_placement import resolve_pyxtal_use
 
     return resolve_pyxtal_use(
         composition=getattr(args, "composition", None),
@@ -732,8 +732,8 @@ def cluster_geometry_from_certified_artifacts(
     args: argparse.Namespace,
 ) -> tuple[np.ndarray, np.ndarray, list[int], list[str], dict[str, int] | None]:
     """Load PSF+CRD (liquid-box / mini) for ASE/JAX-MD; skip Packmol rebuild."""
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import load_cluster_from_artifacts
-    from mmml.interfaces.pycharmmInterface.mlpot.trimer_scan import (
+    from karml.interfaces.pycharmmInterface.mlpot.setup import load_cluster_from_artifacts
+    from karml.interfaces.pycharmmInterface.mlpot.trimer_scan import (
         atoms_per_monomer_from_psf,
     )
 
@@ -778,7 +778,7 @@ def resolve_cluster_geometry(
 ) -> tuple[np.ndarray, np.ndarray, list[int], list[str], dict[str, int] | None]:
     """Build or load cluster geometry; skip Packmol when continuing from handoff."""
     if handoff is not None:
-        from mmml.cli.run.md_handoff import cluster_geometry_from_handoff
+        from karml.cli.run.md_handoff import cluster_geometry_from_handoff
 
         z, r0, atoms_per_list, residue_labels, composition_summary = (
             cluster_geometry_from_handoff(
@@ -800,7 +800,7 @@ def resolve_cluster_geometry(
             "--from-psf and --from-crd must be provided together to load a "
             "certified liquid-box (or mini) geometry on ase/jaxmd."
         )
-    from mmml.interfaces.pycharmmInterface.mlpot.composition_spec import (
+    from karml.interfaces.pycharmmInterface.mlpot.composition_spec import (
         apply_from_pdb_alias,
         composition_mode,
         parse_composition_entries,
@@ -810,7 +810,7 @@ def resolve_cluster_geometry(
     if getattr(args, "composition", None):
         entries = parse_composition_entries(str(args.composition))
         if composition_mode(entries) == "full_system_pdb":
-            from mmml.interfaces.pycharmmInterface.mlpot.setup import load_cluster_from_pdb
+            from karml.interfaces.pycharmmInterface.mlpot.setup import load_cluster_from_pdb
 
             z, r0, n_mol, _tag = load_cluster_from_pdb(args)
             atoms_per_list = list(getattr(args, "_cluster_atoms_per_list", []) or [])
@@ -830,13 +830,13 @@ def build_initial_cluster_from_args(
     args: argparse.Namespace,
 ) -> tuple[np.ndarray, np.ndarray, list[int], list[str], dict[str, int] | None]:
     """Build cluster geometry; returns z, r0, atoms_per_list, residue_labels, composition_summary."""
-    from mmml.interfaces.pycharmmInterface.packmol_placement import (
+    from karml.interfaces.pycharmmInterface.packmol_placement import (
         packmol_center_for_cold_start,
         resolve_packmol_cube_side_from_args,
         resolve_packmol_placement_mode,
         resolve_packmol_sphere_radius,
     )
-    from mmml.interfaces.pyxtal_placement import parse_supercell_reps
+    from karml.interfaces.pyxtal_placement import parse_supercell_reps
 
     use_pyxtal = resolve_cluster_pyxtal(args)
     use_packmol = resolve_cluster_packmol(args)
@@ -849,7 +849,7 @@ def build_initial_cluster_from_args(
         )
 
     if args.composition:
-        from mmml.interfaces.pycharmmInterface.mlpot.composition_spec import (
+        from karml.interfaces.pycharmmInterface.mlpot.composition_spec import (
             resolve_composition_plan,
         )
 
@@ -897,7 +897,7 @@ def build_initial_cluster_from_args(
                 f"dim={int(getattr(args, 'pyxtal_dim', 3))}"
             )
         elif use_packmol:
-            from mmml.interfaces.pycharmmInterface.packmol_cache import (
+            from karml.interfaces.pycharmmInterface.packmol_cache import (
                 packmol_prep_settings_from_namespace,
             )
 
@@ -1021,7 +1021,7 @@ def _build_cluster_from_composition(
             f"CHARMM coordinate count ({shifted.shape[0]}) != cluster PSF atom count "
             f"({expected_atoms}). The cluster PSF may have been cleared after build."
         )
-    from mmml.interfaces.pycharmmInterface.grid_placement import (
+    from karml.interfaces.pycharmmInterface.grid_placement import (
         grid_centers_cube,
         grid_centers_sphere,
         resolve_grid_placement_mode,
@@ -1050,7 +1050,7 @@ def _build_cluster_from_composition(
     # randomized orientations — preferred for dilute PBC smokes).
     rng = np.random.default_rng(int(seed)) if seed is not None else None
     if rng is not None:
-        from mmml.utils.geometry_checks import _oriented_repack_template
+        from karml.utils.geometry_checks import _oriented_repack_template
 
     for i in range(n_molecules):
         s = int(offsets[i])
@@ -1065,7 +1065,7 @@ def _build_cluster_from_composition(
                 internal, random_rotations=True, rng=rng
             )
         shifted[s:e] = internal + centers[i]
-    from mmml.interfaces.pycharmmInterface.heme_electronic import seat_heme_counterions
+    from karml.interfaces.pycharmmInterface.heme_electronic import seat_heme_counterions
 
     shifted = seat_heme_counterions(
         shifted, atom_names, ordered_residue_names, atoms_per_list
@@ -1074,7 +1074,7 @@ def _build_cluster_from_composition(
     return z, shifted, atoms_per_list, ordered_residue_names
 
 
-def _factory_mmml(
+def _factory_karml(
     *,
     z: np.ndarray,
     r: np.ndarray,
@@ -1213,13 +1213,13 @@ def _factory_mmml(
     )
     t2 = _tmark()
     if timings is not None:
-        timings["mmml_setup_calculator_s"] = t1 - t0
-        timings["mmml_factory_call_s"] = t2 - t1
+        timings["karml_setup_calculator_s"] = t1 - t0
+        timings["karml_factory_call_s"] = t2 - t1
     if len(calc_result) == 3:
-        mmml_calc, _, _ = calc_result
+        karml_calc, _, _ = calc_result
     else:
-        mmml_calc, _ = calc_result
-    return mmml_calc
+        karml_calc, _ = calc_result
+    return karml_calc
 
 
 def _validate_psf_charges(
@@ -1300,7 +1300,7 @@ def _numpy_wrap_monomers_primary_cell(
     monomer_offsets: np.ndarray,
     cell_matrix: np.ndarray,
 ) -> np.ndarray:
-    from mmml.utils.geometry_checks import wrap_monomers_primary_cell
+    from karml.utils.geometry_checks import wrap_monomers_primary_cell
 
     return wrap_monomers_primary_cell(positions, monomer_offsets, cell_matrix)
 
@@ -1337,11 +1337,11 @@ def _run_charmm_minimize(
     try:
         if quiet:
             pyci.pycharmm_quiet()
-        from mmml.interfaces.pycharmmInterface.nbonds_config import apply_vacuum_nbonds
+        from karml.interfaces.pycharmmInterface.nbonds_config import apply_vacuum_nbonds
 
         use_pbc_charmm = cubic_box_side_A is not None and float(cubic_box_side_A) > 0.0
         if use_pbc_charmm:
-            from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+            from karml.interfaces.pycharmmInterface.mlpot.pbc_env import (
                 apply_pbc_nbonds,
                 prepare_charmm_pbc,
             )
@@ -1593,7 +1593,7 @@ def run_md(
             try:
                 row["H_eV"] = float(dyn.get_conserved_energy())
             except (PropertyNotImplementedError, NotImplementedError):
-                # Some ASE calculators (including this hybrid MMML calculator) do not
+                # Some ASE calculators (including this hybrid KARML calculator) do not
                 # expose free_energy, which NoseHooverChainNVT may request internally.
                 # Keep logging robust by skipping H in that case.
                 pass
@@ -1727,7 +1727,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help=(
             "Portable .json or Orbax path (default: bundled manifest model with "
-            "lowest validation force MAE, or $MMML_CKPT)."
+            "lowest validation force MAE, or $KARML_CKPT)."
         ),
     )
     parser.add_argument(
@@ -1736,7 +1736,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Override learned-charge Coulomb erf damping sigma in Angstrom; set 0 to disable.",
     )
-    parser.add_argument("--output-dir", type=Path, default=Path("artifacts/md_10mer_mmml_pbc_suite"))
+    parser.add_argument("--output-dir", type=Path, default=Path("artifacts/md_10mer_karml_pbc_suite"))
     parser.add_argument("--template-pdb", type=Path, default=default_meoh_template_pdb())
     parser.add_argument("--n-molecules", type=int, default=10)
     parser.add_argument(
@@ -1774,7 +1774,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--ml-cutoff", type=float, default=0.1)
     parser.add_argument("--mm-switch-on", type=float, default=DEFAULT_MM_SWITCH_ON)
     # md_system forwards both of these to every backend unconditionally, so a
-    # parser that does not know them turns `mmml md-system` into argparse
+    # parser that does not know them turns `karml md-system` into argparse
     # exit 2 in the subprocess. Kept name-for-name with `run_sim`.
     parser.add_argument(
         "--hybrid-hamiltonian",
@@ -1961,10 +1961,10 @@ def build_parser() -> argparse.ArgumentParser:
         default=2.0,
         help="Legacy Packmol distance tolerance in Angstrom for explicit --packmol runs.",
     )
-    from mmml.interfaces.pyxtal_placement import add_pyxtal_cluster_args
+    from karml.interfaces.pyxtal_placement import add_pyxtal_cluster_args
 
     add_pyxtal_cluster_args(parser)
-    from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import add_box_sizing_args
+    from karml.interfaces.pycharmmInterface.mlpot.box_sizing import add_box_sizing_args
 
     add_box_sizing_args(parser)
     parser.add_argument(
@@ -2084,7 +2084,7 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="N",
         help=(
             "Parallel PhysNet chunks across N local GPUs (default 1; "
-            "or MMML_MLPOT_N_GPUS). Requires --ml-batch-size so work splits."
+            "or KARML_MLPOT_N_GPUS). Requires --ml-batch-size so work splits."
         ),
     )
     parser.add_argument(
@@ -2099,7 +2099,7 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Enable ASE calculator / chunk-apply wall-time profiling.",
     )
-    from mmml.interfaces.pycharmmInterface.ml_dtypes import add_ml_compute_dtype_args
+    from karml.interfaces.pycharmmInterface.ml_dtypes import add_ml_compute_dtype_args
     add_ml_compute_dtype_args(parser)
     parser.add_argument("--all", action="store_true", help="Run all 6 combinations")
     parser.add_argument(
@@ -2112,7 +2112,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--skip-jit-warmup",
         action="store_true",
         help=(
-            "Skip generic XLA GPU compile and pre-BFGS hybrid MMML energy/force warmup "
+            "Skip generic XLA GPU compile and pre-BFGS hybrid KARML energy/force warmup "
             "(may log XLA cuda_timer delay-kernel warnings on first GPU compile)."
         ),
     )
@@ -2148,7 +2148,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--handoff-quality-gate",
         action=argparse.BooleanOptionalAction,
         default=False,
-        help="Evaluate initial MMML |F| on handoff and optionally pre-minimize.",
+        help="Evaluate initial KARML |F| on handoff and optionally pre-minimize.",
     )
     parser.add_argument(
         "--handoff-quality-fmax-eVA",
@@ -2249,11 +2249,11 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
-    from mmml.utils.jax_gpu_warmup import apply_xla_cuda_timer_log_filter
+    from karml.utils.jax_gpu_warmup import apply_xla_cuda_timer_log_filter
 
     apply_xla_cuda_timer_log_filter()
     args = build_parser().parse_args(argv)
-    from mmml.cli.run.md_config import normalize_hybrid_assembly_flags
+    from karml.cli.run.md_config import normalize_hybrid_assembly_flags
 
     normalize_hybrid_assembly_flags(args)
     if args.box_size is not None and args.box_size <= 0:
@@ -2272,7 +2272,7 @@ def main(argv: list[str] | None = None) -> int:
     timing_log: list[str] = []
     t_c0 = _tmark()
 
-    from mmml.cli.run.md_handoff import (
+    from karml.cli.run.md_handoff import (
         apply_handoff_geometry_to_atoms,
         ensure_psf_for_handoff_cluster,
         get_handoff_in,
@@ -2353,7 +2353,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         r0 = initial_atoms.get_positions()
 
-    from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import resolve_suite_auto_box_side
+    from karml.interfaces.pycharmmInterface.mlpot.box_sizing import resolve_suite_auto_box_side
 
     auto_L, _auto_src = resolve_suite_auto_box_side(args, r0, ml_cutoff=float(args.ml_cutoff))
     L_resolved, box_source, box_warnings = resolve_handoff_box(
@@ -2370,10 +2370,10 @@ def main(argv: list[str] | None = None) -> int:
         r_pbc = np.asarray(r0, dtype=float)
     else:
         r_pbc = r0 - r0.mean(axis=0) + 0.5 * L
-    from mmml.interfaces.pycharmmInterface.mlpot.mc_density import (
+    from karml.interfaces.pycharmmInterface.mlpot.mc_density import (
         apply_mc_density_equalization,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+    from karml.interfaces.pycharmmInterface.mlpot.pbc_env import (
         cubic_box_length_from_geometry,
     )
 
@@ -2519,7 +2519,7 @@ def main(argv: list[str] | None = None) -> int:
                 f"{key}: CHARMM minimization {run_timings.get('charmm_min_wall_s', 0.0):.3f} s",
                 timing_log,
             )
-        calc = _factory_mmml(
+        calc = _factory_karml(
             z=z,
             r=atoms.get_positions(),
             n_mol=n_molecules,
@@ -2572,14 +2572,14 @@ def main(argv: list[str] | None = None) -> int:
             log_lines=timing_log,
         )
         _tlog(
-            f"{key}: mmml setup_calculator {run_timings.get('mmml_setup_calculator_s', 0):.3f} s, "
-            f"factory_call {run_timings.get('mmml_factory_call_s', 0):.3f} s",
+            f"{key}: karml setup_calculator {run_timings.get('karml_setup_calculator_s', 0):.3f} s, "
+            f"factory_call {run_timings.get('karml_factory_call_s', 0):.3f} s",
             timing_log,
         )
 
         if not args.skip_jit_warmup:
             t_w = _tmark()
-            warmup_ase_mmml_energy_forces(atoms, include_forces=True)
+            warmup_ase_karml_energy_forces(atoms, include_forces=True)
             run_timings["jit_warmup_first_potential_s"] = _tmark() - t_w
             _tlog(
                 f"{key}: JIT warmup (first potential energy) {run_timings['jit_warmup_first_potential_s']:.3f} s",
@@ -2631,7 +2631,7 @@ def main(argv: list[str] | None = None) -> int:
                 "this is pre-MD minimization, not dynamics yet)",
                 timing_log,
             )
-            from mmml.cli.run.ase_minimize_log import (
+            from karml.cli.run.ase_minimize_log import (
                 attach_compact_ase_optimizer_log,
                 resolve_ase_optimizer_logfile,
             )
@@ -2698,7 +2698,7 @@ def main(argv: list[str] | None = None) -> int:
                     nbxmod=args.charmm_nbxmod,
                     timings=run_timings,
                 )
-                from mmml.cli.run.ase_minimize_log import (
+                from karml.cli.run.ase_minimize_log import (
                     attach_compact_ase_optimizer_log,
                     resolve_ase_optimizer_logfile,
                 )
@@ -2765,7 +2765,7 @@ def main(argv: list[str] | None = None) -> int:
             and bool(getattr(args, "continue_velocities", True))
             and run_local_skip_pre_min
         ):
-            from mmml.cli.run.md_handoff import (
+            from karml.cli.run.md_handoff import (
                 ang_ps_velocities_to_jaxmd_metal,
                 handoff_velocities_as_ang_ps,
                 remove_center_of_mass_velocity_ang_ps,
@@ -2861,7 +2861,7 @@ def main(argv: list[str] | None = None) -> int:
     (out_dir / "suite_timing.json").write_text(json.dumps(timing_payload, indent=2))
     (out_dir / "suite_summary.json").write_text(json.dumps(suite_summary, indent=2))
     (out_dir / "timing_log.txt").write_text("\n".join(timing_log) + "\n", encoding="utf-8")
-    from mmml.utils.rich_report import print_colored_json
+    from karml.utils.rich_report import print_colored_json
 
     print_colored_json(suite_summary["runs"])
     print(f"Wrote {out_dir / 'suite_summary.json'}")

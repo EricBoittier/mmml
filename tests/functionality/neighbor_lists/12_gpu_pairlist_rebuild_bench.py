@@ -5,8 +5,8 @@ the PyCHARMM MLpot NVE runs). CHARMM PSF/parameters are mocked: only the pair li
 is timed. Each timed call is update(positions, force_rebuild=True) until the
 padded JAX pair arrays are ready, i.e. what the MLpot callback pays per rebuild.
 
-    MMML_MM_NL_DEVICE is set per mode (cpu, auto); run on a GPU node with
-    pip install 'mmml[nl-gpu]':
+    KARML_MM_NL_DEVICE is set per mode (cpu, auto); run on a GPU node with
+    pip install 'karml[nl-gpu]':
 
     python tests/functionality/neighbor_lists/12_gpu_pairlist_rebuild_bench.py \
         path/to/etoh_26A/model_petmin.crd out.json   # N_REP=100 N_WARM=5
@@ -24,7 +24,7 @@ import numpy as np
 import jax
 import jax.numpy as jnp
 jax.config.update("jax_enable_x64", True)
-from mmml.interfaces.pycharmmInterface.mm_energy_forces import build_mm_energy_forces_fn
+from karml.interfaces.pycharmmInterface.mm_energy_forces import build_mm_energy_forces_fn
 
 CRD = sys.argv[1]
 rows = [l.split() for l in open(CRD) if not l.startswith("*")][1:]
@@ -39,7 +39,7 @@ def build():
     fake_param = MagicMock(); fake_param.get_atc.return_value = ["CG321"]
     rtf = MagicMock(); rtf.readlines.return_value = ["ATOM C1 CG321 -0.1\n"]
     prm = MagicMock(); prm.readlines.return_value = ["CG321 0.0 -0.05 1.6 0.0 -0.01 1.9\n"]
-    mod = "mmml.interfaces.pycharmmInterface.mm_energy_forces"
+    mod = "karml.interfaces.pycharmmInterface.mm_energy_forces"
     with patch("pycharmm.psf", fake_psf), patch("pycharmm.param", fake_param), patch(f"{mod}.open", side_effect=[rtf, prm]), \
          patch(f"{mod}._get_actual_psf_charges", return_value=np.zeros(n)), patch(f"{mod}.CGENFF_PRM", "/dev/null"), patch(f"{mod}.CGENFF_RTF", "/dev/null"):
         return build_mm_energy_forces_fn(
@@ -63,7 +63,7 @@ failures = []
 cpu_keys = []
 gpu = jax.devices("gpu")[0]
 for mode, dev_input in (("cpu", False), ("auto", False), ("auto", True)):
-    os.environ["MMML_MM_NL_DEVICE"] = mode
+    os.environ["KARML_MM_NL_DEVICE"] = mode
     _, update = build()
     ts = []
     n_mismatch = 0

@@ -6,8 +6,8 @@ from pathlib import Path
 
 import numpy as np
 
-from mmml.interfaces.pycharmmInterface.calculator_utils import ModelOutput
-from mmml.utils.hdf5_reporter import load_hdf5_trajectory, make_jaxmd_reporter
+from karml.interfaces.pycharmmInterface.calculator_utils import ModelOutput
+from karml.utils.hdf5_reporter import load_hdf5_trajectory, make_jaxmd_reporter
 
 
 def test_model_output_mm_charges_default_and_field():

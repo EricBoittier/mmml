@@ -26,7 +26,7 @@ from ase.md.langevin import Langevin
 from ase import units
 from pathlib import Path
 
-from mmml.models.efield.ase_calc_EF import (
+from karml.models.efield.ase_calc_EF import (
     AseCalculatorEF,
     ef_active_column_count,
     ef_sparse_pairwise_indices_active,
@@ -201,8 +201,8 @@ def main_batched(args):
     import time
     import functools
     from ase.data import atomic_masses as _ase_masses
-    from mmml.models.efield.training import MessagePassingModel
-    from mmml.models.efield.model_functions import energy_and_forces
+    from karml.models.efield.training import MessagePassingModel
+    from karml.models.efield.model_functions import energy_and_forces
 
     BOLTZMANN_EV = 8.617333262e-5
     AMU_TO_EV_FS2_ANG2 = 103.6427
@@ -668,7 +668,7 @@ def main_batched(args):
     t0 = time.perf_counter()
     comp = {"compression": "gzip", "compression_opts": 4}
     with h5py.File(h5_path, "w") as hf:
-        hf.attrs["mmml_format"] = "ef_md_batched_v1"
+        hf.attrs["karml_format"] = "ef_md_batched_v1"
         hf.attrs["thermostat"] = str(args.thermostat)
         hf.attrs["save_charges"] = bool(args.save_charges)
         hf.create_dataset("Z", data=Z_np, **comp)  # (B, N) atomic numbers (row = replica)

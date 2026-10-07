@@ -25,9 +25,9 @@ import numpy as np
 
 
 def _fail_closed(fn):
-    """Wrap ``fn`` with mmml's fail-closed callback guard when mmml is importable."""
+    """Wrap ``fn`` with karml's fail-closed callback guard when karml is importable."""
     try:
-        from mmml.interfaces.pycharmmInterface.mlpot.callback_failstop import (
+        from karml.interfaces.pycharmmInterface.mlpot.callback_failstop import (
             fail_closed_callback,
         )
     except ImportError:
@@ -80,7 +80,7 @@ class MLpot():
         self.ml_Natoms = len(ml_indices)
 
         # Legacy path: strip ML-region connectivity from the PSF. Prefer BLOCK +
-        # preserve_psf_internals=True (mmml default) so VMD/topology stay intact.
+        # preserve_psf_internals=True (karml default) so VMD/topology stay intact.
         if not preserve_psf_internals:
             pycharmm.psf.delete_bonds(ml_selection, ml_selection, psort=True)
             pycharmm.psf.delete_angles(ml_selection, ml_selection, psort=True)

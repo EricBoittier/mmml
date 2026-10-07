@@ -51,7 +51,7 @@ INTERNAL COORDINATES (A.U.)
  H      2   1   3     2.052261190661   111.29325123   240.95813169
  H      3   2   1     1.768190844263   108.71250699    59.21515060
 
-Calling /mmhome/boittier/home/mmml/examples/orca/mmml-orca-client ethanol_goat.goat.0.2_EXT.extinp.tmp -b 127.0.0.1:8888  >> ethanol_goat.goat.0.2.out ... 
+Calling /mmhome/boittier/home/karml/examples/orca/karml-orca-client ethanol_goat.goat.0.2_EXT.extinp.tmp -b 127.0.0.1:8888  >> ethanol_goat.goat.0.2.out ... 
 
 
 Error (ORCA/EXT): external program failed with exit code 256

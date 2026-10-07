@@ -17,7 +17,7 @@ Complete this section for scientific features, evaluations, scans,
 simulations, models, or data transformations. Mark items not relevant to this
 change as N/A and explain why.
 
-- [ ] I searched `mmml/`, `scripts/`, `workflows/`, tests, and docs for related
+- [ ] I searched `karml/`, `scripts/`, `workflows/`, tests, and docs for related
       implementations and reused, promoted, or explicitly superseded them.
 - [ ] Supported logic lives behind one public Python API; CLI and workflow code
       are thin callers.

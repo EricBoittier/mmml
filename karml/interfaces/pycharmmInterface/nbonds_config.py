@@ -181,7 +181,7 @@ def pbc_nbond_cutoffs_from_mlpot_switches(
     margin_A: float = PBC_NBOND_BOX_MARGIN_A,
     skin_A: float = PBC_NBOND_SKIN_A,
 ) -> PbcNbondCutoffs:
-    """PBC CHARMM cutoffs aligned with MMML ``mm_switch_on + mm_switch_width``."""
+    """PBC CHARMM cutoffs aligned with KARML ``mm_switch_on + mm_switch_width``."""
     cutnb_max = mlpot_mm_nl_cutoff_A(
         mm_switch_on=float(mm_switch_on),
         mm_switch_width=float(mm_switch_width),
@@ -334,7 +334,7 @@ def suspend_pbc_before_cgenff_param_append() -> bool:
   follow-up ``upinb`` → ``UPIMNB`` pass can segfault (MLpot registration,
     overlap-rescue ``reregister_params``, etc.).
     """
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import (
+    from karml.interfaces.pycharmmInterface.import_pycharmm import (
         PYCHARMM_AVAILABLE,
         crystal_free_charmm_for_param_append,
     )
@@ -346,7 +346,7 @@ def suspend_pbc_before_cgenff_param_append() -> bool:
         if not crystal_free_charmm_for_param_append():
             return False
         print(
-            "MMML: crystal free before CGENFF READ PARAM APPEND (PBC suspend)",
+            "KARML: crystal free before CGENFF READ PARAM APPEND (PBC suspend)",
             flush=True,
         )
         return True
@@ -392,8 +392,8 @@ def read_cgenff_prm(
     """
     import pycharmm.read as read
 
-    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_PRM
+    from karml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
+    from karml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_PRM
 
     path = str(prm_path or CGENFF_PRM)
     level = int(bomlev_level if bomlev_level is not None else CGENFF_PRM_BOMLEV)
@@ -401,7 +401,7 @@ def read_cgenff_prm(
     if append:
         suspend_pbc_before_cgenff_param_append()
 
-    from mmml.interfaces.pycharmmInterface.charmm_levels import (
+    from karml.interfaces.pycharmmInterface.charmm_levels import (
         charmm_quiet_prnlev,
         suppress_charmm_fortran_io,
     )
@@ -421,7 +421,7 @@ def ic_prm_fill(*, replace_all: bool = True) -> None:
     """Fill IC table from the parameter file under relaxed bomlev."""
     import pycharmm.ic as ic
 
-    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
+    from karml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
 
     with charmm_relaxed_bomlev(CGENFF_PRM_BOMLEV):
         ic.prm_fill(replace_all=replace_all)
@@ -430,16 +430,16 @@ def ic_prm_fill(*, replace_all: bool = True) -> None:
 def read_cgenff_toppar(*, enable_drude: bool = False) -> None:
     """Load CGENFF RTF/PRM under relaxed BOMBlev; restore the prior level on exit.
 
-    Extra append RTFs from ``MMML_CGENFF_EXTRA_RTF`` (colon/comma-separated paths)
+    Extra append RTFs from ``KARML_CGENFF_EXTRA_RTF`` (colon/comma-separated paths)
     are read after the main topology so custom residues (e.g. example CH3CL) are
     available to Packmol / ``md-system`` compositions. Extra append PRMs from
-    ``MMML_CGENFF_EXTRA_PRM`` are read after the base CGenFF parameter file.
+    ``KARML_CGENFF_EXTRA_PRM`` are read after the base CGenFF parameter file.
 
     A heme or MbCO cluster (``topology_residue_context``) reads the protein
     topology and ``toppar_all36_prot_heme.str`` instead of CGenFF. TIP3 and
     protein ions also append ``toppar_water_ions.str``.
     """
-    from mmml.interfaces.pycharmmInterface.heme_library import (
+    from karml.interfaces.pycharmmInterface.heme_library import (
         active_topology_residues,
         read_protein_heme_toppar,
         topology_family,
@@ -451,12 +451,12 @@ def read_cgenff_toppar(*, enable_drude: bool = False) -> None:
 
     import pycharmm.read as read
 
-    from mmml.interfaces.pycharmmInterface.cgenff_residues import (
+    from karml.interfaces.pycharmmInterface.cgenff_residues import (
         extra_cgenff_prm_paths,
         extra_cgenff_rtf_paths,
     )
-    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
-    from mmml.interfaces.pycharmmInterface.charmm_paths import assert_cgenff_toppar_readable
+    from karml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
+    from karml.interfaces.pycharmmInterface.charmm_paths import assert_cgenff_toppar_readable
 
     toppar = assert_cgenff_toppar_readable()
 
@@ -607,7 +607,7 @@ def resolve_pbc_nbond_cutoffs(
         if stashed is not None and pbc_nbond_cutoffs_invariant_ok(stashed):
             return stashed
 
-    from mmml.interfaces.pycharmmInterface.cutoffs import (
+    from karml.interfaces.pycharmmInterface.cutoffs import (
         DEFAULT_MM_SWITCH_ON,
         DEFAULT_MM_SWITCH_WIDTH,
         CutoffParameters,
@@ -908,7 +908,7 @@ def apply_nbonds_script_kwargs(kw: dict[str, Any], *, rebuild: bool = True) -> N
 
 def apply_vacuum_nbonds(*, nbxmod: int = 5) -> None:
     """Apply ASE-style vacuum nonbonds (domdec off, no crystal)."""
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import prepare_charmm_vacuum
+    from karml.interfaces.pycharmmInterface.mlpot.setup import prepare_charmm_vacuum
 
     prepare_charmm_vacuum()
     apply_nbonds_kwargs(vacuum_nbond_kwargs(nbxmod=nbxmod))

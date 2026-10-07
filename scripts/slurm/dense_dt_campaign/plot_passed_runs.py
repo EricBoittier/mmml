@@ -22,20 +22,20 @@ from matplotlib.ticker import MaxNLocator
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT))
 
-from mmml.analysis.lattice_energy import unwrap_molecules  # noqa: E402
-from mmml.utils.ase_structure_plot import (  # noqa: E402
+from karml.analysis.lattice_energy import unwrap_molecules  # noqa: E402
+from karml.utils.ase_structure_plot import (  # noqa: E402
     DOCS_STRUCTURE_STYLE,
     SCALE_BOX,
     draw_orthographic_structure,
     use_matplotlib_agg,
 )
-from mmml.utils.domdec_psf_order import read_psf_atoms_and_bonds  # noqa: E402
-from mmml.utils.plotting.styles import (  # noqa: E402
+from karml.utils.domdec_psf_order import read_psf_atoms_and_bonds  # noqa: E402
+from karml.utils.plotting.styles import (  # noqa: E402
     apply_plot_style,
     comparison_colors,
     legend_outside,
 )
-from mmml.utils.plotting.trajectory_structure import (  # noqa: E402
+from karml.utils.plotting.trajectory_structure import (  # noqa: E402
     element_pair_rdfs,
 )
 

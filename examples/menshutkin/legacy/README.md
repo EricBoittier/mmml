@@ -1,13 +1,13 @@
 # Superseded: the CHARMM box-building route
 
 These scripts built the solvated box through CHARMM and Packmol
-(`mmml make-box`). They are kept because they document real, non-obvious fixes,
+(`karml make-box`). They are kept because they document real, non-obvious fixes,
 but **nothing on the live path uses them** — `jaxmd_box.py` replaced the whole
 route, and the runtime no longer needs CHARMM at all.
 
 | file | what it did | why it was replaced |
 |---|---|---|
-| `04_make_solvent_boxes.sh` | solvated the solute in each solvent with `mmml make-box` | `make-box` sizes the molecule count from the cube volume but packs into the inscribed sphere, giving a 2.2x over-dense box (CHARMM reported 7.5e22 kcal/mol) |
+| `04_make_solvent_boxes.sh` | solvated the solute in each solvent with `karml make-box` | `make-box` sizes the molecule count from the cube volume but packs into the inscribed sphere, giving a 2.2x over-dense box (CHARMM reported 7.5e22 kcal/mol) |
 | `05_export_solute.py` | wrote a strictly column-aligned CGenFF solute PDB | only needed to feed `make-box`; `jaxmd_box.py` builds coordinates directly |
 | `06_solvated_md.py` | one solvated trajectory, with a CHARMM composition build and solvent-cavity carving | 544 lines of which four helpers were live; those moved to `../solute.py`, and the CHARMM build path is gone |
 

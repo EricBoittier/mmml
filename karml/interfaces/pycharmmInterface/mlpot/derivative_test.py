@@ -7,7 +7,7 @@ from typing import Any, Sequence
 
 import numpy as np
 
-from mmml.data.units import format_energy_kcal_ev
+from karml.data.units import format_energy_kcal_ev
 
 
 @dataclass(frozen=True)
@@ -42,7 +42,7 @@ def build_test_first_script(config: TestFirstConfig) -> str:
 def _atom_indices_for_config(config: TestFirstConfig) -> np.ndarray | None:
     if not config.resids:
         return None
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import select_by_resids
+    from karml.interfaces.pycharmmInterface.mlpot.setup import select_by_resids
 
     idx = np.asarray(select_by_resids(config.resids).get_atom_indexes(), dtype=int)
     if idx.size == 0:
@@ -59,7 +59,7 @@ def run_mlpot_python_fd_test(
     import jax
     import jax.numpy as jnp
 
-    from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
+    from karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
         DecomposedMlpotCalculator,
     )
 
@@ -168,10 +168,10 @@ def run_mlpot_python_fd_test(
 
 def run_charmm_test_first(config: TestFirstConfig) -> None:
     """CHARMM ``TEST FIRSt`` after ``ENER`` (and optional ``UPDATE``)."""
-    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+    import karml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
     import pycharmm
 
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+    from karml.interfaces.pycharmmInterface.mlpot.setup import (
         get_charmm_positions_array,
         refresh_nbonds_after_mlpot,
         sync_charmm_positions,
@@ -211,7 +211,7 @@ def run_post_minimize_derivative_tests(
     positions: np.ndarray | None = None,
 ) -> None:
     """Run configured MLpot and/or CHARMM derivative tests."""
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+    from karml.interfaces.pycharmmInterface.mlpot.setup import (
         get_charmm_positions_array,
     )
 

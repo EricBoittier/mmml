@@ -8,12 +8,12 @@ WORKFLOW_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$WORKFLOW_ROOT"
 
 REPO_ROOT="$(cd "$WORKFLOW_ROOT/../.." && pwd)"
-# shellcheck source=../../../scripts/resolve_mmml_env.sh
-source "$REPO_ROOT/scripts/resolve_mmml_env.sh"
-mmml_resolve_env "$REPO_ROOT"
-PY="${MMML_PYTHON}"
+# shellcheck source=../../../scripts/resolve_karml_env.sh
+source "$REPO_ROOT/scripts/resolve_karml_env.sh"
+karml_resolve_env "$REPO_ROOT"
+PY="${KARML_PYTHON}"
 
-CFG="${MMML_WORKFLOW_CONFIG:-config.yaml}"
+CFG="${KARML_WORKFLOW_CONFIG:-config.yaml}"
 
 IFS=$'\t' read -r DEFAULT_JOBS DEFAULT_RES <<EOF
 $("$PY" -c "
@@ -34,8 +34,8 @@ fi
 JOBS="${1:-$DEFAULT_JOBS}"
 shift || true
 
-PROFILE="${MMML_SNAKEMAKE_PROFILE:-profiles/slurm}"
-export MMML_WORKFLOW_CONFIG="$CFG"
+PROFILE="${KARML_SNAKEMAKE_PROFILE:-profiles/slurm}"
+export KARML_WORKFLOW_CONFIG="$CFG"
 
 exec "$PY" -m snakemake \
   --profile "$PROFILE" \

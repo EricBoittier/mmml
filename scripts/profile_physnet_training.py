@@ -3,7 +3,7 @@
 
 Example:
   JAX_PLATFORMS=cpu python scripts/profile_physnet_training.py --epochs 3
-  MMML_PHYSNET_PROFILE_EPOCH_TIMING=1 mmml physnet-train --config train.yaml
+  KARML_PHYSNET_PROFILE_EPOCH_TIMING=1 karml physnet-train --config train.yaml
 """
 
 from __future__ import annotations
@@ -14,12 +14,12 @@ import time
 import jax
 import jax.numpy as jnp
 
-from mmml.models.physnetjax.physnetjax.data.batches import (
+from karml.models.physnetjax.physnetjax.data.batches import (
     _pair_indices,
     prepare_batches_fast,
     prepare_batches_jit,
 )
-from mmml.models.physnetjax.physnetjax.models.model import EF
+from karml.models.physnetjax.physnetjax.models.model import EF
 
 
 def _mock_data(n: int, natoms: int):
@@ -59,7 +59,7 @@ def profile_batch_prep(n: int, natoms: int, batch_size: int, repeats: int) -> No
 
 
 def profile_model(features: int, natoms: int, batch_size: int, steps: int) -> None:
-    from mmml.models.physnetjax.physnetjax.training.trainstep import train_step
+    from karml.models.physnetjax.physnetjax.training.trainstep import train_step
 
     data = _mock_data(max(steps * batch_size, batch_size), natoms)
     pair_cache = _pair_indices(natoms, batch_size)
@@ -98,7 +98,7 @@ def profile_model(features: int, natoms: int, batch_size: int, steps: int) -> No
         dst_idx=dst_idx,
         src_idx=src_idx,
     )
-    from mmml.models.physnetjax.physnetjax.training.optimizer import (
+    from karml.models.physnetjax.physnetjax.training.optimizer import (
         get_optimizer,
     )
 

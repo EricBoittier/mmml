@@ -2,7 +2,7 @@
 # Live weighted mean of partner charges over active ML dimers → E_MM Coulomb.
 # Refused with jax_pme; smoke uses mic.
 #
-#   uv run mmml md-system --config examples/m/yaml/es_embed_tip3_latent_dynamic.yaml --run-all
+#   uv run karml md-system --config examples/m/yaml/es_embed_tip3_latent_dynamic.yaml --run-all
 
 defaults:
   composition: "AMM1:1,CH3CL:1,TIP3:12"

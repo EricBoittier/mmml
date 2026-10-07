@@ -27,13 +27,13 @@ export ARTIFACTS_DIR
 
 # CGenFF-named acetone monomer (single residue). Safe for --from-pdb smoke
 # and as a Packmol template via --composition "${PDB}:N".
-PDB_MONOMER="${PDB_MONOMER:-${REPO_ROOT}/mmml/generate/sample/pdb/aco_monomer.pdb}"
+PDB_MONOMER="${PDB_MONOMER:-${REPO_ROOT}/karml/generate/sample/pdb/aco_monomer.pdb}"
 export PDB_MONOMER
 
 # Optional: certified liquid-box (PSF/CRD). Override if you have a local box.
 CERTIFIED_BOX_DIR="${CERTIFIED_BOX_DIR:-}"
 if [[ -z "${CERTIFIED_BOX_DIR}" ]]; then
-  _TUT="${REPO_ROOT}/../mmml_tutorial/example_systems/acodcm/boxes/dcm206"
+  _TUT="${REPO_ROOT}/../karml_tutorial/example_systems/acodcm/boxes/dcm206"
   if [[ -f "${_TUT}/model.psf" && -f "${_TUT}/model.crd" ]]; then
     CERTIFIED_BOX_DIR="${_TUT}"
   fi

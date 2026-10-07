@@ -6,7 +6,7 @@ from pathlib import Path
 
 import numpy as np
 
-from mmml.utils.domdec_psf_order import PsfAtom, read_psf_atoms_and_bonds
+from karml.utils.domdec_psf_order import PsfAtom, read_psf_atoms_and_bonds
 
 __all__ = [
     "parse_resname_list",

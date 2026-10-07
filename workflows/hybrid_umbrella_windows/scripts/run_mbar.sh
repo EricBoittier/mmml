@@ -15,7 +15,7 @@ if [[ -z "${OUT}" ]]; then
 fi
 
 mkdir -p "${OUT}/mbar"
-uv run mmml umbrella-mbar --run-dir "${OUT}"
+uv run karml umbrella-mbar --run-dir "${OUT}"
 
 uv run python - <<PY
 import json

@@ -5,9 +5,9 @@ from __future__ import annotations
 import numpy as np
 
 # The template-to-geometry mapping now lives in the shared core; the Orbax
-# script (scripts/prepare_ml_mm_dataset.py) and `mmml prepare-mm-dataset` both
+# script (scripts/prepare_ml_mm_dataset.py) and `karml prepare-mm-dataset` both
 # call it from here.
-from mmml.data.cgenff_dataset import load_reference, match_cgenff_template
+from karml.data.cgenff_dataset import load_reference, match_cgenff_template
 
 _REF = load_reference()
 

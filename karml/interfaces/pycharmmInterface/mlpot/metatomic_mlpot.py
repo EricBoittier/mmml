@@ -1,4 +1,4 @@
-"""Metatomic CHARMM MLpot: USER callback + MMML fragment ML/MM scheme.
+"""Metatomic CHARMM MLpot: USER callback + KARML fragment ML/MM scheme.
 
 PyCHARMM only requires ``get_pycharmm_calculator()`` and Fortran-shaped
 ``calculate_charmm`` (kcal/mol, forces into ``dx/dy/dz``). This adapter fills
@@ -25,8 +25,8 @@ import time
 import numpy as np
 from ase.calculators.calculator import Calculator
 
-from mmml.data.units import EV_TO_KCAL_MOL
-from mmml.interfaces.calculators.ase_fragment_hybrid import (
+from karml.data.units import EV_TO_KCAL_MOL
+from karml.interfaces.calculators.ase_fragment_hybrid import (
     METATOMIC_EVAL_MODES,
     BatchEvaluator,
     FragmentHybridResult,
@@ -34,15 +34,15 @@ from mmml.interfaces.calculators.ase_fragment_hybrid import (
     evaluate_fragment_hybrid_batched,
     evaluate_whole_system,
 )
-from mmml.interfaces.calculators.metatomic import (
+from karml.interfaces.calculators.metatomic import (
     is_metatomic_checkpoint,
     load_metatomic_calculator,
 )
-from mmml.interfaces.pycharmmInterface.cutoffs import (
+from karml.interfaces.pycharmmInterface.cutoffs import (
     CutoffParameters,
     cutoff_parameters_from_args,
 )
-from mmml.interfaces.pycharmmInterface.mlpot.callback_failstop import (
+from karml.interfaces.pycharmmInterface.mlpot.callback_failstop import (
     failstop_calculate_charmm,
 )
 
@@ -202,7 +202,7 @@ class MetatomicMlpotCalculator:
         box_side: float | None,
     ) -> tuple[float, np.ndarray]:
         """ML energy of the core plus ghost hydrogens, forces on the full system."""
-        from mmml.interfaces.calculators.link_atoms import (
+        from karml.interfaces.calculators.link_atoms import (
             capped_ml_system,
             scatter_capped_forces,
         )
@@ -268,7 +268,7 @@ class MetatomicMlpotCalculator:
     ) -> float:
         """CHARMM USER energy in kcal/mol; accumulate kcal/mol/Å into ``dx/dy/dz``."""
         del Ntrans, Natim, idxp, Nmlp, Nmlmmp, idxi, idxj, idxjp, idxu, idxv, idxup, idxvp
-        from mmml.interfaces.pycharmmInterface.mlpot.ml_profile import (
+        from karml.interfaces.pycharmmInterface.mlpot.ml_profile import (
             get_mlpot_profile_stats,
             mlpot_profiling_enabled,
         )
@@ -445,8 +445,8 @@ def _maybe_build_mm_only_spherical(
     """MM-only ``setup_calculator`` spherical_fn; ML stays in the ASE adapter."""
     if not do_mm:
         return None, None
-    from mmml.interfaces.pycharmmInterface.calculator_utils import unpack_factory_result
-    from mmml.interfaces.pycharmmInterface.mmml_calculator import setup_calculator
+    from karml.interfaces.pycharmmInterface.calculator_utils import unpack_factory_result
+    from karml.interfaces.pycharmmInterface.karml_calculator import setup_calculator
 
     factory = setup_calculator(
         list(atoms_per_monomer),
@@ -515,7 +515,7 @@ def _maybe_batched_fragment_evaluator(
 ) -> BatchEvaluator | None:
     """One TorchScript forward per atom-budget pack of monomers + dimers."""
     try:
-        from mmml.distill.batched_teacher import BatchedMetatomicTeacher
+        from karml.distill.batched_teacher import BatchedMetatomicTeacher
 
         teacher = BatchedMetatomicTeacher(checkpoint)
     except Exception as exc:
@@ -558,13 +558,13 @@ def build_metatomic_mlpot_model(
             f"atoms_per_monomer length {len(per)} != n_monomers={n_monomers}"
         )
     mode = resolve_metatomic_eval_mode(args, explicit=eval_mode)
-    from mmml.interfaces.pycharmmInterface.heme_electronic import (
+    from karml.interfaces.pycharmmInterface.heme_electronic import (
         partition_system,
         resolve_metatomic_electronic_state,
     )
 
     electronic = resolve_metatomic_electronic_state(args)
-    from mmml.interfaces.pycharmmInterface.ml_cut import ml_cut_from_args, ml_cut_spec_from_args
+    from karml.interfaces.pycharmmInterface.ml_cut import ml_cut_from_args, ml_cut_spec_from_args
 
     mm_region = str(getattr(args, "mm_region", None) or "none").strip().lower() if args else "none"
     link_atoms: tuple[Any, ...] = ()
@@ -587,7 +587,7 @@ def build_metatomic_mlpot_model(
         ml_indices, link_atoms = partition_system(names, labels, per)
         mode = "whole_system"
     elif mm_region == "his93":
-        from mmml.interfaces.pycharmmInterface.myoglobin import his93_cut_from_args
+        from karml.interfaces.pycharmmInterface.myoglobin import his93_cut_from_args
 
         ml_indices, link_atoms = his93_cut_from_args(args)
         mode = "whole_system"

@@ -18,7 +18,7 @@ All five come from one paper:
 > [doi:10.1039/a900558g](https://doi.org/10.1039/a900558g), CCDC 182/1197.
 
 Deposited coordinates are redistributed by the Crystallography Open Database and
-are bundled under `mmml/data/structures/`:
+are bundled under `karml/data/structures/`:
 
 | `ACO_PHASE` | COD | Space group | a, b, c (Å) | Conditions | Notes |
 |---|---|---|---|---|---|
@@ -44,7 +44,7 @@ rather than producing a nonsense topology.
 | `00_check_env.py` | ASE, SciPy, JAX x64, the five CIFs, CGenFF `RESI ACO` |
 | `01_phases.py` | Reads each cell; checks lattice parameters, volume and Z against the paper |
 | `02_contacts.py` | Recomputes the published C=O···C=O and C–H···O distances |
-| `03_build_supercell.sh` | Writes PDB (with `CRYST1`) and extxyz via `mmml build-crystal` |
+| `03_build_supercell.sh` | Writes PDB (with `CRYST1`) and extxyz via `karml build-crystal` |
 | `04_lattice_energy.py` | Lattice energy with a cutoff convergence study |
 | `05_sublimation.py` | ΔH_sub for the three Pbca temperatures, against experiment |
 
@@ -72,7 +72,7 @@ unexplained since Kelley's 1929 calorimetry.
 
 ## How the energy is computed
 
-`mmml.analysis.lattice_energy` sums the CGenFF intermolecular energy over
+`karml.analysis.lattice_energy` sums the CGenFF intermolecular energy over
 explicit lattice translations, carrying the full 3×3 cell throughout:
 
 - **Dispersion/repulsion**: CHARMM Lennard-Jones with an analytic isotropic tail
@@ -137,7 +137,7 @@ right direction. See `examples/lj_scales/` for producing the sidecar.
 ## Limitation: no crystal MD yet
 
 These cells are orthorhombic but strongly non-cubic (9.17 × 7.53 × 21.25 Å),
-and mmml's periodic MD paths are cubic-only:
+and karml's periodic MD paths are cubic-only:
 
 - `prepare_charmm_pbc` installs a cubic CHARMM IMAGE via `crystal.define_cubic`;
   there is no `define_ortho` call site.

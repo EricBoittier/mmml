@@ -6,14 +6,14 @@ import warnings
 
 import numpy as np
 
-from mmml.models.physnetjax.physnetjax.models.model import PhysNet
-from mmml.models.physnetjax.physnetjax.models.model_charge_spin import PhysNetChargeSpin
-from mmml.models.physnetjax.physnetjax.models.physnet_family import (
+from karml.models.physnetjax.physnetjax.models.model import PhysNet
+from karml.models.physnetjax.physnetjax.models.model_charge_spin import PhysNetChargeSpin
+from karml.models.physnetjax.physnetjax.models.physnet_family import (
     PhysNetFamilyConfig,
     PhysNetFamilyMixin,
     resolve_physnet_class,
 )
-from mmml.models.physnetjax.physnetjax.models.spooky_model import SpookyPhysNet
+from karml.models.physnetjax.physnetjax.models.spooky_model import SpookyPhysNet
 
 
 def test_resolve_physnet_class_flags():
@@ -186,7 +186,7 @@ def test_vdw_soft_core_fraction_gates_lj_clamp():
 
 
 def test_mixin_dipole_matches_direct_kernel():
-    from mmml.models.physnetjax.physnetjax.models.mpnn_kernels import (
+    from karml.models.physnetjax.physnetjax.models.mpnn_kernels import (
         molecular_dipole_from_charges,
     )
     import jax.numpy as jnp

@@ -15,7 +15,7 @@ Properties verified
    READ PARAM APPEND cannot reinstate any epsilon/Rmin entry.
 2. All bonded force constants (Kb, Ktheta, Kub, Vn) are zeroed.
 3. Equilibrium geometry (r0, theta0, dihedral phase/multiplicity) is preserved.
-4. Header stamp is present (MMML PSF-ready overlay).
+4. Header stamp is present (KARML PSF-ready overlay).
 5. Optional note is written into the header.
 6. The function returns the destination Path.
 7. Parent directories are created automatically.
@@ -84,7 +84,7 @@ def dst(tmp_path: Path) -> Path:
 
 
 def _make(src: Path, dst: Path, **kw) -> tuple[Path, str]:
-    from mmml.interfaces.pycharmmInterface.charmm_prm_zero import (
+    from karml.interfaces.pycharmmInterface.charmm_prm_zero import (
         write_zeroed_psf_ready_prm,
     )
 
@@ -203,7 +203,7 @@ def test_dihedral_multiplicity_and_phase_preserved(mini_prm: Path, dst: Path):
 
 def test_header_stamp_present(mini_prm: Path, dst: Path):
     _, text = _make(mini_prm, dst)
-    assert "MMML PSF-ready overlay" in text
+    assert "KARML PSF-ready overlay" in text
 
 
 def test_header_mentions_source_file(mini_prm: Path, dst: Path):
@@ -238,7 +238,7 @@ def test_no_note_leaves_header_without_garbage(mini_prm: Path, dst: Path):
 
 
 def test_returns_dst_path(mini_prm: Path, dst: Path):
-    from mmml.interfaces.pycharmmInterface.charmm_prm_zero import (
+    from karml.interfaces.pycharmmInterface.charmm_prm_zero import (
         write_zeroed_psf_ready_prm,
     )
 
@@ -247,7 +247,7 @@ def test_returns_dst_path(mini_prm: Path, dst: Path):
 
 
 def test_dst_file_exists_after_call(mini_prm: Path, dst: Path):
-    from mmml.interfaces.pycharmmInterface.charmm_prm_zero import (
+    from karml.interfaces.pycharmmInterface.charmm_prm_zero import (
         write_zeroed_psf_ready_prm,
     )
 
@@ -261,7 +261,7 @@ def test_dst_file_exists_after_call(mini_prm: Path, dst: Path):
 
 
 def test_creates_parent_directories(mini_prm: Path, tmp_path: Path):
-    from mmml.interfaces.pycharmmInterface.charmm_prm_zero import (
+    from karml.interfaces.pycharmmInterface.charmm_prm_zero import (
         write_zeroed_psf_ready_prm,
     )
 
@@ -298,7 +298,7 @@ def test_dihedrals_section_header_present(mini_prm: Path, dst: Path):
 
 def _cgenff_prm() -> Path:
     repo = Path(__file__).resolve().parents[2]
-    return repo / "mmml" / "data" / "charmm" / "par_all36_cgenff.prm"
+    return repo / "karml" / "data" / "charmm" / "par_all36_cgenff.prm"
 
 
 @pytest.mark.skipif(not _cgenff_prm().is_file(), reason="CGenFF .prm not present")
@@ -327,5 +327,5 @@ def test_real_cgenff_header_stamp(tmp_path: Path):
     src = _cgenff_prm()
     dst = tmp_path / "zeroed_psf_ready.prm"
     _, text = _make(src, dst)
-    assert "MMML PSF-ready overlay" in text
+    assert "KARML PSF-ready overlay" in text
     assert "par_all36_cgenff.prm" in text

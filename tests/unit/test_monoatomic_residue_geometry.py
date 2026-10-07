@@ -4,7 +4,7 @@
 which is the signature of an unresolved CHARMM internal-coordinate table. A
 single-atom residue has exactly that signature for a legitimate reason -- there
 is no internal geometry -- so the span test used to make every monoatomic
-residue unbuildable: ``mmml liquid-box --composition AR1:500`` died with
+residue unbuildable: ``karml liquid-box --composition AR1:500`` died with
 "PyCHARMM make-res coordinate generation failed for residue 'AR1'". That blocks
 the noble gases and the monoatomic ions (CLA/POT/SOD/LIT).
 """
@@ -12,7 +12,7 @@ the noble gases and the monoatomic ions (CLA/POT/SOD/LIT).
 import numpy as np
 import pytest
 
-from mmml.cli.run.md_pbc_suite.ase import _has_resolved_geometry
+from karml.cli.run.md_pbc_suite.ase import _has_resolved_geometry
 
 
 def test_single_atom_is_resolved():
@@ -51,7 +51,7 @@ def test_span_just_below_threshold_is_rejected(n):
 # `_monomer_geometry_is_3d` requires y and z spans >= 0.3 A, which a single
 # atom can never satisfy. It sits behind the second failure:
 #   RuntimeError: Monomer AR1 not 3D after minimization (spans x=0.00 ...)
-from mmml.interfaces.pycharmmInterface.cluster_geometry import (  # noqa: E402
+from karml.interfaces.pycharmmInterface.cluster_geometry import (  # noqa: E402
     _monomer_geometry_is_3d,
     ensure_monomer_3d_coords,
 )

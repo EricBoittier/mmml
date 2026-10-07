@@ -1,6 +1,6 @@
 # Releasing (development alpha)
 
-MMML versions are derived from git tags by
+KARML versions are derived from git tags by
 [`versioningit`](https://versioningit.readthedocs.io/) (see `[tool.versioningit]` in
 `pyproject.toml`). A clean, tagged commit produces an exact version; anything after a
 tag gets a dev/local suffix.
@@ -10,10 +10,10 @@ tag gets a dev/local suffix.
 The alpha is distributed as a Python package, not a git clone:
 
 ```bash
-pip install mmml            # or: uv pip install mmml
+pip install karml            # or: uv pip install karml
 ```
 
-The wheel/sdist are ~11 MB (they exclude large repo data such as `mmml/models/EF/data/`,
+The wheel/sdist are ~11 MB (they exclude large repo data such as `karml/models/EF/data/`,
 trajectories, and `setup/charmm.tar.xz`). pyCHARMM and a GPU are optional — see the README
 and [Getting started](getting-started.md).
 
@@ -22,7 +22,7 @@ and [Getting started](getting-started.md).
 1. Make sure `main` is green and the working tree is clean.
 2. Choose a PEP 440 pre-release version and tag it (annotated):
    ```bash
-   git tag -a v0.1.0a1 -m "mmml 0.1.0a1 (alpha)"
+   git tag -a v0.1.0a1 -m "karml 0.1.0a1 (alpha)"
    git push origin v0.1.0a1
    ```
    `versioningit` turns `v0.1.0a1` into version `0.1.0a1`.
@@ -49,4 +49,4 @@ and [Getting started](getting-started.md).
   garbage-collect LFS objects automatically).
 
 Do **not** commit new large/regenerable artifacts; `.gitignore` already covers
-`node_modules/`, `*.dcd`, `*.traj`, `*.parquet`, `mmml/models/EF/data/`, etc.
+`node_modules/`, `*.dcd`, `*.traj`, `*.parquet`, `karml/models/EF/data/`, etc.

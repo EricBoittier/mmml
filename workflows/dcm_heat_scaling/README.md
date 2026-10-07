@@ -1,6 +1,6 @@
 # DCM heat scaling (PyCHARMM MLpot)
 
-Snakemake workflow for **heat-only** `mmml md-system` runs on **DCM:5 … DCM:90** (step 5),
+Snakemake workflow for **heat-only** `karml md-system` runs on **DCM:5 … DCM:90** (step 5),
 with two timesteps (**0.25 fs** and **0.125 fs**) and configurable repeats.
 
 Sibling to [dcm_nve_scaling](../dcm_nve_scaling/) (short NVE screening).
@@ -12,13 +12,13 @@ Sibling to [dcm_nve_scaling](../dcm_nve_scaling/) (short NVE screening).
 ## Prerequisites
 
 ```bash
-export MMML_CKPT=/mmhome/boittier/home/mmml_tutorial/acodcm/ckpts/dcm1-c137fb42-1f65-4748-880b-8f8184a20f70
+export KARML_CKPT=/mmhome/boittier/home/karml_tutorial/acodcm/ckpts/dcm1-c137fb42-1f65-4748-880b-8f8184a20f70
 export JAX_ENABLE_X64=1   # optional; job_shell defaults to 1
-# MMML_PYTHON / MMML_BIN optional — resolved from repo .venv when unset
+# KARML_PYTHON / KARML_BIN optional — resolved from repo .venv when unset
 ```
 
-- GPU JAX (`uv sync --extra gpu`) or cluster conda/micromamba env with `jax` + `mmml`
-- Runs use plain `mmml md-system` (`use_mpirun: false`) — do **not** nest `mmml-charmm-mpirun.sh` inside Snakemake Slurm jobsteps
+- GPU JAX (`uv sync --extra gpu`) or cluster conda/micromamba env with `jax` + `karml`
+- Runs use plain `karml md-system` (`use_mpirun: false`) — do **not** nest `karml-charmm-mpirun.sh` inside Snakemake Slurm jobsteps
 - `packmol` on PATH
 - `snakemake` **and** [`snakemake-executor-plugin-slurm`](https://snakemake.github.io/snakemake-plugin-catalog/plugins/executor/slurm.html) (Snakemake 8+ no longer bundles Slurm)
 
@@ -54,7 +54,7 @@ Equivalent to your manual command (with `X` = cluster size, `N` = repeat):
 
 ```bash
 export JAX_ENABLE_X64=1
-mmml md-system \
+karml md-system \
   --setup pycharmm_full --backend pycharmm \
   --composition DCM:X \
   --output-dir artifacts/pycharmm_mlpot/dcmX_npt_x64_N/dt025 \
@@ -63,7 +63,7 @@ mmml md-system \
   --dt-fs 0.25 \
   --flat-bottom-radius 55 --packmol-radius 15 --temperature 220 \
   --dynamics-overlap-action rescue \
-  --checkpoint "$MMML_CKPT" --seed <unique> \
+  --checkpoint "$KARML_CKPT" --seed <unique> \
   --dcd-nsavc 500 --dynamics-intra-min-distance 0.5 \
   --ml-gpu-count 1 --ml-batch-size 2056 --no-echeck
 ```
@@ -122,7 +122,7 @@ The log you pasted (`artifacts/...` without `../../`, `mpi=1`, manual `> stdout.
 **Summary table** (works while Snakemake is running or after failures):
 
 ```bash
-cd ~/mmml/workflows/dcm_heat_scaling
+cd ~/karml/workflows/dcm_heat_scaling
 bash scripts/status.sh
 ```
 
@@ -137,32 +137,32 @@ Writes `results/status.csv` and prints counts:
 | `partial` | DCD exists but job did not finish (`done.txt` missing) |
 | `pending` | no output directory yet |
 
-**Quick shell checks** (repo root = `~/mmml`):
+**Quick shell checks** (repo root = `~/karml`):
 
 ```bash
 # how many finished?
-find ~/mmml/artifacts/pycharmm_mlpot -name done.txt | wc -l
+find ~/karml/artifacts/pycharmm_mlpot -name done.txt | wc -l
 
 # any heat trajectories (even if Snakemake not done yet)?
-find ~/mmml/artifacts/pycharmm_mlpot -name 'heat_dcm_*.dcd' -ls
+find ~/karml/artifacts/pycharmm_mlpot -name 'heat_dcm_*.dcd' -ls
 
 # driver log (login node)
-tail -f ~/mmml/workflows/dcm_heat_scaling/snakemake_slurm.log
+tail -f ~/karml/workflows/dcm_heat_scaling/snakemake_slurm.log
 
 # one job log (gpu node output)
-tail -f ~/mmml/artifacts/pycharmm_mlpot/dcm30_npt_x64_1/dt025/stdout.log
+tail -f ~/karml/artifacts/pycharmm_mlpot/dcm30_npt_x64_1/dt025/stdout.log
 
 # slurm queue
 squeue -u $USER
 ```
 
-**Stale outputs:** early runs wrote under `workflows/dcm_heat_scaling/artifacts/` (wrong). Current runs use `~/mmml/artifacts/pycharmm_mlpot/`. `status.sh` flags stale dirs.
+**Stale outputs:** early runs wrote under `workflows/dcm_heat_scaling/artifacts/` (wrong). Current runs use `~/karml/artifacts/pycharmm_mlpot/`. `status.sh` flags stale dirs.
 
 After pulling latest fixes, restart cleanly:
 
 ```bash
-export MMML_CKPT=...
-cd ~/mmml/workflows/dcm_heat_scaling
+export KARML_CKPT=...
+cd ~/karml/workflows/dcm_heat_scaling
 nohup bash scripts/snakemake_slurm.sh 4 > snakemake_slurm.log 2>&1 &
 bash scripts/status.sh
 ```

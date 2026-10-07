@@ -12,14 +12,14 @@ import jax
 import jax.numpy as jnp
 from jax import Array
 
-from mmml.interfaces.pycharmmInterface.calculator_utils import (
+from karml.interfaces.pycharmmInterface.calculator_utils import (
     _sharpstep,
     monomer_coms_segment,
     safe_norm,
 )
-from mmml.interfaces.pycharmmInterface.cutoffs import GAMMA_OFF, GAMMA_ON
-from mmml.interfaces.pycharmmInterface.ml_dtypes import resolve_ml_compute_dtype
-from mmml.interfaces.pycharmmInterface.pbc_utils_jax import (
+from karml.interfaces.pycharmmInterface.cutoffs import GAMMA_OFF, GAMMA_ON
+from karml.interfaces.pycharmmInterface.ml_dtypes import resolve_ml_compute_dtype
+from karml.interfaces.pycharmmInterface.pbc_utils_jax import (
     cell_inverse,
     frac_coords,
     mic_displacement,
@@ -171,7 +171,7 @@ def _cell_matrix_np(cell: np.ndarray) -> np.ndarray:
     return c
 
 
-MM_EXTENT_MARGIN_ENV = "MMML_MM_EXTENT_MARGIN_A"
+MM_EXTENT_MARGIN_ENV = "KARML_MM_EXTENT_MARGIN_A"
 MAX_AUTO_MM_EXTENT_MARGIN_A = 1.0
 
 
@@ -193,7 +193,7 @@ def resolve_mm_extent_margin_A(
     overshot by a DCM C-Cl stretch within a few hundred steps at 300 K and
     aborted NVT/NpT runs. Use the room left below ``L/2`` instead (capped at
     ``MAX_AUTO_MM_EXTENT_MARGIN_A``), never less than ``requested_A``.
-    ``MMML_MM_EXTENT_MARGIN_A`` overrides both.
+    ``KARML_MM_EXTENT_MARGIN_A`` overrides both.
     """
     env = (os.environ.get(MM_EXTENT_MARGIN_ENV) or "").strip()
     if env:
@@ -560,8 +560,8 @@ def _unpack_mm_energy_forces(
     return energy, forces, zero, zero
 
 try:
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_PRM, CGENFF_RTF
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import pycharmm_quiet
+    from karml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_PRM, CGENFF_RTF
+    from karml.interfaces.pycharmmInterface.import_pycharmm import pycharmm_quiet
     pycharmm_quiet()
 except Exception:
     CGENFF_PRM = CGENFF_RTF = None
@@ -569,7 +569,7 @@ except Exception:
         pass
 
 try:
-    from mmml.interfaces.pycharmmInterface.cell_list import (
+    from karml.interfaces.pycharmmInterface.cell_list import (
         PairListTruncationError,
         cell_list_pairs as _cell_list_pairs,
         estimate_max_pairs as _estimate_max_pairs,
@@ -580,13 +580,13 @@ except Exception:
     _estimate_max_pairs = None
 
 try:
-    from mmml.interfaces.pycharmmInterface.nl_reference import have_vesin
+    from karml.interfaces.pycharmmInterface.nl_reference import have_vesin
 except Exception:
     def have_vesin() -> bool:
         return False
 
 try:
-    from mmml.interfaces.pycharmmInterface.nl_backend import (
+    from karml.interfaces.pycharmmInterface.nl_backend import (
         build_mm_pairs_with_backend,
         pick_static_rebuild_backend,
         resolve_mm_nl_backend,
@@ -602,7 +602,7 @@ except Exception:
         return "cell_list"
 
 try:
-    from mmml.interfaces.pycharmmInterface.jax_md_neighbor_list import (
+    from karml.interfaces.pycharmmInterface.jax_md_neighbor_list import (
         have_jax_md,
         create_jax_md_neighbor_list,
     )
@@ -838,7 +838,7 @@ def _record_pair_capacity(stats: dict[str, Any], capacity: int, reason: str) -> 
     history.append(cap)
     stats["pair_capacity_history"] = history[-16:]
     stats["last_capacity_change_reason"] = reason
-    if os.environ.get("MMML_MM_NL_STRICT_CAPACITY") == "1":
+    if os.environ.get("KARML_MM_NL_STRICT_CAPACITY") == "1":
         raise RuntimeError(
             f"MM pair-list capacity changed from {prev} to {cap} ({reason}); "
             "this can trigger JAX recompilation"
@@ -1183,7 +1183,7 @@ def _resolve_cell_list_max_pairs(
 ) -> int:
     if max_pairs is not None:
         return int(max_pairs)
-    from mmml.interfaces.pycharmmInterface.cell_list import cubic_box_side_from_cell_matrix
+    from karml.interfaces.pycharmmInterface.cell_list import cubic_box_side_from_cell_matrix
 
     box_side = cubic_box_side_from_cell_matrix(
         np.asarray(pbc_cell) if pbc_cell is not None else None
@@ -1255,7 +1255,7 @@ def _build_cell_list_pairs_with_retry(
 
 
 def _warmup_jax_only() -> bool:
-    from mmml.interfaces.pycharmmInterface.mmml_calculator import _warmup_jax_only as _flag
+    from karml.interfaces.pycharmmInterface.karml_calculator import _warmup_jax_only as _flag
 
     return _flag()
 
@@ -1313,7 +1313,7 @@ def _get_actual_psf_charges(total_atoms: int) -> np.ndarray:
 
     # Read and parse CGENFF_RTF to map residue_name -> {atom_name: charge}
     rtf_charges = {}
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_RTF
+    from karml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_RTF
     import os
 
     if CGENFF_RTF and os.path.exists(CGENFF_RTF):
@@ -1406,10 +1406,10 @@ def _jax_pme_hybrid_mm_pure_callback(
     jax_pme_dispersion: bool | None = None,
 ) -> Tuple[Array, Array]:
     """Host hybrid jax-pme (full − intra) callable from inside ``jax.jit``."""
-    from mmml.interfaces.pycharmmInterface.jax_pme_hybrid_coulomb import (
+    from karml.interfaces.pycharmmInterface.jax_pme_hybrid_coulomb import (
         hybrid_jax_pme_mm_lr_correction,
     )
-    from mmml.interfaces.pycharmmInterface.long_range_backend import box_length_from_cell
+    from karml.interfaces.pycharmmInterface.long_range_backend import box_length_from_cell
 
     pos_shape = positions.shape
     out_dtype = positions.dtype
@@ -1441,7 +1441,7 @@ def _jax_pme_hybrid_mm_pure_callback(
         pi = None if pi_np.size == 0 else np.asarray(pi_np, dtype=np.int64)
         pj = None if pj_np.size == 0 else np.asarray(pj_np, dtype=np.int64)
         mask = None if mask_np.size == 0 else np.asarray(mask_np, dtype=np.float64)
-        from mmml.interfaces.pycharmmInterface.long_range_backend import (
+        from karml.interfaces.pycharmmInterface.long_range_backend import (
             jax_pme_pure_callback_host_context,
         )
 
@@ -1528,7 +1528,7 @@ def _wrap_mm_fn_with_jax_pme_coulomb(
     Each long-range term uses ``scale * (E_pme_full - E_intra)`` so intra-monomer
     electrostatics and dispersion stay in the ML region.
     """
-    from mmml.interfaces.pycharmmInterface.long_range_backend import box_length_from_cell
+    from karml.interfaces.pycharmmInterface.long_range_backend import box_length_from_cell
 
     charges_host = np.asarray(charges_np, dtype=np.float64)
     c6_host = None if c6_sqrt_np is None else np.asarray(c6_sqrt_np, dtype=np.float64)
@@ -1951,11 +1951,11 @@ def build_mm_energy_forces_fn(
         With ``force_static_mm_eval=True``, PBC rebuild still uses a positions-only
         ``mm_fn`` backed by the initial static pair buffer (JIT fallback path).
     """
-    from mmml.utils.jax_gpu_warmup import maybe_sanitize_process_env_for_ptxas
+    from karml.utils.jax_gpu_warmup import maybe_sanitize_process_env_for_ptxas
 
     maybe_sanitize_process_env_for_ptxas()
     ml_jnp_dtype = resolve_ml_compute_dtype(ml_compute_dtype)
-    from mmml.interfaces.pycharmmInterface.long_range_backend import (
+    from karml.interfaces.pycharmmInterface.long_range_backend import (
         box_length_from_cell,
         per_atom_jax_pme_c6_sqrt_for_atoms,
         per_atom_monomer_ids,
@@ -2006,8 +2006,8 @@ def build_mm_energy_forces_fn(
             return False
 
     if not _cgenff_params_loaded():
-        from mmml.interfaces.pycharmmInterface.import_pycharmm import reset_block
-        from mmml.interfaces.pycharmmInterface.nbonds_config import read_cgenff_toppar
+        from karml.interfaces.pycharmmInterface.import_pycharmm import reset_block
+        from karml.interfaces.pycharmmInterface.nbonds_config import read_cgenff_toppar
 
         reset_block()
         read_cgenff_toppar()
@@ -2015,7 +2015,7 @@ def build_mm_energy_forces_fn(
     # Skip when MPI-linked CHARMM defers GPU until after MLpot SD (CUDA before first
     # gete corrupts OpenMPI registered-memory pools).
     if not defer_xla_gpu_warmup:
-        from mmml.utils.jax_gpu_warmup import ensure_xla_gpu_warmed
+        from karml.utils.jax_gpu_warmup import ensure_xla_gpu_warmed
 
         ensure_xla_gpu_warmed(force=True)
 
@@ -2280,7 +2280,7 @@ def build_mm_energy_forces_fn(
         charges = charges_full[:total_atoms]
         at_codes = at_codes_full[:total_atoms]
     # Uniform MM charge scale (``mm_charge_scale`` in hybrid_mm.json, fitted by
-    # ``mmml tune-mm-nonbonded``): every intermolecular Coulomb pair scales by
+    # ``karml tune-mm-nonbonded``): every intermolecular Coulomb pair scales by
     # charge_scale**2. Applied once here so switched MIC, Ewald and the
     # per-system (Mode A) paths all see the same charges.
     charges = apply_mm_charge_scale(charges, charge_scale)
@@ -2307,8 +2307,8 @@ def build_mm_energy_forces_fn(
             raise ValueError(
                 "lr_solver=ewald requires a PBC cell when building MM forces."
             )
-        from mmml.interfaces.pycharmmInterface.calculator_utils import mm_switch_scale
-        from mmml.models.ewald_hybrid_coulomb import (
+        from karml.interfaces.pycharmmInterface.calculator_utils import mm_switch_scale
+        from karml.models.ewald_hybrid_coulomb import (
             ewald_static_params_from_box_length,
             hybrid_ewald_coulomb_energy_with_cell,
         )
@@ -2480,7 +2480,7 @@ def build_mm_energy_forces_fn(
     if (
         _use_jax_pme_coulomb
         and pbc_cell is not None
-        and os.environ.get("MMML_JAX_PME_PREWARM", "1").strip() != "0"
+        and os.environ.get("KARML_JAX_PME_PREWARM", "1").strip() != "0"
     ):
         try:
             warmup_jax_pme_hybrid_host(
@@ -2594,7 +2594,7 @@ def build_mm_energy_forces_fn(
         ) -> Array:
             if hybrid_hamiltonian == "shared_cutoff":
                 return jnp.sum(pair_energies)
-            from mmml.interfaces.pycharmmInterface.calculator_utils import monomer_coms_segment
+            from karml.interfaces.pycharmmInterface.calculator_utils import monomer_coms_segment
 
             coms = monomer_coms_segment(positions, _monomer_id_jnp, n_monomers)
             com_i = coms[_dimer_perms_np[:, 0]]
@@ -2976,14 +2976,14 @@ def build_mm_energy_forces_fn(
             *,
             positions_jax=None,
         ) -> Tuple[Array, Array]:
-            from mmml.interfaces.pycharmmInterface.nl_gpu import (
+            from karml.interfaces.pycharmmInterface.nl_gpu import (
                 gpu_nl_path_available,
                 rebuild_vesin_pairs_gpu,
             )
 
             _check_extent_and_radius(positions_in, box_in)
 
-            # GPU Vesin + CuPy rebuild (MMML_MM_NL_DEVICE=auto|gpu): chosen when
+            # GPU Vesin + CuPy rebuild (KARML_MM_NL_DEVICE=auto|gpu): chosen when
             # CuPy works and JAX runs on a GPU. Device positions are read via
             # DLPack; host positions (PyCHARMM MLpot callback) cost one small
             # H2D copy. Pairs stay on device (no D2H/H2D of the padded list).
@@ -3042,7 +3042,7 @@ def build_mm_energy_forces_fn(
                         flush=True,
                     )
                     try:
-                        import mmml.interfaces.pycharmmInterface.nl_gpu as _nl_gpu
+                        import karml.interfaces.pycharmmInterface.nl_gpu as _nl_gpu
 
                         # Skip GPU on later rebuilds this process.
                         _nl_gpu._CUPY_RUNTIME_OK = False
@@ -3475,10 +3475,10 @@ def decompose_mlpot_mm_nb_eterms_kcalmol(
 
     Primary pairs have zero MIC lattice shift; image pairs use a non-zero translation.
     ``rmins_A`` is the per-atom CHARMM ``Rmin/2``; ``epsilons_kcal`` the per-atom ε.
-    Default MLpot routing split; ``MMML_MLPOT_ETERM_SPLIT_SOURCE=hybrid`` uses the
+    Default MLpot routing split; ``KARML_MLPOT_ETERM_SPLIT_SOURCE=hybrid`` uses the
     hybrid's own JAX split (``update_fn.mm_eterm_split``) instead where available.
     """
-    from mmml.interfaces.pycharmmInterface.cutoffs import GAMMA_OFF, GAMMA_ON
+    from karml.interfaces.pycharmmInterface.cutoffs import GAMMA_OFF, GAMMA_ON
 
     def _np_sharpstep(r: np.ndarray, x0: float, x1: float, gamma: float) -> np.ndarray:
         denom = x1 - x0

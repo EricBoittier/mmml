@@ -1,4 +1,4 @@
-"""Calculator-neutral monomer/dimer ML hybrid (the MMML ML/MM fragment scheme).
+"""Calculator-neutral monomer/dimer ML hybrid (the KARML ML/MM fragment scheme).
 
 Used by metatomic (and any other ASE calculator) to reproduce the PhysNet
 MLpot split without JAX:
@@ -22,7 +22,7 @@ import numpy as np
 from ase import Atoms
 from ase.calculators.calculator import Calculator, all_changes
 
-from mmml.interfaces.pycharmmInterface.cutoffs import (
+from karml.interfaces.pycharmmInterface.cutoffs import (
     DEFAULT_ML_SWITCH_WIDTH,
     DEFAULT_MM_SWITCH_ON,
     GAMMA_ON,
@@ -301,7 +301,7 @@ def evaluate_fragment_hybrid(
     monomer_charges: Sequence[float] | None = None,
     monomer_spins: Sequence[float] | None = None,
 ) -> FragmentHybridResult:
-    """Monomer sum plus switched dimer interaction (MMML ML/MM scheme, ML part)."""
+    """Monomer sum plus switched dimer interaction (KARML ML/MM scheme, ML part)."""
     numbers = np.asarray(atomic_numbers, dtype=int)
     pos = np.asarray(positions, dtype=np.float64)
     per = [int(n) for n in atoms_per_monomer]

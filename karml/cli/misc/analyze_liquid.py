@@ -1,8 +1,8 @@
 """Analyze neat-liquid jaxmd / campaign trajectories (density, RDF, MSD, plots).
 
 Examples:
-  mmml analyze-liquid --campaign-dir artifacts/lj_scales/liquid_dcm -o analysis/
-  mmml analyze-liquid --h5 path/to/pbc_nvt_jaxmd_nvt.h5 --box-size 30 --solvent DCM -o out/
+  karml analyze-liquid --campaign-dir artifacts/lj_scales/liquid_dcm -o analysis/
+  karml analyze-liquid --h5 path/to/pbc_nvt_jaxmd_nvt.h5 --box-size 30 --solvent DCM -o out/
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ import json
 import sys
 from pathlib import Path
 
-from mmml.analysis.liquid_md import (
+from karml.analysis.liquid_md import (
     analyze_campaign_dir,
     analyze_h5,
     write_analysis_outputs,
@@ -21,7 +21,7 @@ from mmml.analysis.liquid_md import (
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="mmml analyze-liquid",
+        prog="karml analyze-liquid",
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )

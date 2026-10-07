@@ -27,7 +27,7 @@ CUTOFF_A = 12.0
 
 @pytest.fixture(scope="module")
 def phases():
-    from mmml.analysis.dcm_crystal import DCM_CRYSTAL_PHASES
+    from karml.analysis.dcm_crystal import DCM_CRYSTAL_PHASES
 
     return DCM_CRYSTAL_PHASES
 
@@ -35,7 +35,7 @@ def phases():
 @pytest.fixture(scope="module")
 def cells():
     """Both structures with rebuilt hydrogens, read once."""
-    from mmml.analysis.dcm_crystal import DCM_CRYSTAL_PHASES, read_dcm_phase
+    from karml.analysis.dcm_crystal import DCM_CRYSTAL_PHASES, read_dcm_phase
 
     return {key: read_dcm_phase(key, rebuild_hydrogens=True) for key in DCM_CRYSTAL_PHASES}
 
@@ -57,7 +57,7 @@ def test_both_deposited_pressure_points_are_bundled(phases):
     ],
 )
 def test_deposited_cell_matches_the_paper(key, lengths, volume, pressure):
-    from mmml.analysis.dcm_crystal import dcm_phase, read_dcm_phase
+    from karml.analysis.dcm_crystal import dcm_phase, read_dcm_phase
 
     phase = dcm_phase(key)
     assert phase.space_group_number == 60  # Pbcn
@@ -70,7 +70,7 @@ def test_deposited_cell_matches_the_paper(key, lengths, volume, pressure):
 
 
 def test_symmetry_expands_to_four_whole_molecules(cells):
-    from mmml.analysis.lattice_energy import unwrap_molecules
+    from karml.analysis.lattice_energy import unwrap_molecules
 
     for key, atoms in cells.items():
         z = atoms.get_atomic_numbers()
@@ -83,7 +83,7 @@ def test_symmetry_expands_to_four_whole_molecules(cells):
 
 
 def test_unknown_phase_names_the_alternatives():
-    from mmml.analysis.dcm_crystal import dcm_phase
+    from karml.analysis.dcm_crystal import dcm_phase
 
     with pytest.raises(KeyError, match="pbcn_133gpa"):
         dcm_phase("ambient")
@@ -91,7 +91,7 @@ def test_unknown_phase_names_the_alternatives():
 
 def test_the_ambient_reference_carries_a_cell_but_no_structure():
     """The 1973 structure is a comparison target, not something to build from."""
-    from mmml.analysis.dcm_crystal import KAWAGUCHI_AMBIENT_CELL
+    from karml.analysis.dcm_crystal import KAWAGUCHI_AMBIENT_CELL
 
     ref = KAWAGUCHI_AMBIENT_CELL
     assert ref.cell_lengths_A == pytest.approx((4.249, 8.138, 9.492))
@@ -99,7 +99,7 @@ def test_the_ambient_reference_carries_a_cell_but_no_structure():
     assert not hasattr(ref, "cif_path")
     # Both deposited structures are compressed relative to it, which is the
     # reason the relaxation step exists at all.
-    from mmml.analysis.dcm_crystal import DCM_CRYSTAL_PHASES
+    from karml.analysis.dcm_crystal import DCM_CRYSTAL_PHASES
 
     for phase in DCM_CRYSTAL_PHASES.values():
         assert phase.cell_volume_A3 < ref.cell_volume_A3
@@ -114,7 +114,7 @@ def test_deposited_hydrogens_reverse_the_compression_trend():
     Volume falls 2.6% between the two pressure points, so contacts must shorten.
     With the deposited hydrogens the shortest H...Cl contact appears to grow.
     """
-    from mmml.analysis.dcm_crystal import h_cl_contacts, read_dcm_phase
+    from karml.analysis.dcm_crystal import h_cl_contacts, read_dcm_phase
 
     lo = h_cl_contacts(read_dcm_phase("pbcn_133gpa"), rebuild_hydrogens=False)
     hi = h_cl_contacts(read_dcm_phase("pbcn_163gpa"), rebuild_hydrogens=False)
@@ -122,7 +122,7 @@ def test_deposited_hydrogens_reverse_the_compression_trend():
 
 
 def test_rebuilt_hydrogens_restore_the_compression_trend(cells):
-    from mmml.analysis.dcm_crystal import h_cl_contacts
+    from karml.analysis.dcm_crystal import h_cl_contacts
 
     lo = h_cl_contacts(cells["pbcn_133gpa"], rebuild_hydrogens=False)
     hi = h_cl_contacts(cells["pbcn_163gpa"], rebuild_hydrogens=False)
@@ -130,7 +130,7 @@ def test_rebuilt_hydrogens_restore_the_compression_trend(cells):
 
 
 def test_rebuild_leaves_the_heavy_atoms_alone(cells):
-    from mmml.analysis.dcm_crystal import read_dcm_phase
+    from karml.analysis.dcm_crystal import read_dcm_phase
 
     deposited = read_dcm_phase("pbcn_133gpa")
     rebuilt = cells["pbcn_133gpa"]
@@ -142,8 +142,8 @@ def test_rebuild_leaves_the_heavy_atoms_alone(cells):
 
 
 def test_rebuild_produces_the_intended_ch2cl2_geometry(cells):
-    from mmml.analysis.dcm_crystal import GAS_PHASE_CH_A, GAS_PHASE_HCH_DEG
-    from mmml.analysis.lattice_energy import unwrap_molecules
+    from karml.analysis.dcm_crystal import GAS_PHASE_CH_A, GAS_PHASE_HCH_DEG
+    from karml.analysis.lattice_energy import unwrap_molecules
 
     atoms = cells["pbcn_163gpa"]
     z = atoms.get_atomic_numbers()
@@ -159,8 +159,8 @@ def test_rebuild_produces_the_intended_ch2cl2_geometry(cells):
 
 
 def test_rebuild_refuses_a_molecule_that_is_not_ch2cl2():
-    from mmml.analysis.acetone_crystal import read_acetone_phase
-    from mmml.analysis.dcm_crystal import rebuild_methylene_hydrogens
+    from karml.analysis.acetone_crystal import read_acetone_phase
+    from karml.analysis.dcm_crystal import rebuild_methylene_hydrogens
 
     with pytest.raises(ValueError, match="not CH2Cl2"):
         rebuild_methylene_hydrogens(read_acetone_phase("pbca_150k"))
@@ -168,8 +168,8 @@ def test_rebuild_refuses_a_molecule_that_is_not_ch2cl2():
 
 def test_normalizing_ch_length_alone_is_not_enough():
     """Distance normalisation does not fix a wrong hydrogen *direction*."""
-    from mmml.analysis.crystal_contacts import normalize_hydrogen_positions
-    from mmml.analysis.dcm_crystal import h_cl_contacts, read_dcm_phase
+    from karml.analysis.crystal_contacts import normalize_hydrogen_positions
+    from karml.analysis.dcm_crystal import h_cl_contacts, read_dcm_phase
 
     lo = normalize_hydrogen_positions(read_dcm_phase("pbcn_133gpa"))
     hi = normalize_hydrogen_positions(read_dcm_phase("pbcn_163gpa"))
@@ -179,9 +179,9 @@ def test_normalizing_ch_length_alone_is_not_enough():
 
 
 def test_normalize_hydrogen_positions_sets_the_requested_bond_length():
-    from mmml.analysis.crystal_contacts import normalize_hydrogen_positions
-    from mmml.analysis.dcm_crystal import read_dcm_phase
-    from mmml.analysis.lattice_energy import unwrap_molecules
+    from karml.analysis.crystal_contacts import normalize_hydrogen_positions
+    from karml.analysis.dcm_crystal import read_dcm_phase
+    from karml.analysis.lattice_energy import unwrap_molecules
 
     atoms = normalize_hydrogen_positions(read_dcm_phase("pbcn_133gpa"), target_A=1.1)
     z = atoms.get_atomic_numbers()
@@ -196,7 +196,7 @@ def test_normalize_hydrogen_positions_sets_the_requested_bond_length():
 
 
 def test_the_shortest_halogen_contact_is_a_type_ii_sigma_hole_geometry(cells):
-    from mmml.analysis.dcm_crystal import halogen_contacts
+    from karml.analysis.dcm_crystal import halogen_contacts
 
     for key, atoms in cells.items():
         closest = halogen_contacts(atoms)[0]
@@ -206,7 +206,7 @@ def test_the_shortest_halogen_contact_is_a_type_ii_sigma_hole_geometry(cells):
 
 
 def test_halogen_contacts_shorten_under_compression(cells):
-    from mmml.analysis.dcm_crystal import halogen_contacts
+    from karml.analysis.dcm_crystal import halogen_contacts
 
     lo = halogen_contacts(cells["pbcn_133gpa"])[0].distance_A
     hi = halogen_contacts(cells["pbcn_163gpa"])[0].distance_A
@@ -224,7 +224,7 @@ def test_halogen_contacts_shorten_under_compression(cells):
     ],
 )
 def test_halogen_motif_classification(theta1, theta2, expected):
-    from mmml.analysis.dcm_crystal import classify_halogen_motif
+    from karml.analysis.dcm_crystal import classify_halogen_motif
 
     assert classify_halogen_motif(theta1, theta2).startswith(expected)
 
@@ -234,7 +234,7 @@ def test_halogen_motif_classification(theta1, theta2, expected):
 
 @pytest.fixture(scope="module")
 def decompositions(cells):
-    from mmml.analysis.lattice_energy import decompose_lattice_energy_by_element_pair
+    from karml.analysis.lattice_energy import decompose_lattice_energy_by_element_pair
 
     return {
         key: decompose_lattice_energy_by_element_pair(
@@ -269,7 +269,7 @@ def test_the_halogen_contact_binds_by_dispersion_not_electrostatics(decompositio
 
 def test_the_decomposition_reproduces_the_lattice_sum(cells, decompositions):
     """Buckets add up, and the dimer Coulomb sum agrees with Ewald."""
-    from mmml.analysis.lattice_energy import crystal_lattice_energy
+    from karml.analysis.lattice_energy import crystal_lattice_energy
 
     for key, atoms in cells.items():
         dec = decompositions[key]
@@ -293,8 +293,8 @@ def test_an_atom_pair_split_would_have_been_meaningless(cells):
     magnitude larger than the total, of both signs: the monopole terms cancel
     between element pairs and mean nothing individually.
     """
-    from mmml.models.cgenff_mm import COULOMB_CONSTANT
-    from mmml.analysis.lattice_energy import build_molecular_cell
+    from karml.models.cgenff_mm import COULOMB_CONSTANT
+    from karml.analysis.lattice_energy import build_molecular_cell
 
     atoms = cells["pbcn_133gpa"]
     mcell, _, _ = build_molecular_cell(
@@ -313,7 +313,7 @@ def test_an_atom_pair_split_would_have_been_meaningless(cells):
 
 
 def test_lattice_energy_is_bound_and_dispersion_dominated(cells):
-    from mmml.analysis.lattice_energy import crystal_lattice_energy
+    from karml.analysis.lattice_energy import crystal_lattice_energy
 
     for key, atoms in cells.items():
         r = crystal_lattice_energy(
@@ -329,7 +329,7 @@ def test_lattice_energy_is_bound_and_dispersion_dominated(cells):
 
 def test_the_more_compressed_cell_is_less_bound(cells):
     """Past the minimum, squeezing costs energy. A basic sanity check."""
-    from mmml.analysis.lattice_energy import crystal_lattice_energy
+    from karml.analysis.lattice_energy import crystal_lattice_energy
 
     energies = {
         key: crystal_lattice_energy(
@@ -345,7 +345,7 @@ def test_the_more_compressed_cell_is_less_bound(cells):
 
 def test_lattice_energy_regression(cells):
     """Pins the absolute value so a silent change in typing or charges is caught."""
-    from mmml.analysis.lattice_energy import crystal_lattice_energy
+    from karml.analysis.lattice_energy import crystal_lattice_energy
 
     r = crystal_lattice_energy(
         cells["pbcn_133gpa"].get_positions(),
@@ -361,7 +361,7 @@ def test_lattice_energy_regression(cells):
 
 @pytest.fixture(scope="module")
 def relaxations(cells):
-    from mmml.analysis.lattice_energy import relax_cell_lengths
+    from karml.analysis.lattice_energy import relax_cell_lengths
 
     atoms = cells["pbcn_133gpa"]
     return {
@@ -388,7 +388,7 @@ def test_relaxing_at_the_measured_pressures_reproduces_the_measured_volumes(
 
 
 def test_relaxing_to_ambient_pressure_approaches_the_1973_cell(relaxations):
-    from mmml.analysis.dcm_crystal import KAWAGUCHI_AMBIENT_CELL
+    from karml.analysis.dcm_crystal import KAWAGUCHI_AMBIENT_CELL
 
     relaxed = relaxations[0.0]
     ref = KAWAGUCHI_AMBIENT_CELL
@@ -406,7 +406,7 @@ def test_higher_pressure_gives_a_smaller_cell_and_a_weaker_crystal(relaxations):
 
 
 def test_relaxation_keeps_molecules_rigid_and_the_cell_orthorhombic(cells, relaxations):
-    from mmml.analysis.lattice_energy import unwrap_molecules
+    from karml.analysis.lattice_energy import unwrap_molecules
 
     atoms = cells["pbcn_133gpa"]
     relaxed = relaxations[0.0]
@@ -440,8 +440,8 @@ def test_relaxation_lowers_the_energy_it_started_from(relaxations):
 
 
 def test_relaxed_sublimation_enthalpy_matches_the_thermodynamic_cycle(relaxations):
-    from mmml.analysis.dcm_crystal import DCM_SUBLIMATION_REFERENCE
-    from mmml.analysis.lattice_energy import KCAL_MOL_TO_KJ_MOL
+    from karml.analysis.dcm_crystal import DCM_SUBLIMATION_REFERENCE
+    from karml.analysis.lattice_energy import KCAL_MOL_TO_KJ_MOL
 
     reference = DCM_SUBLIMATION_REFERENCE
     predicted = (
@@ -457,8 +457,8 @@ def test_relaxing_improves_agreement_with_experiment(cells, relaxations):
     A structure measured at 1.33 GPa is compressed onto its repulsive wall, so
     its static energy underestimates cohesion.
     """
-    from mmml.analysis.dcm_crystal import DCM_SUBLIMATION_REFERENCE
-    from mmml.analysis.lattice_energy import (
+    from karml.analysis.dcm_crystal import DCM_SUBLIMATION_REFERENCE
+    from karml.analysis.lattice_energy import (
         KCAL_MOL_TO_KJ_MOL,
         crystal_lattice_energy,
         sublimation_enthalpy_kcal_mol,
@@ -476,7 +476,7 @@ def test_relaxing_improves_agreement_with_experiment(cells, relaxations):
 
 
 def test_the_experimental_reference_is_a_cycle_not_a_measurement():
-    from mmml.analysis.dcm_crystal import DCM_SUBLIMATION_REFERENCE
+    from karml.analysis.dcm_crystal import DCM_SUBLIMATION_REFERENCE
 
     ref = DCM_SUBLIMATION_REFERENCE
     assert ref.dsub_h_kj_mol == pytest.approx(ref.dvap_h_kj_mol + ref.dfus_h_kj_mol)
@@ -490,8 +490,8 @@ def test_the_experimental_reference_is_a_cycle_not_a_measurement():
 
 def test_learned_lj_scales_change_the_lattice_energy(cells):
     """Sublimation enthalpy is an observable hybrid training never sees."""
-    from mmml.analysis.lattice_energy import crystal_lattice_energy
-    from mmml.data.cgenff_dataset import load_reference
+    from karml.analysis.lattice_energy import crystal_lattice_energy
+    from karml.data.cgenff_dataset import load_reference
 
     atoms = cells["pbcn_133gpa"]
     n_types = len(load_reference().sigmas)

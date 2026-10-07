@@ -1,17 +1,17 @@
-"""``mmml tune-mm-nonbonded``: fit CGenFF LJ/charge scales of the ML/MM tail.
+"""``karml tune-mm-nonbonded``: fit CGenFF LJ/charge scales of the ML/MM tail.
 
 Two stages::
 
     # 1. teacher + student interaction labels of liquid frames (GPU helps)
-    mmml tune-mm-nonbonded label --frames box/seed_*/traj.extxyz \\
+    karml tune-mm-nonbonded label --frames box/seed_*/traj.extxyz \\
         --teacher pet-omol-l.pt --student student.json --out-dir tune/ --stride 10
 
     # 2. fit (CPU, seconds-minutes): scales + bootstrap + cohesion budget
-    mmml tune-mm-nonbonded fit --labels tune/ --valid-groups 10,18,19,28,31 \\
+    karml tune-mm-nonbonded fit --labels tune/ --valid-groups 10,18,19,28,31 \\
         --n-boot 10 --out-json tune/lj_elec_tune.json --figs-dir tune/figs
 
-See :mod:`mmml.models.mm_nonbonded_tune` for the model and
-:mod:`mmml.distill.box_cohesion` for the labels.
+See :mod:`karml.models.mm_nonbonded_tune` for the model and
+:mod:`karml.distill.box_cohesion` for the labels.
 """
 
 from __future__ import annotations
@@ -44,7 +44,7 @@ def _parse_grid(text: str | None) -> list[tuple[float, float]]:
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        prog="mmml tune-mm-nonbonded",
+        prog="karml tune-mm-nonbonded",
         description="Fit per-type CGenFF LJ (eps/Rmin) scales and a charge scale so "
         "student-ML + MM reproduces teacher interaction energies/forces of liquid frames.",
     )
@@ -117,7 +117,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def _run_label(args: argparse.Namespace) -> int:
-    from mmml.distill.box_cohesion import (
+    from karml.distill.box_cohesion import (
         PhysNetPairEvaluator,
         iter_box_frames,
         label_frame,
@@ -127,7 +127,7 @@ def _run_label(args: argparse.Namespace) -> int:
     if args.teacher is None or args.student is None:
         raise SystemExit("label needs --teacher and --student")
     args.out_dir.mkdir(parents=True, exist_ok=True)
-    from mmml.distill.batched_teacher import BatchedMetatomicTeacher
+    from karml.distill.batched_teacher import BatchedMetatomicTeacher
 
     teacher = BatchedMetatomicTeacher(
         args.teacher, device=args.device, max_atoms_per_batch=args.teacher_max_atoms
@@ -187,8 +187,8 @@ def _label_files(paths: list[Path]) -> list[Path]:
 
 
 def _features(frames, ff, switch, *, with_forces, cache: Path | None):
-    from mmml.distill.box_cohesion import frame_features_from_labels
-    from mmml.models.mm_nonbonded_tune import load_features, save_features
+    from karml.distill.box_cohesion import frame_features_from_labels
+    from karml.models.mm_nonbonded_tune import load_features, save_features
 
     if cache is not None and cache.exists():
         data = load_features(cache)
@@ -201,7 +201,7 @@ def _features(frames, ff, switch, *, with_forces, cache: Path | None):
 
 
 def _evaluate(ff, params, data) -> dict:
-    from mmml.models.mm_nonbonded_tune import (
+    from karml.models.mm_nonbonded_tune import (
         cohesion_budget,
         energy_rmse_per_mol,
         predict_energy,
@@ -222,7 +222,7 @@ def _evaluate(ff, params, data) -> dict:
 
 
 def _variant(ff, name, prior, train, valid, alldata, n_boot, boot_seed) -> dict:
-    from mmml.models.mm_nonbonded_tune import (
+    from karml.models.mm_nonbonded_tune import (
         TuneParams,
         bootstrap_fit,
         fit_parameters,
@@ -257,7 +257,7 @@ def _variant(ff, name, prior, train, valid, alldata, n_boot, boot_seed) -> dict:
 
 def _dimer_check(args, ff, switch, results) -> dict:
     """Two-body check where the hybrid is MM-only: teacher dimer E_int vs w_MM E_MM."""
-    from mmml.models.mm_nonbonded_tune import (
+    from karml.models.mm_nonbonded_tune import (
         EV_TO_KCAL,
         TuneParams,
         dimer_features,
@@ -298,8 +298,8 @@ def _run_fit(args: argparse.Namespace) -> int:
     import jax
 
     jax.config.update("jax_enable_x64", True)
-    from mmml.distill.box_cohesion import load_labels
-    from mmml.models.mm_nonbonded_tune import (
+    from karml.distill.box_cohesion import load_labels
+    from karml.models.mm_nonbonded_tune import (
         MonomerNonbonded,
         PriorConfig,
         SwitchConfig,
@@ -407,7 +407,7 @@ def _run_fit(args: argparse.Namespace) -> int:
         args.sidecar.write_text(json.dumps(lj_sidecar_payload(ff, results[0]["_params_obj"]), indent=2))
         print(f"wrote {args.sidecar}")
     if args.figs_dir is not None:
-        from mmml.analysis.mm_nonbonded_tune_plots import make_tune_figures
+        from karml.analysis.mm_nonbonded_tune_plots import make_tune_figures
 
         for path in make_tune_figures(payload, ff, results, data, is_valid, args.figs_dir):
             print(f"wrote {path}")

@@ -89,7 +89,7 @@ def pair_model_path(tmp_path_factory) -> str:
         supported_devices=["cpu"],
         dtype="float64",
     )
-    metadata = mta.ModelMetadata(name="mmml-test-smooth-pair", authors=["mmml tests"])
+    metadata = mta.ModelMetadata(name="karml-test-smooth-pair", authors=["karml tests"])
     model = mta.AtomisticModel(SmoothPairEnergy(CUTOFF_A).eval(), metadata, capabilities)
     path = tmp_path_factory.mktemp("metatomic") / "smooth_pair.pt"
     model.save(str(path))
@@ -104,7 +104,7 @@ def _cluster(rng: np.random.Generator, n: int) -> tuple[np.ndarray, np.ndarray]:
 
 
 def _ase_reference(path: str, numbers, positions, cell=None) -> tuple[float, np.ndarray]:
-    from mmml.interfaces.calculators.metatomic import load_metatomic_calculator
+    from karml.interfaces.calculators.metatomic import load_metatomic_calculator
 
     calc = load_metatomic_calculator(path, device="cpu")
     atoms = Atoms(numbers=numbers, positions=positions)
@@ -116,7 +116,7 @@ def _ase_reference(path: str, numbers, positions, cell=None) -> tuple[float, np.
 
 
 def test_batched_teacher_matches_ase_calculator(pair_model_path: str) -> None:
-    from mmml.distill.batched_teacher import BatchedMetatomicTeacher
+    from karml.distill.batched_teacher import BatchedMetatomicTeacher
 
     rng = np.random.default_rng(7)
     gas = [_cluster(rng, n) for n in (3, 7, 10, 20, 33)]
@@ -152,7 +152,7 @@ def test_batched_teacher_matches_ase_calculator(pair_model_path: str) -> None:
 
 def test_periodic_images_change_the_energy(pair_model_path: str) -> None:
     """The cell is used: a small periodic box differs from the same atoms in vacuum."""
-    from mmml.distill.batched_teacher import BatchedMetatomicTeacher
+    from karml.distill.batched_teacher import BatchedMetatomicTeacher
 
     rng = np.random.default_rng(3)
     numbers = np.array([8, 1, 1, 6, 8], dtype=int)

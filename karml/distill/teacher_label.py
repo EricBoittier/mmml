@@ -6,7 +6,7 @@
   ``E_ref`` per molecule, with full teacher forces. Monomer ``E_A - E_ref``;
   dimer ``E_AB - 2 E_ref``. This is what the PhysNet MLpot needs: it runs the
   same network on monomers and dimers and forms
-  ``E_int = P(AB) - P(A) - P(B)`` itself (``mmml_calculator``
+  ``E_int = P(AB) - P(A) - P(B)`` itself (``karml_calculator``
   ``calculate_dimer_contributions``), so the dimer target must be the dimer
   energy, not ``E_int``.
 * ``interaction``: dimer ``E = E(AB) - E(A) - E(B)`` with interaction forces.
@@ -28,8 +28,8 @@ from typing import Protocol
 import numpy as np
 from ase.calculators.calculator import Calculator
 
-from mmml.distill.acetone_pool import Geometry
-from mmml.interfaces.calculators.ase_fragment_hybrid import evaluate_whole_system
+from karml.distill.acetone_pool import Geometry
+from karml.interfaces.calculators.ase_fragment_hybrid import evaluate_whole_system
 
 ENERGY_MODE_MLMM = "mlmm"
 ENERGY_MODE_INTERACTION = "interaction"

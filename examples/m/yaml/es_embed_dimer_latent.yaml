@@ -1,7 +1,7 @@
 # Electrostatic embedding Mode B (latent / Q¹) — dimer-only (AMM1 + CH3CL).
 # Partner-perturbed ML charges enter E_MM Coulomb. Not for liquid boxes.
 #
-#   uv run mmml md-system --config examples/m/yaml/es_embed_dimer_latent.yaml --run-all
+#   uv run karml md-system --config examples/m/yaml/es_embed_dimer_latent.yaml --run-all
 
 defaults:
   composition: "AMM1:1,CH3CL:1"

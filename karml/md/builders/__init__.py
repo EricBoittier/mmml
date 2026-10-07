@@ -2,26 +2,26 @@
 
 Each builder wraps an existing construction backend (packmol, pyxtal, peptide
 builder, template PDB) behind one seam, and is the single place
-:class:`~mmml.md.system.FFParams` is resolved (decision A). Concrete builders
-migrate here from ``mmml.interfaces.pycharmmInterface`` and
-``mmml.cli.run.md_pbc_suite`` in later steps.
+:class:`~karml.md.system.FFParams` is resolved (decision A). Concrete builders
+migrate here from ``karml.interfaces.pycharmmInterface`` and
+``karml.cli.run.md_pbc_suite`` in later steps.
 """
 
 from __future__ import annotations
 
 from typing import Protocol, runtime_checkable
 
-from mmml.md.builders._topology import (
+from karml.md.builders._topology import (
     molecule_ids_from_bonds,
     monomer_indices_from_mol_id,
 )
-from mmml.md.builders.psf import PsfSystemBuilder
-from mmml.md.builders.placement import (
+from karml.md.builders.psf import PsfSystemBuilder
+from karml.md.builders.placement import (
     PackmolSystemBuilder,
     PeptideWaterSystemBuilder,
     PyxtalSystemBuilder,
 )
-from mmml.md.system import MolecularSystem, SystemSpec
+from karml.md.system import MolecularSystem, SystemSpec
 
 __all__ = [
     "SystemBuilder",

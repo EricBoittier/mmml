@@ -3,7 +3,7 @@
 
 Usage:
     # Fix C (2), move NH3 rigidly along N–C:
-    mmml umbrella-sample \\
+    karml umbrella-sample \\
       --checkpoint examples/m/kl.json \\
       --structure examples/m/neb/reag_0_opt.xyz \\
       --atoms 2,1 --move-with 1,3,4,5 \\
@@ -12,7 +12,7 @@ Usage:
       -o out/umbrella --overwrite
 
     # 2D (Cl–C × N–C); invert CH3, avoid 1.5/1.5 corner
-    mmml umbrella-sample --checkpoint examples/m/kl.json \\
+    karml umbrella-sample --checkpoint examples/m/kl.json \\
       --structure examples/m/neb/reag_0_opt.xyz \\
       --atoms 0,2 --atoms2 1,2 \\
       --move-with2 1,3,4,5 --invert-with 6,7,8 \\
@@ -21,7 +21,7 @@ Usage:
       --k 10 --ky 10 -o out/umbrella2d --overwrite
 
     # NPZ (R, Z) or PDB also work; --seed-mode frames uses consecutive frames as windows
-    mmml umbrella-sample --checkpoint ckpt.json --structure data.npz \\
+    karml umbrella-sample --checkpoint ckpt.json --structure data.npz \\
       --atoms 0,1 --targets 1.8,2.0,2.2 --seed-mode frames -o out/umb
 """
 
@@ -32,15 +32,15 @@ import os
 from pathlib import Path
 from typing import Any
 
-from mmml.md.restraints import (
+from karml.md.restraints import (
     AngleWall,
     BondRetentionWall,
     FlatBottomWall,
     LinearDistanceCV,
 )
-from mmml.md.restraints.linear_distance import ReactionChannelRestraint
-from mmml.umbrella.config import UmbrellaConfig
-from mmml.umbrella.sample import run_umbrella_nvt
+from karml.md.restraints.linear_distance import ReactionChannelRestraint
+from karml.umbrella.config import UmbrellaConfig
+from karml.umbrella.sample import run_umbrella_nvt
 
 
 def _parse_pair(value: str) -> tuple[int, int]:
@@ -94,7 +94,7 @@ def _parse_int_list(value: str) -> tuple[int, ...]:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="mmml umbrella-sample",
+        prog="karml umbrella-sample",
         description=(
             "Batched distance umbrella sampling with a PhysNet / SpookyNet "
             "checkpoint via JAX-MD NVT Nose-Hoover."
@@ -788,7 +788,7 @@ def _config_from_args(args: argparse.Namespace) -> UmbrellaConfig:
 def main(argv: list[str] | None = None) -> int:
     # Before any transitive ``import jax`` / ``jax_md`` (hybrid path).
     try:
-        from mmml.interfaces.pycharmmInterface.jax_device_policy import (
+        from karml.interfaces.pycharmmInterface.jax_device_policy import (
             apply_mlpot_jax_platform_env,
             sanitize_stale_jax_platforms_env,
         )
@@ -799,7 +799,7 @@ def main(argv: list[str] | None = None) -> int:
         import sys
 
         print(
-            f"mmml umbrella-sample: JAX platform setup warning: {exc}",
+            f"karml umbrella-sample: JAX platform setup warning: {exc}",
             file=sys.stderr,
             flush=True,
         )

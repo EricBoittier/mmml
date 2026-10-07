@@ -30,7 +30,7 @@ import numpy as np
 import orbax.checkpoint as ocp
 import pandas as pd
 
-os.environ.setdefault("MPLCONFIGDIR", str(Path(tempfile.gettempdir()) / "mmml-matplotlib"))
+os.environ.setdefault("MPLCONFIGDIR", str(Path(tempfile.gettempdir()) / "karml-matplotlib"))
 import matplotlib.pyplot as plt
 from matplotlib import colors
 
@@ -43,8 +43,8 @@ from ase import Atoms
 from ase.calculators.calculator import Calculator, all_changes
 from ase.units import Bohr, Hartree
 
-from mmml.models.mbd import E3xMBDModel, mbd_energy_and_forces
-from mmml.models.multipoles import E3xMultipoleModel
+from karml.models.mbd import E3xMBDModel, mbd_energy_and_forces
+from karml.models.multipoles import E3xMultipoleModel
 from scripts.train_qcml_mbd import MBDTrainConfig
 from scripts.train_qcml_multipoles import TrainConfig
 from scripts.plot_qcml_multipole_components import (

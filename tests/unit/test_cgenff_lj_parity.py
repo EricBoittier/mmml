@@ -31,7 +31,7 @@ def _dataset_table():
 
 def _md_table():
     """Replicates the parser in mm_energy_forces (name -> (epsilon, Rmin/2))."""
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_PRM
+    from karml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_PRM
 
     out = {}
     for line in Path(CGENFF_PRM).read_text(errors="replace").splitlines():

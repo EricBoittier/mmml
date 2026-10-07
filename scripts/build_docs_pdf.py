@@ -30,7 +30,7 @@ from reportlab.platypus import Image, PageBreak, Paragraph, Preformatted, Simple
 ROOT = Path(__file__).resolve().parents[1]
 MKDOCS_CONFIG = ROOT / "mkdocs.yml"
 DOCS_DIR = ROOT / "docs"
-DEFAULT_OUTPUT = ROOT / "site" / "mmml-docs.pdf"
+DEFAULT_OUTPUT = ROOT / "site" / "karml-docs.pdf"
 LINK_RE = re.compile(r"\[([^\]]+)\]\(([^)]+)\)")
 INLINE_CODE_RE = re.compile(r"`([^`]+)`")
 MERMAID_CLI_PACKAGE = "@mermaid-js/mermaid-cli"
@@ -116,7 +116,7 @@ def mermaid_render_command() -> list[str] | None:
     """
     if shutil.which("mmdc"):
         return ["mmdc"]
-    if os.environ.get("MMML_DOCS_PDF_ALLOW_NPX") == "1" and shutil.which("npx"):
+    if os.environ.get("KARML_DOCS_PDF_ALLOW_NPX") == "1" and shutil.which("npx"):
         return ["npx", "-y", MERMAID_CLI_PACKAGE]
     return None
 
@@ -130,11 +130,11 @@ def mermaid_to_image_flowable(source: str, style_map: dict[str, ParagraphStyle])
             Preformatted(source, style_map["Code"]),
         ]
 
-    with tempfile.TemporaryDirectory(prefix="mmml-docs-mermaid-") as tmp_dir:
+    with tempfile.TemporaryDirectory(prefix="karml-docs-mermaid-") as tmp_dir:
         input_path = Path(tmp_dir) / "diagram.mmd"
         output_path = Path(tmp_dir) / "diagram.png"
         input_path.write_text(source, encoding="utf-8")
-        puppeteer_config = os.environ.get("MMML_MERMAID_PUPPETEER_CONFIG")
+        puppeteer_config = os.environ.get("KARML_MERMAID_PUPPETEER_CONFIG")
         puppeteer_args = (
             ["--puppeteerConfigFile", puppeteer_config]
             if puppeteer_config
@@ -339,7 +339,7 @@ def build_pdf(pages: list[tuple[str, Path]], output: Path) -> None:
         leftMargin=0.6 * inch,
         topMargin=0.6 * inch,
         bottomMargin=0.6 * inch,
-        title="MMML Documentation",
+        title="KARML Documentation",
     )
     doc.build(flowables)
 
@@ -350,7 +350,7 @@ def main() -> None:
         "--output",
         type=Path,
         default=DEFAULT_OUTPUT,
-        help="PDF path to write (default: site/mmml-docs.pdf).",
+        help="PDF path to write (default: site/karml-docs.pdf).",
     )
     args = parser.parse_args()
 

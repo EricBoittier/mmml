@@ -3,7 +3,7 @@
 # orthogonal; see es_embed_*.yaml and mech_embed_*.yaml.
 #
 #   source examples/m/_env.sh
-#   uv run mmml md-system --config examples/m/yaml/ewald_all_tip3.yaml --run-all
+#   uv run karml md-system --config examples/m/yaml/ewald_all_tip3.yaml --run-all
 #   # or one job:  ... --job-id ewald_jax_mic_ase
 #
 # Optional deps:

@@ -28,13 +28,13 @@ import warnings
 
 warnings.filterwarnings("ignore", message=".*crystal system.*")
 
-from mmml.analysis.dcm_crystal import (  # noqa: E402
+from karml.analysis.dcm_crystal import (  # noqa: E402
     DCM_CRYSTAL_PHASES,
     DCM_SUBLIMATION_REFERENCE,
     KAWAGUCHI_AMBIENT_CELL,
     read_dcm_phase,
 )
-from mmml.analysis.lattice_energy import (  # noqa: E402
+from karml.analysis.lattice_energy import (  # noqa: E402
     KCAL_MOL_TO_KJ_MOL,
     crystal_lattice_energy,
     relax_cell_lengths,

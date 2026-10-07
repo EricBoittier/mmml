@@ -9,17 +9,17 @@ from pathlib import Path
 
 import numpy as np
 
-from mmml.interfaces.pycharmmInterface.mlpot.restart_velocity_analysis import (
+from karml.interfaces.pycharmmInterface.mlpot.restart_velocity_analysis import (
     RestartVelocityReport,
     analyze_restart_velocities,
     collect_numbered_restart_paths,
 )
-from mmml.utils.rich_report import emit_dashboard, emit_table
+from karml.utils.rich_report import emit_dashboard, emit_table
 
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        prog="mmml plot-restart-velocities",
+        prog="karml plot-restart-velocities",
         description=(
             "Plot |v| distributions from CHARMM restart files (heat.NNNN.res) "
             "and flag velocity outliers."

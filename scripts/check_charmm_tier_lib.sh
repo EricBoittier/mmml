@@ -5,13 +5,13 @@
 #   source scripts/pc_bach_env.sh   # pc-bach OpenMPI stack
 #   bash scripts/check_charmm_tier_lib.sh --n-ml 2660 --pbc --box-size 32
 #
-# Exit 0 when the selected tier lib exists, stamp matches, and mmml mpi-check passes.
+# Exit 0 when the selected tier lib exists, stamp matches, and karml mpi-check passes.
 # Exit 1 when a rebuild is required or mpi-check fails.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-# shellcheck source=resolve_mmml_env.sh
-source "$ROOT/scripts/resolve_mmml_env.sh"
+# shellcheck source=resolve_karml_env.sh
+source "$ROOT/scripts/resolve_karml_env.sh"
 
 N_ML=""
 PBC=0
@@ -45,13 +45,13 @@ if [[ -z "$N_ML" ]]; then
   exit 2
 fi
 
-if [[ "$SOURCE_PC_BACH" == 1 || "${MMML_CLUSTER:-}" == "pc-bach" ]]; then
+if [[ "$SOURCE_PC_BACH" == 1 || "${KARML_CLUSTER:-}" == "pc-bach" ]]; then
   # shellcheck source=pc_bach_env.sh
   source "$ROOT/scripts/pc_bach_env.sh"
 fi
 
-mmml_resolve_env "$ROOT"
-PY="${MMML_PYTHON}"
+karml_resolve_env "$ROOT"
+PY="${KARML_PYTHON}"
 
 PBC_FLAG=()
 [[ "$PBC" == 1 ]] && PBC_FLAG=(--pbc)
@@ -92,10 +92,10 @@ if command -v ldd >/dev/null 2>&1; then
   fi
 fi
 
-echo "=== mmml mpi-check ==="
+echo "=== karml mpi-check ==="
 export CHARMM_LIB_DIR
-if ! "$PY" -m mmml.cli.__main__ mpi-check; then
-  echo "ERROR: mmml mpi-check failed for CHARMM_LIB_DIR=$CHARMM_LIB_DIR" >&2
+if ! "$PY" -m karml.cli.__main__ mpi-check; then
+  echo "ERROR: karml mpi-check failed for CHARMM_LIB_DIR=$CHARMM_LIB_DIR" >&2
   exit 1
 fi
 

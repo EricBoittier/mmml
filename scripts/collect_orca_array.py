@@ -7,7 +7,7 @@ geometries are the same, so the types/charges/master tables carry over exactly.
 
 Units: ORCA gives Hartree and Hartree/Bohr. This writes eV and eV/Angstrom, with
 force = -gradient. This codebase has already eaten one silent 23x unit error;
-the conversion is explicit and recorded in _mmml_units.
+the conversion is explicit and recorded in _karml_units.
 
 Per-element references are refitted here rather than reused from the GFN2 set:
 they are level-of-theory specific, and the GFN2 refs would leave a residual that
@@ -67,7 +67,7 @@ def parse_dat(path: Path, n_at: int):
 
 
 def main() -> int:
-    from mmml.data.units import (
+    from karml.data.units import (
         BOHR_TO_ANGSTROM,
         HARTREE_BOHR_TO_EV_ANGSTROM,
         HARTREE_TO_EV,
@@ -144,7 +144,7 @@ def main() -> int:
         atom_ref_energies=refs,
         cgenff_master_sigmas=np.asarray(src[0]["cgenff_master_sigmas"]),
         cgenff_master_epsilons=np.asarray(src[0]["cgenff_master_epsilons"]),
-        _mmml_units=np.array(["energy=eV", "forces=eV/Angstrom", "coords=Angstrom",
+        _karml_units=np.array(["energy=eV", "forces=eV/Angstrom", "coords=Angstrom",
                               "dipole=e*Angstrom", f"method={args.method}",
                               "E=atom-referenced", "E_total=raw"]),
     )
@@ -168,7 +168,7 @@ def main() -> int:
         print(f"-> {f}  ({len(sel)} structures)")
     print(f"\n{args.method}; eV, eV/A, dipole e*A. Same geometries as the GFN2 set, "
           f"so the orientation-scan gate transfers directly.")
-    print("Ready for: mmml physnet-train --hybrid-mm --data <base>_train.npz "
+    print("Ready for: karml physnet-train --hybrid-mm --data <base>_train.npz "
           "--valid-data <base>_valid.npz")
     return 0
 

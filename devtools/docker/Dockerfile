@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.6
-# Multi-stage Dockerfile for MMML
+# Multi-stage Dockerfile for KARML
 # Supports both CPU and GPU variants
 
 ARG BASE_IMAGE=python:3.11-slim
@@ -47,7 +47,7 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
 ENV UV_LINK_MODE=copy \
     UV_PYTHON=python3.11
 
-WORKDIR /workspace/mmml
+WORKDIR /workspace/karml
 
 # ============================================================================
 # Stage 2: Dependencies installation
@@ -73,18 +73,18 @@ COPY . .
 RUN uv sync
 
 # Set up environment variables
-ENV VIRTUAL_ENV=/workspace/mmml/.venv \
-    PATH="/workspace/mmml/.venv/bin:${PATH}" \
-    CHARMM_HOME=/workspace/mmml/setup/charmm \
-    CHARMM_LIB_DIR=/workspace/mmml/setup/charmm \
-    LD_LIBRARY_PATH=/workspace/mmml/setup/charmm
+ENV VIRTUAL_ENV=/workspace/karml/.venv \
+    PATH="/workspace/karml/.venv/bin:${PATH}" \
+    CHARMM_HOME=/workspace/karml/setup/charmm \
+    CHARMM_LIB_DIR=/workspace/karml/setup/charmm \
+    LD_LIBRARY_PATH=/workspace/karml/setup/charmm
 
 # Create CHARMM setup file
 RUN printf 'export CHARMM_HOME=%s\nexport CHARMM_LIB_DIR=%s\n' \
-    "$CHARMM_HOME" "$CHARMM_LIB_DIR" > mmml/CHARMMSETUP
+    "$CHARMM_HOME" "$CHARMM_LIB_DIR" > karml/CHARMMSETUP
 
 # Create a convenient symlink
-RUN ln -s /workspace/mmml /root/mmml
+RUN ln -s /workspace/karml /root/karml
 
 CMD ["bash"]
 
@@ -131,7 +131,7 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
     mv /root/.local/bin/uv /usr/local/bin/uv && \
     rm -rf /root/.local/share
 
-WORKDIR /workspace/mmml
+WORKDIR /workspace/karml
 
 # Copy dependency files
 COPY pyproject.toml ./
@@ -147,20 +147,20 @@ COPY . .
 RUN uv sync --extra gpu
 
 # Set up environment variables
-ENV VIRTUAL_ENV=/workspace/mmml/.venv \
-    PATH="/workspace/mmml/.venv/bin:${PATH}" \
-    CHARMM_HOME=/workspace/mmml/setup/charmm \
-    CHARMM_LIB_DIR=/workspace/mmml/setup/charmm \
-    LD_LIBRARY_PATH=/workspace/mmml/setup/charmm \
+ENV VIRTUAL_ENV=/workspace/karml/.venv \
+    PATH="/workspace/karml/.venv/bin:${PATH}" \
+    CHARMM_HOME=/workspace/karml/setup/charmm \
+    CHARMM_LIB_DIR=/workspace/karml/setup/charmm \
+    LD_LIBRARY_PATH=/workspace/karml/setup/charmm \
     CUDA_HOME=/usr/local/cuda \
     XLA_FLAGS="--xla_gpu_cuda_data_dir=/usr/local/cuda"
 
 # Create CHARMM setup file
 RUN printf 'export CHARMM_HOME=%s\nexport CHARMM_LIB_DIR=%s\n' \
-    "$CHARMM_HOME" "$CHARMM_LIB_DIR" > mmml/CHARMMSETUP
+    "$CHARMM_HOME" "$CHARMM_LIB_DIR" > karml/CHARMMSETUP
 
 # Create a convenient symlink
-RUN ln -s /workspace/mmml /root/mmml
+RUN ln -s /workspace/karml /root/karml
 
 CMD ["bash"]
 
@@ -210,7 +210,7 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
     mv /root/.local/bin/uv /usr/local/bin/uv && \
     rm -rf /root/.local/share
 
-WORKDIR /workspace/mmml
+WORKDIR /workspace/karml
 
 # Copy dependency files
 COPY pyproject.toml ./
@@ -226,19 +226,19 @@ COPY . .
 RUN uv sync --extra gpu
 
 # Set up environment variables
-ENV VIRTUAL_ENV=/workspace/mmml/.venv \
-    PATH="/workspace/mmml/.venv/bin:${PATH}" \
-    CHARMM_HOME=/workspace/mmml/setup/charmm \
-    CHARMM_LIB_DIR=/workspace/mmml/setup/charmm \
-    LD_LIBRARY_PATH=/workspace/mmml/setup/charmm \
+ENV VIRTUAL_ENV=/workspace/karml/.venv \
+    PATH="/workspace/karml/.venv/bin:${PATH}" \
+    CHARMM_HOME=/workspace/karml/setup/charmm \
+    CHARMM_LIB_DIR=/workspace/karml/setup/charmm \
+    LD_LIBRARY_PATH=/workspace/karml/setup/charmm \
     CUDA_HOME=/usr/local/cuda \
     XLA_FLAGS="--xla_gpu_cuda_data_dir=/usr/local/cuda"
 
 # Create CHARMM setup file
 RUN printf 'export CHARMM_HOME=%s\nexport CHARMM_LIB_DIR=%s\n' \
-    "$CHARMM_HOME" "$CHARMM_LIB_DIR" > mmml/CHARMMSETUP
+    "$CHARMM_HOME" "$CHARMM_LIB_DIR" > karml/CHARMMSETUP
 
 # Create a convenient symlink
-RUN ln -s /workspace/mmml /root/mmml
+RUN ln -s /workspace/karml /root/karml
 
 CMD ["bash"]

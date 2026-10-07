@@ -2,7 +2,7 @@
 File parsers for molecular data formats.
 
 Supports:
-- NPZ files (MMML format with R, Z, E, F, D, etc.)
+- NPZ files (KARML format with R, Z, E, F, D, etc.)
 - ASE trajectory files (.traj)
 - PDB files
 """

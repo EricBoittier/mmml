@@ -5,7 +5,7 @@ import flax.linen as nn
 import jax
 import jax.numpy as jnp
 
-from mmml.models.physnetjax.physnetjax.models.mpnn_kernels import (
+from karml.models.physnetjax.physnetjax.models.mpnn_kernels import (
     encode_geometry_and_basis,
 )
 

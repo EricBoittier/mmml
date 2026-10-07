@@ -1,13 +1,13 @@
 ---
-description: MMML agent workflow — no live MD runs; tests and runnable workflows first
+description: KARML agent workflow — no live MD runs; tests and runnable workflows first
 alwaysApply: true
 ---
 
-# MMML agent workflow
+# KARML agent workflow
 
 ## Do not run simulations or full MD in the agent
 
-- Do **not** run `mmml md-system`, PyCHARMM dynamics, Packmol box builds, or other long / env-heavy jobs in the sandbox or on the user's machine unless they explicitly ask for a one-off command.
+- Do **not** run `karml md-system`, PyCHARMM dynamics, Packmol box builds, or other long / env-heavy jobs in the sandbox or on the user's machine unless they explicitly ask for a one-off command.
 - CHARMM, MPI-linked libs, checkpoints, and GPU JAX are not available in agent sessions; attempts waste time and fail on missing env.
 - `uv.lock` is gitignored (not committed). After `uv sync`, ignore local lock churn; on older clones still tracking it, run `scripts/git-skip-uv-lock.sh`.
 - Prefer **unit tests** (`pytest tests/unit/...`) and **documented workflows** the user runs locally.
@@ -16,7 +16,7 @@ alwaysApply: true
 
 - Add or extend **fast unit tests** (mocked PyCHARMM) before asking the user to run CHARMM.
 - Use **functionality scripts** under `tests/functionality/` for staged manual verification (see READMEs there).
-- Build features in layers: **CHARMM FF only** → **MMML / MLpot** → full `md-system` presets.
+- Build features in layers: **CHARMM FF only** → **KARML / MLpot** → full `md-system` presets.
 - When changing CLI defaults or argv forwarding, update `tests/unit/test_md_system_pycharmm_cmd.py` (or related) in the same change.
 - **Run affected unit tests before finishing** — CI resolves fresh deps from `pyproject.toml` (often newer than a local venv). Example: `uv run pytest tests/unit/test_calculator_minimize.py -q`.
 - When third-party behavior is **version-gated** (e.g. ASE 3.26 `openfile`), update the corresponding unit test in the **same change**; do not leave tests asserting pre-upgrade behavior.
@@ -31,7 +31,7 @@ alwaysApply: true
 
 1. **CLI + parsing** — `resolve_fix_resids`, `resolve_constrain_resids`, argv forwarding (`tests/unit/test_monomer_constraints.py`).
 2. **CHARMM FF only** — `cons_fix` + SD without MLpot (`tests/functionality/constraints/README.md`).
-3. **MMML** — `minimize_with_mlpot` pass 2 + dynamics `cons_fix` (`tests/functionality/mlpot/04_*.py`, `05_*.py`).
+3. **KARML** — `minimize_with_mlpot` pass 2 + dynamics `cons_fix` (`tests/functionality/mlpot/04_*.py`, `05_*.py`).
 
 ## What to deliver instead of running MD
 
@@ -42,7 +42,7 @@ alwaysApply: true
 ## PBC ML-dimer MIC wrap (do not “fix”)
 
 - **Never** remove `stop_gradient` on the MIC lattice shift that wraps monomer B
-  in `mmml_calculator`, and **never** replace that wrap with smooth-MIC + force
+  in `karml_calculator`, and **never** replace that wrap with smooth-MIC + force
   VJP to chase NVE force–energy consistency. Exact MIC shifts are
   piecewise-constant; differentiating them blows up `|F|` near ±L/2 and breaks
   minimize/NVE. Details: `.cursor/rules/pbc-dimer-mic-wrap.mdc`.

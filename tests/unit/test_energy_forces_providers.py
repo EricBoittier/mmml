@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from mmml.interfaces.energy_forces import (
+from karml.interfaces.energy_forces import (
     ProviderKind,
     ProviderSpec,
     assert_hybrid_ml_compatible,

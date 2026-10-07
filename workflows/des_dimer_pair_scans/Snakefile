@@ -10,7 +10,7 @@ if str(_SCRIPTS) not in sys.path:
 
 from scan_lib import iter_pairs, load_config  # noqa: E402
 
-_CFG_PATH = os.environ.get("MMML_WORKFLOW_CONFIG") or str(Path(workflow.basedir) / "config.yaml")
+_CFG_PATH = os.environ.get("KARML_WORKFLOW_CONFIG") or str(Path(workflow.basedir) / "config.yaml")
 _CFG = load_config(_CFG_PATH) if Path(_CFG_PATH).is_file() else dict(config)
 _PAIR_TAGS = [p.tag for p in iter_pairs(_CFG)]
 _OUTPUT_ROOT = str(_CFG.get("output_root", "artifacts/des_dimer_pair_scans"))
@@ -45,7 +45,7 @@ rule scan_pair:
         """
         set -euo pipefail
         mkdir -p $(dirname {log.stdout})
-        export MMML_WORKFLOW_CONFIG={params.cfg}
+        export KARML_WORKFLOW_CONFIG={params.cfg}
         bash {params.workflow_dir}/scripts/job_shell.sh {wildcards.pair} \
           > {log.stdout} 2>&1
         test -s {output}

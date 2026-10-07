@@ -233,7 +233,7 @@ def wrap_dimer_monomer_b(
 ) -> Array:
     """MIC-shift monomer B so the dimer uses the minimum-image COM separation.
 
-    Production MD (``mmml_calculator``) uses ``smooth=False`` and
+    Production MD (``karml_calculator``) uses ``smooth=False`` and
     ``detach_shift=True``: exact MIC lattice shifts are piecewise-constant, so
     stopping their gradient is correct almost everywhere. Differentiable smooth
     shifts create large force spikes near ±L/2 and must not be used in MD.

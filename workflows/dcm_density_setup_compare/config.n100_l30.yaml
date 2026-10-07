@@ -4,9 +4,9 @@
 #
 # Run:
 #   cd workflows/dcm_density_setup_compare
-#   export MMML_CKPT=...
+#   export KARML_CKPT=...
 #   export JAX_ENABLE_X64=1
-#   export MMML_WORKFLOW_CONFIG=config.n100_l30.yaml
+#   export KARML_WORKFLOW_CONFIG=config.n100_l30.yaml
 #   bash scripts/preflight.sh
 #   TAG=resilient_dcm_100_t50_l30_ht_bussi
 #   srun --partition=gpu --gres=gpu:1 --cpus-per-task=4 --mem=32G \
@@ -21,7 +21,7 @@ cluster_sizes: [100]
 temperatures: [50.0]
 box_sizes: [30.0]
 
-checkpoint: ${MMML_CKPT}
+checkpoint: ${KARML_CKPT}
 output_root: artifacts/dcm_density_setup_compare
 seed_base: 4242
 placement_seed_ignore_heat: true

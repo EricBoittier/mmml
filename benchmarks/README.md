@@ -1,10 +1,10 @@
-# mmml speed benchmarks (airspeed velocity)
+# karml speed benchmarks (airspeed velocity)
 
 A performance suite for the code **this repository implements** — the PhysNet /
 SpookyNet JAX models, the CHARMM-compatible MM kernels, host neighbour
-construction, SHAKE/RATTLE, the `mmml.md` driver, the production ML calculator,
+construction, SHAKE/RATTLE, the `karml.md` driver, the production ML calculator,
 and the training-batch and trajectory-I/O paths. Third-party libraries appear
-only underneath an mmml entry point; nothing here benchmarks JAX or ASE for
+only underneath an karml entry point; nothing here benchmarks JAX or ASE for
 their own sake.
 
 Runs are **manual** and typically happen on a GPU node. This suite is not wired
@@ -123,7 +123,7 @@ separately and deliberately, by `track_compile_*` benchmarks that call
 
 **Precision is a process-global, fixed from the environment.**
 `jax_enable_x64` cannot be flipped per benchmark without leaking into whatever
-runs next in the same worker, so `_common` sets it once from `MMML_BENCH_X64`
+runs next in the same worker, so `_common` sets it once from `KARML_BENCH_X64`
 (default `1`, matching `examples/md_cpu/_env.sh` and the production MD path).
 Results are only comparable between runs that agree on it — changing it starts a
 new series rather than extending the old one.
@@ -157,8 +157,8 @@ module.
 
 | Variable | Default | Effect |
 | --- | --- | --- |
-| `MMML_BENCH_X64` | `1` | float64 (production MD default). Set `0` for a float32 series. |
-| `MMML_BENCH_CKPT` / `MMML_CKPT` | bundled `examples/ckpts_json/DESdimers_params.json` | Checkpoint for `bench_calculator` |
+| `KARML_BENCH_X64` | `1` | float64 (production MD default). Set `0` for a float32 series. |
+| `KARML_BENCH_CKPT` / `KARML_CKPT` | bundled `examples/ckpts_json/DESdimers_params.json` | Checkpoint for `bench_calculator` |
 | `JAX_PLATFORMS` | auto | `cpu` / `cuda`; the Slurm job pins `cuda` and verifies it |
 | `OMP_NUM_THREADS` | `1` in the runners | Keeps NumPy and JAX's CPU backend from fighting over cores |
 

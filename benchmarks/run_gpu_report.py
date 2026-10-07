@@ -88,10 +88,10 @@ def write_status(run: Path, info: dict) -> None:
     asv_link = '<a href="asv/">Open ASV charts →</a>' if (run / 'asv/index.html').exists() else ''
     page = f'''<!doctype html><html lang="en"><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>MMML GPU benchmark</title><style>
+<title>KARML GPU benchmark</title><style>
 body{{font:17px system-ui;max-width:980px;margin:50px auto;padding:0 24px;background:#101820;color:#e5edf4}}
 a{{color:#72dbc8}}pre{{white-space:pre-wrap;overflow-wrap:anywhere;background:#1c2935;padding:20px;border-radius:12px}}
-small{{color:#a9bbc9}}</style><h1>MMML GPU benchmark</h1>
+small{{color:#a9bbc9}}</style><h1>KARML GPU benchmark</h1>
 <p><strong>{html.escape(info['status'])}</strong> · {html.escape(info.get('commit','')[:12])}</p>
 <p>{asv_link}</p><p>ASV kernel/calculator benchmarks. Synthetic MD benchmarks, if selected,
 are not the production ETOH PyCHARMM workload. Unit gates do not establish long-run conservation.</p>
@@ -135,10 +135,10 @@ def main(argv=None) -> int:
     ckpt_hash = checkpoint_hash(ckpt)
     env = os.environ.copy()
     env.update(CUDA_VISIBLE_DEVICES=args.gpu, JAX_PLATFORMS='cuda',
-               MMML_BENCH_X64=args.x64, JAX_ENABLE_X64=args.x64,
+               KARML_BENCH_X64=args.x64, JAX_ENABLE_X64=args.x64,
                OMP_NUM_THREADS=str(args.threads), OPENBLAS_NUM_THREADS=str(args.threads),
                MKL_NUM_THREADS=str(args.threads), XLA_PYTHON_CLIENT_PREALLOCATE='false',
-               MMML_CKPT=str(ckpt), MMML_BENCH_CKPT=str(ckpt),
+               KARML_CKPT=str(ckpt), KARML_BENCH_CKPT=str(ckpt),
                ASV_PYTHONPATH=str(ROOT), PYTHONPATH=str(ROOT))
     gpu_csv = capture('nvidia-smi', '--query-gpu=index,uuid,name,memory.used,utilization.gpu', '--format=csv,noheader,nounits')
     rows = [[x.strip() for x in row] for row in csv.reader(gpu_csv.splitlines())]
@@ -170,10 +170,10 @@ def main(argv=None) -> int:
 
     code = 0
     try:
-        probe = """import json, pathlib, jax, mmml, asv
-print(json.dumps({'jax':jax.__version__, 'asv':asv.__version__, 'mmml':list(mmml.__path__), 'devices':[str(d) for d in jax.devices()]}))
+        probe = """import json, pathlib, jax, karml, asv
+print(json.dumps({'jax':jax.__version__, 'asv':asv.__version__, 'karml':list(karml.__path__), 'devices':[str(d) for d in jax.devices()]}))
 assert len(jax.devices()) == 1 and jax.devices()[0].platform == 'gpu'
-assert pathlib.Path(mmml.__file__).resolve().is_relative_to(pathlib.Path.cwd())
+assert pathlib.Path(karml.__file__).resolve().is_relative_to(pathlib.Path.cwd())
 """
         execute('preflight', [sys.executable, '-c', probe])
         info['runtime'] = json.loads((run / 'preflight.log').read_text().strip().splitlines()[-1])

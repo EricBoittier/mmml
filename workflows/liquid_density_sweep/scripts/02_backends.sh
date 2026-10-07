@@ -30,32 +30,32 @@ for solvent in $SOLVENTS; do
     # --- ASE: hybrid calculator + ASE integrator, NVT ---------------------
     echo
     echo "--- ${tag}: backend=ase (pbc_nvt) ---"
-    run_cmd mmml md-system \
+    run_cmd karml md-system \
       --backend ase --setup pbc_nvt \
       --composition "${solvent}:${n}" --box-size "$BOX_SIZE" \
-      --checkpoint "$MMML_CKPT" \
+      --checkpoint "$KARML_CKPT" \
       --temperature "$TEMPERATURE" --dt-fs "$DT_FS" --ps "$PS_PROD" \
       --output-dir "${OUT_ROOT}/backends/${tag}/ase"
 
     # --- JAX-MD: fastest; same setup preset ------------------------------
     echo
     echo "--- ${tag}: backend=jaxmd (pbc_nvt) ---"
-    run_cmd mmml md-system \
+    run_cmd karml md-system \
       --backend jaxmd --setup pbc_nvt \
       --composition "${solvent}:${n}" --box-size "$BOX_SIZE" \
-      --checkpoint "$MMML_CKPT" \
+      --checkpoint "$KARML_CKPT" \
       --temperature "$TEMPERATURE" --dt-fs "$DT_FS" --ps "$PS_PROD" \
       --output-dir "${OUT_ROOT}/backends/${tag}/jaxmd"
 
     # --- PyCHARMM: staged production pipeline ----------------------------
     # Staged mini → heat → equi → prod with CHARMM crystal/IMAGE. Launched via
-    # the MPI wrapper because libcharmm is MPI-linked (see `mmml doctor`).
+    # the MPI wrapper because libcharmm is MPI-linked (see `karml doctor`).
     echo
     echo "--- ${tag}: backend=pycharmm (pbc_npt, staged) ---"
     run_cmd "$MPIRUN_WRAPPER" md-system \
       --backend pycharmm --setup pbc_npt \
       --composition "${solvent}:${n}" --box-size "$BOX_SIZE" \
-      --checkpoint "$MMML_CKPT" \
+      --checkpoint "$KARML_CKPT" \
       --temperature "$TEMPERATURE" --dt-fs "$DT_FS" --ps "$PS_PROD" \
       --output-dir "${OUT_ROOT}/backends/${tag}/pycharmm"
   done

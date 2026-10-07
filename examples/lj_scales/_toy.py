@@ -58,7 +58,7 @@ def dimer(separation_A: float = 3.5, type_idx=(0, 1, 0, 1)) -> dict:
 
 def e_mm(sigma_scale, epsilon_scale, batch):
     """Intermolecular MM energy under the given per-type scales."""
-    from mmml.models.hybrid_energy import hybrid_forward
+    from karml.models.hybrid_energy import hybrid_forward
 
     out = hybrid_forward(
         constant_ml, {"params": {}}, batch, 1,
@@ -81,7 +81,7 @@ def fit(loss_fn, params, *, lr: float, steps: int, clip: bool = False):
     """
     import optax
 
-    from mmml.models.mm_lj_scales import clip_mm_lj_scale_params
+    from karml.models.mm_lj_scales import clip_mm_lj_scale_params
 
     opt = optax.adam(lr)
     state = opt.init(params)

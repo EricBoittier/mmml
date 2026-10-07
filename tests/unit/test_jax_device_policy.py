@@ -8,16 +8,16 @@ import pytest
 
 
 def test_mlpot_defaults_to_gpu_for_mpi_charmm(monkeypatch):
-    monkeypatch.delenv("MMML_MLPOT_DEVICE", raising=False)
+    monkeypatch.delenv("KARML_MLPOT_DEVICE", raising=False)
     monkeypatch.delenv("JAX_PLATFORMS", raising=False)
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.charmm_mpi.charmm_lib_links_mpi",
+        "karml.interfaces.pycharmmInterface.charmm_mpi.charmm_lib_links_mpi",
         return_value=True,
     ), mock.patch(
-        "mmml.utils.jax_gpu_warmup._installed_jax_cuda_plugins",
+        "karml.utils.jax_gpu_warmup._installed_jax_cuda_plugins",
         return_value=["jax-cuda12-plugin"],
     ):
-        from mmml.interfaces.pycharmmInterface import jax_device_policy
+        from karml.interfaces.pycharmmInterface import jax_device_policy
 
         assert jax_device_policy.mlpot_jax_device_name() == "gpu"
         assert jax_device_policy.apply_mlpot_jax_platform_env(quiet=True) == "gpu"
@@ -26,26 +26,26 @@ def test_mlpot_defaults_to_gpu_for_mpi_charmm(monkeypatch):
 
 
 def test_mlpot_cpu_override(monkeypatch):
-    monkeypatch.setenv("MMML_MLPOT_DEVICE", "cpu")
+    monkeypatch.setenv("KARML_MLPOT_DEVICE", "cpu")
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.charmm_mpi.charmm_lib_links_mpi",
+        "karml.interfaces.pycharmmInterface.charmm_mpi.charmm_lib_links_mpi",
         return_value=True,
     ):
-        from mmml.interfaces.pycharmmInterface import jax_device_policy
+        from karml.interfaces.pycharmmInterface import jax_device_policy
 
         assert jax_device_policy.mlpot_jax_device_name() == "cpu"
 
 
 def test_mlpot_jax_platforms_helpers():
-    from mmml.interfaces.pycharmmInterface import jax_device_policy
+    from karml.interfaces.pycharmmInterface import jax_device_policy
 
     with mock.patch(
-        "mmml.utils.jax_gpu_warmup._installed_jax_cuda_plugins",
+        "karml.utils.jax_gpu_warmup._installed_jax_cuda_plugins",
         return_value=["jax-cuda12-plugin"],
     ):
         assert jax_device_policy.mlpot_jax_platforms_for_device("gpu") == "cuda,cpu"
     with mock.patch(
-        "mmml.utils.jax_gpu_warmup._installed_jax_cuda_plugins",
+        "karml.utils.jax_gpu_warmup._installed_jax_cuda_plugins",
         return_value=[],
     ):
         assert jax_device_policy.mlpot_jax_platforms_for_device("gpu") == "cpu"
@@ -59,16 +59,16 @@ def test_mlpot_jax_platforms_helpers():
 def test_mlpot_expands_gpu_only_jax_platforms_before_import(monkeypatch):
     import sys
 
-    monkeypatch.delenv("MMML_MLPOT_DEVICE", raising=False)
+    monkeypatch.delenv("KARML_MLPOT_DEVICE", raising=False)
     monkeypatch.setenv("JAX_PLATFORMS", "cuda")
-    from mmml.interfaces.pycharmmInterface import jax_device_policy
+    from karml.interfaces.pycharmmInterface import jax_device_policy
 
     # Do not import/init jax while platforms list includes cuda on CPU-only
     # agents — that sticks process-wide. Only exercise env mutation.
     saved = sys.modules.pop("jax", None)
     try:
         with mock.patch(
-            "mmml.utils.jax_gpu_warmup._installed_jax_cuda_plugins",
+            "karml.utils.jax_gpu_warmup._installed_jax_cuda_plugins",
             return_value=["jax-cuda12-plugin"],
         ):
             assert jax_device_policy.apply_mlpot_jax_platform_env(quiet=True) == "gpu"
@@ -86,17 +86,17 @@ def test_mlpot_overrides_stale_cpu_jax_platforms_when_gpu_requested(monkeypatch)
     """Login shells often export JAX_PLATFORMS=cpu; that must not pin GPU runs."""
     import sys
 
-    monkeypatch.delenv("MMML_MLPOT_DEVICE", raising=False)
+    monkeypatch.delenv("KARML_MLPOT_DEVICE", raising=False)
     monkeypatch.setenv("JAX_PLATFORMS", "cpu")
-    from mmml.interfaces.pycharmmInterface import jax_device_policy
+    from karml.interfaces.pycharmmInterface import jax_device_policy
 
     saved = sys.modules.pop("jax", None)
     try:
         with mock.patch(
-            "mmml.utils.jax_gpu_warmup._installed_jax_cuda_plugins",
+            "karml.utils.jax_gpu_warmup._installed_jax_cuda_plugins",
             return_value=["jax-cuda12-plugin"],
         ), mock.patch(
-            "mmml.utils.jax_gpu_warmup.ensure_jax_cuda_toolchain",
+            "karml.utils.jax_gpu_warmup.ensure_jax_cuda_toolchain",
             return_value=True,
         ):
             assert jax_device_policy.apply_mlpot_jax_platform_env(quiet=True) == "gpu"
@@ -112,17 +112,17 @@ def test_mlpot_overrides_cpu_first_defer_list_when_gpu_requested(monkeypatch):
     """Leftover MPI-defer ``cpu,gpu`` would make JAX default to CPU — rewrite."""
     import sys
 
-    monkeypatch.setenv("MMML_MLPOT_DEVICE", "gpu")
+    monkeypatch.setenv("KARML_MLPOT_DEVICE", "gpu")
     monkeypatch.setenv("JAX_PLATFORMS", "cpu,gpu")
-    from mmml.interfaces.pycharmmInterface import jax_device_policy
+    from karml.interfaces.pycharmmInterface import jax_device_policy
 
     saved = sys.modules.pop("jax", None)
     try:
         with mock.patch(
-            "mmml.utils.jax_gpu_warmup._installed_jax_cuda_plugins",
+            "karml.utils.jax_gpu_warmup._installed_jax_cuda_plugins",
             return_value=["jax-cuda12-plugin"],
         ), mock.patch(
-            "mmml.utils.jax_gpu_warmup.ensure_jax_cuda_toolchain",
+            "karml.utils.jax_gpu_warmup.ensure_jax_cuda_toolchain",
             return_value=True,
         ):
             assert jax_device_policy.apply_mlpot_jax_platform_env(quiet=True) == "gpu"
@@ -135,12 +135,12 @@ def test_mlpot_overrides_cpu_first_defer_list_when_gpu_requested(monkeypatch):
 
 
 def test_mlpot_keeps_cpu_first_when_device_is_cpu(monkeypatch):
-    """MPI MLpot defer uses MMML_MLPOT_DEVICE=cpu + cpu,gpu — do not clobber."""
+    """MPI MLpot defer uses KARML_MLPOT_DEVICE=cpu + cpu,gpu — do not clobber."""
     import sys
 
-    monkeypatch.setenv("MMML_MLPOT_DEVICE", "cpu")
+    monkeypatch.setenv("KARML_MLPOT_DEVICE", "cpu")
     monkeypatch.setenv("JAX_PLATFORMS", "cpu,gpu")
-    from mmml.interfaces.pycharmmInterface import jax_device_policy
+    from karml.interfaces.pycharmmInterface import jax_device_policy
 
     saved = sys.modules.pop("jax", None)
     try:
@@ -154,9 +154,9 @@ def test_mlpot_keeps_cpu_first_when_device_is_cpu(monkeypatch):
 
 
 def test_format_jax_device_banner_includes_platforms(monkeypatch):
-    monkeypatch.setenv("MMML_MLPOT_DEVICE", "cpu")
+    monkeypatch.setenv("KARML_MLPOT_DEVICE", "cpu")
     monkeypatch.setenv("JAX_PLATFORMS", "cpu")
-    from mmml.interfaces.pycharmmInterface import jax_device_policy
+    from karml.interfaces.pycharmmInterface import jax_device_policy
 
     line = jax_device_policy.format_jax_device_banner()
     assert "requested=cpu" in line
@@ -165,7 +165,7 @@ def test_format_jax_device_banner_includes_platforms(monkeypatch):
 
 
 def test_mlpot_jax_device_context_falls_back_to_cpu_when_no_gpu(monkeypatch):
-    monkeypatch.setenv("MMML_MLPOT_DEVICE", "gpu")
+    monkeypatch.setenv("KARML_MLPOT_DEVICE", "gpu")
     monkeypatch.setenv("JAX_PLATFORMS", "cpu")
     jax = pytest.importorskip("jax")
     cpu_dev = jax.devices("cpu")[0]
@@ -176,7 +176,7 @@ def test_mlpot_jax_device_context_falls_back_to_cpu_when_no_gpu(monkeypatch):
         return [cpu_dev]
 
     with mock.patch("jax.devices", side_effect=devices_side_effect):
-        from mmml.interfaces.pycharmmInterface import jax_device_policy
+        from karml.interfaces.pycharmmInterface import jax_device_policy
 
         with jax_device_policy.mlpot_jax_device_context() as dev:
             assert dev == cpu_dev
@@ -186,7 +186,7 @@ def test_mlpot_jax_device_context_cpu_fallback_warns_loudly(monkeypatch, capsys)
     """The GPU->CPU fallback must never be silent: it should be observable via
     both the fallback-tracking flag and a printed warning, so a stale/
     misconfigured run can't quietly compute on CPU while claiming GPU."""
-    monkeypatch.setenv("MMML_MLPOT_DEVICE", "gpu")
+    monkeypatch.setenv("KARML_MLPOT_DEVICE", "gpu")
     monkeypatch.setenv("JAX_PLATFORMS", "cpu")
     jax = pytest.importorskip("jax")
     cpu_dev = jax.devices("cpu")[0]
@@ -196,7 +196,7 @@ def test_mlpot_jax_device_context_cpu_fallback_warns_loudly(monkeypatch, capsys)
             raise RuntimeError("no gpu")
         return [cpu_dev]
 
-    from mmml.interfaces.pycharmmInterface import jax_device_policy
+    from karml.interfaces.pycharmmInterface import jax_device_policy
 
     jax_device_policy.reset_mlpot_device_fallback_flag()
     with mock.patch("jax.devices", side_effect=devices_side_effect):
@@ -212,7 +212,7 @@ def test_mlpot_jax_device_context_cpu_fallback_warns_loudly(monkeypatch, capsys)
 
 
 def test_mlpot_jax_device_context_no_fallback_when_gpu_available(monkeypatch):
-    monkeypatch.setenv("MMML_MLPOT_DEVICE", "gpu")
+    monkeypatch.setenv("KARML_MLPOT_DEVICE", "gpu")
     monkeypatch.setenv("JAX_PLATFORMS", "cpu")
     jax = pytest.importorskip("jax")
     gpu_dev = mock.MagicMock()
@@ -221,7 +221,7 @@ def test_mlpot_jax_device_context_no_fallback_when_gpu_available(monkeypatch):
     def devices_side_effect(name=None):
         return [gpu_dev] if name == "gpu" else [cpu_dev]
 
-    from mmml.interfaces.pycharmmInterface import jax_device_policy
+    from karml.interfaces.pycharmmInterface import jax_device_policy
 
     jax_device_policy.reset_mlpot_device_fallback_flag()
     with mock.patch("jax.devices", side_effect=devices_side_effect), mock.patch(
@@ -235,7 +235,7 @@ def test_mlpot_jax_device_context_no_fallback_when_gpu_available(monkeypatch):
 def test_mlpot_jax_cpu_until_falls_back_to_gpu_when_cpu_missing(monkeypatch, capsys):
     """GPU-only JAX init must not abort MLpot defer — use GPU with a warning."""
     monkeypatch.setenv("JAX_PLATFORMS", "gpu,cpu")
-    from mmml.interfaces.pycharmmInterface import jax_device_policy
+    from karml.interfaces.pycharmmInterface import jax_device_policy
 
     gpu_dev = mock.MagicMock(name="gpu0")
 
@@ -263,7 +263,7 @@ def test_jax_cpu_backend_available_false_when_devices_raise(monkeypatch):
     monkeypatch.setenv("JAX_PLATFORMS", "gpu,cpu")
     import sys
 
-    from mmml.interfaces.pycharmmInterface import jax_device_policy
+    from karml.interfaces.pycharmmInterface import jax_device_policy
 
     monkeypatch.setitem(sys.modules, "jax", mock.MagicMock())
 
@@ -276,12 +276,12 @@ def test_jax_cpu_backend_available_false_when_devices_raise(monkeypatch):
 
 def test_mlpot_jax_compilation_cache_default(monkeypatch, tmp_path):
     monkeypatch.delenv("JAX_COMPILATION_CACHE_DIR", raising=False)
-    monkeypatch.delenv("MMML_NO_JAX_COMPILATION_CACHE", raising=False)
+    monkeypatch.delenv("KARML_NO_JAX_COMPILATION_CACHE", raising=False)
     monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
-    from mmml.interfaces.pycharmmInterface import jax_device_policy
+    from karml.interfaces.pycharmmInterface import jax_device_policy
 
     cache = jax_device_policy.apply_mlpot_jax_compilation_cache_env(quiet=True)
-    assert cache == tmp_path / "mmml" / "jax-compilation-cache"
+    assert cache == tmp_path / "karml" / "jax-compilation-cache"
     assert cache.is_dir()
     assert __import__("os").environ["JAX_COMPILATION_CACHE_DIR"] == str(cache)
 
@@ -289,14 +289,14 @@ def test_mlpot_jax_compilation_cache_default(monkeypatch, tmp_path):
 def test_mlpot_jax_compilation_cache_respects_override(monkeypatch, tmp_path):
     override = tmp_path / "custom-jax-cache"
     monkeypatch.setenv("JAX_COMPILATION_CACHE_DIR", str(override))
-    from mmml.interfaces.pycharmmInterface import jax_device_policy
+    from karml.interfaces.pycharmmInterface import jax_device_policy
 
     cache = jax_device_policy.apply_mlpot_jax_compilation_cache_env(quiet=True)
     assert cache == override
 
 
 def test_sanitize_stale_jax_platforms_env(monkeypatch):
-    from mmml.interfaces.pycharmmInterface import jax_device_policy
+    from karml.interfaces.pycharmmInterface import jax_device_policy
 
     monkeypatch.setenv("JAX_PLATFORMS", "rocm")
     monkeypatch.delenv("CUDA_VISIBLE_DEVICES", raising=False)
@@ -316,14 +316,14 @@ def test_apply_mlpot_drops_stale_rocm_platforms(monkeypatch):
     """Studix GPU nodes inherit JAX_PLATFORMS=rocm; strip it before import jax."""
     import sys
 
-    monkeypatch.delenv("MMML_MLPOT_DEVICE", raising=False)
+    monkeypatch.delenv("KARML_MLPOT_DEVICE", raising=False)
     monkeypatch.setenv("JAX_PLATFORMS", "rocm")
-    from mmml.interfaces.pycharmmInterface import jax_device_policy
+    from karml.interfaces.pycharmmInterface import jax_device_policy
 
     saved = sys.modules.pop("jax", None)
     try:
         with mock.patch(
-            "mmml.utils.jax_gpu_warmup._installed_jax_cuda_plugins",
+            "karml.utils.jax_gpu_warmup._installed_jax_cuda_plugins",
             return_value=["jax-cuda12-plugin"],
         ):
             assert jax_device_policy.apply_mlpot_jax_platform_env(quiet=True) == "gpu"
@@ -339,14 +339,14 @@ def test_apply_mlpot_drops_stale_rocm_platforms(monkeypatch):
 def test_apply_mlpot_strips_rocm_from_mixed_list(monkeypatch):
     import sys
 
-    monkeypatch.setenv("MMML_MLPOT_DEVICE", "gpu")
+    monkeypatch.setenv("KARML_MLPOT_DEVICE", "gpu")
     monkeypatch.setenv("JAX_PLATFORMS", "cuda,rocm")
-    from mmml.interfaces.pycharmmInterface import jax_device_policy
+    from karml.interfaces.pycharmmInterface import jax_device_policy
 
     saved = sys.modules.pop("jax", None)
     try:
         with mock.patch(
-            "mmml.utils.jax_gpu_warmup._installed_jax_cuda_plugins",
+            "karml.utils.jax_gpu_warmup._installed_jax_cuda_plugins",
             return_value=["jax-cuda12-plugin"],
         ):
             jax_device_policy.apply_mlpot_jax_platform_env(quiet=True)

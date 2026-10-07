@@ -6,8 +6,8 @@ as JSON files, enabling easy model persistence and reloading.
 
 Example Usage:
     ```python
-    from mmml.utils.model_checkpoint import save_model_checkpoint, load_model_checkpoint
-    from mmml.models.physnetjax.physnetjax.models.model import EF
+    from karml.utils.model_checkpoint import save_model_checkpoint, load_model_checkpoint
+    from karml.models.physnetjax.physnetjax.models.model import EF
     
     # Save a model checkpoint
     model = EF(features=64, cutoff=8.0)
@@ -26,7 +26,7 @@ Example Usage:
     config = checkpoint['config']
     
     # Create model from checkpoint
-    from mmml.utils.model_checkpoint import create_model_from_checkpoint
+    from karml.utils.model_checkpoint import create_model_from_checkpoint
     model, params, config = create_model_from_checkpoint(
         checkpoint_dir="my_checkpoint",
         model_class=EF
@@ -186,11 +186,11 @@ def build_physnet_from_config(
     if model_cls is None:
         merged_type = str({**config, **overrides}.get("model_type", "")).lower()
         if merged_type == "spooky":
-            from mmml.models.physnetjax.physnetjax.models.spooky_model import SpookyPhysNet
+            from karml.models.physnetjax.physnetjax.models.spooky_model import SpookyPhysNet
 
             model_cls = SpookyPhysNet
         else:
-            from mmml.models.physnetjax.physnetjax.models.model import PhysNet
+            from karml.models.physnetjax.physnetjax.models.model import PhysNet
 
             model_cls = PhysNet
     merged = normalize_physnet_config({**config, **overrides})
@@ -556,7 +556,7 @@ def load_model_checkpoint(
         if json_params_path is not None and json_params_path.is_file()
         else checkpoint_dir
     )
-    from mmml.utils.rich_report import get_reporter
+    from karml.utils.rich_report import get_reporter
 
     get_reporter().status("success", "Loaded checkpoint", detail=str(load_source))
     if "config" in result and isinstance(result["config"], dict):
@@ -971,7 +971,7 @@ def assert_flax_variables_for_apply(
         keys = list(variables.keys())[:12]
         raise ValueError(
             f"{context}: missing top-level 'params' collection (keys={keys}). "
-            "Sync mmml to the latest checkpoint-loading fix, or re-save the portable JSON."
+            "Sync karml to the latest checkpoint-loading fix, or re-save the portable JSON."
         )
     inner = variables["params"]
     if not isinstance(inner, dict):

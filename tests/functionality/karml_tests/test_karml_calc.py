@@ -28,7 +28,7 @@ def _can_import_e3x_nn() -> bool:
 def _resolve_ckpt_path() -> Path | None:
 	"""Resolve a usable checkpoint path across legacy and JSON locations."""
 	candidates = []
-	ckpt_env = os.environ.get("MMML_CKPT")
+	ckpt_env = os.environ.get("KARML_CKPT")
 	if ckpt_env:
 		candidates.append(Path(ckpt_env))
 	candidates.extend(
@@ -39,8 +39,8 @@ def _resolve_ckpt_path() -> Path | None:
 			PROJECT_ROOT / "ckpts_json/DESdimers_params.json",
 			PROJECT_ROOT / "ckpts_json/DES",
 			PROJECT_ROOT / "ckpts_json",
-			PROJECT_ROOT / "mmml/models/physnetjax/ckpts/DESdimers",
-			PROJECT_ROOT / "mmml/models/physnetjax/ckpts",
+			PROJECT_ROOT / "karml/models/physnetjax/ckpts/DESdimers",
+			PROJECT_ROOT / "karml/models/physnetjax/ckpts",
 		]
 	)
 	for ckpt in candidates:
@@ -51,14 +51,14 @@ def _resolve_ckpt_path() -> Path | None:
 
 def _resolve_full_ckpt_path() -> Path | None:
 	"""Resolve a full checkpoint directory suitable for strict invariance tests."""
-	ckpt_env = os.environ.get("MMML_CKPT")
+	ckpt_env = os.environ.get("KARML_CKPT")
 	candidates = []
 	if ckpt_env:
 		candidates.append(Path(ckpt_env))
 	candidates.extend(
 		[
-			PROJECT_ROOT / "mmml/models/physnetjax/ckpts/DESdimers",
-			PROJECT_ROOT / "mmml/models/physnetjax/ckpts",
+			PROJECT_ROOT / "karml/models/physnetjax/ckpts/DESdimers",
+			PROJECT_ROOT / "karml/models/physnetjax/ckpts",
 		]
 	)
 	for ckpt in candidates:
@@ -117,7 +117,7 @@ def _stable_pbc_force_gradient_positions() -> np.ndarray:
 
 def test_ev2kcalmol_constant():
 	# Ensure the EV->kcal/mol conversion used by calculators is reasonable
-	from mmml.interfaces.pycharmmInterface.mmml_calculator import ev2kcalmol
+	from karml.interfaces.pycharmmInterface.karml_calculator import ev2kcalmol
 	assert abs(ev2kcalmol - 23.0605) < 0.05
 
 
@@ -134,8 +134,8 @@ def test_setup_calculator_factory_smoke():
 	if ckpt is None:
 		pytest.skip("No checkpoints present for ML model")
 
-	from mmml.interfaces.pycharmmInterface.mmml_calculator import setup_calculator
-	from mmml.interfaces.pycharmmInterface.calculator_utils import unpack_factory_result
+	from karml.interfaces.pycharmmInterface.karml_calculator import setup_calculator
+	from karml.interfaces.pycharmmInterface.calculator_utils import unpack_factory_result
 
 	# Create factory without touching MM (avoids CHARMM setup during smoke test)
 	try:
@@ -167,15 +167,15 @@ def test_ml_energy_matches_reference_when_data_available():
 	Optional: use the original dataset to sanity-check ML energy path.
 	Skips if data is not present.
 	"""
-	# Resolve data path: env MMML_DATA first, then repo-local fallbacks.
+	# Resolve data path: env KARML_DATA first, then repo-local fallbacks.
 	data_candidates = []
-	if env_data := os.environ.get("MMML_DATA"):
+	if env_data := os.environ.get("KARML_DATA"):
 		env_path = Path(env_data)
 		data_candidates.append(env_path if env_path.is_absolute() else PROJECT_ROOT / env_path)
 	data_candidates.extend(
 		[
-			PROJECT_ROOT / "mmml/data/qcml/fixed-acetone-only_MP2_21000.npz",
-			PROJECT_ROOT / "mmml/data/fixed-acetone-only_MP2_21000.npz",
+			PROJECT_ROOT / "karml/data/qcml/fixed-acetone-only_MP2_21000.npz",
+			PROJECT_ROOT / "karml/data/fixed-acetone-only_MP2_21000.npz",
 		]
 	)
 	p = next((cand for cand in data_candidates if cand.exists()), None)
@@ -183,8 +183,8 @@ def test_ml_energy_matches_reference_when_data_available():
 		pytest.skip(f"Dataset not found in expected locations: {data_candidates}")
 
 	# Lightweight import to prepare one batch
-	from mmml.models.physnetjax.physnetjax.data.data import prepare_datasets
-	from mmml.models.physnetjax.physnetjax.data.batches import prepare_batches_jit
+	from karml.models.physnetjax.physnetjax.data.data import prepare_datasets
+	from karml.models.physnetjax.physnetjax.data.batches import prepare_batches_jit
 	import jax
 	import jax.numpy as jnp
 
@@ -206,7 +206,7 @@ def test_ml_energy_matches_reference_when_data_available():
 	R = jnp.array(batch["R"]).reshape(-1, 3)[:20]
 
 	# Build ML-only calculator factory
-	from mmml.interfaces.pycharmmInterface.mmml_calculator import (
+	from karml.interfaces.pycharmmInterface.karml_calculator import (
 		setup_calculator,
 		ev2kcalmol,
 	)
@@ -270,11 +270,11 @@ def test_check_lattice_invariance():
 
 	import jax
 	import jax.numpy as jnp
-	from mmml.interfaces.pycharmmInterface.mmml_calculator import (
+	from karml.interfaces.pycharmmInterface.karml_calculator import (
 		setup_calculator,
 		check_lattice_invariance,
 	)
-	from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
+	from karml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
 
 	# Setup calculator with PBC (cell=40 Å cubic), MIC-only
 	cell_length = 40.0
@@ -354,9 +354,9 @@ def test_pbc_energy_invariance_via_ase():
 
 	import jax.numpy as jnp
 	import ase
-	from mmml.interfaces.pycharmmInterface.mmml_calculator import setup_calculator
-	from mmml.interfaces.pycharmmInterface.calculator_utils import unpack_factory_result
-	from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
+	from karml.interfaces.pycharmmInterface.karml_calculator import setup_calculator
+	from karml.interfaces.pycharmmInterface.calculator_utils import unpack_factory_result
+	from karml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
 	cell_length = 40.0
 	factory = setup_calculator(
 		ATOMS_PER_MONOMER=10,
@@ -435,9 +435,9 @@ def test_pbc_force_invariance():
 
 	import jax.numpy as jnp
 	import ase
-	from mmml.interfaces.pycharmmInterface.mmml_calculator import setup_calculator
-	from mmml.interfaces.pycharmmInterface.calculator_utils import unpack_factory_result
-	from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
+	from karml.interfaces.pycharmmInterface.karml_calculator import setup_calculator
+	from karml.interfaces.pycharmmInterface.calculator_utils import unpack_factory_result
+	from karml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
 	cell_length = 40.0
 	factory = setup_calculator(
 		ATOMS_PER_MONOMER=10,
@@ -524,9 +524,9 @@ def test_pbc_force_gradient_numerical():
 	import jax
 	import jax.numpy as jnp
 	import ase
-	from mmml.interfaces.pycharmmInterface.mmml_calculator import setup_calculator
-	from mmml.interfaces.pycharmmInterface.calculator_utils import unpack_factory_result
-	from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
+	from karml.interfaces.pycharmmInterface.karml_calculator import setup_calculator
+	from karml.interfaces.pycharmmInterface.calculator_utils import unpack_factory_result
+	from karml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
 	cell_length = 40.0
 	factory = setup_calculator(
 		ATOMS_PER_MONOMER=10,
@@ -616,7 +616,7 @@ def test_pbc_mic_displacement_symmetry():
 		pytest.skip("jax not available in this environment")
 
 	import jax.numpy as jnp
-	from mmml.interfaces.pycharmmInterface.pbc_utils_jax import mic_displacement
+	from karml.interfaces.pycharmmInterface.pbc_utils_jax import mic_displacement
 
 	cell = jnp.array([[10.0, 0, 0], [0, 10.0, 0], [0, 0, 10.0]])
 	Ri = jnp.array([1.0, 2.0, 3.0])
@@ -634,7 +634,7 @@ def test_pbc_wrap_unwrap_roundtrip():
 
 	import jax
 	import jax.numpy as jnp
-	from mmml.interfaces.pycharmmInterface.pbc_utils_jax import (
+	from karml.interfaces.pycharmmInterface.pbc_utils_jax import (
 		frac_coords,
 		unwrap_groups,
 		wrap_groups,
@@ -662,7 +662,7 @@ def test_pbc_mapper_idempotent():
 
 	import jax
 	import jax.numpy as jnp
-	from mmml.interfaces.pycharmmInterface.pbc_prep_factory import make_pbc_mapper
+	from karml.interfaces.pycharmmInterface.pbc_prep_factory import make_pbc_mapper
 
 	cell = jnp.array([[40.0, 0, 0], [0, 40.0, 0], [0, 0, 40.0]])
 	mol_id = jnp.array([
@@ -707,11 +707,11 @@ def test_pbc_energy_invariance_orthorhombic_cell():
 
 	import jax
 	import jax.numpy as jnp
-	from mmml.interfaces.pycharmmInterface.mmml_calculator import (
+	from karml.interfaces.pycharmmInterface.karml_calculator import (
 		setup_calculator,
 		check_lattice_invariance,
 	)
-	from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
+	from karml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
 
 	cell_lengths = (30.0, 40.0, 50.0)
 	cell_matrix = jnp.array([
@@ -775,7 +775,7 @@ def test_pbc_force_direction_mic():
 		pytest.skip("jax not available in this environment")
 
 	import jax.numpy as jnp
-	from mmml.interfaces.pycharmmInterface.pbc_utils_jax import mic_displacement
+	from karml.interfaces.pycharmmInterface.pbc_utils_jax import mic_displacement
 
 	L = 20.0
 	cell = jnp.diag(jnp.array([L, L, L]))
@@ -802,7 +802,7 @@ def test_pbc_wrap_groups_com_near_boundary():
 		pytest.skip("jax not available in this environment")
 
 	import jax.numpy as jnp
-	from mmml.interfaces.pycharmmInterface.pbc_utils_jax import (
+	from karml.interfaces.pycharmmInterface.pbc_utils_jax import (
 		frac_coords,
 		wrap_groups,
 	)

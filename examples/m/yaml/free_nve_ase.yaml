@@ -1,5 +1,5 @@
 # Vacuum NVE (ASE, ML-only) — AMM1 + CH3CL
-# Requires: source examples/m/_env.sh  (sets MMML_CGENFF_EXTRA_RTF)
+# Requires: source examples/m/_env.sh  (sets KARML_CGENFF_EXTRA_RTF)
 setup: free_nve
 backend: ase
 composition: AMM1:1,CH3CL:1

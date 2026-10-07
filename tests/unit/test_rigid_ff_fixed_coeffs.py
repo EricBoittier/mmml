@@ -11,15 +11,15 @@ import argparse
 import numpy as np
 import pytest
 
-from mmml.md.energy.registry import EnergyContext
-from mmml.md.energy.terms.multipole import (
+from karml.md.energy.registry import EnergyContext
+from karml.md.energy.terms.multipole import (
     HARTREE_TO_EV,
     MultipoleTerm,
     charge_dipole_pair_energy_au,
 )
-from mmml.md.energy.terms.zbl import DEFAULT_ZBL_CUTOFF_A, DEFAULT_ZBL_CUTON_A, ZBLTerm
-from mmml.md.lowering import runconfig_from_md_system_args, terms_from_md_system_args
-from mmml.md.system import MolecularSystem
+from karml.md.energy.terms.zbl import DEFAULT_ZBL_CUTOFF_A, DEFAULT_ZBL_CUTON_A, ZBLTerm
+from karml.md.lowering import runconfig_from_md_system_args, terms_from_md_system_args
+from karml.md.system import MolecularSystem
 
 
 def _two_diatomics(sep: float = 4.0):
@@ -84,7 +84,7 @@ def test_runconfig_sampler_and_ff():
 def test_zbl_energy_on_inside_cutoff_nonzero_outside_zero():
     import jax.numpy as jnp
 
-    import mmml.md.energy.terms  # noqa: F401
+    import karml.md.energy.terms  # noqa: F401
 
     system = _two_diatomics(sep=0.3)  # O–O ~0.3 Å if we use atom 0 and 2
     # Place atoms 0 and 2 (oxygens of each monomer) at 0.2 Å
@@ -156,7 +156,7 @@ def test_fixed_multipole_matches_analytic_charge_dipole():
     e = float(fns.jax_energy_fn(system.R))
 
     # COM of each diatomic: (0.5,0,0) and (5.5,0,0) in Å → bohr
-    from mmml.md.energy.terms.multipole import ANGSTROM_TO_BOHR
+    from karml.md.energy.terms.multipole import ANGSTROM_TO_BOHR
 
     o0 = np.array([0.5, 0.0, 0.0]) * ANGSTROM_TO_BOHR
     o1 = np.array([5.5, 0.0, 0.0]) * ANGSTROM_TO_BOHR
@@ -170,8 +170,8 @@ def test_fixed_multipole_matches_analytic_charge_dipole():
 def test_fixed_dispersion_qdo_changes_with_distance():
     import jax.numpy as jnp
 
-    import mmml.md.energy.terms  # noqa: F401
-    from mmml.md.energy.terms.mbd import MBDDispersionTerm
+    import karml.md.energy.terms  # noqa: F401
+    from karml.md.energy.terms.mbd import MBDDispersionTerm
 
     system = _two_diatomics(sep=4.0)
     coeffs = np.ones((4, 3), dtype=np.float64) * np.array([6.0, 0.0, 0.0])
@@ -198,8 +198,8 @@ def test_fixed_dispersion_qdo_changes_with_distance():
 def test_hybrid_zbl_mbd_multipole_with_injected_state():
     import jax.numpy as jnp
 
-    import mmml.md.energy.terms  # noqa: F401
-    from mmml.md.assemble import build_hybrid_energy
+    import karml.md.energy.terms  # noqa: F401
+    from karml.md.assemble import build_hybrid_energy
 
     system = _two_diatomics(sep=5.0)
     opts = {
@@ -228,8 +228,8 @@ def test_hybrid_zbl_mbd_multipole_with_injected_state():
 
 
 def test_available_terms_include_qcml_set():
-    import mmml.md.energy.terms  # noqa: F401
-    from mmml.md.energy import available_terms
+    import karml.md.energy.terms  # noqa: F401
+    from karml.md.energy import available_terms
 
     names = available_terms()
     assert "zbl" in names

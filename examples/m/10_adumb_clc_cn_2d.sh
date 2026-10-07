@@ -77,12 +77,12 @@ EXTRA+=(
 )
 # Soft-wall onset: engage 2.5 Å below umbrella max. Cap IASVEL=1 redraw T so a
 # wall-near Boltzmann kick cannot leap past umbmax mid-dyna.
-export MMML_ADUMB_RC_WALL_MARGIN="${MMML_ADUMB_RC_WALL_MARGIN:-2.5}"
-export MMML_ADUMB_IASVEL1_T_CAP="${MMML_ADUMB_IASVEL1_T_CAP:-250}"
-# Do NOT set MMML_BUSSI_IASVEL0_CONTINUATION for ADUMB: iasvel=0 reads COMP
+export KARML_ADUMB_RC_WALL_MARGIN="${KARML_ADUMB_RC_WALL_MARGIN:-2.5}"
+export KARML_ADUMB_IASVEL1_T_CAP="${KARML_ADUMB_IASVEL1_T_CAP:-250}"
+# Do NOT set KARML_BUSSI_IASVEL0_CONTINUATION for ADUMB: iasvel=0 reads COMP
 # positions as velocities on this PyCHARMM build (T≃10¹³ K → UM1RXN).
-unset MMML_BUSSI_IASVEL0_CONTINUATION || true
-unset MMML_BUSSI_INIT_VELOCITIES_HANDOFF || true
+unset KARML_BUSSI_IASVEL0_CONTINUATION || true
+unset KARML_BUSSI_INIT_VELOCITIES_HANDOFF || true
 
 mkdir -p "${OUT}"
 rm -rf "${OUT}/.packmol_cache" "${OUT}/packmol_cluster" "${OUT}/pretreat" "${OUT}/cleanup"
@@ -92,18 +92,18 @@ rm -f "${OUT}/stage_summary.json" \
 
 echo "=== ADUMB 2D Cl–C / C–N: $(basename "${CFG}") ==="
 echo "     (needs CHARMM ADUMB + ADUMBRXNCOR; two umbrella rxncor cards)"
-echo "     MMML_CGENFF_EXTRA_RTF=${MMML_CGENFF_EXTRA_RTF:-}"
-echo "     MMML_CGENFF_EXTRA_PRM=${MMML_CGENFF_EXTRA_PRM:-}"
+echo "     KARML_CGENFF_EXTRA_RTF=${KARML_CGENFF_EXTRA_RTF:-}"
+echo "     KARML_CGENFF_EXTRA_PRM=${KARML_CGENFF_EXTRA_PRM:-}"
 
-if [[ -z "${MMML_CGENFF_EXTRA_RTF:-}" ]]; then
-  echo "WARN: MMML_CGENFF_EXTRA_RTF unset — CH3CL will not be in CGenFF"
+if [[ -z "${KARML_CGENFF_EXTRA_RTF:-}" ]]; then
+  echo "WARN: KARML_CGENFF_EXTRA_RTF unset — CH3CL will not be in CGenFF"
 fi
-if [[ -z "${MMML_CGENFF_EXTRA_PRM:-}" ]]; then
-  echo "WARN: MMML_CGENFF_EXTRA_PRM unset — CG331–CLGA1 bond/angle may be missing"
+if [[ -z "${KARML_CGENFF_EXTRA_PRM:-}" ]]; then
+  echo "WARN: KARML_CGENFF_EXTRA_PRM unset — CG331–CLGA1 bond/angle may be missing"
 fi
 
 set +e
-uv run mmml md-system \
+uv run karml md-system \
   --config "${CFG}" \
   --output-dir "${OUT}" \
   "${EXTRA[@]}"

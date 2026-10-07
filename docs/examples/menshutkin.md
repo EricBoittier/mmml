@@ -2,13 +2,13 @@
 
 !!! note "Source"
     This page mirrors
-    [`examples/menshutkin/README.md`](https://github.com/EricBoittier/mmml/blob/main/examples/menshutkin/README.md).
+    [`examples/menshutkin/README.md`](https://github.com/EricBoittier/karml/blob/main/examples/menshutkin/README.md).
     That README is the hub of a five-document set; its siblings —
-    [`RESULTS.md`](https://github.com/EricBoittier/mmml/blob/main/examples/menshutkin/RESULTS.md),
-    [`SUBMIT.md`](https://github.com/EricBoittier/mmml/blob/main/examples/menshutkin/SUBMIT.md),
-    [`HANDBOOK.md`](https://github.com/EricBoittier/mmml/blob/main/examples/menshutkin/HANDBOOK.md)
+    [`RESULTS.md`](https://github.com/EricBoittier/karml/blob/main/examples/menshutkin/RESULTS.md),
+    [`SUBMIT.md`](https://github.com/EricBoittier/karml/blob/main/examples/menshutkin/SUBMIT.md),
+    [`HANDBOOK.md`](https://github.com/EricBoittier/karml/blob/main/examples/menshutkin/HANDBOOK.md)
     and
-    [`ROADMAP.md`](https://github.com/EricBoittier/mmml/blob/main/examples/menshutkin/ROADMAP.md)
+    [`ROADMAP.md`](https://github.com/EricBoittier/karml/blob/main/examples/menshutkin/ROADMAP.md)
     — live next to it in the repository and are not mirrored here.
     Paths below are relative to the repository root, and host names are the
     machines this campaign was run on — substitute your own.
@@ -28,10 +28,10 @@ continuum), which supplies experimental anchors.
 
 | document | contents |
 |---|---|
-| [`RESULTS.md`](https://github.com/EricBoittier/mmml/blob/main/examples/menshutkin/RESULTS.md) | **the findings** — barriers, solvent effects, ion-pair states, limits |
-| [`SUBMIT.md`](https://github.com/EricBoittier/mmml/blob/main/examples/menshutkin/SUBMIT.md) | **how to run each stage** — prerequisites, one command, how to verify |
-| [`HANDBOOK.md`](https://github.com/EricBoittier/mmml/blob/main/examples/menshutkin/HANDBOOK.md) | operating notes: machines, traps, diagnostics, what is settled |
-| [`ROADMAP.md`](https://github.com/EricBoittier/mmml/blob/main/examples/menshutkin/ROADMAP.md) | what comes next and in what order |
+| [`RESULTS.md`](https://github.com/EricBoittier/karml/blob/main/examples/menshutkin/RESULTS.md) | **the findings** — barriers, solvent effects, ion-pair states, limits |
+| [`SUBMIT.md`](https://github.com/EricBoittier/karml/blob/main/examples/menshutkin/SUBMIT.md) | **how to run each stage** — prerequisites, one command, how to verify |
+| [`HANDBOOK.md`](https://github.com/EricBoittier/karml/blob/main/examples/menshutkin/HANDBOOK.md) | operating notes: machines, traps, diagnostics, what is settled |
+| [`ROADMAP.md`](https://github.com/EricBoittier/karml/blob/main/examples/menshutkin/ROADMAP.md) | what comes next and in what order |
 | this page | what the campaign is, and the physics you must not break |
 
 Two further pages on this site rather than in the repository:
@@ -142,8 +142,8 @@ Watch `CHAN n%` in the log. A few percent is fine; a window spending most of its
 time against the restraint is reporting a property of the restraint.
 
 The implementation is `ReactionChannelRestraint`
-(`mmml/md/restraints/linear_distance.py`), reachable from the CLI as
-`mmml umbrella-sample --wall-channel`; see
+(`karml/md/restraints/linear_distance.py`), reachable from the CLI as
+`karml umbrella-sample --wall-channel`; see
 [Reaction-channel restraints](../umbrella.md#reaction-channel-restraints).
 
 ---
@@ -368,7 +368,7 @@ The ladder for ML/MM is therefore its own:
 | 1. mechanical, fixed FF charges | not at all |
 | 1.5 `mechanical-fluct` | charges follow its **own geometry** only |
 | 2. **`--polarisation`** ← here | classical induced dipoles from the real MM field, in-vacuo α |
-| 3. field-conditioned ML | the network **takes the MM field as input** and predicts the polarised energy/charges (`mmml/models/efield`, NepoIP/MM) |
+| 3. field-conditioned ML | the network **takes the MM field as input** and predicts the polarised energy/charges (`karml/models/efield`, NepoIP/MM) |
 | 4. + polarisable MM | mutual; the solvent responds back |
 
 Rung 3 is the ML/MM analogue of QM/MM electrostatic embedding — the model

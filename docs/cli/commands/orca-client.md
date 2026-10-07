@@ -1,4 +1,4 @@
-# `mmml orca-client`
+# `karml orca-client`
 
 ORCA client → orca-server.
 
@@ -6,13 +6,13 @@ ORCA client → orca-server.
 ## Usage
 
 ```bash
-mmml orca-client --help
+karml orca-client --help
 ```
 
 !!! note
     No `build_parser()` hook — see module docstring or run the command without arguments for usage.
 
-Implementation: `mmml.interfaces.orca_external.client`
+Implementation: `karml.interfaces.orca_external.client`
 
 
 

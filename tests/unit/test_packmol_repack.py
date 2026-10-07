@@ -23,7 +23,7 @@ def _two_monomer_system() -> tuple[np.ndarray, np.ndarray]:
 
 
 def test_packmol_selective_repack_writes_fixed_and_movable_blocks(tmp_path, monkeypatch):
-    from mmml.interfaces.pycharmmInterface import packmol_repack
+    from karml.interfaces.pycharmmInterface import packmol_repack
 
     captured: dict[str, str] = {}
     pos, offsets = _two_monomer_system()
@@ -78,7 +78,7 @@ def test_packmol_repack_resolves_structure_paths_when_scratch_dir_relative(
     tmp_path, monkeypatch
 ):
     """Packmol cwd is scratch_dir; relative structure paths double-resolve and fail."""
-    from mmml.interfaces.pycharmmInterface import packmol_repack
+    from karml.interfaces.pycharmmInterface import packmol_repack
 
     captured: dict[str, str] = {}
     pos, offsets = _two_monomer_system()
@@ -129,7 +129,7 @@ def test_packmol_repack_resolves_structure_paths_when_scratch_dir_relative(
 
 
 def test_read_packmol_monomer_coords_splits_sequential_atoms_not_residue_ids(tmp_path):
-    from mmml.interfaces.pycharmmInterface.packmol_repack import (
+    from karml.interfaces.pycharmmInterface.packmol_repack import (
         _read_packmol_monomer_coords,
     )
 
@@ -154,7 +154,7 @@ def test_read_packmol_monomer_coords_splits_sequential_atoms_not_residue_ids(tmp
 
 
 def test_packmol_repack_falls_back_to_grid_when_binary_missing(monkeypatch):
-    from mmml.interfaces.pycharmmInterface import packmol_repack
+    from karml.interfaces.pycharmmInterface import packmol_repack
 
     pos, offsets = _two_monomer_system()
     z = np.array([6, 1, 6, 1], dtype=int)
@@ -184,7 +184,7 @@ def test_packmol_repack_falls_back_to_grid_when_binary_missing(monkeypatch):
 
 
 def test_resolve_packmol_tolerance_honors_large_config_value():
-    from mmml.interfaces.pycharmmInterface.packmol_repack import _resolve_packmol_tolerance
+    from karml.interfaces.pycharmmInterface.packmol_repack import _resolve_packmol_tolerance
 
     tol = _resolve_packmol_tolerance(
         min_distance=2.3,
@@ -202,7 +202,7 @@ def test_resolve_packmol_tolerance_ignores_com_spacing(spacing):
     density outright (methanol packs O···O at 2.8 Å with COMs 4.1 Å apart), and
     Packmol then grinds for hours without converging.
     """
-    from mmml.interfaces.pycharmmInterface.packmol_repack import (
+    from karml.interfaces.pycharmmInterface.packmol_repack import (
         PACKMOL_DEFAULT_TOLERANCE_A,
         _resolve_packmol_tolerance,
     )
@@ -212,7 +212,7 @@ def test_resolve_packmol_tolerance_ignores_com_spacing(spacing):
 
 
 def test_resolve_packmol_tolerance_defaults_and_overlap_floor():
-    from mmml.interfaces.pycharmmInterface.packmol_repack import _resolve_packmol_tolerance
+    from karml.interfaces.pycharmmInterface.packmol_repack import _resolve_packmol_tolerance
 
     # Prep-ladder floor (0.45 Å) is below Packmol's default and stays inert.
     assert _resolve_packmol_tolerance(min_distance=0.45) == pytest.approx(2.0)
@@ -253,7 +253,7 @@ def _random_rotation(seed: int) -> np.ndarray:
 
 def test_group_identical_templates_collapses_rotated_copies():
     """Packmol randomises orientation, so raw coords never match; distances do."""
-    from mmml.interfaces.pycharmmInterface.packmol_repack import (
+    from karml.interfaces.pycharmmInterface.packmol_repack import (
         _group_identical_templates,
     )
 
@@ -276,7 +276,7 @@ def test_group_identical_templates_collapses_rotated_copies():
 
 
 def test_group_identical_templates_keeps_distinct_conformers_and_species():
-    from mmml.interfaces.pycharmmInterface.packmol_repack import (
+    from karml.interfaces.pycharmmInterface.packmol_repack import (
         _group_identical_templates,
     )
 
@@ -303,7 +303,7 @@ def test_group_identical_templates_keeps_distinct_conformers_and_species():
 
 def test_group_identical_templates_does_not_merge_enantiomers():
     """Distances are reflection-blind; merging mirror images would flip a hand."""
-    from mmml.interfaces.pycharmmInterface.packmol_repack import (
+    from karml.interfaces.pycharmmInterface.packmol_repack import (
         _group_identical_templates,
     )
 
@@ -344,7 +344,7 @@ def test_group_identical_templates_does_not_merge_enantiomers():
 
 def test_group_identical_templates_separates_species_with_equal_geometry():
     """Same coordinates, different atoms — must not share a structure block."""
-    from mmml.interfaces.pycharmmInterface.packmol_repack import (
+    from karml.interfaces.pycharmmInterface.packmol_repack import (
         _group_identical_templates,
     )
 
@@ -369,7 +369,7 @@ def test_group_identical_templates_separates_species_with_equal_geometry():
 
 def test_packmol_repack_emits_one_block_for_identical_movables(tmp_path, monkeypatch):
     """327 methanols must not become 327 Packmol molecule types."""
-    from mmml.interfaces.pycharmmInterface import packmol_repack
+    from karml.interfaces.pycharmmInterface import packmol_repack
 
     captured: dict[str, str] = {}
     n_mono = 6
@@ -415,17 +415,17 @@ def test_packmol_repack_emits_one_block_for_identical_movables(tmp_path, monkeyp
 
 
 def test_overlap_guard_repack_fn_uses_packmol_module():
-    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+    from karml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
         _repack_monomers_clear_overlap_fn,
     )
-    from mmml.interfaces.pycharmmInterface import packmol_repack
+    from karml.interfaces.pycharmmInterface import packmol_repack
 
     assert _repack_monomers_clear_overlap_fn() is packmol_repack.repack_monomers_clear_overlap
 
 
 def test_apply_overlap_repack_uses_psf_monomer_offsets(monkeypatch):
     """Repack must slice atoms by PSF counts, not uniform n_atoms/n_monomers."""
-    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+    from karml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
         DynamicsOverlapConfig,
         apply_overlap_repack_last_resort,
     )
@@ -447,23 +447,23 @@ def test_apply_overlap_repack_uses_psf_monomer_offsets(monkeypatch):
         return None
 
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         fake_get_pos,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
         fake_sync,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard._find_worst_intermonomer_overlap_fn",
+        "karml.interfaces.pycharmmInterface.mlpot.overlap_guard._find_worst_intermonomer_overlap_fn",
         lambda: lambda _pos, _off, **kw: (1.0, None),
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard._repack_monomers_clear_overlap_fn",
+        "karml.interfaces.pycharmmInterface.mlpot.overlap_guard._repack_monomers_clear_overlap_fn",
         lambda: fake_repack,
     )
     monkeypatch.setattr(
-        "mmml.utils.monomer_force_diag.resolve_selective_repack_monomers",
+        "karml.utils.monomer_force_diag.resolve_selective_repack_monomers",
         lambda *_a, **_k: None,
     )
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 import numbers
 from pathlib import Path
 
-from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
     _apply_npt_cpt_kwargs,
     build_heat_dynamics,
     build_hoover_heat_dynamics,
@@ -15,7 +15,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
     final_npt_segment_restart,
     npt_restart_chain,
 )
-from mmml.interfaces.pycharmmInterface.mlpot.pressure_tensor import NptPressureTensor
+from karml.interfaces.pycharmmInterface.mlpot.pressure_tensor import NptPressureTensor
 
 
 def _script_string(**kwargs) -> str:

@@ -30,7 +30,7 @@ def _md_reference_lj(r, rmin_half_a, rmin_half_b, eps_a_prm, eps_b_prm):
 def test_pair_lj_matches_md_formula_for_real_types():
     """Dataset (sigma, eps>=0) -> same energy as MD (Rmin/2, eps<=0)."""
     from scripts.prepare_ml_mm_dataset import DEF_PRM_PATH, load_cgenff_nonbonded_table
-    from mmml.models.cgenff_mm import cgenff_pair_lj, sigma_to_rmin_half
+    from karml.models.cgenff_mm import cgenff_pair_lj, sigma_to_rmin_half
 
     nb_map, sigmas, epsilons = load_cgenff_nonbonded_table(__import__("pathlib").Path(DEF_PRM_PATH))
 
@@ -69,7 +69,7 @@ def test_epsilon_sign_cancels_in_geometric_mean():
 
 def test_well_minimum_is_negative_at_pair_rmin():
     """Physical sanity: E(Rmin) = -eps (a well, not a barrier)."""
-    from mmml.models.cgenff_mm import cgenff_pair_lj
+    from karml.models.cgenff_mm import cgenff_pair_lj
 
     eps, rmin = 0.0661, 4.06
     assert float(cgenff_pair_lj(np.float64(rmin), np.float64(rmin), np.float64(eps))) == pytest.approx(-eps)
@@ -82,7 +82,7 @@ def test_well_minimum_is_negative_at_pair_rmin():
 
 
 def test_sigma_rmin_roundtrip():
-    from mmml.models.cgenff_mm import RMIN_HALF_TO_SIGMA, sigma_to_rmin_half
+    from karml.models.cgenff_mm import RMIN_HALF_TO_SIGMA, sigma_to_rmin_half
 
     # HGA3: Rmin/2 = 1.34 -> sigma 2.3876 (as the parity test asserts)
     assert float(sigma_to_rmin_half(np.float64(1.34 * RMIN_HALF_TO_SIGMA))) == pytest.approx(1.34)
@@ -90,7 +90,7 @@ def test_sigma_rmin_roundtrip():
 
 def test_lj_energy_padding_and_intermolecular_mask():
     """Padding (-1) contributes nothing; intra-monomer pairs are excluded."""
-    from mmml.models.cgenff_mm import cgenff_lj_energy
+    from karml.models.cgenff_mm import cgenff_lj_energy
 
     sig = np.array([3.6, 2.4], dtype=np.float64)
     eps = np.array([0.078, 0.024], dtype=np.float64)
@@ -118,7 +118,7 @@ def test_lj_energy_padding_and_intermolecular_mask():
 def test_lj_energy_is_vmappable_and_differentiable():
     import jax
     import jax.numpy as jnp
-    from mmml.models.cgenff_mm import cgenff_lj_energy
+    from karml.models.cgenff_mm import cgenff_lj_energy
 
     sig = jnp.array([3.6, 2.4]); eps = jnp.array([0.078, 0.024])
     tidx = jnp.array([0, 1, 0, 1]); mid = jnp.array([0, 0, 1, 1])
@@ -136,7 +136,7 @@ def test_shared_cutoff_force_shift_has_zero_energy_and_force_at_cutoff():
     """The opt-in Hamiltonian is C1 at rc; the existing handoff is untouched."""
     import jax
     import jax.numpy as jnp
-    from mmml.models.cgenff_mm import cgenff_mm_energy
+    from karml.models.cgenff_mm import cgenff_mm_energy
 
     sig = jnp.array([3.4])
     eps = jnp.array([0.12])
@@ -172,9 +172,9 @@ def _md_reference_total(pos, tidx, mid, q, sig, eps, *, on, width, mlw):
         mm_taper = 1 - sharpstep(r_com, on, on+width, gamma=GAMMA_OFF)
         E        = handoff*mm_taper * sum_inter(E_pair)
     """
-    from mmml.interfaces.pycharmmInterface.calculator_utils import _sharpstep
-    from mmml.interfaces.pycharmmInterface.cutoffs import GAMMA_OFF, GAMMA_ON
-    from mmml.models.cgenff_mm import RMIN_HALF_TO_SIGMA
+    from karml.interfaces.pycharmmInterface.calculator_utils import _sharpstep
+    from karml.interfaces.pycharmmInterface.cutoffs import GAMMA_OFF, GAMMA_ON
+    from karml.models.cgenff_mm import RMIN_HALF_TO_SIGMA
 
     n = len(tidx)
     rm = np.array([sig[t] / RMIN_HALF_TO_SIGMA if t >= 0 else 0.0 for t in tidx])
@@ -212,7 +212,7 @@ def _dimer(sep):
 
 def test_total_mm_energy_matches_md_across_the_whole_switching_range():
     """The gate: switched LJ + electrostatics total == MD math, at every regime."""
-    from mmml.models.cgenff_mm import cgenff_mm_energy
+    from karml.models.cgenff_mm import cgenff_mm_energy
 
     sig = np.array([3.6527, 2.3876]); eps = np.array([0.0780, 0.0240])
     on, width, mlw = 8.0, 5.0, 1.5
@@ -229,7 +229,7 @@ def test_total_mm_energy_matches_md_across_the_whole_switching_range():
 
 def test_mm_is_off_inside_ml_region_and_beyond_the_tail():
     """MM must vanish where ML is fully on (<6.5) and past the tail (>=13)."""
-    from mmml.models.cgenff_mm import cgenff_mm_energy
+    from karml.models.cgenff_mm import cgenff_mm_energy
 
     sig = np.array([3.6527, 2.3876]); eps = np.array([0.0780, 0.0240])
     kw = dict(mm_switch_on=8.0, mm_switch_width=5.0, ml_switch_width=1.5)
@@ -246,7 +246,7 @@ def test_mm_is_off_inside_ml_region_and_beyond_the_tail():
 
 def test_mm_scale_is_complement_of_ml_scale_at_handoff():
     """'Complementary handoff': MM ramps up exactly as ML ramps down."""
-    from mmml.interfaces.pycharmmInterface.calculator_utils import ml_switch_scale, mm_switch_scale
+    from karml.interfaces.pycharmmInterface.calculator_utils import ml_switch_scale, mm_switch_scale
 
     for r in (6.5, 6.9, 7.3, 7.7, 8.0):
         ml = float(ml_switch_scale(np.float64(r), mm_switch_on=8.0, ml_switch_width=1.5))
@@ -258,7 +258,7 @@ def test_mm_scale_is_complement_of_ml_scale_at_handoff():
 
 def test_monomer_has_no_mm_term():
     """A single monomer has no intermolecular pairs -> exactly 0."""
-    from mmml.models.cgenff_mm import cgenff_mm_energy
+    from karml.models.cgenff_mm import cgenff_mm_energy
 
     sig = np.array([3.6527, 2.3876]); eps = np.array([0.0780, 0.0240])
     pos = np.array([[0.0, 0, 0], [1.0, 0, 0], [0, 0, 0]])
@@ -272,7 +272,7 @@ def test_mm_switch_scale_works_under_jit_with_a_traced_flag():
     """complementary_handoff must survive being traced (hybrid train_step is jitted)."""
     import jax
     import jax.numpy as jnp
-    from mmml.interfaces.pycharmmInterface.calculator_utils import mm_switch_scale
+    from karml.interfaces.pycharmmInterface.calculator_utils import mm_switch_scale
 
     def f(r, flag):
         return mm_switch_scale(r, mm_switch_on=8.0, mm_switch_width=5.0,

@@ -9,7 +9,7 @@ import h5py
 import numpy as np
 import pytest
 
-from mmml.analysis.liquid_md import (
+from karml.analysis.liquid_md import (
     analyze_campaign_dir,
     analyze_h5,
     density_report,

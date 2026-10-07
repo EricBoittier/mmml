@@ -1,4 +1,4 @@
-# `mmml diagnose-lc-outliers`
+# `karml diagnose-lc-outliers`
 
 Inspect learning-curve sweeps for bad seeds and NPZ outliers.
 
@@ -6,13 +6,13 @@ Inspect learning-curve sweeps for bad seeds and NPZ outliers.
 ## Usage
 
 ```bash
-mmml diagnose-lc-outliers --help
+karml diagnose-lc-outliers --help
 ```
 
 ## Options
 
 ```text
-usage: mmml diagnose-lc-outliers [-h] --eval-root EVAL_ROOT [--dataset DATASET]
+usage: karml diagnose-lc-outliers [-h] --eval-root EVAL_ROOT [--dataset DATASET]
                                  [--train-npz TRAIN_NPZ] [--json-out JSON_OUT]
                                  [--structure-plot-out STRUCTURE_PLOT_OUT]
                                  [--structure-indices STRUCTURE_INDICES]
@@ -64,7 +64,7 @@ Other options:
   --top-samples TOP_SAMPLES
   --top-spikes TOP_SPIKES
 
-Example: mmml diagnose-lc-outliers \ --eval-root out/eval/learning_curve/e1000 \
+Example: karml diagnose-lc-outliers \ --eval-root out/eval/learning_curve/e1000 \
 --dataset aco \ --train-npz out/splits/aco/energies_forces_dipoles_train.npz
 ```
 

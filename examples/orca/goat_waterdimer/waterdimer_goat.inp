@@ -7,7 +7,7 @@
 end
 
 %method
-  ProgExt "/mmhome/boittier/home/mmml/examples/orca/mmml-orca-client"
+  ProgExt "/mmhome/boittier/home/karml/examples/orca/karml-orca-client"
   Ext_Params "-b 127.0.0.1:8888"
 end
 

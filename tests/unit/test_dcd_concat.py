@@ -7,11 +7,11 @@ import struct
 import numpy as np
 import pytest
 
-from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
     count_dcd_frames,
     count_readable_dcd_frames,
 )
-from mmml.utils.dcd_writer import (
+from karml.utils.dcd_writer import (
     _dcd_header_byte_size,
     concat_dcd_files,
     save_trajectory_dcd,
@@ -52,7 +52,7 @@ def test_unitcell_flag_read_from_icntrl11():
     assert has_uc is True
 
 
-def test_unitcell_flag_for_mmml_writer(tmp_path):
+def test_unitcell_flag_for_karml_writer(tmp_path):
     with_box = _write(tmp_path / "a.dcd", 1, box=True)
     no_box = _write(tmp_path / "b.dcd", 1, box=False)
     assert _dcd_header_byte_size(with_box.read_bytes())[3] is True

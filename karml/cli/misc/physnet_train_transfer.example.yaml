@@ -1,4 +1,4 @@
-# Example PhysNetJAX transfer-learning config for: mmml physnet-train --config job_dcm.yaml
+# Example PhysNetJAX transfer-learning config for: karml physnet-train --config job_dcm.yaml
 # Copy to job_dcm.yaml and adjust paths. CLI flags override values from this file.
 
 data:
@@ -43,5 +43,5 @@ metrics_plot: ./ckpts/dcm_finetune/learning_curves.png
 log_loss: true
 
 # Manual alternative after training:
-# mmml extract-checkpoint-metrics ./ckpts/dcm_finetune/dcm_finetune-<uuid>/ \
+# karml extract-checkpoint-metrics ./ckpts/dcm_finetune/dcm_finetune-<uuid>/ \
 #   -o learning_curves.png --log-loss

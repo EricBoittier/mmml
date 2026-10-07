@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from mmml.cli.run.md_pbc_suite.jaxmd import (
+from karml.cli.run.md_pbc_suite.jaxmd import (
     charmm_hybrid_rescue_accepted,
     should_skip_charmm_hybrid_rescue,
 )
@@ -26,7 +26,7 @@ def test_jaxmd_wires_soft_skip_and_reject_into_pre_min():
     """Source contract: fire-first rescue path uses soft skip + reject-if-worse."""
     import inspect
 
-    from mmml.cli.run.md_pbc_suite import jaxmd
+    from karml.cli.run.md_pbc_suite import jaxmd
 
     src = inspect.getsource(jaxmd)
     assert "should_skip_charmm_hybrid_rescue" in src

@@ -10,7 +10,7 @@ Typical usage
 
 .. code-block:: python
 
-    from mmml.utils.hdf5_reporter import HDF5Reporter, DatasetSpec
+    from karml.utils.hdf5_reporter import HDF5Reporter, DatasetSpec
 
     reporter = HDF5Reporter(
         "trajectory.h5",

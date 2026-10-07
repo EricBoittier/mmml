@@ -16,14 +16,14 @@ weights are required for the energy/force evaluation.
 Work only in the dedicated clone:
 
 ```bash
-cd ~/mmml_cursor
+cd ~/karml_cursor
 git checkout cursor/jaxmd-cgenff-spoof-dcm-aco-b59b
 ```
 
 ## Run
 
 ```bash
-cd ~/mmml_cursor
+cd ~/karml_cursor
 bash workflows/jaxmd_cgenff_spoof_smoke/scripts/run_all.sh
 # or one job:
 bash workflows/jaxmd_cgenff_spoof_smoke/scripts/run_all.sh dcm_vac_nve

@@ -7,7 +7,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from mmml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
+from karml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
     apply_selective_force_damp_recipe,
     force_magnitudes_kcalmol_A,
     get_comparison_array,
@@ -25,14 +25,14 @@ def charmm_tip3_water(pycharmm_workdir: Path):
     """TIP3 water (MPI-safe setupRes path; no in-process CGENFF cluster rebuild)."""
     if not can_import_pycharmm():
         pytest.skip("pycharmm / libcharmm not available")
-    from mmml.interfaces.pycharmmInterface import setupRes
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import (
+    from karml.interfaces.pycharmmInterface import setupRes
+    from karml.interfaces.pycharmmInterface.import_pycharmm import (
         ensure_pycharmm_loaded,
         reset_block,
         reset_block_no_internal,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.block_terms import apply_charmm_mm_block
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import setup_default_nbonds
+    from karml.interfaces.pycharmmInterface.mlpot.block_terms import apply_charmm_mm_block
+    from karml.interfaces.pycharmmInterface.mlpot.setup import setup_default_nbonds
 
     ensure_pycharmm_loaded()
     atoms = setupRes.main("TIP3")

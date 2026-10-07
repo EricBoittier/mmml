@@ -7,7 +7,7 @@ No CHARMM build and no dynamics.
 
     uv run python scripts/render_md_cg_capability_figures.py
 
-POV-Ray is resolved from ``PATH`` or ``~/.local/share/mmml-povray``.
+POV-Ray is resolved from ``PATH`` or ``~/.local/share/karml-povray``.
 """
 
 from __future__ import annotations
@@ -46,7 +46,7 @@ CELL_SIDE_A = 24.0
 def _povray() -> tuple[Path, Path]:
     """Resolve a POV-Ray whose orthographic camera parses.
 
-    The conda 3.7.0.10 build under ``mmml-povray`` rejects a normal
+    The conda 3.7.0.10 build under ``karml-povray`` rejects a normal
     orthographic camera ("viewing angle has to be smaller than 180
     degrees"). Prefer the 3.7.0.8 tree that accepts ASE's camera block.
     """
@@ -58,7 +58,7 @@ def _povray() -> tuple[Path, Path]:
     found = shutil.which("povray")
     if found:
         candidates.append(Path(found))
-    candidates.append(Path.home() / ".local" / "share" / "mmml-povray" / "bin" / "povray")
+    candidates.append(Path.home() / ".local" / "share" / "karml-povray" / "bin" / "povray")
     binary = next((path for path in candidates if path.is_file()), None)
     if binary is None:
         raise SystemExit("POV-Ray not found (set POVRAY, or install povray on PATH)")
@@ -436,7 +436,7 @@ def figure_peptide_and_mixed() -> dict[str, int]:
 
 
 def figure_acetone_cell() -> None:
-    crystal = read(REPO / "mmml/data/structures/acetone_pbca_150k_cod7110464.cif")
+    crystal = read(REPO / "karml/data/structures/acetone_pbca_150k_cod7110464.cif")
     crystal.wrap()
     colors, radii = _element_style(crystal)
     # Bond only covalent contacts. The CIF cell is orthorhombic Pbca.

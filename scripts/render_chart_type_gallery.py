@@ -18,7 +18,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from mpl_toolkits.mplot3d import Axes3D  # noqa: F401 (registers 3d projection)
 
-from mmml.utils.plotting.styles import (
+from karml.utils.plotting.styles import (
     DEFAULT_SEQUENTIAL_CMAP,
     apply_plot_style,
     default_cmap,
@@ -234,7 +234,7 @@ def matshow_heatmap(out: Path) -> None:
     this exact panel (diverging `RdBu_r` on positive-only distances) was a
     real mismatch, not just a style choice.
     """
-    from mmml.utils.plotting.styles import default_cmap
+    from karml.utils.plotting.styles import default_cmap
 
     n = 24
     rng_positions = RNG.uniform(0, 10, size=(n, 3))

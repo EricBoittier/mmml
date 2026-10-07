@@ -220,7 +220,7 @@ Work required:
 * training data with iodine — new scan + NMS sampling, new PhysNet training;
 * basis/ECP: def2-SVPD carries an ECP for I; CCSD(T) needs aug-cc-pVTZ-**PP**;
 * scalar-relativistic effects matter for I and must at least be checked;
-* CGenFF has no I in the current setup — check `MMML_CGENFF_EXTRA_*`;
+* CGenFF has no I in the current setup — check `KARML_CGENFF_EXTRA_*`;
 * everything downstream (boxes, walls, channel file) regenerates from the scan.
 
 Risk: iodine is the first element in this campaign where the ECP/relativistic
@@ -267,7 +267,7 @@ iodine, ECPs and relativity at the same time.
   the correct ledger gives 74 %), and the 1D/2D comparison question. Styling pass
   to follow the content rewrite, not precede it.
 * **HANDBOOK** — add the CPU-on-a-GPU-host procedure (`MENSH_DEVICE=cpu` *and*
-  `MMML_MLPOT_DEVICE=cpu`; the second is not optional and the failure mode is
+  `KARML_MLPOT_DEVICE=cpu`; the second is not optional and the failure mode is
   silently taking a production GPU), and `MENSH_GAS_OUT`.
 
 ---

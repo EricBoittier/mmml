@@ -5,7 +5,7 @@
 # and teacher checkpoints, and deployment MD conditions.
 #
 # Smoke (mock backend, synthetic pool):
-#   MMML_WORKFLOW_CONFIG=config.smoke.yaml bash scripts/snakemake_local.sh 2 -n
+#   KARML_WORKFLOW_CONFIG=config.smoke.yaml bash scripts/snakemake_local.sh 2 -n
 
 tag: UNRESOLVED
 output_root: artifacts/label_acquisition/UNRESOLVED

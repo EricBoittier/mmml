@@ -8,7 +8,7 @@ import pytest
 jax = pytest.importorskip("jax")
 import jax.numpy as jnp
 
-from mmml.interfaces.pycharmmInterface.multipolar_fmm_prototype import (
+from karml.interfaces.pycharmmInterface.multipolar_fmm_prototype import (
     CartesianMultipoleLayout,
     E3X_CONVENTION_NOTE,
     SR_ML_FMM_COMPOSITION_NOTE,

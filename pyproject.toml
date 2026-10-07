@@ -3,8 +3,8 @@ requires = ["setuptools>=61.0", "wheel", "versioningit~=2.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "mmml"
-description = "Molecular Mechanics and Machine Learned Force Fields"
+name = "karml"
+description = "karml (pronounced Karamell): machine-learned potentials in molecular-mechanics MD"
 dynamic = ["version"]
 readme = "README.md"
 authors = [
@@ -61,7 +61,7 @@ dependencies = [
     # Web/API (for GUI)
     "fastapi",
     "uvicorn",
-    # Alchemical / multistate free energy (mmml lambda-mbar, scripts/meoh_dimer_lambda_mbar.py)
+    # Alchemical / multistate free energy (karml lambda-mbar, scripts/meoh_dimer_lambda_mbar.py)
     "pymbar>=4.0",
     "umap-learn>=0.5.12",
 ]
@@ -72,7 +72,7 @@ charmm-interface = [
     "mpi4py",
 ]
 
-# OpenFE (Open Free Energy) - conda-only; see mmml/interfaces/openfeInterface/README.md
+# OpenFE (Open Free Energy) - conda-only; see karml/interfaces/openfeInterface/README.md
 # Install with: micromamba create -c conda-forge -n openfe openfe
 openfe-interface = []
 
@@ -88,7 +88,7 @@ nl-validation = [
     "vesin>=0.6.1",
 ]
 
-# Shell tab completion for ``mmml`` (bash/zsh/fish)
+# Shell tab completion for ``karml`` (bash/zsh/fish)
 cli = [
     "argcomplete>=3.5.0",
 ]
@@ -109,7 +109,7 @@ nvalchemiops-pme = [
 ]
 
 # Metatomic (TorchScript AtomisticModel) ASE calculator + CHARMM MLpot adapter.
-# Optional: CI does not install this extra. Device via MMML_METATOMIC_DEVICE.
+# Optional: CI does not install this extra. Device via KARML_METATOMIC_DEVICE.
 # upet: PET-MAD / PET-OMAD etc. download + metatomic export (larger PET teachers).
 # metatrain: train/fine-tune PET models and export them as metatomic .pt.
 metatomic = [
@@ -125,7 +125,7 @@ metatomic = [
 #
 # PyPI's jax-pme 0.1.0 (lab-cosmo, 2026-09-24) contains the commit previously
 # pinned here by git URL (c5f8272, via the EricBoittier/jax-pme fork) plus two
-# later upstream commits. A PyPI version is required for mmml itself to be
+# later upstream commits. A PyPI version is required for karml itself to be
 # publishable: PyPI rejects `@ git+` requirements, even in extras. Note the
 # import name is `jaxpme`, not `jax_pme`.
 #
@@ -149,7 +149,7 @@ mbar = [
 ]
 
 # GPU MM pair-list rebuild (Vesin + CuPy, DLPack into JAX). Selected automatically
-# when importable and JAX runs on a GPU; MMML_MM_NL_DEVICE=cpu forces the CPU path.
+# when importable and JAX runs on a GPU; KARML_MM_NL_DEVICE=cpu forces the CPU path.
 # CUDA 13 wheel (matches jax[cuda13]); same <14 cap as the gpu extra below.
 nl-gpu = [
     "vesin>=0.6.1",
@@ -202,14 +202,14 @@ quantum = [
 
 # GPU-accelerated quantum chemistry (CUDA 13, default)
 quantum-gpu = [
-    "mmml[quantum]",
+    "karml[quantum]",
     "gpu4pyscf-cuda13x",
     "gpu4pyscf-libxc-cuda13x",
 ]
 
 # GPU-accelerated quantum chemistry (CUDA 12)
 quantum-gpu-cuda12 = [
-    "mmml[quantum]",
+    "karml[quantum]",
     "gpu4pyscf-cuda12x",
     "gpu4pyscf-libxc-cuda12x",
 ]
@@ -303,22 +303,22 @@ dev = [
 
 # Full installation with all optional dependencies (CUDA 13 default)
 all = [
-    "mmml[gpu,charmm-interface,quantum,quantum-gpu,ml,viz,md,chem,data,notebooks,experiments,plotting]",
+    "karml[gpu,charmm-interface,quantum,quantum-gpu,ml,viz,md,chem,data,notebooks,experiments,plotting]",
 ]
 
 # Full installation with all optional dependencies (CUDA 12)
 all-cuda12 = [
-    "mmml[gpu-cuda12,quantum,quantum-gpu-cuda12,ml,viz,md,chem,data,notebooks,experiments,plotting]",
+    "karml[gpu-cuda12,quantum,quantum-gpu-cuda12,ml,viz,md,chem,data,notebooks,experiments,plotting]",
 ]
 
 # Alias for all (CUDA 13); same as all
 all-cuda13 = [
-    "mmml[gpu,quantum,quantum-gpu,ml,viz,md,chem,data,notebooks,experiments,plotting]",
+    "karml[gpu,quantum,quantum-gpu,ml,viz,md,chem,data,notebooks,experiments,plotting]",
 ]
 
 # CPU-only full installation (no GPU dependencies)
 all-cpu = [
-    "mmml[quantum,ml,viz,md,md-cpu,chem,data,notebooks,experiments,plotting]",
+    "karml[quantum,ml,viz,md,md-cpu,chem,data,notebooks,experiments,plotting]",
 ]
 
 [tool.uv]
@@ -339,13 +339,13 @@ conflicts = [
 ]
 
 [project.scripts]
-mmml = "mmml.cli.__main__:cli"
-mmml-orca-external = "mmml.interfaces.orca_external.runner:main"
-mmml-orca-server = "mmml.interfaces.orca_external.server:main"
-mmml-orca-client = "mmml.interfaces.orca_external.client:main"
-mmml-pycharmm-two-residue-sample = "mmml.cli.run.pycharmm_two_residue_sample:main"
-mmml-spectra-md = "mmml.spectra.spectra_md:main"
-mmml-mcp = "mmml.mcp.server:main"
+karml = "karml.cli.__main__:cli"
+karml-orca-external = "karml.interfaces.orca_external.runner:main"
+karml-orca-server = "karml.interfaces.orca_external.server:main"
+karml-orca-client = "karml.interfaces.orca_external.client:main"
+karml-pycharmm-two-residue-sample = "karml.cli.run.pycharmm_two_residue_sample:main"
+karml-spectra-md = "karml.spectra.spectra_md:main"
+karml-mcp = "karml.mcp.server:main"
 
 [tool.setuptools]
 zip-safe = false
@@ -354,10 +354,10 @@ include-package-data = false
 [tool.setuptools.packages.find]
 namespaces = false
 where = [".", "setup/charmm/tool/pycharmm"]
-include = ["mmml*", "pycharmm*"]
+include = ["karml*", "pycharmm*"]
 
 [tool.setuptools.package-data]
-mmml = [
+karml = [
     "py.typed",
     "data/qcml/atomic_reference_energies.json",
     "data/charmm/crystal_image.str",
@@ -366,7 +366,7 @@ mmml = [
     "data/charmm/top_trialanine_cgenff.rtf",
     "data/charmm/par_trialanine_backbone_cmap.prm",
     # Full CGENFF pair. A uv tool / wheel install has no setup/charmm/toppar
-    # tree; import_pycharmm looks under the installed mmml package.
+    # tree; import_pycharmm looks under the installed karml package.
     "data/charmm/heme_mbco_coords.txt",
     "data/charmm/top_all36_cgenff.rtf",
     "data/charmm/par_all36_cgenff.prm",
@@ -387,7 +387,7 @@ mmml = [
     "models/physnetjax/defaults/hf_json/*.json",
     "cli/templates/workflows/**/*",
     # Configs a user is told to run by name in the docs must ship with the
-    # package, or `mmml md-system --config <that path>` only works from a source
+    # package, or `karml md-system --config <that path>` only works from a source
     # checkout. `.example.yaml` is the marker for "shipped example" in cli/run;
     # cli/misc and mcp/examples are documented entry points too.
     "cli/run/*.example.yaml",
@@ -412,14 +412,14 @@ match = ["*"]
 default-tag = "0.1.0"
 
 [tool.versioningit.write]
-file = "mmml/_version.py"
+file = "karml/_version.py"
 
 [tool.ruff]
 target-version = "py313"
 line-length = 119
-src = ["mmml", "tests", "scripts", "setup/charmm/tool/pycharmm"]
+src = ["karml", "tests", "scripts", "setup/charmm/tool/pycharmm"]
 # scripts/kernn is vendored external KerNN (torch) model code, not part of the
-# mmml package and not maintained to this repo's lint rules; exclude from ruff.
+# karml package and not maintained to this repo's lint rules; exclude from ruff.
 extend-exclude = ["*.ipynb", "scripts/kernn"]
 
 [tool.ruff.lint]
@@ -440,7 +440,7 @@ ignore = [
 "tests/**/*.py" = ["ARG"]
 
 [tool.vulture]
-paths = ["mmml", "tests", "scripts", "setup/charmm/tool/pycharmm/pycharmm"]
+paths = ["karml", "tests", "scripts", "setup/charmm/tool/pycharmm/pycharmm"]
 min_confidence = 80
 ignore_names = [
     "ngrid",

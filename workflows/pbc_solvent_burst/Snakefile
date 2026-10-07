@@ -7,7 +7,7 @@ from pathlib import Path
 
 def _repo_python() -> str:
     repo = Path(workflow.basedir).resolve().parents[1]
-    env_py = os.environ.get("MMML_PYTHON", "").strip()
+    env_py = os.environ.get("KARML_PYTHON", "").strip()
     if env_py:
         return env_py
     venv = repo / ".venv" / "bin" / "python"
@@ -66,7 +66,7 @@ def _sched_gpu_slow(wildcards) -> int:
 
 def _slurm_extra(wildcards) -> str:
     mail = str(config.get("slurm_mail_user", "") or "").strip()
-    suppress_nodelist = os.environ.get("MMML_SLURM_NO_NODELIST", "").lower() in {
+    suppress_nodelist = os.environ.get("KARML_SLURM_NO_NODELIST", "").lower() in {
         "1", "true", "yes", "on"
     }
     if suppress_nodelist:
@@ -80,7 +80,7 @@ def _slurm_extra(wildcards) -> str:
         parts.append(f"--mail-user={mail} --mail-type=END,FAIL")
     if nodelist:
         parts.append(f"--nodelist={nodelist}")
-    extra = os.environ.get("MMML_SLURM_EXTRA", "").strip()
+    extra = os.environ.get("KARML_SLURM_EXTRA", "").strip()
     if extra:
         parts.append(extra)
     return " ".join(parts)

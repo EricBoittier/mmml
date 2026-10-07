@@ -9,12 +9,12 @@ import pytest
 
 pytest.importorskip("jax")
 
-from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
-from mmml.interfaces.pycharmmInterface.mlpot import callback_failstop
-from mmml.interfaces.pycharmmInterface.mlpot.callback_failstop import (
+from karml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
+from karml.interfaces.pycharmmInterface.mlpot import callback_failstop
+from karml.interfaces.pycharmmInterface.mlpot.callback_failstop import (
     MlpotCallbackAborted,
 )
-from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
+from karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
     DecomposedMlpotCalculator,
     DecomposedMlpotModel,
 )
@@ -22,7 +22,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
 
 def _stub_live_box(monkeypatch, side_A: float = 30.0) -> None:
     """Keep ``_sync_callback_pbc_box`` off native CHARMM / libcharmm."""
-    from mmml.interfaces.pycharmmInterface.mlpot import pbc_env
+    from karml.interfaces.pycharmmInterface.mlpot import pbc_env
 
     monkeypatch.setattr(
         pbc_env,
@@ -121,15 +121,15 @@ def test_calculate_charmm_partial_ml_scatters_forces(monkeypatch):
     calc._resolve_mm_pairs = MagicMock(return_value=(None, None, False))
     assert getattr(DecomposedMlpotCalculator.calculate_charmm, "__wrapped__", None) is not None
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge.mlpot_runs_on_this_rank",
+        "karml.interfaces.pycharmmInterface.mlpot.mpi_bridge.mlpot_runs_on_this_rank",
         lambda: True,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge.broadcast_mlpot_result",
+        "karml.interfaces.pycharmmInterface.mlpot.mpi_bridge.broadcast_mlpot_result",
         lambda forces, e, n: (forces, e),
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge.mpi_rank_size",
+        "karml.interfaces.pycharmmInterface.mlpot.mpi_bridge.mpi_rank_size",
         lambda: (0, 1),
     )
 
@@ -236,15 +236,15 @@ def test_calculate_charmm_ctypes_accumulates_into_resident_grad(monkeypatch):
     calc._get_spherical_forward_fn = MagicMock(return_value=_fake_forward)
     calc._resolve_mm_pairs = MagicMock(return_value=(None, None, False))
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge.mlpot_runs_on_this_rank",
+        "karml.interfaces.pycharmmInterface.mlpot.mpi_bridge.mlpot_runs_on_this_rank",
         lambda: True,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge.broadcast_mlpot_result",
+        "karml.interfaces.pycharmmInterface.mlpot.mpi_bridge.broadcast_mlpot_result",
         lambda forces, e, n_atoms: (forces, e),
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge.mpi_rank_size",
+        "karml.interfaces.pycharmmInterface.mlpot.mpi_bridge.mpi_rank_size",
         lambda: (0, 1),
     )
 

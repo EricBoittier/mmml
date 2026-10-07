@@ -1,6 +1,6 @@
 # Mode A MD with trained per-type LJ scales from hybrid_mm.json
 #
-#   mmml md-system --config examples/hybrid_mm_charges/md_fixed_lj_scales.yaml --run-all
+#   karml md-system --config examples/hybrid_mm_charges/md_fixed_lj_scales.yaml --run-all
 #
 # Point checkpoint at the Mode A + learn_mm_lj_scales train run. MLpot auto-loads
 # hybrid_mm.json next to the checkpoint; override with mm_lj_scales_file if needed.

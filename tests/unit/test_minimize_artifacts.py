@@ -5,15 +5,15 @@ from unittest import mock
 
 import pytest
 
-from mmml.interfaces.pycharmmInterface.mlpot.minimize_artifacts import (
+from karml.interfaces.pycharmmInterface.mlpot.minimize_artifacts import (
     CHARMM_MM_PRE,
-    MLPOT_MMML,
+    MLPOT_KARML,
     MinimizeArtifactRegistry,
     legacy_mlpot_mini_paths,
     rescue_snapshot_spec,
     snapshot_file_paths,
 )
-from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+from karml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
     DynamicsOverlapConfig,
     save_stabilized_overlap_rescue_snapshot,
 )
@@ -21,7 +21,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
 
 def test_snapshot_stems() -> None:
     assert CHARMM_MM_PRE.stem("dcm_90") == "01_mm"
-    assert MLPOT_MMML.stem("dcm_90") == "02_mini"
+    assert MLPOT_KARML.stem("dcm_90") == "02_mini"
 
 
 def test_legacy_mlpot_paths_short_names() -> None:
@@ -31,11 +31,11 @@ def test_legacy_mlpot_paths_short_names() -> None:
 
 def test_registry_manifest(tmp_path: Path) -> None:
     reg = MinimizeArtifactRegistry(tmp_path, "dcm_9")
-    paths = snapshot_file_paths(tmp_path, MLPOT_MMML, "dcm_9")
-    reg.record(MLPOT_MMML, {"crd": paths["crd"], "pdb": paths["pdb"]})
+    paths = snapshot_file_paths(tmp_path, MLPOT_KARML, "dcm_9")
+    reg.record(MLPOT_KARML, {"crd": paths["crd"], "pdb": paths["pdb"]})
     data = reg.manifest_path.read_text(encoding="utf-8")
     assert "02_mini" in data
-    assert '"kind": "MMML"' in data
+    assert '"kind": "KARML"' in data
 
 
 def test_registry_tracks_last_rescue_crd(tmp_path: Path) -> None:
@@ -61,10 +61,10 @@ def test_save_stabilized_overlap_rescue_snapshot_uses_hybrid_grms(tmp_path: Path
         "pdb": tmp_path / "10_rescue_equi_at_step_2000_dcm_20.pdb",
     }
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.resolve_mlpot_grms_kcalmol_A",
+        "karml.interfaces.pycharmmInterface.mlpot.cli_common.resolve_mlpot_grms_kcalmol_A",
         return_value=12.5,
     ) as hybrid_grms, mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.minimize_artifacts.save_snapshot_from_charmm",
+        "karml.interfaces.pycharmmInterface.mlpot.minimize_artifacts.save_snapshot_from_charmm",
         return_value=written,
     ) as save_snap:
         save_stabilized_overlap_rescue_snapshot(

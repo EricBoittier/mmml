@@ -23,14 +23,14 @@ def _can_import(name: str) -> bool:
 
 
 def _resolve_ckpt() -> Path | None:
-	ckpt_env = os.environ.get("MMML_CKPT")
+	ckpt_env = os.environ.get("KARML_CKPT")
 	candidates: list[Path] = []
 	if ckpt_env:
 		candidates.append(Path(ckpt_env))
 	candidates.extend(
 		[
 			PROJECT_ROOT / "examples/ckpts_json/DESdimers_params.json",
-			PROJECT_ROOT / "mmml/models/physnetjax/ckpts/DESdimers",
+			PROJECT_ROOT / "karml/models/physnetjax/ckpts/DESdimers",
 		]
 	)
 	for p in candidates:
@@ -45,10 +45,10 @@ def _setup_aco_dimer_mlpot(ckpt: Path):
 		sys.path.insert(0, str(MLPOT_DIR))
 
 	import ase
-	import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+	import karml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
 
 	from _common import build_acetone_dimer_cluster
-	from mmml.interfaces.pycharmmInterface.mlpot import (
+	from karml.interfaces.pycharmmInterface.mlpot import (
 		load_physnet_mlpot_bundle,
 		register_mlpot,
 		select_all_atoms,
@@ -74,7 +74,7 @@ def test_mlpot_nve_writes_dcd_and_restart(tmp_path: Path):
 	if ckpt is None:
 		pytest.skip("No PhysNet checkpoint for MLpot dynamics test")
 
-	from mmml.interfaces.pycharmmInterface.mlpot import (
+	from karml.interfaces.pycharmmInterface.mlpot import (
 		CharmmTrajectoryFiles,
 		build_nve_dynamics,
 		run_dynamics_with_io,
@@ -115,12 +115,12 @@ def test_mlpot_heat_writes_dcd_and_restart(tmp_path: Path):
 	if ckpt is None:
 		pytest.skip("No PhysNet checkpoint for MLpot dynamics test")
 
-	from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+	from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
 		CharmmTrajectoryFiles,
 		build_heat_dynamics,
 		run_dynamics_with_io,
 	)
-	from mmml.interfaces.pycharmmInterface.mlpot.staged_workflow import (
+	from karml.interfaces.pycharmmInterface.mlpot.staged_workflow import (
 		_configure_heat_dynamics_start,
 	)
 

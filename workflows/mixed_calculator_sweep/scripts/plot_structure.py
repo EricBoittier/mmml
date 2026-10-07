@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Bond/angle/dihedral/RDF plots for one completed mixed_calculator_sweep setting.
 
-Reuses `mmml.utils.plotting.trajectory_structure` (the module written for
+Reuses `karml.utils.plotting.trajectory_structure` (the module written for
 exactly this: bonds/angles/dihedrals/RDFs from a trajectory) and
 `scripts/plot_trajectory_structure.py`'s `plot_rdfs`/`plot_internal` plotting
 functions, applied to ASE `Atoms` reconstructed from `trajectory.npz`.
@@ -23,8 +23,8 @@ from pathlib import Path
 import numpy as np
 from ase import Atoms
 
-from mmml.utils.plotting.styles import apply_plot_style
-from mmml.utils.plotting.trajectory_structure import (
+from karml.utils.plotting.styles import apply_plot_style
+from karml.utils.plotting.trajectory_structure import (
     element_pair_rdfs,
     internal_coordinate_distributions,
 )
@@ -57,14 +57,14 @@ def _rebuild_topology(workflow_config_path: Path, repo_root: Path, setting: str,
     workflow_config = yaml.safe_load(workflow_config_path.read_text(encoding="utf-8"))
     spec = workflow_config["settings"][setting]
 
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import ensure_pycharmm_loaded
-    from mmml.md.system import SystemSpec
+    from karml.interfaces.pycharmmInterface.import_pycharmm import ensure_pycharmm_loaded
+    from karml.md.system import SystemSpec
 
     if not ensure_pycharmm_loaded():
         raise RuntimeError("PyCHARMM not available (CHARMM_LIB_DIR / libcharmm.so)")
 
     if spec["system"] == "water_box":
-        from mmml.cli.run.md_system_unified import build_packmol_system_with_ffparams
+        from karml.cli.run.md_system_unified import build_packmol_system_with_ffparams
 
         sys_spec = SystemSpec(
             builder="packmol", composition=spec["composition"],
@@ -72,7 +72,7 @@ def _rebuild_topology(workflow_config_path: Path, repo_root: Path, setting: str,
         )
         system = build_packmol_system_with_ffparams(sys_spec)
     elif spec["system"] == "peptide_water":
-        from mmml.md.assemble import build_system
+        from karml.md.assemble import build_system
 
         sys_spec = SystemSpec(
             builder="peptide_water", n_molecules=int(spec["n_waters"]),

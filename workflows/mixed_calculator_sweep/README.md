@@ -99,7 +99,7 @@ With all of that fixed:
   **Root cause, verified by reading the term's implementation** (not just
   inferred from timing): `ml_pep_water`'s `interaction_cutoff_A` does **not**
   reduce its per-step cost — checked directly in
-  `mmml/interfaces/jaxmdInterface/hybrid_energy.py::make_peptide_water_ml_energy_fn`,
+  `karml/interfaces/jaxmdInterface/hybrid_energy.py::make_peptide_water_ml_energy_fn`,
   every core-water dimer is vmapped through the ML model *every step*
   regardless of the cutoff; the cutoff only applies a post-hoc energy
   switching weight (correct physics, zero runtime effect). Unlike

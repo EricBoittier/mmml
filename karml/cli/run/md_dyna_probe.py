@@ -8,8 +8,8 @@ from typing import Any
 
 import numpy as np
 
-from mmml.cli.run.md_evaluate_npz import (
-    _mmml_cutoff_args,
+from karml.cli.run.md_evaluate_npz import (
+    _karml_cutoff_args,
     _prepare_evaluate_npz_context,
     classify_ml_regime,
     compare_evaluate_to_reference_npz,
@@ -19,8 +19,8 @@ from mmml.cli.run.md_evaluate_npz import (
     resolve_reference_units,
     setup_pycharmm_eval_mlpot,
 )
-from mmml.interfaces.pycharmmInterface.hybrid_reference import compute_com_distances
-from mmml.interfaces.pycharmmInterface.mmml_calculator import ev2kcalmol
+from karml.interfaces.pycharmmInterface.hybrid_reference import compute_com_distances
+from karml.interfaces.pycharmmInterface.karml_calculator import ev2kcalmol
 
 
 def _jsonable_force_sources(force_sources: dict[str, np.ndarray]) -> dict[str, list]:
@@ -48,7 +48,7 @@ def pycharmm_dyna_snapshot(
     reference: Any | None = None,
 ) -> dict[str, Any]:
     """CHARMM state after ``ENER FORCE``: energies, all force lanes, optional MP2 compare."""
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
         charmm_energy_row,
         charmm_positions_angstrom,
         collect_evaluate_force_sources_ev_angstrom,
@@ -170,13 +170,13 @@ def run_dyna_probe(args: Any) -> int:
     if backend == "auto":
         args.backend = "pycharmm"
 
-    from mmml.interfaces.pycharmmInterface.charmm_mpi import prepare_serial_charmm_mpi_env
-    from mmml.interfaces.pycharmmInterface.jax_compile_threads import apply_jax_compile_xla_flags
-    from mmml.interfaces.pycharmmInterface.jax_device_policy import (
+    from karml.interfaces.pycharmmInterface.charmm_mpi import prepare_serial_charmm_mpi_env
+    from karml.interfaces.pycharmmInterface.jax_compile_threads import apply_jax_compile_xla_flags
+    from karml.interfaces.pycharmmInterface.jax_device_policy import (
         apply_mlpot_jax_compilation_cache_env,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import build_nve_dynamics, run_dynamics
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import assert_mlpot_user_active
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import build_nve_dynamics, run_dynamics
+    from karml.interfaces.pycharmmInterface.mlpot.setup import assert_mlpot_user_active
 
     prepare_serial_charmm_mpi_env()
     apply_mlpot_jax_compilation_cache_env(quiet=True)
@@ -214,7 +214,7 @@ def run_dyna_probe(args: Any) -> int:
         resolve_reference_units(ref_path, args) if ref_path is not None else (None, None)
     )
 
-    ml_w, mm_on, mm_w = _mmml_cutoff_args(args)
+    ml_w, mm_on, mm_w = _karml_cutoff_args(args)
 
     pre = pycharmm_dyna_snapshot(
         mlpot_ctx,
@@ -260,7 +260,7 @@ def run_dyna_probe(args: Any) -> int:
 
     if not quiet:
         print(
-            f"mmml md-system dyna-probe: {nstep} NVE step(s), dt={dt_fs} fs, "
+            f"karml md-system dyna-probe: {nstep} NVE step(s), dt={dt_fs} fs, "
             f"PBC={use_pbc}",
             flush=True,
         )
@@ -322,7 +322,7 @@ def run_dyna_probe(args: Any) -> int:
     out_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
     if not quiet:
-        print(f"mmml md-system dyna-probe: wrote {out_path}", flush=True)
+        print(f"karml md-system dyna-probe: wrote {out_path}", flush=True)
         for snap in (pre, post):
             label = snap["label"]
             rmse = snap.get("reference_compare", {}).get("force_rmse_eV_A")

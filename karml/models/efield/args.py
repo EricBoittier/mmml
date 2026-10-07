@@ -302,7 +302,7 @@ def build_evaluate_parser() -> argparse.ArgumentParser:
         type=str,
         default=None,
         metavar="PATH",
-        help="Write HDF5 trajectory for mmml gui (R,Z,N,E,E_pred,F,F_pred,Dxyz,Dxyz_pred,Ef). Requires h5py.",
+        help="Write HDF5 trajectory for karml gui (R,Z,N,E,E_pred,F,F_pred,Dxyz,Dxyz_pred,Ef). Requires h5py.",
     )
     parser.add_argument(
         "--rot-augment",

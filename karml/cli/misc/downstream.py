@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Downstream task CLI for MMML models.
+"""Downstream task CLI for KARML models.
 
 This command generalises the CO2 downstream workflow so that any dataset
-stored in MMML NPZ format (e.g. glycol) can be analysed with arbitrary
+stored in KARML NPZ format (e.g. glycol) can be analysed with arbitrary
 PhysNet/DCMNet checkpoints.
 """
 
@@ -26,7 +26,7 @@ EXAMPLE_DIR = REPO_ROOT / "examples" / "co2" / "dcmnet_physnet_train"
 
 def _import_legacy_calculators():
     sys.path.insert(0, str(EXAMPLE_DIR))
-    from mmml.calculators.simple_inference import create_calculator_from_checkpoint
+    from karml.calculators.simple_inference import create_calculator_from_checkpoint
     from dynamics_calculator import (  # type: ignore
         calculate_frequencies,
         calculate_ir_spectrum,
@@ -75,8 +75,8 @@ class MDMetrics:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="mmml downstream",
-        description="Run harmonic / MD downstream analyses on an MMML dataset",
+        prog="karml downstream",
+        description="Run harmonic / MD downstream analyses on an KARML dataset",
     )
     parser.add_argument("--dataset", required=True, type=Path, help="Path to dataset NPZ file")
     parser.add_argument("--checkpoint-dcm", required=True, type=Path, help="Equivariant checkpoint (best_params.pkl)")

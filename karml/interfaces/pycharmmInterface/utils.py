@@ -1,4 +1,4 @@
-from mmml.interfaces.pycharmmInterface.import_pycharmm import *
+from karml.interfaces.pycharmmInterface.import_pycharmm import *
 import os
 import ase
 import numpy as np
@@ -17,7 +17,7 @@ def set_up_directories(base: str | os.PathLike[str] | None = None) -> None:
     """Create legacy make-res / make-box layout dirs (pdb, psf, xyz, res, dcd).
 
     Only call this from paths that still write relative ``pdb/…``, ``psf/…``,
-    etc. (``mmml make-res``, ``mmml make-box``, ``generate_coordinates``).
+    etc. (``karml make-res``, ``karml make-box``, ``generate_coordinates``).
     ``md-system`` / MLpot use flat files under ``--output-dir`` and must not
     create these in CWD via :func:`ensure_charmm_session_ready`.
     """

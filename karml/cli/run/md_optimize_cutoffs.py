@@ -1,4 +1,4 @@
-"""Cutoff grid search for ``mmml md-system --optimize-cutoffs``."""
+"""Cutoff grid search for ``karml md-system --optimize-cutoffs``."""
 
 from __future__ import annotations
 
@@ -9,11 +9,11 @@ from typing import Any
 
 import numpy as np
 
-from mmml.interfaces.pycharmmInterface.cutoffs import (
+from karml.interfaces.pycharmmInterface.cutoffs import (
     cutoff_grids_from_args,
     handoff_widths_from_args,
 )
-from mmml.interfaces.pycharmmInterface.hybrid_reference import (
+from karml.interfaces.pycharmmInterface.hybrid_reference import (
     ReferenceTrajectory,
     load_reference_trajectory_npz,
     run_cutoff_grid_search,
@@ -21,7 +21,7 @@ from mmml.interfaces.pycharmmInterface.hybrid_reference import (
 
 
 def _atoms_per_from_composition(n_atoms: int, composition: str) -> tuple[list[int], list[str], int]:
-    from mmml.cli.run.md_handoff import cluster_layout_from_composition_string
+    from karml.cli.run.md_handoff import cluster_layout_from_composition_string
 
     atoms_per_list, residue_labels, summary = cluster_layout_from_composition_string(
         composition,
@@ -32,7 +32,7 @@ def _atoms_per_from_composition(n_atoms: int, composition: str) -> tuple[list[in
 
 
 def _build_ase_factory(args: Any, base_ckpt_dir: Path, atoms_per_list: list[int], n_monomers: int):
-    from mmml.interfaces.pycharmmInterface.mmml_calculator import setup_calculator
+    from karml.interfaces.pycharmmInterface.karml_calculator import setup_calculator
 
     ml_w, mm_on, mm_w = handoff_widths_from_args(args)
     max_atoms = max(atoms_per_list) * 2
@@ -60,12 +60,12 @@ def run_optimize_cutoffs(args: Any) -> int:
     """Grid-search ML/MM handoff cutoffs against a reference trajectory NPZ."""
     from ase import Atoms
 
-    from mmml.cli.base import resolve_checkpoint_paths
-    from mmml.cli.run.md_handoff import (
+    from karml.cli.base import resolve_checkpoint_paths
+    from karml.cli.run.md_handoff import (
         cluster_geometry_from_handoff,
         ensure_psf_for_handoff_cluster,
     )
-    from mmml.cli.run.md_pbc_suite.ase import _parse_composition
+    from karml.cli.run.md_pbc_suite.ase import _parse_composition
 
     ref_path = Path(args.reference_npz).expanduser().resolve()
     if not getattr(args, "composition", None):
@@ -99,7 +99,7 @@ def run_optimize_cutoffs(args: Any) -> int:
         )
 
     # Build Z from composition topology (same as handoff continuation).
-    from mmml.cli.run.md_handoff import MdHandoffState
+    from karml.cli.run.md_handoff import MdHandoffState
 
     handoff_stub = MdHandoffState(
         positions=np.zeros((n_atoms, 3)),
@@ -158,7 +158,7 @@ def run_optimize_cutoffs(args: Any) -> int:
     ml_grid, mm_on_grid, mm_w_grid = cutoff_grids_from_args(args)
     if not getattr(args, "quiet", False):
         print(
-            f"mmml md-system optimize-cutoffs: {ref_path.name} "
+            f"karml md-system optimize-cutoffs: {ref_path.name} "
             f"({len(reference.frame_indices)} frames, grids "
             f"ml={len(ml_grid)} mm_on={len(mm_on_grid)} mm_w={len(mm_w_grid)})",
             flush=True,

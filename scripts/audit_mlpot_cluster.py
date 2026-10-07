@@ -36,7 +36,7 @@ def _parse_composition(s: str) -> tuple[str, int]:
 
 
 def _find_mini_crd(out_dir: Path, tag: str) -> Path | None:
-    numbered = out_dir / f"02_mlpot_mmml_{tag}.crd"
+    numbered = out_dir / f"02_mlpot_karml_{tag}.crd"
     direct = numbered if numbered.is_file() else out_dir / f"mini_full_mlpot_{tag}.crd"
     if direct.is_file():
         return direct

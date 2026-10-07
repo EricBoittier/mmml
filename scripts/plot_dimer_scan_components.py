@@ -15,7 +15,7 @@ sys.path.insert(0, str(_REPO_ROOT))
 from ase import Atoms
 from ase.visualize.plot import plot_atoms
 
-from mmml.analysis.dimer_scans import build_rigid_dimer
+from karml.analysis.dimer_scans import build_rigid_dimer
 
 # Monomer registry for structure rendering
 MOLECULES = {

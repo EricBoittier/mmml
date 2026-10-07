@@ -1,6 +1,6 @@
 """Precomputed per-monomer latent-charge templates for liquid MD (Mode D).
 
-``mm_charge_mode=latent_mean`` (see :mod:`mmml.models.mm_charge_mode`) needs a
+``mm_charge_mode=latent_mean`` (see :mod:`karml.models.mm_charge_mode`) needs a
 *fixed* set of per-atom charges for one monomer, derived offline by averaging
 ``neutralize_per_monomer(q_ML)`` (the same quantity Mode B uses live) over many
 dimer forwards of a trained checkpoint -- see

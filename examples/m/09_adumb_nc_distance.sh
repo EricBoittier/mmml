@@ -19,7 +19,7 @@
 #                        export solute → rebuild make-box for SOLVENT → --from-pdb box
 #                        (cannot Packmol a multi-residue solute PDB as one monomer)
 #
-# Requires mmml-patched libcharmm (UM1RXN [min,max]). Do NOT leave CHARMM_LIB_DIR
+# Requires karml-patched libcharmm (UM1RXN [min,max]). Do NOT leave CHARMM_LIB_DIR
 # pointing at a stale PhysNet_PyCHARMM tree without that patch.
 #
 # Examples:
@@ -52,7 +52,7 @@ fi
 # Warn/fail if CHARMM_LIB_DIR looks like an old external PhysNet build (no UM1RXN patch).
 if [[ -n "${CHARMM_LIB_DIR:-}" && "${CHARMM_LIB_DIR}" == *"PhysNet_PyCHARMM"* ]]; then
   echo "FAIL: CHARMM_LIB_DIR=${CHARMM_LIB_DIR}"
-  echo "      That tree is unpatched (UM1RXN). Rebuild mmml CHARMM and retarget:"
+  echo "      That tree is unpatched (UM1RXN). Rebuild karml CHARMM and retarget:"
   echo "        bash scripts/rebuild_charmm_mlpot.sh --clean"
   echo "        export CHARMM_LIB_DIR=${ROOT}/setup/charmm/lib"
   exit 1
@@ -125,19 +125,19 @@ echo "     (needs CHARMM ADUMB + ADUMBRXNCOR + UM1RXN [min,max] patch)"
 echo "     If Unknown umbrella / SIGSEGV / 'out of range': rebuild_charmm_mlpot.sh"
 echo "     Default YAML: ps_heat=100, ξ=r(ClC)−r(CN) ∈ [-6, 6] Å (SN2 band ~[-3,3])"
 echo "     CHARMM_LIB_DIR=${CHARMM_LIB_DIR:-<unset>}"
-echo "     MMML_CGENFF_EXTRA_RTF=${MMML_CGENFF_EXTRA_RTF:-}"
-echo "     MMML_CGENFF_EXTRA_PRM=${MMML_CGENFF_EXTRA_PRM:-}"
+echo "     KARML_CGENFF_EXTRA_RTF=${KARML_CGENFF_EXTRA_RTF:-}"
+echo "     KARML_CGENFF_EXTRA_PRM=${KARML_CGENFF_EXTRA_PRM:-}"
 
 # Ensure CH3CL append RTF/PRM are visible (sourced from examples/m/_env.sh).
-if [[ -z "${MMML_CGENFF_EXTRA_RTF:-}" ]]; then
-  echo "WARN: MMML_CGENFF_EXTRA_RTF unset — CH3CL will not be in CGenFF"
+if [[ -z "${KARML_CGENFF_EXTRA_RTF:-}" ]]; then
+  echo "WARN: KARML_CGENFF_EXTRA_RTF unset — CH3CL will not be in CGenFF"
 fi
-if [[ -z "${MMML_CGENFF_EXTRA_PRM:-}" ]]; then
-  echo "WARN: MMML_CGENFF_EXTRA_PRM unset — CG331–CLGA1 bond/angle may be missing"
+if [[ -z "${KARML_CGENFF_EXTRA_PRM:-}" ]]; then
+  echo "WARN: KARML_CGENFF_EXTRA_PRM unset — CG331–CLGA1 bond/angle may be missing"
 fi
 
 set +e
-uv run mmml md-system \
+uv run karml md-system \
   --config "${CFG}" \
   --output-dir "${OUT}" \
   "${EXTRA[@]}"

@@ -1,8 +1,8 @@
-site_name: MMML Documentation
+site_name: KARML Documentation
 site_description: Molecular Mechanics and Machine-Learned Force-Field Toolkit
-site_url: https://mmml.readthedocs.io/
-repo_url: https://github.com/EricBoittier/mmml
-repo_name: EricBoittier/mmml
+site_url: https://karml.readthedocs.io/
+repo_url: https://github.com/EricBoittier/karml
+repo_name: EricBoittier/karml
 
 # Keep manuscript LaTeX sources in-tree but out of the HTML docs build.
 exclude_docs: |

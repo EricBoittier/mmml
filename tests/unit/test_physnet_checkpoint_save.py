@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import MagicMock
 
-from mmml.models.physnetjax.physnetjax.restart.restart import save_training_checkpoint
+from karml.models.physnetjax.physnetjax.restart.restart import save_training_checkpoint
 
 
 def test_save_training_checkpoint_uses_force_true(tmp_path: Path) -> None:

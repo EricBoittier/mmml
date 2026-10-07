@@ -15,7 +15,7 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 
-from mmml.utils.rich_report import make_compact_table
+from karml.utils.rich_report import make_compact_table
 
 
 def _ensure_np(arr: Any) -> np.ndarray:

@@ -9,7 +9,7 @@
 #SBATCH --time=02:00:00
 
 set -euo pipefail
-REPO="${MMML_REPO:-$HOME/mmml}"
+REPO="${KARML_REPO:-$HOME/karml}"
 ARTIFACTS="${LJ_ARTIFACTS_DIR:?LJ_ARTIFACTS_DIR is required}"
 cd "$REPO"
 export PATH="$HOME/.local/bin:$PATH" UV_NO_SYNC=1

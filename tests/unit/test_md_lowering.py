@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from mmml.md.lowering import (
+from karml.md.lowering import (
     ensemble_from_setup,
     runconfig_from_cg_config,
     runconfig_from_md_system_args,

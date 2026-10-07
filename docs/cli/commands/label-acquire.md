@@ -1,4 +1,4 @@
-# `mmml label-acquire`
+# `karml label-acquire`
 
 Select structures for expensive labels (activation / Jacobian / teacher-gradient).
 
@@ -6,13 +6,13 @@ Select structures for expensive labels (activation / Jacobian / teacher-gradient
 ## Usage
 
 ```bash
-mmml label-acquire --help
+karml label-acquire --help
 ```
 
 ## Options
 
 ```text
-usage: mmml label-acquire [-h] --config CONFIG [--output OUTPUT]
+usage: karml label-acquire [-h] --config CONFIG [--output OUTPUT]
                           [{prepare-pool,fingerprint-models,extract,fit-pca,select,label,train-eval,report,all}]
 
 Compare structure-selection methods for acquiring expensive reference labels.

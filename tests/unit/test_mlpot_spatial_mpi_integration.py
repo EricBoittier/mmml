@@ -9,8 +9,8 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
-from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import DecomposedMlpotCalculator
+from karml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
+from karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import DecomposedMlpotCalculator
 
 
 def _make_calculator(*, spatial_mpi: bool = True, cell: float = 40.0) -> DecomposedMlpotCalculator:
@@ -61,18 +61,18 @@ def _invoke_calculate_charmm(calc: DecomposedMlpotCalculator) -> dict:
     dz = np.zeros(n, dtype=np.float64)
 
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.resolve_mlpot_mic_box_side_A",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.resolve_mlpot_mic_box_side_A",
         return_value=(40.0, "test"),
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.jax_device_policy.mlpot_jax_device_context",
+        "karml.interfaces.pycharmmInterface.jax_device_policy.mlpot_jax_device_context",
         return_value=mock.MagicMock(__enter__=mock.MagicMock(), __exit__=mock.MagicMock()),
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.charmm_mpi.recover_mpi_for_charmm_after_jax",
+        "karml.interfaces.pycharmmInterface.charmm_mpi.recover_mpi_for_charmm_after_jax",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.as_ml_array",
+        "karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.as_ml_array",
         side_effect=lambda arr, dtype=None: jnp.asarray(arr),
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.resolve_ml_compute_dtype",
+        "karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.resolve_ml_compute_dtype",
         return_value=jnp.float32,
     ):
         calc.calculate_charmm(
@@ -82,16 +82,16 @@ def _invoke_calculate_charmm(calc: DecomposedMlpotCalculator) -> dict:
 
 
 def test_spatial_mpi_callback_passes_batch_indices(monkeypatch):
-    monkeypatch.setenv("MMML_MLPOT_SPATIAL_MPI", "1")
+    monkeypatch.setenv("KARML_MLPOT_SPATIAL_MPI", "1")
     calc = _make_calculator(spatial_mpi=True)
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge.mpi_rank_size",
+        "karml.interfaces.pycharmmInterface.mlpot.mpi_bridge.mpi_rank_size",
         return_value=(0, 2),
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.force_exchange.mpi_allreduce_forces",
+        "karml.interfaces.pycharmmInterface.mlpot.mpi_spatial.force_exchange.mpi_allreduce_forces",
         side_effect=lambda f, comm=None: np.asarray(f, dtype=np.float64),
     ) as mock_f, mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.force_exchange.mpi_allreduce_energy",
+        "karml.interfaces.pycharmmInterface.mlpot.mpi_spatial.force_exchange.mpi_allreduce_energy",
         side_effect=lambda e, comm=None: float(e),
     ) as mock_e:
         captured = _invoke_calculate_charmm(calc)
@@ -102,10 +102,10 @@ def test_spatial_mpi_callback_passes_batch_indices(monkeypatch):
 
 
 def test_spatial_mpi_disabled_at_np1(monkeypatch):
-    monkeypatch.setenv("MMML_MLPOT_SPATIAL_MPI", "1")
+    monkeypatch.setenv("KARML_MLPOT_SPATIAL_MPI", "1")
     calc = _make_calculator(spatial_mpi=True)
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge.mpi_rank_size",
+        "karml.interfaces.pycharmmInterface.mlpot.mpi_bridge.mpi_rank_size",
         return_value=(0, 1),
     ):
         captured = _invoke_calculate_charmm(calc)
@@ -113,7 +113,7 @@ def test_spatial_mpi_disabled_at_np1(monkeypatch):
 
 
 def test_rank0_bridge_skips_ml_on_nonzero_rank(monkeypatch):
-    monkeypatch.delenv("MMML_MLPOT_SPATIAL_MPI", raising=False)
+    monkeypatch.delenv("KARML_MLPOT_SPATIAL_MPI", raising=False)
     calc = _make_calculator(spatial_mpi=False)
     calls: list[int] = []
 
@@ -128,19 +128,19 @@ def test_rank0_bridge_skips_ml_on_nonzero_rank(monkeypatch):
     calc._get_spherical_forward_fn = mock.MagicMock(side_effect=_fake_forward_fn)
     n = len(calc.atomic_numbers)
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge.mpi_rank_size",
+        "karml.interfaces.pycharmmInterface.mlpot.mpi_bridge.mpi_rank_size",
         return_value=(2, 4),
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge.broadcast_mlpot_result",
+        "karml.interfaces.pycharmmInterface.mlpot.mpi_bridge.broadcast_mlpot_result",
         side_effect=lambda f, e, n: (np.zeros((n, 3)), 0.0),
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.resolve_mlpot_mic_box_side_A",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.resolve_mlpot_mic_box_side_A",
         return_value=(40.0, "test"),
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.jax_device_policy.mlpot_jax_device_context",
+        "karml.interfaces.pycharmmInterface.jax_device_policy.mlpot_jax_device_context",
         return_value=mock.MagicMock(__enter__=mock.MagicMock(), __exit__=mock.MagicMock()),
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.charmm_mpi.recover_mpi_for_charmm_after_jax",
+        "karml.interfaces.pycharmmInterface.charmm_mpi.recover_mpi_for_charmm_after_jax",
     ):
         calc.calculate_charmm(
             n,
@@ -167,18 +167,18 @@ def test_rank0_bridge_skips_ml_on_nonzero_rank(monkeypatch):
 
 
 def test_broadcast_spatial_uses_allreduce_not_bcast(monkeypatch):
-    from mmml.interfaces.pycharmmInterface.mlpot import mpi_bridge
+    from karml.interfaces.pycharmmInterface.mlpot import mpi_bridge
 
-    monkeypatch.setenv("MMML_MLPOT_SPATIAL_MPI", "1")
+    monkeypatch.setenv("KARML_MLPOT_SPATIAL_MPI", "1")
     forces = np.ones((5, 3), dtype=np.float64)
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge.mpi_rank_size",
+        "karml.interfaces.pycharmmInterface.mlpot.mpi_bridge.mpi_rank_size",
         return_value=(1, 2),
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.force_exchange.mpi_allreduce_forces",
+        "karml.interfaces.pycharmmInterface.mlpot.mpi_spatial.force_exchange.mpi_allreduce_forces",
         return_value=forces * 2.0,
     ) as mock_arf, mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.force_exchange.mpi_allreduce_energy",
+        "karml.interfaces.pycharmmInterface.mlpot.mpi_spatial.force_exchange.mpi_allreduce_energy",
         return_value=3.0,
     ) as mock_are:
         out_f, out_e = mpi_bridge.broadcast_mlpot_result(forces, 1.5, 5)

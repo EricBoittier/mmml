@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from mmml.interfaces.pycharmmInterface.mm_energy_forces import (
+from karml.interfaces.pycharmmInterface.mm_energy_forces import (
     warmup_synthetic_mm_atom_params,
 )
 

@@ -7,7 +7,7 @@ Uses only numpy and ase - no PySCF/CUDA dependencies.
 import numpy as np
 import ase.data
 
-from mmml.data.units import ANGSTROM_TO_BOHR
+from karml.data.units import ANGSTROM_TO_BOHR
 
 
 def compute_dipole_from_point_charges(

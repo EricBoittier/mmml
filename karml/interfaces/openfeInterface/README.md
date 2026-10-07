@@ -14,18 +14,18 @@ micromamba create -c conda-forge -n openfe openfe=1.9
 micromamba activate openfe
 ```
 
-To use with mmml, either:
+To use with karml, either:
 
-1. **Install mmml into the openfe env** (if Python versions are compatible):
+1. **Install karml into the openfe env** (if Python versions are compatible):
    ```bash
    micromamba activate openfe
-   pip install -e /path/to/mmml
+   pip install -e /path/to/karml
    ```
 
 2. **Run the ABFE script from the openfe env** (standalone):
    ```bash
    micromamba activate openfe
-   python mmml/interfaces/openfeInterface/abfe_script.py --sdf ligand.sdf --pdb protein.pdb
+   python karml/interfaces/openfeInterface/abfe_script.py --sdf ligand.sdf --pdb protein.pdb
    ```
 
 ### Reproducible: conda-lock
@@ -42,4 +42,4 @@ See [OpenFE installation docs](https://docs.openfree.energy/en/stable/installati
 
 ## Python version note
 
-mmml requires Python 3.13. OpenFE from conda-forge typically uses Python 3.11 or 3.12. To use both, run the ABFE interface from a separate OpenFE conda environment, or install mmml into that environment if you can relax the Python constraint.
+karml requires Python 3.13. OpenFE from conda-forge typically uses Python 3.11 or 3.12. To use both, run the ABFE interface from a separate OpenFE conda environment, or install karml into that environment if you can relax the Python constraint.

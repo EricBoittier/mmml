@@ -33,7 +33,7 @@ from pathlib import Path
 import numpy as np
 
 # Switching-function exponents (canonical values used by both calculators).
-# Defined here to avoid circular imports between cutoffs ↔ mmml_calculator.
+# Defined here to avoid circular imports between cutoffs ↔ karml_calculator.
 GAMMA_ON: float = 1.0
 GAMMA_OFF: float = 3.0
 
@@ -150,7 +150,7 @@ def add_handoff_cutoff_args(parser: argparse.ArgumentParser) -> None:
             "Decomposed MLpot MM pair provider: Fortran callback idxu/idxv (default) "
             "or JAX neighbor rebuild (--mm-pair-source jax). "
             "All-ML bulk systems with empty callback lists auto-fall back to JAX. "
-            "Override with env MMML_MM_PAIR_SOURCE."
+            "Override with env KARML_MM_PAIR_SOURCE."
         ),
     )
 
@@ -299,14 +299,14 @@ class CutoffParameters:
             )
         )
 
-    # --- Switching functions (must match mmml_calculator implementation) ---
+    # --- Switching functions (must match karml_calculator implementation) ---
     @staticmethod
     def _smoothstep01(s):
         return s * s * s * (10.0 + s * (-15.0 + 6.0 * s))
 
     @staticmethod
     def _sharpstep(r, x0, x1, gamma=3.0):
-        # Match _sharpstep in mmml_calculator: clip -> power -> smoothstep
+        # Match _sharpstep in karml_calculator: clip -> power -> smoothstep
         s = np.clip((r - x0) / np.maximum(x1 - x0, 1e-12), 0.0, 1.0)
         s = s ** gamma
         return CutoffParameters._smoothstep01(s)

@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Run one (backend, seed) setting of the unified mmml.md pipeline.
+"""Run one (backend, seed) setting of the unified karml.md pipeline.
 
 A "backend" here is a driver/sampler + ensemble combination reachable through
-``mmml.md.assemble.assemble_and_run``: FIRE minimization, NVE, NVT, and NPT via
+``karml.md.assemble.assemble_and_run``: FIRE minimization, NVE, NVT, and NPT via
 the ``JaxmdDriver``, plus Metropolis MC via the ``RigidBodySampler``. Every
 backend builds the *same* small TIP3-water box (via the packmol composition
-builder, same path as ``mmml.cli.run.md_system_unified``) and scores it with
+builder, same path as ``karml.cli.run.md_system_unified``) and scores it with
 the same ``ml_intra`` + ``mm_nonbonded`` terms, so the sweep is a like-for-like
 smoke test across everything the unified stack currently supports.
 """
@@ -63,13 +63,13 @@ def main() -> int:
 
     import numpy as np
 
-    from mmml.cli.run.md_system_unified import build_packmol_system_with_ffparams
-    from mmml.interfaces.calculators.simple_inference import create_calculator_from_checkpoint
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import ensure_pycharmm_loaded
-    from mmml.md.assemble import assemble_and_run
-    from mmml.md.config import EnsembleSpec, RunConfig
-    from mmml.md.energy.registry import EnergyContext
-    from mmml.md.system import SystemSpec
+    from karml.cli.run.md_system_unified import build_packmol_system_with_ffparams
+    from karml.interfaces.calculators.simple_inference import create_calculator_from_checkpoint
+    from karml.interfaces.pycharmmInterface.import_pycharmm import ensure_pycharmm_loaded
+    from karml.md.assemble import assemble_and_run
+    from karml.md.config import EnsembleSpec, RunConfig
+    from karml.md.energy.registry import EnergyContext
+    from karml.md.system import SystemSpec
 
     status: dict[str, object] = {
         "backend": args.backend,
@@ -88,8 +88,8 @@ def main() -> int:
 
         checkpoint_path = repo_root / workflow_config["checkpoint"]
         calc = create_calculator_from_checkpoint(str(checkpoint_path))
-        model = getattr(calc, "model", getattr(calc, "_mmml_physnet_model", None))
-        params = getattr(calc, "params", getattr(calc, "_mmml_physnet_params", None))
+        model = getattr(calc, "model", getattr(calc, "_karml_physnet_model", None))
+        params = getattr(calc, "params", getattr(calc, "_karml_physnet_params", None))
         ctx = EnergyContext(model=model, params=params)
 
         spec = SystemSpec(
@@ -127,7 +127,7 @@ def main() -> int:
         # custom sampler/driver must not be passed here for either path.
         traj = assemble_and_run(run_config, system=system, ctx=ctx)
 
-        from mmml.md.results import energy_drift_metrics
+        from karml.md.results import energy_drift_metrics
 
         energies = np.asarray(traj.metadata["energies"], dtype=float)
         finite = bool(np.all(np.isfinite(energies)))

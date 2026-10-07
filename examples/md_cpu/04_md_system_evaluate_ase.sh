@@ -15,7 +15,7 @@ uv run python examples/md_cpu/02_ml_energy_ase.py \
   --n-monomers 2
 
 echo "=== md-system --evaluate-npz (ASE, ML-only vacuum) ==="
-uv run mmml md-system \
+uv run karml md-system \
   --evaluate-npz "${NPZ}" \
   --composition ACO:2 \
   --backend ase \

@@ -16,8 +16,8 @@ except ModuleNotFoundError:  # pragma: no cover
     optax = None  # type: ignore[assignment]
     otu = None  # type: ignore[assignment]
 
-from mmml.models.mm_lj_scales import clip_mm_lj_scale_params
-from mmml.models.physnetjax.physnetjax.training.loss import (
+from karml.models.mm_lj_scales import clip_mm_lj_scale_params
+from karml.models.physnetjax.physnetjax.training.loss import (
     mean_absolute_error,
     mean_squared_loss,
     mean_squared_loss_distill,
@@ -37,7 +37,7 @@ Supports both standard energy/force prediction and charge/dipole prediction.
 def _forward(model_apply, params, batch, batch_size, hybrid_mm=None):
     """Model forward; optionally assembled into the hybrid ML/MM total.
 
-    ``hybrid_mm`` is a :class:`mmml.models.hybrid_energy.HybridMMConfig` (or a
+    ``hybrid_mm`` is a :class:`karml.models.hybrid_energy.HybridMMConfig` (or a
     kwargs dict for it: master LJ tables + switching widths).  When set,
     ``energy``/``forces`` become the hybrid ML/MM total the MD calculator
     evaluates -- so the loss trains what is deployed::
@@ -50,11 +50,11 @@ def _forward(model_apply, params, batch, batch_size, hybrid_mm=None):
     Optional top-level ``mm_lj_sigma_scale`` / ``mm_lj_epsilon_scale`` leaves on
     ``params`` are stripped before ``model_apply`` and fed into hybrid ``E_MM``.
     """
-    from mmml.models.mm_lj_scales import split_mm_lj_scale_params
+    from karml.models.mm_lj_scales import split_mm_lj_scale_params
 
     model_params, sigma_scale, epsilon_scale = split_mm_lj_scale_params(params)
     if hybrid_mm is not None:
-        from mmml.models.hybrid_energy import HybridMMConfig, hybrid_forward
+        from karml.models.hybrid_energy import HybridMMConfig, hybrid_forward
 
         cfg = HybridMMConfig.coerce(hybrid_mm)
         return hybrid_forward(

@@ -45,16 +45,16 @@ import pandas as pd
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(_REPO_ROOT))
 
-from mmml.analysis.dimer_molecules import PAIR_SCAN_CONFIG, make_oriented_scan_geometries
-from mmml.analysis.dimer_scans import min_fragment_contact_distance
+from karml.analysis.dimer_molecules import PAIR_SCAN_CONFIG, make_oriented_scan_geometries
+from karml.analysis.dimer_scans import min_fragment_contact_distance
 from scripts.run_dimer_scan_campaign import build_pair_distance_grid
 
 HARTREE_TO_EV = 27.211386245988
 EV_TO_KCAL_MOL = 23.060548867
 HARTREE_TO_KCAL_MOL = HARTREE_TO_EV * EV_TO_KCAL_MOL
 
-# Deliberately not imported from mmml.interfaces.qc_backends.orca_qm: that
-# module transitively imports mmml.interfaces.pycharmmInterface.import_pycharmm,
+# Deliberately not imported from karml.interfaces.qc_backends.orca_qm: that
+# module transitively imports karml.interfaces.pycharmmInterface.import_pycharmm,
 # which does a *module-level* `import pycharmm` (+ MPI init) whenever
 # libcharmm.so is present on the system — completely unrelated to this
 # ORCA-only script, but it would silently drag in the same CHARMM/MPI

@@ -7,16 +7,16 @@ but confirms the MLpot callback uses spatial batch indices and MPI allreduce.
 **Without CHARMM** (callback-only, recommended first):
 
 ```bash
-MMML_MPI_NP=2 MMML_MLPOT_SPATIAL_MPI=1 \\
-  ./scripts/mmml-charmm-mpirun.sh python \\
+KARML_MPI_NP=2 KARML_MLPOT_SPATIAL_MPI=1 \\
+  ./scripts/karml-charmm-mpirun.sh python \\
   tests/functionality/mlpot/06_spatial_mpi_tier2_smoke.py
 ```
 
 **With CHARMM registration** (optional second step):
 
 ```bash
-MMML_MPI_NP=2 MMML_MLPOT_SPATIAL_MPI=1 \\
-  ./scripts/mmml-charmm-mpirun.sh python \\
+KARML_MPI_NP=2 KARML_MLPOT_SPATIAL_MPI=1 \\
+  ./scripts/karml-charmm-mpirun.sh python \\
   tests/functionality/mlpot/06_spatial_mpi_tier2_smoke.py --charmm-ener \\
   --residue ACO --n-molecules 4
 ```
@@ -50,7 +50,7 @@ def _parse_args() -> argparse.Namespace:
 
 
 def _mpi_info() -> tuple[int, int]:
-    from mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
+    from karml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
 
     return mpi_rank_size()
 
@@ -61,7 +61,7 @@ def _log(msg: str) -> None:
 
 
 def _tier2_validate() -> int:
-    from mmml.interfaces.pycharmmInterface.mlpot.spatial_mpi_validate import (
+    from karml.interfaces.pycharmmInterface.mlpot.spatial_mpi_validate import (
         render_tier2_report,
         validate_tier2_spatial_mpi_env,
     )
@@ -80,12 +80,12 @@ def _hybrid_callback_smoke(box_side: float) -> int:
     import jax.numpy as jnp
 
     _log("hybrid callback: importing DecomposedMlpotCalculator (may take 1-2 min first run)")
-    from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
-    from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import DecomposedMlpotCalculator
-    from mmml.interfaces.pycharmmInterface.mlpot.medium_pbc_validation import (
+    from karml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
+    from karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import DecomposedMlpotCalculator
+    from karml.interfaces.pycharmmInterface.mlpot.medium_pbc_validation import (
         lattice_positions_cubic_pbc,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
+    from karml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
 
     rank, size = mpi_rank_size()
     _log("hybrid callback: building lattice cluster")
@@ -131,23 +131,23 @@ def _hybrid_callback_smoke(box_side: float) -> int:
 
     _log("hybrid callback: running calculate_charmm (mocked ML forward)")
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.resolve_mlpot_mic_box_side_A",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.resolve_mlpot_mic_box_side_A",
         return_value=(box_side, "smoke"),
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.jax_device_policy.mlpot_jax_device_context",
+        "karml.interfaces.pycharmmInterface.jax_device_policy.mlpot_jax_device_context",
         return_value=mock.MagicMock(__enter__=mock.MagicMock(), __exit__=mock.MagicMock()),
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.charmm_mpi.recover_mpi_for_charmm_after_jax",
+        "karml.interfaces.pycharmmInterface.charmm_mpi.recover_mpi_for_charmm_after_jax",
     ), mock.patch(
-        "mmml.utils.jax_gpu_warmup.sync_jax_gpu_before_charmm",
+        "karml.utils.jax_gpu_warmup.sync_jax_gpu_before_charmm",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.as_ml_array",
+        "karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.as_ml_array",
         side_effect=lambda arr, dtype=None: jnp.asarray(arr),
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.resolve_ml_compute_dtype",
+        "karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.resolve_ml_compute_dtype",
         return_value=jnp.float32,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.jax.device_get",
+        "karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.jax.device_get",
         side_effect=lambda x: np.asarray(x),
     ):
         energy = calc.calculate_charmm(
@@ -213,11 +213,11 @@ def _charmm_ener_smoke(args: argparse.Namespace) -> int:
 
     ckpt = resolve_checkpoint(args.checkpoint)
     z, r = build_ase_cluster(args.residue, args.n_molecules, args.spacing)
-    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+    import karml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
     import pycharmm
     import pycharmm.energy as energy
 
-    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import setup_charmm_environment
+    from karml.interfaces.pycharmmInterface.mlpot.pbc_env import setup_charmm_environment
 
     setup_charmm_environment(use_pbc=True, cubic_box_side_A=float(args.box_side))
     setup_charmm_nbonds()
@@ -226,7 +226,7 @@ def _charmm_ener_smoke(args: argparse.Namespace) -> int:
     import ase
 
     atoms = ase.Atoms(numbers=z, positions=r)
-    from mmml.models.physnetjax.physnetjax.calc.helper_mlp import get_pyc
+    from karml.models.physnetjax.physnetjax.calc.helper_mlp import get_pyc
 
     pyCModel = get_pyc(params, model, atoms)
     mlpot = pycharmm.MLpot(
@@ -249,7 +249,7 @@ def _charmm_ener_smoke(args: argparse.Namespace) -> int:
 
 
 def main() -> int:
-    from mmml.interfaces.pycharmmInterface.charmm_mpi import (
+    from karml.interfaces.pycharmmInterface.charmm_mpi import (
         mpi4py_openmpi_mismatch,
         prepare_serial_charmm_mpi_env,
         rebuild_mpi4py_shell_hint,
@@ -261,7 +261,7 @@ def main() -> int:
         print(f"FAIL: {msg}", file=sys.stderr)
         print(rebuild_mpi4py_shell_hint(), file=sys.stderr)
         return 1
-    from mmml.interfaces.pycharmmInterface.charmm_mpi import ensure_charmm_mpi_initialized
+    from karml.interfaces.pycharmmInterface.charmm_mpi import ensure_charmm_mpi_initialized
 
     ensure_charmm_mpi_initialized()
     args = _parse_args()

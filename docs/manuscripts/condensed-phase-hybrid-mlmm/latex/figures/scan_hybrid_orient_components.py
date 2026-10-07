@@ -64,17 +64,17 @@ def main() -> int:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument(
         "--checkpoint",
-        default="/mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/ckpts/"
+        default="/mmhome/boittier/home/karml/artifacts/nh3_ch3cl/ckpts/"
         "params_hybrid_mm_fixed_lj_scales_2026-07-31_14-34-33.json",
     )
     p.add_argument(
         "--sidecar",
-        default="/mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/ckpts/"
+        default="/mmhome/boittier/home/karml/artifacts/nh3_ch3cl/ckpts/"
         "hybrid_mm_fixed_lj_scales-32a09175-7932-419d-8935-9832caf00c78/hybrid_mm.json",
     )
     p.add_argument(
         "--data",
-        default="/mmhome/boittier/home/mmml/artifacts/nh3_ch3cl/dataset_cgenff.npz",
+        default="/mmhome/boittier/home/karml/artifacts/nh3_ch3cl/dataset_cgenff.npz",
     )
     p.add_argument("--n-mono", type=int, default=5, help="atoms per monomer")
     p.add_argument("--n-directions", type=int, default=6)
@@ -117,11 +117,11 @@ def main() -> int:
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
-    from mmml.analysis.dimer_scans import intermolecular_min_distance
-    from mmml.cli.misc.physnet_evaluate import _load_physnet_checkpoint
-    from mmml.models.hybrid_energy import HYBRID_MM_BATCH_KEYS, hybrid_forward
-    from mmml.models.physnetjax.physnetjax.data.batches import prepare_batches_jit
-    from mmml.models.short_range_wall import inter_monomer_wall_energy
+    from karml.analysis.dimer_scans import intermolecular_min_distance
+    from karml.cli.misc.physnet_evaluate import _load_physnet_checkpoint
+    from karml.models.hybrid_energy import HYBRID_MM_BATCH_KEYS, hybrid_forward
+    from karml.models.physnetjax.physnetjax.data.batches import prepare_batches_jit
+    from karml.models.short_range_wall import inter_monomer_wall_energy
 
     min_contact = float(args.min_contact)
     raw = dict(np.load(args.data, allow_pickle=True))
@@ -646,8 +646,8 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    # Ensure mmml repo is importable when launched from manuscript tree.
-    repo = Path("/mmhome/boittier/home/mmml")
+    # Ensure karml repo is importable when launched from manuscript tree.
+    repo = Path("/mmhome/boittier/home/karml")
     if str(repo) not in sys.path:
         sys.path.insert(0, str(repo))
     raise SystemExit(main())

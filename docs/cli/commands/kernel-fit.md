@@ -1,4 +1,4 @@
-# `mmml kernel-fit`
+# `karml kernel-fit`
 
 Kernel fitting utilities.
 
@@ -6,13 +6,13 @@ Kernel fitting utilities.
 ## Usage
 
 ```bash
-mmml kernel-fit --help
+karml kernel-fit --help
 ```
 
 ## Options
 
 ```text
-usage: mmml kernel-fit [-h] [--out-dir OUT_DIR] [--natmk NATMK]
+usage: karml kernel-fit [-h] [--out-dir OUT_DIR] [--natmk NATMK]
                        [--out-h5 OUT_H5] [--out-mdcm OUT_MDCM]
                        [--out-kmdcm OUT_KMDCM] [--residue-name RESIDUE_NAME]
                        [--nkfr NKFR] [--optimize] [--train-frames TRAIN_FRAMES]

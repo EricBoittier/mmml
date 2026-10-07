@@ -7,7 +7,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from mmml.models.latent_charge_template import (
+from karml.models.latent_charge_template import (
     LatentChargeTemplate,
     load_latent_charge_template,
     save_latent_charge_template,

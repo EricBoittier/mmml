@@ -4,14 +4,14 @@ LEG="${1:?leg name}"
 WORKFLOW_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 REPO_ROOT="$(cd "$WORKFLOW_ROOT/../../.." && pwd)"
 cd "$REPO_ROOT"
-export MMML_CKPT="${MMML_CKPT:?export MMML_CKPT}"
+export KARML_CKPT="${KARML_CKPT:?export KARML_CKPT}"
 OUT="$WORKFLOW_ROOT/results/$LEG"
 mkdir -p "$OUT"
-exec mmml md-system \
+exec karml md-system \
   --setup pbc_nve \
   --backend pycharmm \
   --composition "DCM:5" \
-  --checkpoint "$MMML_CKPT" \
+  --checkpoint "$KARML_CKPT" \
   --output-dir "$OUT" \
   --md-stages mini,nve \
   --ps 1.0 \

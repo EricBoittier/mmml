@@ -1,4 +1,4 @@
-# `mmml mpi-check`
+# `karml mpi-check`
 
 Validate OpenMPI/CHARMM/mpi4py for MLpot.
 
@@ -6,13 +6,13 @@ Validate OpenMPI/CHARMM/mpi4py for MLpot.
 ## Usage
 
 ```bash
-mmml mpi-check --help
+karml mpi-check --help
 ```
 
 ## Options
 
 ```text
-usage: mmml mpi-check [-h] [--json] [--strict] [--prelaunch] [--tier2] [--tier3]
+usage: karml mpi-check [-h] [--json] [--strict] [--prelaunch] [--tier2] [--tier3]
 
 Validate OpenMPI / CHARMM / mpi4py setup for PyCHARMM MLpot runs.
 

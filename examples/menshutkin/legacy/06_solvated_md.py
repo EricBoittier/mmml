@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Solvated reactive ML/MM dynamics for NH3 + CH3Cl with JAX-MD.
 
-Why this is not just ``mmml md-system --backend jaxmd``
+Why this is not just ``karml md-system --backend jaxmd``
 ------------------------------------------------------
 The stock unified path composes ``ml_intra + mm_nonbonded``, which is wrong for
 this system in three separate ways. Running it as-is on a water box gives
@@ -70,7 +70,7 @@ SOLUTE_Z = np.array([7, 1, 1, 1, 6, 17, 1, 1, 1], dtype=np.int32)
 def build_system(composition: str, box_size: float, seed: int, psf_path: Path):
     """Packmol composition -> MolecularSystem with CGenFF FFParams.
 
-    Mirrors ``mmml.cli.run.md_system_unified.build_packmol_system_with_ffparams``
+    Mirrors ``karml.cli.run.md_system_unified.build_packmol_system_with_ffparams``
     but writes the PSF somewhere persistent: that helper uses a
     ``TemporaryDirectory`` which is removed before it returns, so the resulting
     ``system.psf_path`` points at a deleted file and any term needing bonded
@@ -78,14 +78,14 @@ def build_system(composition: str, box_size: float, seed: int, psf_path: Path):
     """
     import pycharmm.write as write
 
-    from mmml.cli.run.md_pbc_suite.cluster import build_packmol_composition_cluster
-    from mmml.md.builders.placement import (
+    from karml.cli.run.md_pbc_suite.cluster import build_packmol_composition_cluster
+    from karml.md.builders.placement import (
         _box,
         _composition,
         _lower_optional_psf,
         _placement_system,
     )
-    from mmml.md.system import SystemSpec
+    from karml.md.system import SystemSpec
 
     spec = SystemSpec(
         builder="packmol",
@@ -262,10 +262,10 @@ def dump_packed(composition: str, box_size: float, seed: int, out: Path) -> int:
     Runs as its own process so CHARMM's global state is never reused (see
     build_solvated_system).
     """
-    from mmml.cli.run.md_pbc_suite.cluster import build_packmol_composition_cluster
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import ensure_pycharmm_loaded
-    from mmml.md.builders.placement import _composition
-    from mmml.md.system import SystemSpec
+    from karml.cli.run.md_pbc_suite.cluster import build_packmol_composition_cluster
+    from karml.interfaces.pycharmmInterface.import_pycharmm import ensure_pycharmm_loaded
+    from karml.md.builders.placement import _composition
+    from karml.md.system import SystemSpec
 
     if not ensure_pycharmm_loaded():
         raise SystemExit("PyCHARMM not available")
@@ -341,7 +341,7 @@ def main() -> int:
 
     n_solvent = args.n_solvent
     if n_solvent is None:
-        from mmml.analysis.residue_geometry import load_residue_monomer_atoms
+        from karml.analysis.residue_geometry import load_residue_monomer_atoms
 
         mono = load_residue_monomer_atoms(resi, generate=True)
         molar_mass = float(sum(mono.get_masses()))  # g/mol
@@ -365,7 +365,7 @@ def main() -> int:
 
     jax.config.update("jax_enable_x64", True)
 
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import ensure_pycharmm_loaded
+    from karml.interfaces.pycharmmInterface.import_pycharmm import ensure_pycharmm_loaded
 
     if not ensure_pycharmm_loaded():
         raise SystemExit("PyCHARMM not available (CHARMM_LIB_DIR / libcharmm.so)")
@@ -388,10 +388,10 @@ def main() -> int:
     print(f"built xi     {xi_built:+.3f} A")
 
     # --- energy terms -------------------------------------------------------
-    from mmml.md.assemble import build_hybrid_energy
-    from mmml.md.config import EnsembleSpec, RunConfig
-    from mmml.md.energy.registry import EnergyContext
-    from mmml.md.restraints import LinearDistanceCV
+    from karml.md.assemble import build_hybrid_energy
+    from karml.md.config import EnsembleSpec, RunConfig
+    from karml.md.energy.registry import EnergyContext
+    from karml.md.restraints import LinearDistanceCV
 
     calc_model, calc_params = _load_model(Path(os.environ.get("MENSH_CKPT", REPO_ROOT / "model_ext.json")))
 
@@ -423,7 +423,7 @@ def main() -> int:
     # --- sanity check before spending GPU time ------------------------------
     import jax.numpy as jnp
 
-    from mmml.md.neighbors import make_intermolecular_neighbor_fn
+    from karml.md.neighbors import make_intermolecular_neighbor_fn
 
     nbr_fn = make_intermolecular_neighbor_fn(system, 12.0, None)
     kw = {k: jnp.asarray(v) for k, v in nbr_fn(r, np.asarray(system.box)).items()}
@@ -449,7 +449,7 @@ def main() -> int:
     # --- run ----------------------------------------------------------------
     import dataclasses
 
-    from mmml.md.assemble import assemble_and_run
+    from karml.md.assemble import assemble_and_run
 
     masses = np.asarray([_mass(z) for z in np.asarray(system.Z)], dtype=float)
 
@@ -530,13 +530,13 @@ def _mass(z: int) -> float:
 
 
 def _load_model(checkpoint: Path):
-    from mmml.interfaces.calculators.simple_inference import (
+    from karml.interfaces.calculators.simple_inference import (
         create_calculator_from_checkpoint,
     )
 
     calc = create_calculator_from_checkpoint(str(checkpoint))
-    model = getattr(calc, "model", None) or calc._mmml_physnet_model
-    params = getattr(calc, "params", None) or calc._mmml_physnet_params
+    model = getattr(calc, "model", None) or calc._karml_physnet_model
+    params = getattr(calc, "params", None) or calc._karml_physnet_params
     return model, params
 
 

@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from mmml.md.restraints import DihedralRestraint, DistanceRestraint
+from karml.md.restraints import DihedralRestraint, DistanceRestraint
 
 
 def test_distance_restraint_energy_and_validation():

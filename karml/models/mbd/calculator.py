@@ -20,7 +20,7 @@ try:
 except ModuleNotFoundError as exc:  # pragma: no cover - exercised only without ASE.
     raise ModuleNotFoundError("QCML MBD calculator requires ASE.") from exc
 
-from mmml.models.mbd.model import E3xMBDModel, mbd_energy_and_forces
+from karml.models.mbd.model import E3xMBDModel, mbd_energy_and_forces
 
 
 @dataclass(frozen=True)
@@ -72,12 +72,12 @@ def load_mbd_model(checkpoint: str | Path) -> tuple[E3xMBDModel, Any]:
 
     Accepts either an Orbax checkpoint directory (with a sibling
     ``model_config.json``) or a portable JSON file produced by
-    :func:`mmml.utils.model_checkpoint.orbax_to_json` (params + config bundled
+    :func:`karml.utils.model_checkpoint.orbax_to_json` (params + config bundled
     together, no sibling file needed).
     """
     checkpoint = Path(checkpoint).expanduser()
     if checkpoint.is_file() and checkpoint.suffix == ".json":
-        from mmml.utils.model_checkpoint import json_to_params
+        from karml.utils.model_checkpoint import json_to_params
 
         restored = json_to_params(checkpoint)
         raw_config = restored.get("config")

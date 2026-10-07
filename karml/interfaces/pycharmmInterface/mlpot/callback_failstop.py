@@ -43,7 +43,7 @@ can rebind and rebuild lists. Once that check verifies USER, it calls
 (exit 86). Extent errors and other unexpected exceptions are always fatal.
 The deferred-probe path (PBC + MPI-linked CHARMM) stays disarmed.
 
-``MMML_MLPOT_CALLBACK_FAIL_EXIT_CODE`` (1..255) changes the exit code for tests
+``KARML_MLPOT_CALLBACK_FAIL_EXIT_CODE`` (1..255) changes the exit code for tests
 only; production runs should leave it unset.
 """
 
@@ -61,10 +61,10 @@ from typing import Any, Callable, NoReturn, TypeVar
 MLPOT_CALLBACK_FAILURE_EXIT_CODE = 86
 """Process exit status after an exception inside the MLpot energy callback."""
 
-EXIT_CODE_ENV = "MMML_MLPOT_CALLBACK_FAIL_EXIT_CODE"
+EXIT_CODE_ENV = "KARML_MLPOT_CALLBACK_FAIL_EXIT_CODE"
 """Test-only override of :data:`MLPOT_CALLBACK_FAILURE_EXIT_CODE`."""
 
-_BANNER = "MMML MLPOT CALLBACK FAILURE"
+_BANNER = "KARML MLPOT CALLBACK FAILURE"
 
 _last_failure: dict[str, Any] | None = None
 
@@ -239,7 +239,7 @@ def fail_closed_callback(
     ``exit_fn`` returns, the process is still terminated with ``os._exit``:
     returning to CHARMM is never an option.
     """
-    if getattr(fn, "__mmml_fail_closed__", False):
+    if getattr(fn, "__karml_fail_closed__", False):
         return fn
 
     @functools.wraps(fn)
@@ -257,7 +257,7 @@ def fail_closed_callback(
                 exit_fn(code)
             terminate_after_callback_failure(code)
 
-    guarded.__mmml_fail_closed__ = True  # type: ignore[attr-defined]
+    guarded.__karml_fail_closed__ = True  # type: ignore[attr-defined]
     return guarded
 
 

@@ -100,7 +100,7 @@ def main() -> int:
     out_dir.mkdir(parents=True, exist_ok=True)
 
     import ase
-    from mmml.interfaces.pycharmmInterface.mlpot import (
+    from karml.interfaces.pycharmmInterface.mlpot import (
         MinimizeWithMlpotConfig,
         get_charmm_positions_array,
         load_physnet_mlpot_bundle,

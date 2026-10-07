@@ -48,9 +48,9 @@ def main() -> int:
         ok = False
 
     try:
-        import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+        import karml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
 
-        print("  OK  mmml import_pycharmm (CHARMM_HOME / CHARMM_LIB_DIR)")
+        print("  OK  karml import_pycharmm (CHARMM_HOME / CHARMM_LIB_DIR)")
     except Exception as exc:
         print(f"  FAIL import_pycharmm: {exc}")
         ok = False

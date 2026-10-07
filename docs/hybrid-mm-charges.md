@@ -2,14 +2,14 @@
 
 How per-atom charges enter **intermolecular `E_MM` Coulomb** in hybrid ML/MM
 training and deployment.  Implementation:
-[`mmml/models/mm_charge_mode.py`](https://github.com/EricBoittier/mmml/blob/main/mmml/models/mm_charge_mode.py).
+[`karml/models/mm_charge_mode.py`](https://github.com/EricBoittier/karml/blob/main/karml/models/mm_charge_mode.py).
 
 Related: [Hybrid potential regions](hybrid-potential-regions.md),
-[hybrid energy assembly](https://github.com/EricBoittier/mmml/blob/main/mmml/models/hybrid_energy.py),
+[hybrid energy assembly](https://github.com/EricBoittier/karml/blob/main/karml/models/hybrid_energy.py),
 [**trainable LJ scales**](hybrid-mm-lj-scales.md).
 
 **Example YAMLs (train + MD for all three modes):**
-[`examples/hybrid_mm_charges/`](https://github.com/EricBoittier/mmml/tree/main/examples/hybrid_mm_charges)
+[`examples/hybrid_mm_charges/`](https://github.com/EricBoittier/karml/tree/main/examples/hybrid_mm_charges)
 — see that folder’s `README.md` for the table and copy-paste commands.
 
 ### Perturbative nomenclature (Q⁰ / Q¹)
@@ -65,9 +65,9 @@ q_MM = q_CGenFF
 ```
 
 - **Train:** `--hybrid-mm` without `--mm-charge-mode` / `--mm-charge-correction`
-  — YAML: [`train_fixed.yaml`](https://github.com/EricBoittier/mmml/blob/main/examples/hybrid_mm_charges/train_fixed.yaml)
+  — YAML: [`train_fixed.yaml`](https://github.com/EricBoittier/karml/blob/main/examples/hybrid_mm_charges/train_fixed.yaml)
 - **MD:** PSF / RTF charges in `mm_energy_forces` (default)
-  — YAML: [`md_fixed.yaml`](https://github.com/EricBoittier/mmml/blob/main/examples/hybrid_mm_charges/md_fixed.yaml)
+  — YAML: [`md_fixed.yaml`](https://github.com/EricBoittier/karml/blob/main/examples/hybrid_mm_charges/md_fixed.yaml)
 - Charge head may still exist for dipoles / `E_ML` electrostatics
 - What `scripts/check_hybrid_train_md_parity.py` exercises by default
 
@@ -108,15 +108,15 @@ q_MM = neutralize_per_monomer(Q¹)
 Replace CGenFF in `E_MM`; do not add.  Q¹ is partner-perturbed (AB context).
 
 - **Train:** `--hybrid-mm --mm-charge-mode latent` (or `q1`) `--charges`
-  — YAML: [`train_latent.yaml`](https://github.com/EricBoittier/mmml/blob/main/examples/hybrid_mm_charges/train_latent.yaml)
+  — YAML: [`train_latent.yaml`](https://github.com/EricBoittier/karml/blob/main/examples/hybrid_mm_charges/train_latent.yaml)
 - **MD:** `--mm-charge-mode latent` (dimer-only; same gates as Mode C)
-  — YAML: [`md_latent.yaml`](https://github.com/EricBoittier/mmml/blob/main/examples/hybrid_mm_charges/md_latent.yaml)
+  — YAML: [`md_latent.yaml`](https://github.com/EricBoittier/karml/blob/main/examples/hybrid_mm_charges/md_latent.yaml)
 - **`q_ML` source:** AB dimer forward (train `out_ab["charges"]`; MD sole dimer slot)
 - Liquids / JAX-PME / chunked multi-GPU apply: refused
 
 ### Minimal runnable example — native Ewald, `fixed` vs `latent`, small system
 
-[`examples/hybrid_mm_charges/monomer_ml_mm_ewald_example.py`](https://github.com/EricBoittier/mmml/blob/main/examples/hybrid_mm_charges/monomer_ml_mm_ewald_example.py)
+[`examples/hybrid_mm_charges/monomer_ml_mm_ewald_example.py`](https://github.com/EricBoittier/karml/blob/main/examples/hybrid_mm_charges/monomer_ml_mm_ewald_example.py)
 exercises **Mode A** and **Mode B** together with `lr_solver="ewald"` on a
 tiny synthetic 2-monomer/5-atom system — no checkpoint, no CHARMM:
 
@@ -145,9 +145,9 @@ CHARMM still evaluates BOND/ANGL/DIHE while USER owns ML monomers + native
 Ewald Coulomb, use:
 
 ```bash
-export MMML_CKPT=/path/to/params.json   # Mode B: charges=True / latent-trained
-mmml md-system --config examples/hybrid_mm_charges/md_fixed_ewald_dimer.yaml --run-all
-mmml md-system --config examples/hybrid_mm_charges/md_latent_ewald_dimer.yaml --run-all
+export KARML_CKPT=/path/to/params.json   # Mode B: charges=True / latent-trained
+karml md-system --config examples/hybrid_mm_charges/md_fixed_ewald_dimer.yaml --run-all
+karml md-system --config examples/hybrid_mm_charges/md_latent_ewald_dimer.yaml --run-all
 ```
 
 Point `defaults.checkpoint` at a matching Mode A / Mode B hybrid checkpoint
@@ -162,9 +162,9 @@ q_MM = q_CGenFF + neutralize_per_monomer(q_ML)
 ```
 
 - **Train:** `--mm-charge-mode fixed_plus_latent` or `--mm-charge-correction` (requires `--charges`)
-  — YAML: [`train_fixed_plus_latent.yaml`](https://github.com/EricBoittier/mmml/blob/main/examples/hybrid_mm_charges/train_fixed_plus_latent.yaml)
+  — YAML: [`train_fixed_plus_latent.yaml`](https://github.com/EricBoittier/karml/blob/main/examples/hybrid_mm_charges/train_fixed_plus_latent.yaml)
 - **MD:** `--mm-charge-mode fixed_plus_latent` (or `--mm-charge-correction`)
-  — YAML: [`md_fixed_plus_latent.yaml`](https://github.com/EricBoittier/mmml/blob/main/examples/hybrid_mm_charges/md_fixed_plus_latent.yaml)
+  — YAML: [`md_fixed_plus_latent.yaml`](https://github.com/EricBoittier/karml/blob/main/examples/hybrid_mm_charges/md_fixed_plus_latent.yaml)
 - **`q_ML` source in train:** AB dimer forward (`out_ab["charges"]`)
 - **Projection:** required — the charge head is a bare `Dense`; neutrality is
   only a soft loss.  Unprojected net monomer charge turns far-field MM from
@@ -211,13 +211,13 @@ since it is just a fixed per-atom charges array handed to the same
   This runs the trained model over `--max-samples` `DCM,DCM` homo-dimers,
   reads `out_ab["charges"]` for monomer A of each, projects it net-zero with
   `neutralize_per_monomer`, and averages. The saved `.npz`
-  (`mmml.models.latent_charge_template.LatentChargeTemplate`) records the
+  (`karml.models.latent_charge_template.LatentChargeTemplate`) records the
   mean, the per-atom std (diagnostic — large values mean a single frozen
   template is a poor fit for that species), sample count, and provenance.
   Loading refuses a template whose net charge exceeds `1e-3 e` (a non-neutral
   monomer makes the tiled box non-neutral, which breaks the Ewald sum).
 - **MD:** `--mm-charge-mode latent_mean --mm-latent-charge-template <path>`
-  on `mmml/cli/run/md_system.py` or the `md-pbc-suite` `jaxmd`/`ase` backends.
+  on `karml/cli/run/md_system.py` or the `md-pbc-suite` `jaxmd`/`ase` backends.
 - **v1 limitation:** homogeneous liquids only (every monomer the same size
   and species as the template) — `setup_calculator` raises if
   `ATOMS_PER_MONOMER` is heterogeneous. Mixed-species liquids need one
@@ -226,9 +226,9 @@ since it is just a fixed per-atom charges array handed to the same
   charges are fixed for the whole run (same value regardless of local
   environment) — see Mode D vs L2/L3 below.
 
-Implementation: [`mmml/models/latent_charge_template.py`](https://github.com/EricBoittier/mmml/blob/main/mmml/models/latent_charge_template.py),
+Implementation: [`karml/models/latent_charge_template.py`](https://github.com/EricBoittier/karml/blob/main/karml/models/latent_charge_template.py),
 wired into `setup_calculator` in
-[`mmml/interfaces/pycharmmInterface/mmml_calculator.py`](https://github.com/EricBoittier/mmml/blob/main/mmml/interfaces/pycharmmInterface/mmml_calculator.py).
+[`karml/interfaces/pycharmmInterface/karml_calculator.py`](https://github.com/EricBoittier/karml/blob/main/karml/interfaces/pycharmmInterface/karml_calculator.py).
 
 ---
 
@@ -255,10 +255,10 @@ energy contribution.
   Mode E just stops discarding it. (Previously the code only ever read one
   fixed dimer slot's charges, hardcoded for the `n_monomers==2` case — see
   `calculate_ml_contributions` / `_aggregate_dynamic_latent_charges` in
-  `mmml_calculator.py`.)
+  `karml_calculator.py`.)
 - **Aggregation core is pure and unit-tested**: the generic "weighted
   scatter-average" reduction lives in
-  [`mmml/models/dynamic_latent_charges.py`](https://github.com/EricBoittier/mmml/blob/main/mmml/models/dynamic_latent_charges.py)
+  [`karml/models/dynamic_latent_charges.py`](https://github.com/EricBoittier/karml/blob/main/karml/models/dynamic_latent_charges.py)
   (`weighted_scatter_average`), separate from the MD-calculator-specific
   geometry/padding code that feeds it.
 - **v1 limitation — zero-weight atoms get charge 0, not an isolated-monomer

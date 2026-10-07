@@ -12,7 +12,7 @@ import numpy as np
 def _charmm_velocities_array() -> np.ndarray | None:
     """Best-effort CHARMM main-set velocities (N, 3) or None."""
     try:
-        import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+        import karml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
         import pycharmm.coor as coor
 
         v = coor.get_velocity()
@@ -211,13 +211,13 @@ def restore_positions_from_overlap_run_state(
         positions = tree.get("positions")
         if positions is None:
             continue
-        from mmml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
+        from karml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
 
         sync_charmm_positions(np.asarray(positions, dtype=np.float64))
         velocities = tree.get("velocities")
         if velocities is not None:
             try:
-                import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+                import karml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
                 import pycharmm.coor as coor
 
                 v = np.asarray(velocities, dtype=np.float64)
@@ -244,12 +244,12 @@ def maybe_save_overlap_run_state(
 ) -> Path | None:
     if directory is None:
         return None
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
+    from karml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
 
     positions = get_charmm_positions_array()
     box = None
     try:
-        from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import _read_charmm_box_sides_A
+        from karml.interfaces.pycharmmInterface.mlpot.pbc_env import _read_charmm_box_sides_A
 
         sides = _read_charmm_box_sides_A()
         if sides is not None:

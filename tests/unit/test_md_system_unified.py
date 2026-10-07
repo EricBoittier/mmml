@@ -1,4 +1,4 @@
-"""Tests for the ``mmml.cli.run.md_system_unified`` opt-in unified-stack path."""
+"""Tests for the ``karml.cli.run.md_system_unified`` opt-in unified-stack path."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from mmml.cli.run.md_system_unified import (
+from karml.cli.run.md_system_unified import (
     check_md_system_args_supported,
     format_npt_volume_pressure_line,
     npt_volume_ratio_ok,
@@ -68,9 +68,9 @@ def test_check_supported_allows_continue_from():
 
 
 def test_apply_incoming_handoff_overlays_geometry(monkeypatch):
-    from mmml.cli.run.md_handoff import MdHandoffState
-    from mmml.cli.run.md_system_unified import _apply_incoming_handoff
-    from mmml.md.system import MolecularSystem
+    from karml.cli.run.md_handoff import MdHandoffState
+    from karml.cli.run.md_system_unified import _apply_incoming_handoff
+    from karml.md.system import MolecularSystem
 
     system = MolecularSystem(
         R=np.zeros((3, 3), dtype=np.float64),
@@ -86,7 +86,7 @@ def test_apply_incoming_handoff_overlays_geometry(monkeypatch):
         metadata={"source": "unit-test"},
     )
     monkeypatch.setattr(
-        "mmml.cli.run.md_system_unified._resolve_handoff_in",
+        "karml.cli.run.md_system_unified._resolve_handoff_in",
         lambda args: handoff,
     )
     out, from_h = _apply_incoming_handoff(argparse.Namespace(continue_from=None), system)
@@ -96,9 +96,9 @@ def test_apply_incoming_handoff_overlays_geometry(monkeypatch):
 
 
 def test_publish_unified_handoff_sets_context():
-    from mmml.cli.run.md_handoff import clear_handoff_context, get_handoff_out
-    from mmml.cli.run.md_system_unified import _publish_unified_handoff
-    from mmml.md.system import MolecularSystem
+    from karml.cli.run.md_handoff import clear_handoff_context, get_handoff_out
+    from karml.cli.run.md_system_unified import _publish_unified_handoff
+    from karml.md.system import MolecularSystem
 
     clear_handoff_context()
     system = MolecularSystem(
@@ -168,9 +168,9 @@ def test_npt_volume_ratio_ok_and_format_line():
 
 def test_fire_minimize_picks_best_energy_frame(monkeypatch):
     """Packmol cold-start premin must restore the lowest-energy FIRE frame."""
-    from mmml.cli.run.md_system_unified import _fire_minimize_system
-    from mmml.md.config import EnsembleSpec, RunConfig
-    from mmml.md.system import MolecularSystem, SystemSpec
+    from karml.cli.run.md_system_unified import _fire_minimize_system
+    from karml.md.config import EnsembleSpec, RunConfig
+    from karml.md.system import MolecularSystem, SystemSpec
 
     system = MolecularSystem(
         R=np.zeros((2, 3), dtype=np.float64),
@@ -192,7 +192,7 @@ def test_fire_minimize_picks_best_energy_frame(monkeypatch):
         metadata = {"positions": positions, "energies": energies}
 
     monkeypatch.setattr(
-        "mmml.md.assemble.assemble_and_run",
+        "karml.md.assemble.assemble_and_run",
         lambda *a, **k: _Traj(),
     )
     run_config = RunConfig(
@@ -229,7 +229,7 @@ def test_run_unified_pins_mlpot_device_context(monkeypatch):
     from contextlib import contextmanager
     from unittest import mock
 
-    from mmml.md.system import MolecularSystem
+    from karml.md.system import MolecularSystem
 
     entered = {"n": 0}
 
@@ -239,23 +239,23 @@ def test_run_unified_pins_mlpot_device_context(monkeypatch):
         yield mock.Mock(platform="cpu", id=0)
 
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.jax_device_policy.mlpot_jax_device_context",
+        "karml.interfaces.pycharmmInterface.jax_device_policy.mlpot_jax_device_context",
         _fake_ctx,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.jax_device_policy.apply_mlpot_jax_platform_env",
+        "karml.interfaces.pycharmmInterface.jax_device_policy.apply_mlpot_jax_platform_env",
         lambda quiet=True: "cpu",
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.jax_device_policy.print_jax_device_banner",
+        "karml.interfaces.pycharmmInterface.jax_device_policy.print_jax_device_banner",
         lambda **kwargs: None,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.jax_device_policy.reset_mlpot_device_fallback_flag",
+        "karml.interfaces.pycharmmInterface.jax_device_policy.reset_mlpot_device_fallback_flag",
         lambda: None,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.jax_device_policy.mlpot_device_context_fell_back_to_cpu",
+        "karml.interfaces.pycharmmInterface.jax_device_policy.mlpot_device_context_fell_back_to_cpu",
         lambda: False,
     )
 
@@ -266,11 +266,11 @@ def test_run_unified_pins_mlpot_device_context(monkeypatch):
 
     # Patch past validation + CHARMM into the energy path.
     monkeypatch.setattr(
-        "mmml.cli.run.md_system_unified.check_md_system_args_supported",
+        "karml.cli.run.md_system_unified.check_md_system_args_supported",
         lambda args: None,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.import_pycharmm.ensure_pycharmm_loaded",
+        "karml.interfaces.pycharmmInterface.import_pycharmm.ensure_pycharmm_loaded",
         lambda: True,
     )
 
@@ -283,7 +283,7 @@ def test_run_unified_pins_mlpot_device_context(monkeypatch):
     )
 
     monkeypatch.setattr(
-        "mmml.cli.run.md_system_unified.build_packmol_system_with_ffparams",
+        "karml.cli.run.md_system_unified.build_packmol_system_with_ffparams",
         lambda *a, **k: toy,
     )
     ens = mock.Mock(
@@ -296,7 +296,7 @@ def test_run_unified_pins_mlpot_device_context(monkeypatch):
         params={"float64": True},
     )
     monkeypatch.setattr(
-        "mmml.md.lowering.runconfig_from_md_system_args",
+        "karml.md.lowering.runconfig_from_md_system_args",
         lambda args: mock.Mock(
             terms=("ml_intra", "mm_nonbonded"),
             system=mock.Mock(builder="packmol"),
@@ -304,7 +304,7 @@ def test_run_unified_pins_mlpot_device_context(monkeypatch):
         ),
     )
     monkeypatch.setattr(
-        "mmml.cli.run.md_system_unified.build_energy_context",
+        "karml.cli.run.md_system_unified.build_energy_context",
         lambda *a, **k: mock.Mock(),
     )
 
@@ -316,7 +316,7 @@ def test_run_unified_pins_mlpot_device_context(monkeypatch):
         }
 
     monkeypatch.setattr(
-        "mmml.md.assemble.assemble_and_run",
+        "karml.md.assemble.assemble_and_run",
         lambda *a, **k: _Traj(),
     )
 
@@ -330,8 +330,8 @@ def test_run_unified_handoff_skips_fire_and_applies_R(monkeypatch):
     from contextlib import contextmanager
     from unittest import mock
 
-    from mmml.cli.run.md_handoff import MdHandoffState, clear_handoff_context, get_handoff_out
-    from mmml.md.system import MolecularSystem
+    from karml.cli.run.md_handoff import MdHandoffState, clear_handoff_context, get_handoff_out
+    from karml.md.system import MolecularSystem
 
     clear_handoff_context()
     toy = MolecularSystem(
@@ -354,35 +354,35 @@ def test_run_unified_handoff_skips_fire_and_applies_R(monkeypatch):
         yield mock.Mock(platform="cpu", id=0)
 
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.jax_device_policy.mlpot_jax_device_context",
+        "karml.interfaces.pycharmmInterface.jax_device_policy.mlpot_jax_device_context",
         _fake_ctx,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.jax_device_policy.apply_mlpot_jax_platform_env",
+        "karml.interfaces.pycharmmInterface.jax_device_policy.apply_mlpot_jax_platform_env",
         lambda quiet=True: "cpu",
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.jax_device_policy.print_jax_device_banner",
+        "karml.interfaces.pycharmmInterface.jax_device_policy.print_jax_device_banner",
         lambda **kwargs: None,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.jax_device_policy.reset_mlpot_device_fallback_flag",
+        "karml.interfaces.pycharmmInterface.jax_device_policy.reset_mlpot_device_fallback_flag",
         lambda: None,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.jax_device_policy.mlpot_device_context_fell_back_to_cpu",
+        "karml.interfaces.pycharmmInterface.jax_device_policy.mlpot_device_context_fell_back_to_cpu",
         lambda: False,
     )
     monkeypatch.setattr(
-        "mmml.cli.run.md_system_unified.check_md_system_args_supported",
+        "karml.cli.run.md_system_unified.check_md_system_args_supported",
         lambda args: None,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.import_pycharmm.ensure_pycharmm_loaded",
+        "karml.interfaces.pycharmmInterface.import_pycharmm.ensure_pycharmm_loaded",
         lambda: True,
     )
     monkeypatch.setattr(
-        "mmml.cli.run.md_system_unified.build_packmol_system_with_ffparams",
+        "karml.cli.run.md_system_unified.build_packmol_system_with_ffparams",
         lambda *a, **k: toy,
     )
     ens = mock.Mock(
@@ -395,7 +395,7 @@ def test_run_unified_handoff_skips_fire_and_applies_R(monkeypatch):
         params={"float64": True},
     )
     monkeypatch.setattr(
-        "mmml.md.lowering.runconfig_from_md_system_args",
+        "karml.md.lowering.runconfig_from_md_system_args",
         lambda args: mock.Mock(
             terms=("ml_intra", "mm_nonbonded"),
             system=mock.Mock(builder="packmol"),
@@ -403,11 +403,11 @@ def test_run_unified_handoff_skips_fire_and_applies_R(monkeypatch):
         ),
     )
     monkeypatch.setattr(
-        "mmml.cli.run.md_system_unified.build_energy_context",
+        "karml.cli.run.md_system_unified.build_energy_context",
         lambda *a, **k: mock.Mock(),
     )
     monkeypatch.setattr(
-        "mmml.cli.run.md_system_unified._resolve_handoff_in",
+        "karml.cli.run.md_system_unified._resolve_handoff_in",
         lambda args: handoff,
     )
     def _fire(*_a, **_k):
@@ -415,7 +415,7 @@ def test_run_unified_handoff_skips_fire_and_applies_R(monkeypatch):
         return toy
 
     monkeypatch.setattr(
-        "mmml.cli.run.md_system_unified._fire_minimize_system",
+        "karml.cli.run.md_system_unified._fire_minimize_system",
         _fire,
     )
 
@@ -433,7 +433,7 @@ def test_run_unified_handoff_skips_fire_and_applies_R(monkeypatch):
         captured["system"] = system
         return _Traj()
 
-    monkeypatch.setattr("mmml.md.assemble.assemble_and_run", _assemble)
+    monkeypatch.setattr("karml.md.assemble.assemble_and_run", _assemble)
 
     rc = run_unified_jaxmd(
         _args(

@@ -14,16 +14,16 @@
 #       uv sync --extra gpu
 #       module unload cudnn    # if a old cuDNN module is loaded
 #   - Checkpoint for DCM PhysNet:
-#       export MMML_CKPT=/path/to/dcm1-.../ckpts/dcm1-...
+#       export KARML_CKPT=/path/to/dcm1-.../ckpts/dcm1-...
 #   - packmol on PATH (first run only if cache miss); rebuild libcharmm if you scale cluster size up
-#   - Packmol placement cached under <output-dir>/.packmol_cache (or MMML_PACKMOL_CACHE).
+#   - Packmol placement cached under <output-dir>/.packmol_cache (or KARML_PACKMOL_CACHE).
 #     Use --rebuild-packmol to force repack; --save-run-state for Orbax/NPZ geometry + metadata.
 #
 # Defaults: one GPU (CUDA_VISIBLE_DEVICES=0, --ml-gpu-count 1) to avoid multi-GPU
 # cuDNN/cuBLASLt issues on shared nodes.
 #
 # Examples:
-#   MMML_CKPT=$HOME/mmml_tutorial/acodcm/ckpts/dcm1-... ./scripts/run_dcm9_stability.sh
+#   KARML_CKPT=$HOME/karml_tutorial/acodcm/ckpts/dcm1-... ./scripts/run_dcm9_stability.sh
 #   PS_HEAT=20 MD_STAGES=mini,heat,equi ./scripts/run_dcm9_stability.sh
 #   CHARMM_MM_PRETREAT=1 MD_STAGES=mini,heat ./scripts/run_dcm9_stability.sh
 #     # CGENFF min + 2000-step CHARMM heat before MLpot (outputs charmm_mm_heat_dcm_9.*)
@@ -54,15 +54,15 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 
-# Prefer pip cuDNN before mpirun (mmml-charmm-mpirun.sh also does this after MPI setup).
+# Prefer pip cuDNN before mpirun (karml-charmm-mpirun.sh also does this after MPI setup).
 # shellcheck source=scripts/setup_jax_cuda_env.sh
 source "$REPO_ROOT/scripts/setup_jax_cuda_env.sh"
 
 export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0}"
 
-if [[ -z "${MMML_CKPT:-}" ]]; then
-  echo "Set MMML_CKPT to your DCM PhysNet checkpoint directory." >&2
-  echo "  Example: export MMML_CKPT=\$HOME/mmml_tutorial/acodcm/ckpts/dcm1-..." >&2
+if [[ -z "${KARML_CKPT:-}" ]]; then
+  echo "Set KARML_CKPT to your DCM PhysNet checkpoint directory." >&2
+  echo "  Example: export KARML_CKPT=\$HOME/karml_tutorial/acodcm/ckpts/dcm1-..." >&2
   exit 1
 fi
 
@@ -94,7 +94,7 @@ if [[ "${CHARMM_MM_PRETREAT:-0}" == "1" ]]; then
   )
 fi
 
-MPIRUN="${MMML_MPIRUN_WRAPPER:-$REPO_ROOT/scripts/mmml-charmm-mpirun.sh}"
+MPIRUN="${KARML_MPIRUN_WRAPPER:-$REPO_ROOT/scripts/karml-charmm-mpirun.sh}"
 
 FB_ARGS=()
 if [[ "${ENABLE_FB:-0}" == "1" ]]; then
@@ -111,7 +111,7 @@ exec "$MPIRUN" md-system \
   --composition "DCM:${N_MOLECULES}" \
   --output-dir "$OUT_DIR" \
   --job-name dcm9_stability \
-  --checkpoint "$MMML_CKPT" \
+  --checkpoint "$KARML_CKPT" \
   --md-stages "$MD_STAGES" \
   --spacing 5.0 \
   --packmol-sphere \

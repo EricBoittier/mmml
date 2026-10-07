@@ -18,8 +18,8 @@ from typing import Optional, Sequence
 
 import numpy as np
 
-from mmml.interfaces.pycharmmInterface.cutoffs import DEFAULT_MM_SWITCH_ON
-from mmml.interfaces.pycharmmInterface.mlpot.mlpot_sparse_dimer_policy import (
+from karml.interfaces.pycharmmInterface.cutoffs import DEFAULT_MM_SWITCH_ON
+from karml.interfaces.pycharmmInterface.mlpot.mlpot_sparse_dimer_policy import (
     resolve_max_active_dimers,
     validate_sparse_dimer_cap,
 )
@@ -121,7 +121,7 @@ def workflow_checklist(n_monomers: int) -> Sequence[str]:
     """Copy-paste checklist for medium PBC production prep."""
     sizing = suggest_medium_pbc_sizing(n_monomers)
     return (
-        f"1. Equilibrate with mmml-charmm-mpirun.sh (MMML_MPI_NP=1).",
+        f"1. Equilibrate with karml-charmm-mpirun.sh (KARML_MPI_NP=1).",
         f"2. validate_mlpot_sparse_dimers.py on mini_full_mlpot_*.crd "
         f"(n={n_monomers}, cap default {sizing.max_active_dimers_cap}).",
         f"3. If cap saturated: raise --ml-max-active-dimers or enlarge box.",

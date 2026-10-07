@@ -1,6 +1,6 @@
 {
   "umbrella_mbar": {
-    "source": "../mmml/artifacts/umbrella/umbrella_summary.json",
+    "source": "../karml/artifacts/umbrella/umbrella_summary.json",
     "n_windows": 20,
     "n_frames_per_window": 2001,
     "temperature_K": 300.0,
@@ -17,7 +17,7 @@
     ]
   },
   "dimer_scan_wells_kcal_mol": {
-    "source": "../mmml/results/dimer_scan_campaign/mbd_checkpoint_comparison/scan_results_clean.csv",
+    "source": "../karml/results/dimer_scan_campaign/mbd_checkpoint_comparison/scan_results_clean.csv",
     "note": "QC/xTB cleaned interaction wells on highlighted offsets; SpookyNet campaign artifacts omitted from figures",
     "DCM_DCM": {
       "method": "pbe0_def2svp_gpu4pyscf_d3bj_cp",
@@ -39,7 +39,7 @@
     }
   },
   "nve_water_baseline": {
-    "source": "../mmml/workflows/mixed_calculator_sweep/results/summary.csv",
+    "source": "../karml/workflows/mixed_calculator_sweep/results/summary.csv",
     "drift_ev": [
       0.29,
       -0.143
@@ -51,7 +51,7 @@
     "n_steps": 10000
   },
   "adumb_nc_distance": {
-    "source": "../mmml/artifacts/nh3_ch3cl/adumb_nc_distance/",
+    "source": "../karml/artifacts/nh3_ch3cl/adumb_nc_distance/",
     "exit_code": 2,
     "note": "incomplete WHAM; figure shows UMBCOR histogram + WUNI coverage",
     "umbcor_n": 122,

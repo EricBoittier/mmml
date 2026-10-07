@@ -26,7 +26,7 @@ def test_mm_scale_jnp_repeat_matches_concat() -> None:
 
 def test_mean_switch_scale_jax_matches_numpy_reference() -> None:
     """Vectorized JAX COM switch must match the numpy reference implementation."""
-    from mmml.interfaces.pycharmmInterface.jax_pme_hybrid_coulomb import (
+    from karml.interfaces.pycharmmInterface.jax_pme_hybrid_coulomb import (
         _mean_switch_scale,
         _mean_switch_scale_jax,
     )

@@ -222,7 +222,7 @@ def _resolve_cmap_type_key(
 
 def trialanine_backbone_cmap_prm_path() -> Path:
     """Bundled alanine-backbone CMAP grid with CGENFF type headers."""
-    from mmml.paths import default_trialanine_backbone_cmap_prm
+    from karml.paths import default_trialanine_backbone_cmap_prm
 
     return default_trialanine_backbone_cmap_prm()
 

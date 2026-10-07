@@ -1,4 +1,4 @@
-"""Regression tests for files shipped inside the installed mmml wheel."""
+"""Regression tests for files shipped inside the installed karml wheel."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ import importlib.util
 
 import pytest
 
-from mmml.paths import (
+from karml.paths import (
     _package_dir,
     bundled_file,
     crystal_image_str_source,
@@ -51,7 +51,7 @@ def test_default_tip3_template_pdb_is_bundled() -> None:
 
 
 def test_default_template_pdb_for_residue_tip3():
-    from mmml.cli.run.md_pbc_suite.cluster import _default_template_pdb_for_residue
+    from karml.cli.run.md_pbc_suite.cluster import _default_template_pdb_for_residue
 
     path = _default_template_pdb_for_residue("TIP3")
     assert path is not None and path.is_file()
@@ -80,7 +80,7 @@ def test_default_dcm_crystal_cif_is_bundled() -> None:
 
 def test_both_dcm_pressure_points_are_bundled() -> None:
     """The default must stay the 1.63 GPa entry: presets and doc tables use it."""
-    from mmml.paths import DCM_CRYSTAL_CIFS
+    from karml.paths import DCM_CRYSTAL_CIFS
 
     assert set(DCM_CRYSTAL_CIFS) == {"pbcn_133gpa", "pbcn_163gpa"}
     for phase in DCM_CRYSTAL_CIFS:
@@ -104,12 +104,12 @@ def test_default_benzene_crystal_cif_is_bundled() -> None:
 
 
 def test_generate_sample_module_is_packaged() -> None:
-    spec = importlib.util.find_spec("mmml.generate.sample.sample_diverse_xyz")
+    spec = importlib.util.find_spec("karml.generate.sample.sample_diverse_xyz")
     assert spec is not None and spec.origin
     assert Path(spec.origin).is_file()
 
 
-def test_mmml_package_root_is_directory() -> None:
+def test_karml_package_root_is_directory() -> None:
     root = _package_dir()
     assert root.is_dir()
     assert (root / "__init__.py").is_file()

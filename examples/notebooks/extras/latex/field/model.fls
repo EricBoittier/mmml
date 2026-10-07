@@ -1,9 +1,9 @@
-PWD /home/boittier/Documents/github/mmml/notebooks/extras/latex/field
+PWD /home/boittier/Documents/github/karml/notebooks/extras/latex/field
 INPUT /etc/texmf/web2c/texmf.cnf
 INPUT /usr/share/texmf/web2c/texmf.cnf
 INPUT /usr/share/texlive/texmf-dist/web2c/texmf.cnf
 INPUT /var/lib/texmf/web2c/pdftex/pdflatex.fmt
-INPUT /home/boittier/Documents/github/mmml/notebooks/extras/latex/field/model.tex
+INPUT /home/boittier/Documents/github/karml/notebooks/extras/latex/field/model.tex
 OUTPUT model.log
 INPUT /usr/share/texlive/texmf-dist/tex/latex/standalone/standalone.cls
 INPUT /usr/share/texlive/texmf-dist/tex/latex/standalone/standalone.cls

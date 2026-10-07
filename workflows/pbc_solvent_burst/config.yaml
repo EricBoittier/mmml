@@ -30,7 +30,7 @@ box_sizes: [28.0, 30.0, 32.0]
 # Require the selected validated checkpoint explicitly.  For the current
 # campaign, use the low-LR continuation from step 2000 (the best proof.html
 # arm), exported as a portable JSON checkpoint.
-checkpoint: ${MMML_CKPT}
+checkpoint: ${KARML_CKPT}
 output_root: artifacts/pbc_solvent_burst
 seed_base: 123
 
@@ -50,7 +50,7 @@ heat_thermostat: scale
 dt_fs: 0.1
 pressure: 1.0
 
-# Hybrid cleanup ladder (maps to existing mmml recovery hooks).
+# Hybrid cleanup ladder (maps to existing karml recovery hooks).
 # Triggers: overlap → MLpot/CHARMM rescue; handoff → JAX PBC FIRE; pretreat → preventive CHARMM MM.
 cleanup_strategy:
   name: pbc_hybrid_default
@@ -114,7 +114,7 @@ ml_batch_size: 32
 # downgrade when a job is launched from another environment.
 ml_compute_dtype: float64
 
-mpirun_wrapper: ../../scripts/mmml-charmm-mpirun.sh
+mpirun_wrapper: ../../scripts/karml-charmm-mpirun.sh
 
 # Slurm: tier small N (≤30) → RTX3080 nodes; bulk matrix uses N≈100–440 on fast pool.
 slurm_small_cluster_max_n: 30

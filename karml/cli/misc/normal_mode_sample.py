@@ -3,12 +3,12 @@
 CLI for normal mode sampling from pyscf-dft harmonic output.
 
 Samples geometries along vibrational modes for downstream QM/ML.
-Input: .h5 from mmml pyscf-dft --harmonic
+Input: .h5 from karml pyscf-dft --harmonic
 Output: NPZ with R (n_samples, n_atoms, 3), Z, N
 
 Usage:
-    mmml normal-mode-sample -i out/04_results.h5 -o out/06_sampled.npz --amplitude 0.1
-    mmml normal-mode-sample -i out/04_results.h5 -o out/06_sampled.npz --amplitude 0.1 --include-equilibrium
+    karml normal-mode-sample -i out/04_results.h5 -o out/06_sampled.npz --amplitude 0.1
+    karml normal-mode-sample -i out/04_results.h5 -o out/06_sampled.npz --amplitude 0.1 --include-equilibrium
 """
 
 import argparse

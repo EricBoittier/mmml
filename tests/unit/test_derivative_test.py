@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import pytest
 
-from mmml.interfaces.pycharmmInterface.mlpot.derivative_test import (
+from karml.interfaces.pycharmmInterface.mlpot.derivative_test import (
     TestFirstConfig,
     build_test_first_script,
     selection_clause_for_test_first,
 )
-from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
     argparse,
     resolve_test_first_config,
 )

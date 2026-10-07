@@ -27,7 +27,7 @@ class AladBuildResult:
 
 def protein_toppar_paths() -> ProteinToppar:
     """Return protein ``top_all36_prot.rtf`` + ``par_all36m_prot.prm`` (or ``par_all36_prot.prm``)."""
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import CHARMM_HOME
+    from karml.interfaces.pycharmmInterface.import_pycharmm import CHARMM_HOME
 
     base = Path(CHARMM_HOME) / "toppar"
     rtf = base / "top_all36_prot.rtf"

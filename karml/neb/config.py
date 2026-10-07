@@ -1,4 +1,4 @@
-"""Configuration for MMML NEB sampling."""
+"""Configuration for KARML NEB sampling."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ NebMethod = Literal["improvedtangent", "aseneb", "eb", "spline", "string"]
 
 @dataclass(frozen=True)
 class NebConfig:
-    """Inputs for :func:`mmml.neb.run.run_neb`."""
+    """Inputs for :func:`karml.neb.run.run_neb`."""
 
     initial: Path
     final: Path

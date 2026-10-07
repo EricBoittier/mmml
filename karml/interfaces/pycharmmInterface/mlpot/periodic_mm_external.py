@@ -6,14 +6,14 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from mmml.interfaces.pycharmmInterface.mlpot.periodic_mm import PeriodicMmConfig
+from karml.interfaces.pycharmmInterface.mlpot.periodic_mm import PeriodicMmConfig
 
 if TYPE_CHECKING:
     pass
 
 
 def read_psf_charges(n_atoms: int) -> np.ndarray:
-    from mmml.interfaces.pycharmmInterface.mm_energy_forces import _get_actual_psf_charges
+    from karml.interfaces.pycharmmInterface.mm_energy_forces import _get_actual_psf_charges
 
     chg = np.asarray(_get_actual_psf_charges(int(n_atoms)), dtype=np.float64).reshape(-1)
     if chg.shape[0] < int(n_atoms):
@@ -36,7 +36,7 @@ def compute_periodic_coulomb_kcalmol(
     pos = np.asarray(positions_A, dtype=np.float64)
     chg = np.asarray(charges_e, dtype=np.float64)
     if cfg.uses_jax_pme:
-        from mmml.interfaces.pycharmmInterface.long_range_backend import compute_jax_pme_coulomb
+        from karml.interfaces.pycharmmInterface.long_range_backend import compute_jax_pme_coulomb
 
         result = compute_jax_pme_coulomb(
             pos,
@@ -48,7 +48,7 @@ def compute_periodic_coulomb_kcalmol(
         return float(result.energy_kcalmol), np.asarray(result.forces_kcalmol_A, dtype=np.float64)
 
     if cfg.uses_nvalchemiops_pme:
-        from mmml.interfaces.pycharmmInterface.long_range_backend import (
+        from karml.interfaces.pycharmmInterface.long_range_backend import (
             compute_nvalchemiops_pme_coulomb,
         )
 
@@ -60,7 +60,7 @@ def compute_periodic_coulomb_kcalmol(
         return float(result.energy_kcalmol), np.asarray(result.forces_kcalmol_A, dtype=np.float64)
 
     if cfg.uses_ewald:
-        from mmml.interfaces.pycharmmInterface.long_range_backend import (
+        from karml.interfaces.pycharmmInterface.long_range_backend import (
             compute_native_ewald_coulomb,
         )
 
@@ -75,7 +75,7 @@ def compute_periodic_coulomb_kcalmol(
         )
         return float(result.energy_kcalmol), np.asarray(result.forces_kcalmol_A, dtype=np.float64)
 
-    from mmml.interfaces.scafacosInterface.scafacos_session import compute_scafacos_coulomb
+    from karml.interfaces.scafacosInterface.scafacos_session import compute_scafacos_coulomb
 
     result = compute_scafacos_coulomb(
         pos,

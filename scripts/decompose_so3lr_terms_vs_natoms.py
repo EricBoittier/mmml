@@ -9,7 +9,7 @@ trained model, and for each structure records:
   - the model's own internal energy-term decomposition: electrostatics,
     ZBL repulsion, CGenFF vdW (each is exposed separately in
     SpookyPhysNet.__call__'s output dict -- see
-    mmml/models/physnetjax/physnetjax/models/spooky_model.py:1270-1281 --
+    karml/models/physnetjax/physnetjax/models/spooky_model.py:1270-1281 --
     but the evaluation script's eval_fn only ever reads "energy"/"forces",
     so these were never actually inspected before).
 
@@ -29,7 +29,7 @@ file, just extended across files/sizes in one pass.
 
 Usage:
     python scripts/decompose_so3lr_terms_vs_natoms.py \\
-        --checkpoint /mmhome/boittier/home/mmml/artifacts/spooky_so3lr_muon3/epoch-0010 \\
+        --checkpoint /mmhome/boittier/home/karml/artifacts/spooky_so3lr_muon3/epoch-0010 \\
         --extxyz ~/data/so3lr_test/ \\
         --max-per-dataset 30 \\
         --out-csv eval_out/term_decomposition.csv \\
@@ -81,7 +81,7 @@ def main() -> int:
     from ase.io import iread
 
     import evaluate_so3lr_spooky_extxyz as ev
-    from mmml.utils.model_checkpoint import infer_trainable_zbl_config
+    from karml.utils.model_checkpoint import infer_trainable_zbl_config
 
     checkpoint_path = Path(args.checkpoint).resolve()
     params, config = ev.restore_checkpoint(checkpoint_path)

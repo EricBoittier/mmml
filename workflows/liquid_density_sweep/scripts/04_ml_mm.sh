@@ -32,7 +32,7 @@ banner "ML/MM settings sweep (L=${BOX_SIZE} Å)"
 
 md_common() {  # solvent n outdir
   printf '%s' "--setup pbc_nvt --composition $1:$2 --box-size $BOX_SIZE \
---checkpoint $MMML_CKPT --temperature $TEMPERATURE --dt-fs $DT_FS \
+--checkpoint $KARML_CKPT --temperature $TEMPERATURE --dt-fs $DT_FS \
 --ps $PS_PROD --output-dir $3"
 }
 
@@ -48,33 +48,33 @@ for solvent in $SOLVENTS; do
     # --- A. Partitioning ------------------------------------------------
     # Pure MM reference: no ML at all. The classical baseline.
     echo "--- pure MM (no ML) ---"
-    run_cmd mmml md-system --backend jaxmd \
+    run_cmd karml md-system --backend jaxmd \
       $(md_common "$solvent" "$n" "${base}/mm_only") \
       --no-do-ml --no-do-ml-dimer --include-mm
 
     # Pure ML: PhysNet only, no MM pair terms. Cutoff keys are ignored.
     echo "--- pure ML (no MM pairs) ---"
-    run_cmd mmml md-system --backend jaxmd \
+    run_cmd karml md-system --backend jaxmd \
       $(md_common "$solvent" "$n" "${base}/ml_only") \
       --do-ml --do-ml-dimer --no-include-mm
 
     # ML monomers + MM intermolecular: mechanical embedding. Intramolecular
     # physics from the model, intermolecular from CGenFF.
     echo "--- ML monomer + MM pairs (mechanical embedding) ---"
-    run_cmd mmml md-system --backend jaxmd \
+    run_cmd karml md-system --backend jaxmd \
       $(md_common "$solvent" "$n" "${base}/ml_mono_mm_pairs") \
       --do-ml --no-do-ml-dimer --include-mm
 
     # Full hybrid: ML monomer + ML dimer + switched MM. The production setting.
     echo "--- full hybrid ML/MM ---"
-    run_cmd mmml md-system --backend jaxmd \
+    run_cmd karml md-system --backend jaxmd \
       $(md_common "$solvent" "$n" "${base}/hybrid_full") \
       --do-ml --do-ml-dimer --include-mm
 
     # --- B. Hybrid MM charges (liquid-safe modes only) -------------------
     for mode in fixed q0 latent_dynamic; do
       echo "--- mm-charge-mode=${mode} ---"
-      run_cmd mmml md-system --backend jaxmd \
+      run_cmd karml md-system --backend jaxmd \
         $(md_common "$solvent" "$n" "${base}/charge_${mode}") \
         --do-ml --do-ml-dimer --include-mm \
         --mm-charge-mode "$mode"
@@ -82,7 +82,7 @@ for solvent in $SOLVENTS; do
 
     # fixed + latent correction (alias: --mm-charge-correction)
     echo "--- mm-charge-mode=fixed_plus_latent ---"
-    run_cmd mmml md-system --backend jaxmd \
+    run_cmd karml md-system --backend jaxmd \
       $(md_common "$solvent" "$n" "${base}/charge_fixed_plus_latent") \
       --do-ml --do-ml-dimer --include-mm \
       --mm-charge-mode fixed_plus_latent
@@ -91,7 +91,7 @@ for solvent in $SOLVENTS; do
     # Where the ML dimer term hands over to classical MM. Too narrow a switch
     # shows up as energy drift in NVE; too wide double-counts.
     echo "--- switching: ml-switch-width / mm-switch-on / mm-switch-width ---"
-    run_cmd mmml md-system --backend jaxmd \
+    run_cmd karml md-system --backend jaxmd \
       $(md_common "$solvent" "$n" "${base}/switch_tuned") \
       --do-ml --do-ml-dimer --include-mm \
       --ml-switch-width 1.5 --mm-switch-on 8.0 --mm-switch-width 5.0
@@ -122,9 +122,9 @@ Species-aware ownership (mixed boxes)
 For a *mixed* system (e.g. DCM + ACO, or solute + solvent) an interaction policy
 declares which provider owns each monomer/pair, so nothing is double-counted:
 
-  mmml md-system --backend jaxmd --setup pbc_nvt \
+  karml md-system --backend jaxmd --setup pbc_nvt \
     --composition DCM:100,ACO:100 --box-size 32 \
-    --checkpoint "$MMML_CKPT" \
+    --checkpoint "$KARML_CKPT" \
     --interaction-policy ./policy.yaml \
     --output-dir artifacts/liquid_density_sweep/mixed_dcm_aco
 

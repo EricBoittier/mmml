@@ -4,7 +4,7 @@ Neat **ethanol** (CGenFF `ETOH`) in a **32 Å** cube at experimental bulk densit
 **300 K**, timestep **0.5 fs**, with a metatomic **PET-MAD** model as the all-ML
 potential.
 
-Example files: [`examples/pet_mad_etoh_pbc/`](https://github.com/EricBoittier/mmml/blob/main/examples/pet_mad_etoh_pbc/).
+Example files: [`examples/pet_mad_etoh_pbc/`](https://github.com/EricBoittier/karml/blob/main/examples/pet_mad_etoh_pbc/).
 Metatomic USER contract: [metatomic.md](../metatomic.md).
 Box certification: [liquid-box workflow](../liquid-box-workflow.md).
 
@@ -24,7 +24,7 @@ Box certification: [liquid-box workflow](../liquid-box-workflow.md).
 scales the stoichiometry to 338 molecules. Pin `ETOH:338` in YAML so the count
 does not drift.
 
-**Do not** use `fragments` here. That mode is the MMML dimer hybrid
+**Do not** use `fragments` here. That mode is the KARML dimer hybrid
 (`Σ E_i + s(r)·(E_AB − E_A − E_B)`). A neat 338-molecule liquid would issue
 hundreds of isolated-monomer evals plus dimer pairs on every CHARMM USER call.
 `whole_system` is one PET-MAD evaluation on the ML selection.
@@ -50,7 +50,7 @@ xs 1.5.0 is the smoke default. PET-MAD s is the same CLI with a larger `.pt`.
 
 ## 2. CHARMM-free ASE smoke (no Packmol)
 
-First-class command: **`mmml metatomic-pbc-md`**. Grid-places 338 copies of
+First-class command: **`karml metatomic-pbc-md`**. Grid-places 338 copies of
 `examples/pet_mad_etoh_pbc/etoh.xyz` in the 32 Å cell and runs Langevin NVT
 (or VelocityVerlet NVE) through `load_metatomic_calculator`. This does **not**
 go through `setup_calculator` (JAX MM) or CHARMM. `examples/pet_mad_etoh_pbc/ase_pbc_md.py`
@@ -58,8 +58,8 @@ is a thin wrapper around the same CLI.
 
 ```bash
 export PET_MAD_CKPT=/path/to/pet-mad-xs-v1.5.0.pt
-JAX_PLATFORMS=cpu MMML_METATOMIC_DEVICE=cpu \
-  mmml metatomic-pbc-md --ensemble nvt --n-steps 5
+JAX_PLATFORMS=cpu KARML_METATOMIC_DEVICE=cpu \
+  karml metatomic-pbc-md --ensemble nvt --n-steps 5
 # or: ./examples/pet_mad_etoh_pbc/run_smoke.sh
 # or: N_STEPS=2 ENSEMBLE=nve ./examples/pet_mad_etoh_pbc/run_smoke.sh
 ```
@@ -73,7 +73,7 @@ JAX_PLATFORMS=cpu MMML_METATOMIC_DEVICE=cpu \
 | `E0_eV`, `E1_eV`, forces | finite |
 | `report.json` `"ok"` | `true` |
 
-GPU: `MMML_METATOMIC_DEVICE=cuda`. On CPU, a 3042-atom PET-MAD step is seconds
+GPU: `KARML_METATOMIC_DEVICE=cuda`. On CPU, a 3042-atom PET-MAD step is seconds
 to tens of seconds; keep `--n-steps` small for a smoke.
 
 ### NVE conservation (FIRE + VelocityVerlet)
@@ -82,7 +82,7 @@ Lattice packing leaves |F| ~ 10 eV/Å. Minimize first, then NVE at 0.5 fs:
 
 ```bash
 export PET_MAD_CKPT=/path/to/pet-mad-xs-v1.5.0.pt
-mmml metatomic-pbc-md --ensemble nve --minimize-steps 60 --n-steps 400
+karml metatomic-pbc-md --ensemble nve --minimize-steps 60 --n-steps 400
 # or: N_STEPS=400 MINI_STEPS=60 ./examples/pet_mad_etoh_pbc/run_nve.sh
 ```
 
@@ -117,14 +117,14 @@ molecular-fragment level, \(E_3=0\).
 
 ```bash
 export PET_MAD_CKPT=/path/to/pet-mad-xs-v1.5.0.pt
-JAX_PLATFORMS=cpu MMML_METATOMIC_DEVICE=cpu \
-  mmml pet-interaction-pes --checkpoint "$PET_MAD_CKPT"
+JAX_PLATFORMS=cpu KARML_METATOMIC_DEVICE=cpu \
+  karml pet-interaction-pes --checkpoint "$PET_MAD_CKPT"
 # or: ./examples/pet_mad_etoh_pbc/run_interaction_pes.sh
 ```
 
 | Check | Pass |
 |-------|------|
-| JSON | `schema` is `mmml.interaction_pes/v2`; energies finite |
+| JSON | `schema` is `karml.interaction_pes/v2`; energies finite |
 | 1D slices | Linear OH···O vs acceptor–acceptor \(E_\mathrm{int}(r)\) (O–O) to 12 Å; wall visible; far-field ≈ 0 past the ~9 Å RF |
 | Angular | \(E_\mathrm{int}(\theta)\) at \(r_e\); \(\theta\) is donor–H–acceptor |
 | 2D surface | ethanol O–O × donor–H–acceptor; heatmap + isolevels + marked minimum |
@@ -146,10 +146,10 @@ PET-MAD as the CHARMM USER term.
 
 ```bash
 export PET_MAD_CKPT=/path/to/pet-mad-xs-v1.5.0.pt
-export MMML_NO_CHARMM_MPI=1 MMML_NO_MPI_RERUN=1
-export MMML_METATOMIC_DEVICE=cpu   # or cuda
+export KARML_NO_CHARMM_MPI=1 KARML_NO_MPI_RERUN=1
+export KARML_METATOMIC_DEVICE=cpu   # or cuda
 
-mmml liquid-box --composition ETOH:338 --box-size 32 \
+karml liquid-box --composition ETOH:338 --box-size 32 \
   --target-density-g-cm3 0.789 -o boxes/etoh338_32A
 ```
 
@@ -158,21 +158,21 @@ exist, inter-monomer contacts above the prep floor (see `REPORT.md`).
 
 ```bash
 # 5 NVE steps at 0.5 fs (smoke)
-mmml md-system --config examples/pet_mad_etoh_pbc/yaml/pbc_nvt.yaml \
+karml md-system --config examples/pet_mad_etoh_pbc/yaml/pbc_nvt.yaml \
   --job-id nve_smoke \
   --from-psf boxes/etoh338_32A/model.psf \
   --from-crd boxes/etoh338_32A/model.crd \
   --checkpoint "$PET_MAD_CKPT"
 
 # 0.2 ps NVE after mini (conservation)
-mmml md-system --config examples/pet_mad_etoh_pbc/yaml/pbc_nvt.yaml \
+karml md-system --config examples/pet_mad_etoh_pbc/yaml/pbc_nvt.yaml \
   --job-id nve \
   --from-psf boxes/etoh338_32A/model.psf \
   --from-crd boxes/etoh338_32A/model.crd \
   --checkpoint "$PET_MAD_CKPT"
 
 # 2 ps heat + 20 ps NVT at 300 K
-mmml md-system --config examples/pet_mad_etoh_pbc/yaml/pbc_nvt.yaml \
+karml md-system --config examples/pet_mad_etoh_pbc/yaml/pbc_nvt.yaml \
   --job-id nvt \
   --from-psf boxes/etoh338_32A/model.psf \
   --from-crd boxes/etoh338_32A/model.crd \
@@ -182,7 +182,7 @@ mmml md-system --config examples/pet_mad_etoh_pbc/yaml/pbc_nvt.yaml \
 Equivalent without YAML (`--box-auto count` derives 338):
 
 ```bash
-mmml md-system --backend pycharmm --setup pbc_nvt \
+karml md-system --backend pycharmm --setup pbc_nvt \
   --ml-potential-mode metatomic --metatomic-eval-mode whole_system \
   --no-include-mm --mlpot-pbc \
   --charmm-zero-energy-terms vdw,elec,bonded \
@@ -212,4 +212,4 @@ mmml md-system --backend pycharmm --setup pbc_nvt \
   if you need ρ(T,P).
 
 Related: [md-system YAML](../md-system-configs.md),
-[TIP3 Ewald smoke](https://github.com/EricBoittier/mmml/blob/main/examples/tip3_50_ewald_smoke/).
+[TIP3 Ewald smoke](https://github.com/EricBoittier/karml/blob/main/examples/tip3_50_ewald_smoke/).

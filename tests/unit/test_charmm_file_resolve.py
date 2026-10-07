@@ -9,7 +9,7 @@ import pytest
 
 
 def test_resolve_charmm_file_cls_uses_top_level_export():
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import _resolve_charmm_file_cls
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import _resolve_charmm_file_cls
 
     sentinel = object()
     mod = SimpleNamespace(CharmmFile=sentinel)
@@ -17,7 +17,7 @@ def test_resolve_charmm_file_cls_uses_top_level_export():
 
 
 def test_resolve_charmm_file_cls_falls_back_to_submodule():
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import _resolve_charmm_file_cls
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import _resolve_charmm_file_cls
 
     sentinel = object()
     stub_sub = ModuleType("pycharmm.charmm_file")
@@ -29,7 +29,7 @@ def test_resolve_charmm_file_cls_falls_back_to_submodule():
 
 
 def test_resolve_charmm_file_cls_raises_when_unavailable():
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import _resolve_charmm_file_cls
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import _resolve_charmm_file_cls
 
     bare = ModuleType("pycharmm")
     stub_sub = ModuleType("pycharmm.charmm_file")  # no CharmmFile attr
@@ -39,7 +39,7 @@ def test_resolve_charmm_file_cls_raises_when_unavailable():
 
 
 def test_open_minimize_dcd_uses_resolved_charmm_file(tmp_path):
-    from mmml.interfaces.pycharmmInterface.mlpot import dynamics as dyn
+    from karml.interfaces.pycharmmInterface.mlpot import dynamics as dyn
 
     opened: dict[str, object] = {}
 

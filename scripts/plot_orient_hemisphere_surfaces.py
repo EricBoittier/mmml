@@ -36,7 +36,7 @@ from matplotlib import colors as mcolors
 from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
 from scipy.interpolate import RBFInterpolator
 
-from mmml.utils.plotting.styles import (
+from karml.utils.plotting.styles import (
     STATUS_COLORS,
     apply_plot_style,
     default_cmap,

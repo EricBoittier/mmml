@@ -7,7 +7,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from mmml.analysis.hybrid_force_breakdown import (
+from karml.analysis.hybrid_force_breakdown import (
     FORCE_TERM_RESIDUAL_NOISE_EVA,
     force_magnitude_stats,
     hybrid_force_term_breakdown,

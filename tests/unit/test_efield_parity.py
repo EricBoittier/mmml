@@ -15,8 +15,8 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from mmml.models.efield.packed import PackSpec, iter_packed_batches
-from mmml.models.efield.training import EFieldPhysNet
+from karml.models.efield.packed import PackSpec, iter_packed_batches
+from karml.models.efield.training import EFieldPhysNet
 
 S = np.diag([1.0, 1.0, -1.0])
 CONV = 0.001 * 51.42206747632595  # Ef_input -> V/Å

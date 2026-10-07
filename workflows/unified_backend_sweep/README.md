@@ -1,9 +1,9 @@
-# Unified mmml.md backend sweep
+# Unified karml.md backend sweep
 
 Smoke-tests every driver/sampler + ensemble combination reachable through
-`mmml.md.assemble.assemble_and_run` on a single, small, real system: a 4-water
+`karml.md.assemble.assemble_and_run` on a single, small, real system: a 4-water
 TIP3 box built via the packmol composition builder (the same path
-`mmml.cli.run.md_system_unified` uses), scored with the `ml_intra` +
+`karml.cli.run.md_system_unified` uses), scored with the `ml_intra` +
 `mm_nonbonded` terms and the bundled example checkpoint
 (`examples/sppoky-epoch-0010_params.json`).
 
@@ -51,7 +51,7 @@ uv run --with snakemake --with snakemake-executor-plugin-slurm \
 ## Run locally
 
 ```bash
-export CHARMM_LIB_DIR=/path/to/mmml/setup/charmm
+export CHARMM_LIB_DIR=/path/to/karml/setup/charmm
 uv run --with snakemake snakemake --profile profiles/local --keep-going
 ```
 
@@ -93,7 +93,7 @@ Slurm from the login node instead (as above); the compute nodes have OpenCL.
 The vendored Packmol binary is platform-specific and not committed to git; if a
 setting fails with `FileNotFoundError: packmol not found for this platform`,
 run `bash ../../scripts/rebuild_packmol.sh` once from the repo root (installs
-to `mmml/generate/packmol/packmol`) before resubmitting.
+to `karml/generate/packmol/packmol`) before resubmitting.
 
 **`jaxmd_npt` fails deterministically on this cluster:** all three `jaxmd_npt`
 settings fail with `JaxRuntimeError: INTERNAL: Failed to materialize symbols:
@@ -110,7 +110,7 @@ each sweep, with `jaxmd_npt`'s 3 seeds being the only failures).
 
 ### CPU jobs
 
-This cluster's mmml `.venv` has no CUDA jaxlib installed, so `jax` already
+This cluster's karml `.venv` has no CUDA jaxlib installed, so `jax` already
 falls back to CPU even on the `gpu` partition (you'll see `An NVIDIA GPU may be
 present on this machine, but a CUDA-enabled jaxlib is not installed. Falling
 back to cpu.` in `stdout.log`). Submitting to a CPU partition instead is

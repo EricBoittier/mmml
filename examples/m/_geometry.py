@@ -117,7 +117,7 @@ def write_evaluate_npz(
     index: int | None = None,
     seed: int = 0,
 ) -> Path:
-    """Write a single-frame NPZ for ``mmml md-system --evaluate-npz``."""
+    """Write a single-frame NPZ for ``karml md-system --evaluate-npz``."""
     z, r = load_dimer_frame(npz_path, index=index, seed=seed)
     out = Path(out_path)
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -184,7 +184,7 @@ def write_solute_pdb(
 
     Residue order is AMM1 then CH3CL with standard CGenFF atom names so CHARMM
     ``READ SEQU PDB`` / Packmol solvation work. Requires
-    ``MMML_CGENFF_EXTRA_RTF=examples/m/top_ch3cl.rtf`` for CH3CL.
+    ``KARML_CGENFF_EXTRA_RTF=examples/m/top_ch3cl.rtf`` for CH3CL.
 
     ``center`` (default True) translates the mass-weighted COM to the origin so the
     ``cons hmcm ... refx 0`` tether starts at ~0 energy (no t=0 yank).

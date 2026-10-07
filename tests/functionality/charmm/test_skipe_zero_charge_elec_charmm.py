@@ -39,16 +39,16 @@ import sys
 
 import numpy as np
 
-import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+import karml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
 import pycharmm
 import pycharmm.coor as coor
 import pycharmm.energy as energy
 import pycharmm.generate as gen
 import pycharmm.read as read
 
-from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
-from mmml.interfaces.pycharmmInterface.mlpot import charmm_energy_policy as cep
-from mmml.interfaces.pycharmmInterface.nbonds_config import read_cgenff_toppar
+from karml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
+from karml.interfaces.pycharmmInterface.mlpot import charmm_energy_policy as cep
+from karml.interfaces.pycharmmInterface.nbonds_config import read_cgenff_toppar
 
 # One ethanol in RTF order C1 O1 HO1 H11 H12 C2 H21 H22 H23.
 X = [0.0, -0.5, -1.45, -0.35, -0.35, 1.5, 1.9, 1.9, 1.9]
@@ -126,9 +126,9 @@ print("\n@@JSON " + json.dumps(payload), flush=True)
 
 def _run_worker() -> dict:
     env = dict(os.environ)
-    env.setdefault("MMML_NO_CHARMM_MPI", "1")
-    env.setdefault("MMML_NO_MPI_RERUN", "1")
-    env.pop("MMML_MLPOT_KEEP_CHARMM_ELEC", None)
+    env.setdefault("KARML_NO_CHARMM_MPI", "1")
+    env.setdefault("KARML_NO_MPI_RERUN", "1")
+    env.pop("KARML_MLPOT_KEEP_CHARMM_ELEC", None)
     env["PYTHONPATH"] = os.pathsep.join(
         p for p in (str(_REPO_ROOT), env.get("PYTHONPATH", "")) if p
     )

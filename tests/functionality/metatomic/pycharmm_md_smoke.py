@@ -11,8 +11,8 @@ Example::
 
     export CHARMM_HOME=$PWD/setup/charmm
     export CHARMM_LIB_DIR=$CHARMM_HOME/lib
-    export MMML_NO_CHARMM_MPI=1 MMML_NO_MPI_RERUN=1
-    export MMML_METATOMIC_DEVICE=cpu JAX_PLATFORMS=cpu
+    export KARML_NO_CHARMM_MPI=1 KARML_NO_MPI_RERUN=1
+    export KARML_METATOMIC_DEVICE=cpu JAX_PLATFORMS=cpu
     uv run python tests/functionality/metatomic/pycharmm_md_smoke.py \\
       --checkpoint /path/to/pet-mad-xs-v1.5.0.pt --run
 """
@@ -48,7 +48,7 @@ def _nonzero_terms(terms: dict[str, float], *, extra: tuple[str, ...] = ()) -> d
 
 
 def main() -> int:
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
         add_charmm_output_args,
         add_cluster_args,
         add_dcd_save_args,
@@ -148,7 +148,7 @@ def main() -> int:
 
         import ase
         import pycharmm.energy as energy
-        from mmml.interfaces.pycharmmInterface.mlpot import (
+        from karml.interfaces.pycharmmInterface.mlpot import (
             CharmmTrajectoryFiles,
             MinimizeWithMlpotConfig,
             MetatomicMlpotModel,
@@ -162,7 +162,7 @@ def main() -> int:
             setup_default_nbonds,
             sync_charmm_positions,
         )
-        from mmml.interfaces.pycharmmInterface.mlpot.setup import assert_mlpot_user_active
+        from karml.interfaces.pycharmmInterface.mlpot.setup import assert_mlpot_user_active
 
         out_dir = args.out_dir.resolve()
         out_dir.mkdir(parents=True, exist_ok=True)
@@ -214,7 +214,7 @@ def main() -> int:
             )
 
             fix_resids = resolve_fix_resids(args)
-            from mmml.interfaces.pycharmmInterface.mlpot import select_by_resids
+            from karml.interfaces.pycharmmInterface.mlpot import select_by_resids
 
             fix_sel = select_by_resids(fix_resids) if fix_resids else None
             if not args.no_pre_minimize:

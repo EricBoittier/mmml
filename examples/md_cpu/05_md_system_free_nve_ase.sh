@@ -9,7 +9,7 @@ cd "${ROOT}"
 OUT="${ARTIFACTS_DIR}/free_nve_ase"
 
 echo "=== md-system free_nve (ASE backend, 0.1 ps) ==="
-uv run mmml md-system \
+uv run karml md-system \
   --setup free_nve \
   --backend ase \
   --composition ACO:2 \

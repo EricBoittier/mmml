@@ -9,7 +9,7 @@ from typing import Any, Literal
 
 import numpy as np
 
-from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
     apply_charmm_output_from_args,
     apply_dynamics_print_kwargs,
     apply_flat_bottom_from_args,
@@ -52,7 +52,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
     overlap_run_state_kwargs_from_args,
     validate_resids_for_cluster,
 )
-from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
     CharmmTrajectoryFiles,
     MinimizeWithMlpotConfig,
     _valid_restart_file,
@@ -66,7 +66,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
     production_restart_chain,
     run_dynamics_with_io,
 )
-from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+from karml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
     DynamicsOverlapConfig,
     attach_prior_segment_restart,
     augment_overlap_config_for_rescue,
@@ -74,44 +74,44 @@ from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
     overlap_config_for_stage,
     resolve_dynamics_overlap_config,
 )
-from mmml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
+from karml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
     apply_comp_velocity_policy,
 )
-from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+from karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
     assert_pre_min_bonded_geometry,
     ensure_segment_restart_checkpoint,
     maybe_run_bonded_mm_mini_after_stage,
     record_mm_baseline_strain,
     rewrite_dynamics_restart_from_current_state,
 )
-from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
+from karml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
     attach_geometry_checkpoints_to_overlap,
     discover_resume_restart,
     write_geometry_baseline_restart,
 )
-from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+from karml.interfaces.pycharmmInterface.mlpot.pbc_env import (
     cubic_box_length_from_geometry,
     ensure_charmm_crystal_for_cpt,
     setup_charmm_environment,
 )
-from mmml.interfaces.pycharmmInterface.mlpot.run_workflow import (
+from karml.interfaces.pycharmmInterface.mlpot.run_workflow import (
     _charmm_pre_minimize_before_mlpot,
     _register_mlpot_context,
     print_charmm_mm_pretreat_handoff_panel,
     run_charmm_mm_pretreat_before_mlpot,
     sync_mlpot_pbc_cell_from_charmm,
 )
-from mmml.interfaces.pycharmmInterface.mlpot.minimize_artifacts import (
+from karml.interfaces.pycharmmInterface.mlpot.minimize_artifacts import (
     BONDED_MM_AFTER_HEAT,
     BONDED_MM_AFTER_MINI,
     CHARMM_MM_PRE,
-    MLPOT_MMML,
+    MLPOT_KARML,
     MinimizeArtifactRegistry,
     PACKMOL_CLUSTER,
     legacy_mlpot_mini_paths,
     mirror_legacy_mlpot_files,
 )
-from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+from karml.interfaces.pycharmmInterface.mlpot.setup import (
     assert_mlpot_user_active,
     verify_mlpot_charmm_atom_consistency,
     ensure_domdec_off_for_mlpot_energy,
@@ -127,7 +127,7 @@ MdStage = Literal["mini", "heat", "nve", "equi", "prod"]
 # Restart / resume policy now lives in staged_restart_policy so it can be tested
 # without CHARMM (see that module's docstring). Re-exported here because callers
 # and tests import these names from staged_workflow.
-from mmml.interfaces.pycharmmInterface.mlpot.staged_restart_policy import (  # noqa: E402,F401
+from karml.interfaces.pycharmmInterface.mlpot.staged_restart_policy import (  # noqa: E402,F401
     _POST_DYNAMICS_RESUME_STAGES,
     _can_seed_stage_from_memory,
     _equi_in_place_restart,
@@ -150,19 +150,19 @@ _STAGE_ORDER: tuple[MdStage, ...] = ("mini", "heat", "nve", "equi", "prod")
 
 
 def _stage_ps(args: argparse.Namespace, stage: MdStage) -> float:
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import resolve_stage_ps
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import resolve_stage_ps
 
     return resolve_stage_ps(args, stage)
 
 
 def _artifact_paths(out_dir: Path, tag: str) -> dict[str, Path]:
-    from mmml.interfaces.pycharmmInterface.mlpot.artifact_paths import staged_artifact_paths
+    from karml.interfaces.pycharmmInterface.mlpot.artifact_paths import staged_artifact_paths
 
     return staged_artifact_paths(out_dir, tag)
 
 
 def _npt_cpt_options(args: argparse.Namespace) -> dict[str, Any]:
-    from mmml.interfaces.pycharmmInterface.mlpot.pressure_tensor import (
+    from karml.interfaces.pycharmmInterface.mlpot.pressure_tensor import (
         resolve_npt_cpt_pressure_options,
     )
 
@@ -170,7 +170,7 @@ def _npt_cpt_options(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def _npt_cpt_builder_options(args: argparse.Namespace) -> dict[str, Any]:
-    from mmml.interfaces.pycharmmInterface.mlpot.pressure_tensor import (
+    from karml.interfaces.pycharmmInterface.mlpot.pressure_tensor import (
         npt_cpt_builder_options,
     )
 
@@ -199,7 +199,7 @@ def _prepare_npt_pressure_checks(
     first_segment: bool = True,
 ) -> None:
     """Instantaneous virial tensor + optional ``IUPTEN`` log before equi/prod."""
-    from mmml.interfaces.pycharmmInterface.mlpot.pressure_tensor import (
+    from karml.interfaces.pycharmmInterface.mlpot.pressure_tensor import (
         maybe_configure_stage_pressure_tensor_io,
         maybe_report_instantaneous_pressure_tensor,
     )
@@ -268,10 +268,10 @@ def _seed_charmm_coords_from_dynamics_restart(
             )
         return False
 
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         read_restart_positions,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
+    from karml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
 
     pos = None
     used: Path | None = None
@@ -296,7 +296,7 @@ def _seed_charmm_coords_from_dynamics_restart(
             )
         return False
     sync_charmm_positions(pos)
-    from mmml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
+    from karml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
         clear_comparison_coordinates,
     )
 
@@ -316,7 +316,7 @@ def _seed_charmm_coords_from_dynamics_restart(
 
 
 def _io_for_stage(stage: MdStage, paths: dict[str, Path]) -> CharmmTrajectoryFiles:
-    from mmml.interfaces.pycharmmInterface.mpi_rank_io import gate_charmm_trajectory_io
+    from karml.interfaces.pycharmmInterface.mpi_rank_io import gate_charmm_trajectory_io
 
     if stage == "heat":
         io = CharmmTrajectoryFiles(
@@ -386,13 +386,13 @@ def _build_stage_dynamics_kw(
             or getattr(args, "no_echeck", False)
             or getattr(args, "_auto_no_echeck_heat", False)
         ):
-            from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+            from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
                 disabled_charmm_echeck_kcal,
             )
 
             heat_echeck = disabled_charmm_echeck_kcal()
         else:
-            from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+            from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
                 recommend_heat_echeck_kcal,
             )
 
@@ -400,10 +400,10 @@ def _build_stage_dynamics_kw(
             if n_atoms is not None and n_monomers is not None:
                 heat_floor = recommend_heat_echeck_kcal(n_monomers, n_atoms)
             heat_echeck = max(echeck, heat_floor) if echeck > 0 else echeck
-        from mmml.interfaces.pycharmmInterface.mlpot.dynamics import build_heat_dynamics
+        from karml.interfaces.pycharmmInterface.mlpot.dynamics import build_heat_dynamics
 
         if resolve_heat_thermostat(args) == "hoover":
-            from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+            from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
                 build_hoover_heat_dynamics,
                 compute_cpt_piston_masses,
             )
@@ -425,10 +425,10 @@ def _build_stage_dynamics_kw(
                 tmass=tmass,
             )
         elif resolve_heat_thermostat(args) == "bussi":
-            from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+            from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
                 prepare_bussi_heat_dynamics_kw,
             )
-            from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+            from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
                 resolve_heat_bussi_taut_ps,
             )
 
@@ -532,7 +532,7 @@ def _build_stage_dynamics_kw(
     if cadence is not None:
         kw["_dyn_freq_cadence"] = cadence
     if stage == "heat":
-        from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
             apply_heat_ramp_frequencies,
         )
 
@@ -551,7 +551,7 @@ def _build_stage_dynamics_kw(
         and resolve_heat_thermostat(args) == "scale"
         and int(kw.get("ihtfrq", 0)) > 0
     ):
-        from mmml.interfaces.pycharmmInterface.mlpot.dynamics import apply_heat_ramp_frequencies
+        from karml.interfaces.pycharmmInterface.mlpot.dynamics import apply_heat_ramp_frequencies
 
         apply_heat_ramp_frequencies(
             kw,
@@ -597,10 +597,10 @@ def _configure_heat_dynamics_start(
     In-place resume (``restart_read == restart_write``) uses ``dyna restart`` so
     the step counter and thermostat state continue from the checkpoint.
     """
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _valid_restart_file,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         read_restart_last_step,
     )
 
@@ -728,7 +728,7 @@ def _configure_nve_dynamics_start(
             if handoff_restart_path is not None
             else None
         )
-        force_c_api_handoff = os.environ.get("MMML_NVE_C_API_HANDOFF") == "1"
+        force_c_api_handoff = os.environ.get("KARML_NVE_C_API_HANDOFF") == "1"
         use_restart = (
             not force_c_api_handoff
             and restart_path is not None
@@ -859,14 +859,14 @@ def _reset_stage_trajectory(
     Default: remove any prior ``path`` (fresh trajectory for this stage).
     With ``rescue_old=True``, rename the old file to ``*.rescued.N.dcd`` instead.
     """
-    from mmml.interfaces.pycharmmInterface.mpi_rank_io import is_mpi_rank_zero, rank0_print
+    from karml.interfaces.pycharmmInterface.mpi_rank_io import is_mpi_rank_zero, rank0_print
 
     if path is None or not is_mpi_rank_zero():
         return
 
     dcd_path = Path(path)
     try:
-        from mmml.interfaces.pycharmmInterface.charmm_paths import (
+        from karml.interfaces.pycharmmInterface.charmm_paths import (
             remove_charmm_io_write_staging_alias,
         )
 
@@ -905,7 +905,7 @@ def _reset_stage_restart(
     restart_read: Path | None = None,
 ) -> None:
     """Remove prior stage restart/scratch files before a fresh dynamics run."""
-    from mmml.interfaces.pycharmmInterface.mlpot.artifact_paths import (
+    from karml.interfaces.pycharmmInterface.mlpot.artifact_paths import (
         BASELINE_RES,
         overlap_chunk_dcd_glob_pattern,
         overlap_restart_slot_paths,
@@ -915,7 +915,7 @@ def _reset_stage_restart(
         return
     path = Path(restart_path)
     if path.name in (BASELINE_RES,) or path.name.startswith("geometry_baseline_"):
-        from mmml.utils.rich_report import emit_tagged
+        from karml.utils.rich_report import emit_tagged
 
         emit_tagged("restart", f"Keeping geometry baseline restart: {path}", tag_style="dim")
         return
@@ -926,11 +926,11 @@ def _reset_stage_restart(
     )
     if path.is_file() and not preserve_main:
         path.unlink(missing_ok=True)
-        from mmml.utils.rich_report import emit_tagged
+        from karml.utils.rich_report import emit_tagged
 
         emit_tagged("restart", f"Removed prior restart: {path}", tag_style="dim")
     elif preserve_main:
-        from mmml.utils.rich_report import emit_tagged
+        from karml.utils.rich_report import emit_tagged
 
         emit_tagged("restart", f"Keeping in-place restart for resume: {path}", tag_style="dim")
     parent = path.parent
@@ -955,7 +955,7 @@ def _validate_dyn_stage_completion(
     integrated_step: int | None = None,
     salvaged_partial: bool = False,
 ) -> None:
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         assert_stage_dynamics_completed,
     )
 
@@ -983,7 +983,7 @@ def _overlap_extent_prior_restart(
     prev_restart: Path | None,
 ) -> Path | None:
     """Best on-disk checkpoint for extent fly-off (post-mini baseline wins)."""
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import _valid_restart_file
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import _valid_restart_file
 
     baseline = paths.get("geometry_baseline_res")
     if baseline is not None:
@@ -1003,7 +1003,7 @@ def _stage_handoff_restart_for_early_abort(
     prev_restart: Path | None,
 ) -> Path | None:
     """On-disk stage handoff for overlap chunk-0 early-abort recovery (equi for prod, etc.)."""
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import _valid_restart_file
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import _valid_restart_file
 
     by_stage: dict[MdStage, tuple[str, ...]] = {
         "prod": ("equi_res",),
@@ -1166,10 +1166,10 @@ def _configure_equi_dynamics_start(
 
     restart_path = Path(io.restart_read) if io.restart_read is not None else None
     if restart_path is not None and not coords_in_memory:
-        from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
             read_restart_positions,
         )
-        from mmml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
+        from karml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
 
         # positions, not the leap-frog step displacement (X, Y, Z) of an NVE restart
         pos = read_restart_positions(restart_path)
@@ -1178,7 +1178,7 @@ def _configure_equi_dynamics_start(
                 f"EQUI CPT start: no finite coordinates in restart {restart_path}"
             )
         sync_charmm_positions(pos)
-        from mmml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
+        from karml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
             clear_comparison_coordinates,
         )
 
@@ -1234,10 +1234,10 @@ def _maybe_configure_cpt_in_memory_overlap_start(
     box_side: float | None,
 ) -> Path | None:
     """Fresh CPT barostat when EQUI/PROD continues in RAM without overlap READYN."""
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         overlap_first_chunk_skips_readyn,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+    from karml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
         resolve_overlap_memory_handoff,
     )
 
@@ -1284,12 +1284,12 @@ def _load_or_build_cluster(
     *,
     handoff_in=None,
 ) -> tuple[np.ndarray, np.ndarray, int, str]:
-    from mmml.cli.run.md_handoff import (
+    from karml.cli.run.md_handoff import (
         cluster_geometry_from_handoff,
         ensure_psf_for_handoff_cluster,
         get_handoff_in,
     )
-    from mmml.cli.run.md_pbc_suite.ase import _parse_composition
+    from karml.cli.run.md_pbc_suite.ase import _parse_composition
 
     ho = handoff_in if handoff_in is not None else get_handoff_in()
     if ho is not None:
@@ -1329,7 +1329,7 @@ def _load_or_build_cluster(
         return z, np.asarray(r0, dtype=np.float64), n_mol, tag
     if getattr(args, "skip_cluster_build", False) or getattr(args, "from_psf", None):
         return load_cluster_from_artifacts(args)
-    from mmml.interfaces.pycharmmInterface.mlpot.composition_spec import (
+    from karml.interfaces.pycharmmInterface.mlpot.composition_spec import (
         apply_from_pdb_alias,
         composition_mode,
         parse_composition_entries,
@@ -1339,7 +1339,7 @@ def _load_or_build_cluster(
     if getattr(args, "composition", None):
         entries = parse_composition_entries(str(args.composition))
         if composition_mode(entries) == "full_system_pdb":
-            from mmml.interfaces.pycharmmInterface.mlpot.setup import load_cluster_from_pdb
+            from karml.interfaces.pycharmmInterface.mlpot.setup import load_cluster_from_pdb
 
             return load_cluster_from_pdb(args)
     return build_cluster_from_args_with_tag(args)
@@ -1354,8 +1354,8 @@ def _publish_staged_handoff(
     stages: list[str],
 ) -> None:
     """Expose the current CHARMM state to campaign dependents."""
-    from mmml.cli.run.md_handoff import handoff_from_charmm, set_handoff_out
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+    from karml.cli.run.md_handoff import handoff_from_charmm, set_handoff_out
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         read_restart_last_step,
     )
 
@@ -1379,8 +1379,8 @@ def _publish_staged_handoff(
 
 
 def run_staged_workflow(args: argparse.Namespace) -> int:
-    from mmml.interfaces.pycharmmInterface.mlpot.cleanup_mode import apply_cleanup_defaults
-    from mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
+    from karml.interfaces.pycharmmInterface.mlpot.cleanup_mode import apply_cleanup_defaults
+    from karml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
         apply_condensed_phase_md_defaults,
         liquid_prep_enabled,
         maybe_probe_packmol_mic_pipeline,
@@ -1391,15 +1391,15 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
     apply_condensed_phase_md_defaults(args)
     if getattr(args, "mlpot_profile", False):
         import os
-        from mmml.interfaces.pycharmmInterface.mlpot.ml_profile import (
+        from karml.interfaces.pycharmmInterface.mlpot.ml_profile import (
             enable_mlpot_profiling,
         )
 
         enable_mlpot_profiling()
-        os.environ["MMML_MLPOT_PROFILE"] = "1"
-        os.environ["MMML_JAX_COMPILE_TIMERS"] = "1"
-    from mmml.cli.run.md_handoff import get_handoff_in
-    from mmml.cli.run.md_stage_summary import cubic_box_side_from_cell
+        os.environ["KARML_MLPOT_PROFILE"] = "1"
+        os.environ["KARML_JAX_COMPILE_TIMERS"] = "1"
+    from karml.cli.run.md_handoff import get_handoff_in
+    from karml.cli.run.md_stage_summary import cubic_box_side_from_cell
 
     handoff_in = get_handoff_in()
     stages = resolve_md_stages(args)
@@ -1414,11 +1414,11 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
     dynamics_constrain = resolve_constrain_resids(args)
     ckpt = resolve_checkpoint(args.checkpoint)
     z, r, n_mol, tag = _load_or_build_cluster(args, handoff_in=handoff_in)
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import reconcile_n_monomers_with_psf
+    from karml.interfaces.pycharmmInterface.mlpot.setup import reconcile_n_monomers_with_psf
 
     n_mol, _ = reconcile_n_monomers_with_psf(args, z, n_mol)
     if handoff_in is not None:
-        from mmml.cli.run.md_handoff import validate_handoff_matches_cluster_geometry
+        from karml.cli.run.md_handoff import validate_handoff_matches_cluster_geometry
 
         validate_handoff_matches_cluster_geometry(
             handoff_in,
@@ -1445,7 +1445,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
     out_dir = Path(args.output_dir).resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
     if getattr(args, "mlpot_profile", False):
-        from mmml.interfaces.pycharmmInterface.mlpot.ml_profile import (
+        from karml.interfaces.pycharmmInterface.mlpot.ml_profile import (
             write_profile_git_metadata,
         )
 
@@ -1477,7 +1477,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
     mini_registry: MinimizeArtifactRegistry | None = (
         MinimizeArtifactRegistry(out_dir, tag) if save_artifacts else None
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.recovery_progress import (
+    from karml.interfaces.pycharmmInterface.mlpot.recovery_progress import (
         resolve_cleanup_dir,
         resolve_prep_ladder_dir,
     )
@@ -1492,7 +1492,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
     mlpot_pbc = resolve_mlpot_use_pbc(args)
     loose_pbc = resolve_loose_pbc(charmm_pbc, mlpot_pbc)
     if charmm_pbc:
-        from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import (
+        from karml.interfaces.pycharmmInterface.mlpot.box_sizing import (
             apply_certified_box_size_from_artifacts,
         )
 
@@ -1518,10 +1518,10 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
             fresh_packmol_build=_fresh_packmol,
         )
     if atoms_per_list is not None:
-        from mmml.interfaces.pycharmmInterface.mlpot.mc_density import (
+        from karml.interfaces.pycharmmInterface.mlpot.mc_density import (
             apply_mc_density_equalization,
         )
-        from mmml.utils.intermonomer_geometry import resolve_pre_mlpot_overlap_min_distance
+        from karml.utils.intermonomer_geometry import resolve_pre_mlpot_overlap_min_distance
 
         r, box_side_after_mc, mc_density_summary = apply_mc_density_equalization(
             args,
@@ -1568,7 +1568,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
         and handoff_in is None
         and atoms_per_list is not None
     ):
-        from mmml.cli.run.md_handoff import (
+        from karml.cli.run.md_handoff import (
             align_fresh_cluster_positions_for_charmm_pbc,
         )
 
@@ -1589,7 +1589,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
             fresh_packmol_build=_fresh_packmol,
         )
     if charmm_pbc and not args.quiet:
-        from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import (
+        from karml.interfaces.pycharmmInterface.mlpot.box_sizing import (
             parse_composition_dict,
             resolve_initial_pbc_box_side,
         )
@@ -1614,7 +1614,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
             )
 
     if mlpot_pbc:
-        from mmml.interfaces.pycharmmInterface.mlpot.mlpot_limits import (
+        from karml.interfaces.pycharmmInterface.mlpot.mlpot_limits import (
             preflight_mlpot_registration_limits,
         )
 
@@ -1624,7 +1624,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
             box_side_A=box_side,
         )
 
-    from mmml.interfaces.pycharmmInterface.mlpot.periodic_mm import (
+    from karml.interfaces.pycharmmInterface.mlpot.periodic_mm import (
         assert_periodic_mm_box_side,
         cluster_extent_from_positions,
         periodic_mm_status_line,
@@ -1667,7 +1667,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
         fallback_box_side_A=box_side if charmm_pbc else None,
     )
     if bool(getattr(args, "save_forces_npz", False)):
-        from mmml.interfaces.pycharmmInterface.mlpot.force_checkpoint import (
+        from karml.interfaces.pycharmmInterface.mlpot.force_checkpoint import (
             ForceCheckpointConfig,
             configure_force_checkpoint,
         )
@@ -1711,7 +1711,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
 
     setup_charmm_environment(use_pbc=charmm_pbc, cubic_box_side_A=box_side, workflow_args=args)
     if atoms_per_list is not None:
-        from mmml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
+        from karml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
 
         r = get_charmm_positions_array()
         maybe_probe_packmol_mic_pipeline(
@@ -1728,7 +1728,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
     if handoff_in is not None:
         from dataclasses import replace
 
-        from mmml.cli.run.md_handoff import (
+        from karml.cli.run.md_handoff import (
             align_handoff_positions_for_charmm_pbc,
             monomer_offsets_uniform,
             prepare_pycharmm_handoff_continuation,
@@ -1795,7 +1795,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                 flush=True,
             )
         elif not bool(getattr(args, "charmm_mm_pretreat_with_liquid_prep", False)):
-            from mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
+            from karml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
                 liquid_prep_enabled,
             )
 
@@ -1821,7 +1821,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
         sync_charmm_positions(r)
         pretreat_restart_path = None
         if charmm_pbc and box_side is not None:
-            from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+            from karml.interfaces.pycharmmInterface.mlpot.pbc_env import (
                 find_latest_pretreat_mm_restart,
                 sync_workflow_pbc_box_side_after_mm_pretreat,
             )
@@ -1837,13 +1837,13 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                 quiet=bool(args.quiet),
             )
         else:
-            from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+            from karml.interfaces.pycharmmInterface.mlpot.pbc_env import (
                 find_latest_pretreat_mm_restart,
             )
 
             pretreat_restart_path = find_latest_pretreat_mm_restart(paths)
         r = get_charmm_positions_array()
-        from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+        from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
             resolve_charmm_mm_pretreat_heat_nstep,
             resolve_charmm_mm_pretreat_settings,
         )
@@ -1867,7 +1867,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
     elif "mini" in stages and not getattr(args, "skip_cluster_build", False):
         save_mini = bool(getattr(args, "save", True))
         mini_dcd_nsavc = resolve_dcd_nsavc_for_args(args, nstep=mini_nstep)
-        from mmml.interfaces.pycharmmInterface.mpi_rank_io import rank0_trajectory_path
+        from karml.interfaces.pycharmmInterface.mpi_rank_io import rank0_trajectory_path
 
         r = _charmm_pre_minimize_before_mlpot(
             args,
@@ -1895,20 +1895,20 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                 grms_kcalmol_A=charmm_grms(),
             )
 
-    from mmml.interfaces.pycharmmInterface.mlpot.box_lattice_abnr import (
+    from karml.interfaces.pycharmmInterface.mlpot.box_lattice_abnr import (
         should_run_mini_lattice_abnr,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import should_run_mini_box_equil
+    from karml.interfaces.pycharmmInterface.mlpot.box_sizing import should_run_mini_box_equil
 
     if should_run_mini_lattice_abnr(
         args,
         charmm_pbc=charmm_pbc,
         stages=list(stages),
     ):
-        from mmml.interfaces.pycharmmInterface.mlpot.box_lattice_abnr import (
+        from karml.interfaces.pycharmmInterface.mlpot.box_lattice_abnr import (
             run_mini_lattice_abnr,
         )
-        from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+        from karml.interfaces.pycharmmInterface.mlpot.pbc_env import (
             sync_workflow_pbc_box_side_after_mm_pretreat,
         )
 
@@ -1935,10 +1935,10 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
         pretreat_mm=pretreat_mm,
         stages=list(stages),
     ):
-        from mmml.interfaces.pycharmmInterface.mlpot.box_equil import (
+        from karml.interfaces.pycharmmInterface.mlpot.box_equil import (
             run_mini_box_equilibration,
         )
-        from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+        from karml.interfaces.pycharmmInterface.mlpot.pbc_env import (
             sync_workflow_pbc_box_side_after_mm_pretreat,
         )
 
@@ -1998,7 +1998,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
         )
         setattr(args, "_pre_mlpot_geometry_gate_summary", gate_summary.to_dict())
         if charmm_pbc and box_side is not None:
-            from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+            from karml.interfaces.pycharmmInterface.mlpot.pbc_env import (
                 sync_workflow_pbc_box_side_after_mm_pretreat,
             )
 
@@ -2011,7 +2011,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
 
     r = get_charmm_positions_array()
     if liquid_prep_enabled(args) and atoms_per_list is not None:
-        from mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
+        from karml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
             assert_ml_safe_before_mlpot_registration,
         )
 
@@ -2059,13 +2059,13 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
         ctx.cubic_box_side_A = float(box_side)
         ctx.charmm_cubic_box_side_A = float(box_side)
     elif pretreat_restart_path is not None and charmm_pbc:
-        from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import DecomposedMlpotModel
+        from karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import DecomposedMlpotModel
 
         rpath = Path(pretreat_restart_path)
         if isinstance(pyCModel, DecomposedMlpotModel) and rpath.is_file():
             pyCModel._npt_restart_read = rpath
 
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
         probe_and_light_resync_if_desync,
     )
 
@@ -2076,7 +2076,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
         restart_path=pretreat_restart_path,
     )
 
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
         assert_initial_mlpot_grms_before_sd,
     )
 
@@ -2099,7 +2099,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
             fix_sel = select_by_resids(fix_resids) if fix_resids else None
             save_mini = bool(getattr(args, "save", True))
             mini_dcd_nsavc = resolve_dcd_nsavc_for_args(args, nstep=mini_nstep)
-            from mmml.interfaces.pycharmmInterface.mpi_rank_io import rank0_trajectory_path
+            from karml.interfaces.pycharmmInterface.mpi_rank_io import rank0_trajectory_path
 
             if not args.quiet:
                 print(
@@ -2126,14 +2126,14 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     pyCModel=pyCModel,
                     mlpot_ctx=ctx,
                     save=save_mini,
-                    pdb_path=paths["mlpot_mmml_pdb"] if save_mini else None,
-                    crd_path=paths["mlpot_mmml_crd"] if save_mini else None,
-                    psf_path=paths["mlpot_mmml_psf"] if save_mini else None,
-                    energy_json_path=paths["mlpot_mmml_energy_json"] if save_mini else None,
-                    xyz_path=paths["mlpot_mmml_xyz"] if save_mini else None,
-                    dcd_path=rank0_trajectory_path(paths["mlpot_mmml_dcd"] if save_mini else None),
+                    pdb_path=paths["mlpot_karml_pdb"] if save_mini else None,
+                    crd_path=paths["mlpot_karml_crd"] if save_mini else None,
+                    psf_path=paths["mlpot_karml_psf"] if save_mini else None,
+                    energy_json_path=paths["mlpot_karml_energy_json"] if save_mini else None,
+                    xyz_path=paths["mlpot_karml_xyz"] if save_mini else None,
+                    dcd_path=rank0_trajectory_path(paths["mlpot_karml_dcd"] if save_mini else None),
                     dcd_nsavc=mini_dcd_nsavc if save_mini else 0,
-                    title=MLPOT_MMML.label,
+                    title=MLPOT_KARML.label,
                     skip_if_crd_exists=bool(getattr(args, "skip_if_crd_exists", False)),
                     test_first=resolve_test_first_config(args),
                     show_energy=show_energy,
@@ -2165,23 +2165,23 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
             if save_mini and legacy_mlpot is not None:
                 mirror_legacy_mlpot_files(
                     {
-                        "pdb": paths["mlpot_mmml_pdb"],
-                        "crd": paths["mlpot_mmml_crd"],
-                        "psf": paths["mlpot_mmml_psf"],
-                        "xyz": paths["mlpot_mmml_xyz"],
-                        "energy_json": paths["mlpot_mmml_energy_json"],
+                        "pdb": paths["mlpot_karml_pdb"],
+                        "crd": paths["mlpot_karml_crd"],
+                        "psf": paths["mlpot_karml_psf"],
+                        "xyz": paths["mlpot_karml_xyz"],
+                        "energy_json": paths["mlpot_karml_energy_json"],
                     },
                     legacy_mlpot,
                 )
             if save_mini and mini_registry is not None:
                 mini_registry.record(
-                    MLPOT_MMML,
+                    MLPOT_KARML,
                     {
-                        "pdb": paths["mlpot_mmml_pdb"],
-                        "crd": paths["mlpot_mmml_crd"],
-                        "psf": paths["mlpot_mmml_psf"],
-                        "xyz": paths["mlpot_mmml_xyz"],
-                        "energy_json": paths["mlpot_mmml_energy_json"],
+                        "pdb": paths["mlpot_karml_pdb"],
+                        "crd": paths["mlpot_karml_crd"],
+                        "psf": paths["mlpot_karml_psf"],
+                        "xyz": paths["mlpot_karml_xyz"],
+                        "energy_json": paths["mlpot_karml_energy_json"],
                     },
                     grms_kcalmol_A=resolve_mlpot_grms_kcalmol_A(ctx, context=""),
                 )
@@ -2190,13 +2190,13 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                 ctx,
                 context="Post MLpot mini" if not args.quiet else "Post MLpot mini GRMS",
             )
-            from mmml.interfaces.pycharmmInterface.mlpot.extent_repack_recovery import (
+            from karml.interfaces.pycharmmInterface.mlpot.extent_repack_recovery import (
                 stash_geometry_reference_on_ctx,
             )
 
             stash_geometry_reference_on_ctx(ctx, kind="mini")
             mini_trajectories = _trajectory_outputs(paths["mini_charmm_dcd"])
-            mini_trajectories.extend(_trajectory_outputs(paths["mlpot_mmml_dcd"]))
+            mini_trajectories.extend(_trajectory_outputs(paths["mlpot_karml_dcd"]))
             last_traj = mini_trajectories[-1] if mini_trajectories else None
             maybe_run_bonded_mm_mini_after_stage(
                 ctx,
@@ -2216,7 +2216,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     else None
                 ),
             )
-            from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
+            from karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
                 maybe_warmup_deferred_decomposed_mlpot,
             )
 
@@ -2240,7 +2240,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
             )
             return 0
 
-        from mmml.interfaces.pycharmmInterface.mlpot.monomer_geometry_limits import (
+        from karml.interfaces.pycharmmInterface.mlpot.monomer_geometry_limits import (
             apply_geometry_limits_to_overlap_config,
         )
 
@@ -2275,7 +2275,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                 mlpot_ctx=ctx,
             )
             if overlap_rescued:
-                from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+                from karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
                     finalize_overlap_rescue_for_dynamics,
                 )
 
@@ -2284,7 +2284,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     stage_overlap_pre,
                     context="Post overlap rescue (pre-dynamics)",
                 )
-                from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+                from karml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
                     save_stabilized_overlap_rescue_snapshot,
                 )
 
@@ -2302,7 +2302,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     f"Geometry baseline restart -> {baseline_path.name}",
                     flush=True,
                 )
-        from mmml.interfaces.pycharmmInterface.mlpot.extent_repack_recovery import (
+        from karml.interfaces.pycharmmInterface.mlpot.extent_repack_recovery import (
             stash_geometry_reference_on_ctx,
         )
 
@@ -2348,7 +2348,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
             pbc=charmm_pbc,
             mlpot_ctx=ctx,
         )
-        from mmml.interfaces.pycharmmInterface.mlpot.grms_thresholds import (
+        from karml.interfaces.pycharmmInterface.mlpot.grms_thresholds import (
             resolve_intervention_grms_threshold,
         )
 
@@ -2372,7 +2372,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     f"intervention {intervention_grms:.4f} — running density prep ladder...",
                     flush=True,
                 )
-            from mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
+            from karml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
                 run_density_prep_ladder,
             )
 
@@ -2469,8 +2469,8 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     "attempting bonded-MM jiggle recovery...",
                     flush=True,
                 )
-            from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import apply_charmm_position_noise
-            from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+            from karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import apply_charmm_position_noise
+            from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
                 bonded_mm_mini_config_from_namespace,
                 minimize_bonded_mm_recovery,
             )
@@ -2496,7 +2496,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
             )
 
         if current_grms > max_grms:
-            from mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
+            from karml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
                 run_density_prep_ladder,
             )
 
@@ -2522,7 +2522,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
             current_grms = float(ladder_grms)
             setattr(args, "_density_prep_ladder_summary", ladder_summary.to_dict())
 
-        from mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize import (
+        from karml.interfaces.pycharmmInterface.mlpot.calculator_minimize import (
             run_pre_dynamics_hybrid_calculator_prep,
         )
 
@@ -2544,7 +2544,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
         # A whole-system RMS can hide a few atoms at multi-eV/Å force.  Measure
         # the live hybrid force field after every recovery/minimization step and
         # enforce the independent per-atom ceiling before entering HEAT.
-        from mmml.interfaces.pycharmmInterface.mlpot.grms_thresholds import (
+        from karml.interfaces.pycharmmInterface.mlpot.grms_thresholds import (
             DynamicsGateResult,
             geometry_safe_for_dynamics,
             measure_monomer_grms_stats,
@@ -2590,7 +2590,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                 and len(atoms_per_list) <= 1
                 and bool(getattr(args, "calculator_pre_minimize", True))
             ):
-                from mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize import (
+                from karml.interfaces.pycharmmInterface.mlpot.calculator_minimize import (
                     relax_for_pre_dynamics_force_gate,
                 )
 
@@ -2639,7 +2639,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                 and atoms_per_list is not None
                 and len(atoms_per_list) > 1
             ):
-                from mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize import (
+                from karml.interfaces.pycharmmInterface.mlpot.calculator_minimize import (
                     repair_stressed_monomers_with_calculator,
                 )
 
@@ -2691,7 +2691,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                             # is coupled to the surrounding cluster.  Restore a
                             # known-good monomer template and minimize the
                             # selected residues with isolated PhysNet instead.
-                            from mmml.interfaces.pycharmmInterface.mlpot.monomer_physnet_mini import (
+                            from karml.interfaces.pycharmmInterface.mlpot.monomer_physnet_mini import (
                                 run_selective_monomer_physnet_mini,
                                 selective_monomer_physnet_mini_config_from_args,
                             )
@@ -2773,7 +2773,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
             quiet=bool(args.quiet),
         )
 
-        from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
+        from karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
             maybe_warmup_deferred_decomposed_mlpot,
         )
 
@@ -2889,7 +2889,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                             restart = False
                             rread = None
                     if not seg_prep_quiet:
-                        from mmml.utils.rich_report import emit_tagged
+                        from karml.utils.rich_report import emit_tagged
 
                         emit_tagged(
                             "HEAT",
@@ -2920,7 +2920,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                         n_monomers=n_mol,
                     )
                     kw["nsavc"] = dcd_nsavc
-                    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+                    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
                         apply_dyn_inbfrq_from_args,
                         apply_heat_segment_ramp_kwargs,
                         finalize_heat_dynamics_frequencies,
@@ -2982,7 +2982,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     )
                     apply_comp_velocity_policy("heat", kw, args, quiet=seg_prep_quiet)
                     apply_dyn_inbfrq_from_args(kw, args, charmm_pbc=charmm_pbc)
-                    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+                    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
                         apply_dyn_imgfrq_from_args,
                     )
 
@@ -3042,7 +3042,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     freq_changes: dict[str, tuple[int, int]] = {}
                     if int(kw.get("ihtfrq", 0) or 0) > 0:
                         freq_changes = finalize_heat_dynamics_frequencies(kw)
-                    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+                    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
                         print_heat_dynamics_diagnostics,
                     )
 
@@ -3077,15 +3077,15 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     )
                     # Hoover CPT heat: one DYNA per segment (no mid-segment Bussi /
                     # Boltzmann redraw when DCD forbids C-API velocity inject).
-                    # Opt out with MMML_HEAT_MID_SEGMENT_CHECKS=1 for debugging.
+                    # Opt out with KARML_HEAT_MID_SEGMENT_CHECKS=1 for debugging.
                     if heat_thermostat == "hoover" and stage_overlap is not None:
                         from dataclasses import replace
 
-                        from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+                        from karml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
                             _truthy_env,
                         )
 
-                        if not _truthy_env("MMML_HEAT_MID_SEGMENT_CHECKS"):
+                        if not _truthy_env("KARML_HEAT_MID_SEGMENT_CHECKS"):
                             stage_overlap = replace(
                                 stage_overlap, heat_segment_boundary_only=True
                             )
@@ -3561,7 +3561,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     restart = False
                     rread = None
                 elif rread is not None:
-                    from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
+                    from karml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
                         is_handoff_seed_restart_path,
                     )
 
@@ -3653,7 +3653,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     mlpot_ctx=ctx,
                 )
             apply_comp_velocity_policy(stage, kw, args)
-            from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+            from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
                 apply_dyn_imgfrq_from_args,
                 apply_dyn_inbfrq_from_args,
             )
@@ -3667,7 +3667,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     or getattr(args, "pre_nve_charmm_update", True)
                 )
             ):
-                from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+                from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
                     sync_charmm_lists_after_mini,
                 )
 
@@ -3675,7 +3675,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
             if stage == "heat":
                 # Drop pretreat/pre-heat calculator mini best so mid-HEAT rescue
                 # FIRE cannot roll geometry back to the t≈0 mini frame.
-                from mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize import (
+                from karml.interfaces.pycharmmInterface.mlpot.calculator_minimize import (
                     clear_calculator_mini_historical_best,
                 )
 
@@ -3725,7 +3725,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                 )
             heat_freq_changes: dict[str, tuple[int, int]] = {}
             if stage == "heat":
-                from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+                from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
                     finalize_heat_dynamics_frequencies,
                     print_heat_dynamics_diagnostics,
                 )
@@ -3768,7 +3768,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                 and int(stage_overlap.check_interval) >= nstep
                 and not args.quiet
             ):
-                from mmml.utils.rich_report import emit_overlap_log
+                from karml.utils.rich_report import emit_overlap_log
 
                 emit_overlap_log(
                     f"one integration segment ({nstep} steps); "
@@ -3863,10 +3863,10 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
             turn_off_cons_fix()
         ctx.unset()
 
-    from mmml.interfaces.pycharmmInterface.mlpot.ml_profile import maybe_log_mlpot_profile
+    from karml.interfaces.pycharmmInterface.mlpot.ml_profile import maybe_log_mlpot_profile
 
     maybe_log_mlpot_profile(quiet=bool(args.quiet))
-    from mmml.interfaces.pycharmmInterface.mlpot.run_state_checkpoint import (
+    from karml.interfaces.pycharmmInterface.mlpot.run_state_checkpoint import (
         maybe_save_run_state_from_workflow,
     )
 
@@ -3880,7 +3880,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
         last_restart=last_restart_path,
         last_trajectory=last_traj,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.force_checkpoint import (
+    from karml.interfaces.pycharmmInterface.mlpot.force_checkpoint import (
         flush_force_checkpoint,
     )
 

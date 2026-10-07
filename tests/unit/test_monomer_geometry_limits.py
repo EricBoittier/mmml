@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from mmml.interfaces.pycharmmInterface.mlpot.monomer_geometry_limits import (
+from karml.interfaces.pycharmmInterface.mlpot.monomer_geometry_limits import (
     DEFAULT_INTRA_MIN_DISTANCE_A,
     DEFAULT_MAX_MONOMER_EXTENT_A,
     compute_monomer_geometry_limits,
@@ -60,7 +60,7 @@ def test_compute_limits_tighter_than_legacy_defaults() -> None:
 
 def test_compute_limits_includes_geminal_hh_spacing() -> None:
     """Geminal H–H (PSF 1–3) sets intra_min even when pair is excluded."""
-    from mmml.utils.geometry_checks import build_bond_exclusion_pairs
+    from karml.utils.geometry_checks import build_bond_exclusion_pairs
 
     # C–H–H methyl-like geometry (geminal H–H PSF 1–3 via C)
     pos = np.array(
@@ -135,7 +135,7 @@ def test_apply_geometry_limits_respects_no_dynamics_max_monomer_extent() -> None
     from argparse import Namespace
     from dataclasses import dataclass
 
-    from mmml.interfaces.pycharmmInterface.mlpot.monomer_geometry_limits import (
+    from karml.interfaces.pycharmmInterface.mlpot.monomer_geometry_limits import (
         apply_geometry_limits_to_overlap_config,
     )
 
@@ -153,7 +153,7 @@ def test_apply_geometry_limits_respects_no_dynamics_max_monomer_extent() -> None
     args = Namespace(no_dynamics_max_monomer_extent=True, quiet=True)
     with pytest.MonkeyPatch.context() as mp:
         mp.setattr(
-            "mmml.interfaces.pycharmmInterface.mlpot.monomer_geometry_limits."
+            "karml.interfaces.pycharmmInterface.mlpot.monomer_geometry_limits."
             "compute_geometry_limits_from_mlpot_ctx",
             lambda *a, **k: type(
                 "L",

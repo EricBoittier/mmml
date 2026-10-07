@@ -8,12 +8,12 @@ import pytest
 jax = pytest.importorskip("jax")
 import jax.numpy as jnp
 
-from mmml.interfaces.pycharmmInterface.calculator_utils import (
+from karml.interfaces.pycharmmInterface.calculator_utils import (
     FLAT_BOTTOM_MODES,
     apply_com_lower_wall,
     apply_flat_bottom,
 )
-from mmml.interfaces.pycharmmInterface.pbc_utils_jax import (
+from karml.interfaces.pycharmmInterface.pbc_utils_jax import (
     mic_displacement,
     mic_displacement_smooth,
 )

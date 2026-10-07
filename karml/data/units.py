@@ -1,5 +1,5 @@
 """
-Central unit conversion constants and helpers for MMML.
+Central unit conversion constants and helpers for KARML.
 
 All conversion factors are defined here to avoid magic numbers and ensure
 consistency across train_joint, fix_and_split, DCMNet, PhysNet, and calculators.
@@ -418,7 +418,7 @@ def subtract_atom_refs(
     charge_state: int = 0,
 ) -> np.ndarray:
     """Subtract per-atom reference energies from total energies."""
-    from mmml.data.atomic_references import (
+    from karml.data.atomic_references import (
         DEFAULT_REFERENCE_LEVEL,
         get_atomic_reference_array,
     )
@@ -557,12 +557,12 @@ def find_units_manifest(npz_path: Path | str) -> UnitsManifestV2 | None:
 
 
 def units_from_npz(npz_path: Path | str) -> UnitsManifestV2 | None:
-    """Read embedded _mmml_units from NPZ if present, else nearby manifest."""
+    """Read embedded _karml_units from NPZ if present, else nearby manifest."""
     p = Path(npz_path).expanduser()
     try:
         with np.load(p, allow_pickle=True) as data:
-            if "_mmml_units" in data.files:
-                raw = data["_mmml_units"]
+            if "_karml_units" in data.files:
+                raw = data["_karml_units"]
                 if isinstance(raw, np.ndarray) and raw.shape == ():
                     raw = raw.item()
                 if isinstance(raw, (bytes, str)):
@@ -735,9 +735,9 @@ def pyscf_units_json() -> str:
 
 
 def attach_units_to_npz_payload(payload: dict[str, Any]) -> dict[str, Any]:
-    """Return payload copy with embedded _mmml_units JSON string."""
+    """Return payload copy with embedded _karml_units JSON string."""
     out = dict(payload)
-    out["_mmml_units"] = np.array(pyscf_units_json())
+    out["_karml_units"] = np.array(pyscf_units_json())
     return out
 
 

@@ -219,15 +219,15 @@ def collect_live_cpt_ml_virial_report(
     rel_dv: float = 1.0e-4,
 ) -> dict[str, Any]:
     """PRSI / atomic / strain / VIRE / VIRI after a registered MLpot ENER FORCE."""
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
         mlpot_spherical_energy_forces_ev_angstrom,
         refresh_mlpot_energy_and_grms,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.pressure_tensor import (
+    from karml.interfaces.pycharmmInterface.mlpot.pressure_tensor import (
         read_instantaneous_scalar_pressure_atm,
     )
-    from mmml.interfaces.pycharmmInterface.charmm_forces import charmm_forces_array
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
+    from karml.interfaces.pycharmmInterface.charmm_forces import charmm_forces_array
+    from karml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
 
     refresh_mlpot_energy_and_grms(
         mlpot_ctx,
@@ -314,21 +314,21 @@ def run_live_cpt_ml_virial(
     No CPT / ``dyna``. Strain FD uses the JAX hybrid energy at a scaled box so
     CHARMM's crystal is not rebuilt after MLpot registration.
     """
-    from mmml.cli.run.md_handoff import load_handoff, set_handoff_in
-    from mmml.cli.run.md_system import build_parser
-    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import setup_charmm_environment
-    from mmml.interfaces.pycharmmInterface.mlpot.run_workflow import (
+    from karml.cli.run.md_handoff import load_handoff, set_handoff_in
+    from karml.cli.run.md_system import build_parser
+    from karml.interfaces.pycharmmInterface.mlpot.pbc_env import setup_charmm_environment
+    from karml.interfaces.pycharmmInterface.mlpot.run_workflow import (
         _register_mlpot_context,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+    from karml.interfaces.pycharmmInterface.mlpot.setup import (
         get_charmm_positions_array,
         load_cluster_from_artifacts,
         sync_charmm_positions,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.staged_workflow import (
+    from karml.interfaces.pycharmmInterface.mlpot.staged_workflow import (
         _load_or_build_cluster,
     )
-    from mmml.interfaces.pycharmmInterface.utils import get_Z_from_psf
+    from karml.interfaces.pycharmmInterface.utils import get_Z_from_psf
 
     out = Path(output_dir) if output_dir is not None else Path.cwd() / "cpt_ml_virial"
     out.mkdir(parents=True, exist_ok=True)
@@ -369,7 +369,7 @@ def run_live_cpt_ml_virial(
     if continue_from is not None:
         set_handoff_in(load_handoff(Path(continue_from).expanduser().resolve()))
 
-    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+    import karml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
 
     z, r, n_mol, _tag = _load_or_build_cluster(args)
     if z is None or len(z) == 0:
@@ -380,7 +380,7 @@ def run_live_cpt_ml_virial(
         workflow_args=args,
     )
     if continue_from is not None:
-        from mmml.cli.run.md_handoff import get_handoff_in
+        from karml.cli.run.md_handoff import get_handoff_in
 
         ho = get_handoff_in()
         if ho is not None:

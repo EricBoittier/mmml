@@ -7,7 +7,7 @@ a PhysNet checkpoint is available.  No PyCHARMM required for the jax-pme leg.
 
 Examples
 --------
-  JAX_PLATFORMS=cpu MMML_JAX_COMPILE_TIMERS=1 \\
+  JAX_PLATFORMS=cpu KARML_JAX_COMPILE_TIMERS=1 \\
     uv run python tests/functionality/long_range/11_calculator_primitive_benchmark.py
 
   JAX_PLATFORMS=cpu uv run python tests/functionality/long_range/11_calculator_primitive_benchmark.py \\
@@ -66,7 +66,7 @@ def _parse_args() -> argparse.Namespace:
 def _synthetic_cluster(args: argparse.Namespace):
     from jaxpme import prefactors as jpref
 
-    from mmml.interfaces.pycharmmInterface.long_range_backend import (
+    from karml.interfaces.pycharmmInterface.long_range_backend import (
         per_atom_jax_pme_c6_sqrt_for_atoms,
     )
 
@@ -106,7 +106,7 @@ def _bench_jax_warmup(
     steady_reps: int,
     notes: str = "",
 ) -> BenchRow:
-    from mmml.utils.jax_gpu_warmup import (
+    from karml.utils.jax_gpu_warmup import (
         block_jax_values,
         reset_jax_compile_timers,
         run_jax_warmup_passes,
@@ -165,16 +165,16 @@ def _bench_hybrid_components(
     intra_mode: str,
     steady_reps: int,
 ) -> list[BenchRow]:
-    from mmml.interfaces.pycharmmInterface.jax_pme_cross_monomer import (
+    from karml.interfaces.pycharmmInterface.jax_pme_cross_monomer import (
         consume_cross_monomer_profile,
     )
-    from mmml.interfaces.pycharmmInterface.jax_pme_hybrid_coulomb import (
+    from karml.interfaces.pycharmmInterface.jax_pme_hybrid_coulomb import (
         consume_hybrid_jax_pme_profile,
         hybrid_jax_pme_mm_lr_correction,
     )
 
-    os.environ["MMML_JAX_PME_INTRA_MODE"] = intra_mode
-    os.environ["MMML_JAX_PME_PROFILE"] = "1"
+    os.environ["KARML_JAX_PME_INTRA_MODE"] = intra_mode
+    os.environ["KARML_JAX_PME_PROFILE"] = "1"
 
     def _hybrid():
         return hybrid_jax_pme_mm_lr_correction(
@@ -195,7 +195,7 @@ def _bench_hybrid_components(
         "hybrid_lr",
         _hybrid,
         steady_reps=steady_reps,
-        notes=f"MMML_JAX_PME_INTRA_MODE={intra_mode}",
+        notes=f"KARML_JAX_PME_INTRA_MODE={intra_mode}",
     )
     rows = [total]
 
@@ -211,7 +211,7 @@ def _bench_hybrid_components(
                 compile_s=None,
                 run_s=None,
                 steady_ms=float(stats["mean_ms"]),
-                notes="MMML_JAX_PME_PROFILE steady mean",
+                notes="KARML_JAX_PME_PROFILE steady mean",
             )
         )
     for label, stats in consume_cross_monomer_profile().items():
@@ -229,10 +229,10 @@ def _bench_hybrid_components(
 
 
 def _bench_jax_pme_primitives(ctx: dict[str, Any], *, steady_reps: int) -> list[BenchRow]:
-    from mmml.interfaces.pycharmmInterface.jax_pme_cross_monomer import (
+    from karml.interfaces.pycharmmInterface.jax_pme_cross_monomer import (
         compute_jax_pme_cross_monomer_power_law,
     )
-    from mmml.interfaces.pycharmmInterface.long_range_backend import (
+    from karml.interfaces.pycharmmInterface.long_range_backend import (
         compute_jax_pme_coulomb,
         compute_jax_pme_lj_dispersion,
         compute_jax_pme_power_law,
@@ -312,21 +312,21 @@ def _bench_mlpot_primitives(args: argparse.Namespace, *, steady_reps: int) -> li
 
     # JAX compile timing only — avoid import-time CHARMM BLOCK/crystal on empty PSF
     # (MPI-linked libcharmm can stall for minutes with no progress output).
-    os.environ.setdefault("MMML_WARMUP_MLPOT_JAX_ONLY", "1")
+    os.environ.setdefault("KARML_WARMUP_MLPOT_JAX_ONLY", "1")
     print(
         "\n--- MLpot JAX warmup primitives "
-        "(MMML_WARMUP_MLPOT_JAX_ONLY=1; compile may take ~30–120s on CPU) ---",
+        "(KARML_WARMUP_MLPOT_JAX_ONLY=1; compile may take ~30–120s on CPU) ---",
         flush=True,
     )
 
-    from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
+    from karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
         build_decomposed_mlpot_model,
         warmup_decomposed_mlpot,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.medium_pbc_validation import (
+    from karml.interfaces.pycharmmInterface.mlpot.medium_pbc_validation import (
         lattice_positions_cubic_pbc,
     )
-    from mmml.utils.jax_gpu_warmup import (
+    from karml.utils.jax_gpu_warmup import (
         reset_hybrid_spherical_warmup_cache,
         reset_jax_compile_timers,
         summarize_jax_compile_timers,
@@ -390,7 +390,7 @@ def _bench_mlpot_primitives(args: argparse.Namespace, *, steady_reps: int) -> li
         mm_pair_idx = None
         mm_pair_mask = None
         if model._do_mm and model._get_update_fn is not None:
-            from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
+            from karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
                 _box_numpy_for_update,
             )
 
@@ -449,8 +449,8 @@ def main() -> int:
         print("jax-pme not installed", file=sys.stderr)
         return 1
 
-    os.environ.setdefault("MMML_JAX_COMPILE_TIMERS", "1")
-    os.environ.setdefault("MMML_JAX_PME_INTRA_MODE", "cross")
+    os.environ.setdefault("KARML_JAX_COMPILE_TIMERS", "1")
+    os.environ.setdefault("KARML_JAX_PME_INTRA_MODE", "cross")
 
     ctx = _synthetic_cluster(args)
     rows: list[BenchRow] = []
@@ -482,7 +482,7 @@ def main() -> int:
             "box_side_A": ctx["box_L"],
             "method": ctx["method"],
             "jax_platforms": os.environ.get("JAX_PLATFORMS"),
-            "intra_mode_default": os.environ.get("MMML_JAX_PME_INTRA_MODE"),
+            "intra_mode_default": os.environ.get("KARML_JAX_PME_INTRA_MODE"),
         },
         "primitives": [asdict(r) for r in rows],
     }

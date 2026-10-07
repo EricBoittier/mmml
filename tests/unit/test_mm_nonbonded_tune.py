@@ -1,4 +1,4 @@
-"""Tests for the ML/MM nonbonded tuner (mmml.models.mm_nonbonded_tune)."""
+"""Tests for the ML/MM nonbonded tuner (karml.models.mm_nonbonded_tune)."""
 
 from __future__ import annotations
 
@@ -11,8 +11,8 @@ jax = pytest.importorskip("jax")
 jax.config.update("jax_enable_x64", True)
 import jax.numpy as jnp  # noqa: E402
 
-from mmml.models.cgenff_mm import cgenff_mm_energy, RMIN_HALF_TO_SIGMA  # noqa: E402
-from mmml.models.mm_nonbonded_tune import (  # noqa: E402
+from karml.models.cgenff_mm import cgenff_mm_energy, RMIN_HALF_TO_SIGMA  # noqa: E402
+from karml.models.mm_nonbonded_tune import (  # noqa: E402
     FrameFeatures,
     MonomerNonbonded,
     PriorConfig,
@@ -261,7 +261,7 @@ def test_underlay_features_only_inside_ml_region(ff):
 
 
 def test_label_roundtrip(tmp_path):
-    from mmml.distill.box_cohesion import load_labels, save_labels
+    from karml.distill.box_cohesion import load_labels, save_labels
 
     frames = []
     for k, n_pairs in enumerate((3, 5)):
@@ -283,8 +283,8 @@ def test_label_roundtrip(tmp_path):
 def test_sidecar_payload_roundtrips_through_md_loader(ff, tmp_path):
     import json
 
-    from mmml.models.mm_lj_scales import load_mm_lj_scales_sidecar
-    from mmml.models.mm_nonbonded_tune import lj_sidecar_payload
+    from karml.models.mm_lj_scales import load_mm_lj_scales_sidecar
+    from karml.models.mm_nonbonded_tune import lj_sidecar_payload
 
     p = TuneParams(np.full(ff.n_types, 1.5), np.full(ff.n_types, 1.01), 1.1)
     path = tmp_path / "hybrid_mm.json"
@@ -298,12 +298,12 @@ def test_sidecar_payload_roundtrips_through_md_loader(ff, tmp_path):
 
 
 def test_cli_parser():
-    from mmml.cli.misc.tune_mm_nonbonded import build_parser
+    from karml.cli.misc.tune_mm_nonbonded import build_parser
 
     p = build_parser()
     a = p.parse_args(["fit", "--labels", "x", "--out-json", "y.json", "--handoff-grid", "6:5,5:4"])
     assert a.stage == "fit" and a.mm_switch_on == 6.0
-    from mmml.cli.misc.tune_mm_nonbonded import _parse_grid
+    from karml.cli.misc.tune_mm_nonbonded import _parse_grid
 
     assert _parse_grid(a.handoff_grid) == [(6.0, 5.0), (5.0, 4.0)]
 

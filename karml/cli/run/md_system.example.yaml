@@ -1,9 +1,9 @@
 # Single-run example (flat keys):
-#   mmml md-system --config mmml/cli/run/md_system.example.yaml
+#   karml md-system --config karml/cli/run/md_system.example.yaml
 #
 # Campaign example (defaults + runs):
-#   mmml md-system --config mmml/cli/run/md_system.example.yaml --run-all
-#   mmml md-system --config mmml/cli/run/md_system.example.yaml --job-id jaxmd_prod
+#   karml md-system --config karml/cli/run/md_system.example.yaml --run-all
+#   karml md-system --config karml/cli/run/md_system.example.yaml --job-id jaxmd_prod
 
 # --- Uncomment for a single JAX-MD NPT run ---------------------------------
 # setup: pbc_npt
@@ -24,7 +24,7 @@
 # packmol_radius: optional legacy fallback (cube side = 2× radius when box_size unset)
 defaults:
   composition: "DCM:20"
-  checkpoint: /mmhome/boittier/home/mmml/examples/ckpts_json/DESdimers_params.json
+  checkpoint: /mmhome/boittier/home/karml/examples/ckpts_json/DESdimers_params.json
   box_size: 38.0
   dt_fs: 0.25
   temperature: 160.0
@@ -63,7 +63,7 @@ runs:
     pressure: 1.0
     output_dir: results/jaxmd_prod
     handoff_write_res: true
-    # Optional: auto pre-min when MMML |F| > 1 eV/Å at handoff (see docs/handoff.md)
+    # Optional: auto pre-min when KARML |F| > 1 eV/Å at handoff (see docs/handoff.md)
     # handoff_quality_gate: true
     # handoff_quality_fmax_eVA: 1.0
     # jaxmd_minimize_steps: 500

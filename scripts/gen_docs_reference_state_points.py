@@ -28,8 +28,8 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
-from mmml.data.reference_state_points import SPECIES, Phase
-from mmml.utils.plotting.styles import apply_plot_style
+from karml.data.reference_state_points import SPECIES, Phase
+from karml.utils.plotting.styles import apply_plot_style
 
 REPO = Path(__file__).resolve().parents[1]
 OUT = REPO / "docs" / "images" / "des-so3lr-dimers" / "reference_state_points.png"

@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 import numpy as np
 import pytest
 
-from mmml.interfaces.pycharmmInterface.charmm_restart_io import (
+from karml.interfaces.pycharmmInterface.charmm_restart_io import (
     format_rest_header,
     lattice_type_for_cell,
     parse_restart_crystal,
@@ -68,7 +68,7 @@ def test_set_rest_header_lattice_token_keeps_version() -> None:
 
 
 def test_synthetic_handoff_writes_off_diagonal(tmp_path) -> None:
-    from mmml.cli.run.md_handoff import MdHandoffState, _write_synthetic_charmm_restart
+    from karml.cli.run.md_handoff import MdHandoffState, _write_synthetic_charmm_restart
 
     cell = np.array([[18.0, 0.8, 0.0], [0.0, 19.0, 0.3], [0.0, 0.0, 17.5]])
     handoff = MdHandoffState(

@@ -4,12 +4,12 @@ jobs: 8
 latency-wait: 120
 retries: 1
 envvars:
-  - MMML_CKPT
-  - MMML_WORKFLOW_CONFIG
-  - MMML_PYTHON
+  - KARML_CKPT
+  - KARML_WORKFLOW_CONFIG
+  - KARML_PYTHON
   - JAX_ENABLE_X64
-  - MMML_SLURM_NO_NODELIST
-  - MMML_SLURM_EXTRA
+  - KARML_SLURM_NO_NODELIST
+  - KARML_SLURM_EXTRA
 default-resources:
   - gpu=1
   - charmm_slot=1

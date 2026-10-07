@@ -7,7 +7,7 @@ from typing import Any
 
 import numpy as np
 
-from mmml.interfaces.pycharmmInterface.mlpot.cli_common import forces_grms_kcalmol_A
+from karml.interfaces.pycharmmInterface.mlpot.cli_common import forces_grms_kcalmol_A
 
 
 @dataclass(frozen=True)
@@ -28,7 +28,7 @@ def worst_atom_force_peaks(
     monomer_filter: tuple[int, ...] | list[int] | None = None,
 ) -> tuple[AtomForcePeak, ...]:
     """Return the largest per-atom force magnitudes (kcal/mol/Å and eV/Å)."""
-    from mmml.interfaces.pycharmmInterface.mmml_calculator import kcalmol2ev
+    from karml.interfaces.pycharmmInterface.karml_calculator import kcalmol2ev
 
     f = np.asarray(forces_kcal, dtype=np.float64).reshape(-1, 3)
     offsets = np.asarray(monomer_offsets, dtype=int)
@@ -187,18 +187,18 @@ def mlpot_hybrid_forces_kcalmol_A(
     natom: int | None = None,
 ) -> np.ndarray | None:
     """Hybrid ML/MM forces (kcal/mol/Å) at CHARMM or given positions."""
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
         charmm_positions_angstrom,
         mlpot_spherical_forces_ev_angstrom,
     )
-    from mmml.interfaces.pycharmmInterface.mmml_calculator import ev2kcalmol
+    from karml.interfaces.pycharmmInterface.karml_calculator import ev2kcalmol
 
     pyCModel = getattr(mlpot_ctx, "pyCModel", None)
     if pyCModel is None:
         return None
 
     if natom is None:
-        import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+        import karml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
         import pycharmm.coor as coor
 
         natom = int(coor.get_natom())
@@ -223,7 +223,7 @@ def mlpot_hybrid_forces_kcalmol_A(
     if forces_ev is not None and int(forces_ev.shape[0]) >= n:
         return np.asarray(forces_ev[:n], dtype=np.float64) * float(ev2kcalmol)
 
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
         mlpot_last_hybrid_forces_kcalmol_A,
     )
 

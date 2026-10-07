@@ -1,11 +1,11 @@
 {
     "version": 1,
-    "project": "mmml",
-    "project_url": "https://mmml.readthedocs.io/en/latest/",
+    "project": "karml",
+    "project_url": "https://karml.readthedocs.io/en/latest/",
     "repo": ".",
     "dvcs": "git",
     "branches": ["main"],
-    "show_commit_url": "https://github.com/EricBoittier/mmml/commit/",
+    "show_commit_url": "https://github.com/EricBoittier/karml/commit/",
 
     "environment_type": "existing",
     "pythons": ["same"],

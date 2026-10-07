@@ -12,8 +12,8 @@ import pytest
 
 os.environ.setdefault("JAX_PLATFORMS", "cpu")
 
-from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
-from mmml.interfaces.pycharmmInterface.mlpot.dimer_centroid_nl import (
+from karml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
+from karml.interfaces.pycharmmInterface.mlpot.dimer_centroid_nl import (
     CentroidDimerNeighborList,
     dimer_pair_ids,
 )
@@ -35,7 +35,7 @@ def _positions(n_monomers: int, seed: int = 0) -> np.ndarray:
 
 
 def _build(n_monomers: int, n_atoms: int, r0, **setup_kw):
-    from mmml.interfaces.pycharmmInterface.mmml_calculator import setup_calculator
+    from karml.interfaces.pycharmmInterface.karml_calculator import setup_calculator
 
     fake_mm_fn = lambda *a, **k: (jnp.array(0.0), jnp.zeros((n_atoms, 3)))
     fake_update_fn = lambda *a, **k: (jnp.zeros((1, 2), dtype=jnp.int32), jnp.ones((1,), dtype=bool))
@@ -47,7 +47,7 @@ def _build(n_monomers: int, n_atoms: int, r0, **setup_kw):
 
     z = jnp.full((n_atoms,), 6, dtype=jnp.int32)
     with patch(
-        "mmml.interfaces.pycharmmInterface.mmml_calculator.build_mm_energy_forces_fn",
+        "karml.interfaces.pycharmmInterface.karml_calculator.build_mm_energy_forces_fn",
         side_effect=fake_build_mm,
     ):
         factory = setup_calculator(
@@ -210,7 +210,7 @@ def test_centroid_nl_padding_only_candidates_match_empty_active_set() -> None:
 
 
 def test_centroid_nl_opt_out(monkeypatch) -> None:
-    monkeypatch.setenv("MMML_ML_DIMER_CENTROID_NL", "0")
+    monkeypatch.setenv("KARML_ML_DIMER_CENTROID_NL", "0")
     n_monomers = 8
     r0 = _positions(n_monomers)
     spherical_fn, _ = _build(n_monomers, n_monomers * N_MONO, r0, ml_max_active_dimers=10)

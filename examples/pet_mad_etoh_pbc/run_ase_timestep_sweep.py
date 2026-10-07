@@ -15,7 +15,7 @@ Env::
     SWEEP_PS       simulated time per run (default 0.5)
     SWEEP_BOX_A    box side (default 32)
     SWEEP_TRAJ_EVERY  write <run>/traj.extxyz (E, F, cell) every N steps (0 = off)
-    MMML_METATOMIC_DEVICE  cuda / cpu
+    KARML_METATOMIC_DEVICE  cuda / cpu
 """
 
 from __future__ import annotations
@@ -36,8 +36,8 @@ from ase.md.velocitydistribution import Stationary, thermalize_momenta
 from ase.md.verlet import VelocityVerlet
 from ase.optimize import FIRE
 
-from mmml.interfaces.calculators.metatomic import load_metatomic_calculator
-from mmml.md.metatomic_pbc import (
+from karml.interfaces.calculators.metatomic import load_metatomic_calculator
+from karml.md.metatomic_pbc import (
     append_training_frame,
     build_tiled_cubic_liquid,
     default_etoh_monomer_xyz,

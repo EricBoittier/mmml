@@ -9,7 +9,7 @@ from ase.io import read
 jax.config.update("jax_disable_jit", False)
 
 # Paths
-workspace_dir = Path("/Users/ericboittier/mmml")
+workspace_dir = Path("/Users/ericboittier/karml")
 traj_path = workspace_dir / "cg_fire.traj"
 ckpt_path = workspace_dir / "examples/params_aaa_long_2026-07-04_22-30-27.json"
 
@@ -39,16 +39,16 @@ sys.modules["pycharmm.coor"] = mock.MagicMock()
 sys.modules["pycharmm.energy"] = mock.MagicMock()
 sys.modules["pycharmm.select"] = mock.MagicMock()
 sys.modules["pycharmm.lingo"] = mock.MagicMock()
-sys.modules["mmml.interfaces.pycharmmInterface.import_pycharmm"] = mock.MagicMock()
+sys.modules["karml.interfaces.pycharmmInterface.import_pycharmm"] = mock.MagicMock()
 
 # Import model calculator and interfaces
-from mmml.interfaces.calculators.simple_inference import create_calculator_from_checkpoint
+from karml.interfaces.calculators.simple_inference import create_calculator_from_checkpoint
 
 # 3. Create the calculator and model
 try:
     calc = create_calculator_from_checkpoint(str(ckpt_path))
-    model = getattr(calc, "model", getattr(calc, "_mmml_physnet_model", None))
-    params = getattr(calc, "params", getattr(calc, "_mmml_physnet_params", None))
+    model = getattr(calc, "model", getattr(calc, "_karml_physnet_model", None))
+    params = getattr(calc, "params", getattr(calc, "_karml_physnet_params", None))
     print("Successfully loaded calculator and parameters from checkpoint.")
 except Exception as e:
     print(f"Error loading calculator: {e}")

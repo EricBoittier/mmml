@@ -13,7 +13,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from mmml.interfaces.pycharmmInterface.mlpot.virial_compare import (
+from karml.interfaces.pycharmmInterface.mlpot.virial_compare import (
     classify_cpt_ml_virial_hypothesis,
     collect_toy_mic_pressures,
     mic_harmonic_energy_ev,
@@ -104,7 +104,7 @@ def test_stopgrad_forces_match_finite_difference_at_fixed_l():
 
 def test_live_diagnose_argv_parses(tmp_path):
     """md-system accepts the functionality-script argv (no CHARMM)."""
-    from mmml.cli.run.md_system import build_parser
+    from karml.cli.run.md_system import build_parser
 
     psf = tmp_path / "model.psf"
     crd = tmp_path / "model.crd"

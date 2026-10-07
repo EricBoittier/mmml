@@ -27,13 +27,13 @@ export UV_OFFLINE="${UV_OFFLINE:-1}"
 export PYTHONUNBUFFERED=1
 export LJ_DEVICE=gpu
 export JAX_PLATFORMS=cuda
-export MMML_MLPOT_DEVICE=gpu
+export KARML_MLPOT_DEVICE=gpu
 export JAX_ENABLE_X64=1
 export XLA_PYTHON_CLIENT_PREALLOCATE=false
 
-_NG="$ROOT/mmml/data/charmm"
-export MMML_CGENFF_EXTRA_RTF="${MMML_CGENFF_EXTRA_RTF:+$MMML_CGENFF_EXTRA_RTF:}$_NG/top_noble_gases_literature.rtf"
-export MMML_CGENFF_EXTRA_PRM="${MMML_CGENFF_EXTRA_PRM:+$MMML_CGENFF_EXTRA_PRM:}$_NG/par_noble_gases_literature.prm"
+_NG="$ROOT/karml/data/charmm"
+export KARML_CGENFF_EXTRA_RTF="${KARML_CGENFF_EXTRA_RTF:+$KARML_CGENFF_EXTRA_RTF:}$_NG/top_noble_gases_literature.rtf"
+export KARML_CGENFF_EXTRA_PRM="${KARML_CGENFF_EXTRA_PRM:+$KARML_CGENFF_EXTRA_PRM:}$_NG/par_noble_gases_literature.prm"
 
 _CH="$ROOT/setup/charmm"
 _OCL="${HOME}/micromamba/pkgs/ocl-icd-2.3.3-hb9d3cd8_0/lib"
@@ -66,7 +66,7 @@ nvidia-smi --query-gpu=name,memory.total --format=csv,noheader 2>/dev/null | hea
 
 # Pure CGenFF LJ (--ff cgenff, no checkpoint, no ML). Load certified geometry.
 # jaxmd-unified forbids combining --from-pdb with a Packmol composition string.
-uv run mmml md-system \
+uv run karml md-system \
   --backend jaxmd \
   --jaxmd-unified \
   --ff cgenff \

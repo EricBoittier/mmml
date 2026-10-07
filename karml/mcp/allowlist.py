@@ -1,8 +1,8 @@
-"""Allowlisted mmml subcommands the MCP server may invoke."""
+"""Allowlisted karml subcommands the MCP server may invoke."""
 
 from __future__ import annotations
 
-from mmml.cli.registry import COMMAND_REGISTRY, CommandSpec
+from karml.cli.registry import COMMAND_REGISTRY, CommandSpec
 
 # Commands safe for agent-driven orchestration (no raw shell, no deprecated unless noted).
 ALLOWED_COMMANDS: frozenset[str] = frozenset(
@@ -31,8 +31,8 @@ ALLOWED_COMMANDS: frozenset[str] = frozenset(
     }
 )
 
-# Console scripts invoked outside ``mmml`` dispatch.
-ALLOWED_CONSOLE_SCRIPTS: frozenset[str] = frozenset({"mmml-spectra-md"})
+# Console scripts invoked outside ``karml`` dispatch.
+ALLOWED_CONSOLE_SCRIPTS: frozenset[str] = frozenset({"karml-spectra-md"})
 
 
 def command_spec(name: str) -> CommandSpec | None:
@@ -42,7 +42,7 @@ def command_spec(name: str) -> CommandSpec | None:
     return None
 
 
-def is_allowed_mmml_command(name: str) -> bool:
+def is_allowed_karml_command(name: str) -> bool:
     return name in ALLOWED_COMMANDS
 
 

@@ -17,7 +17,7 @@
 """Compatibility facade for the CHARMM shared library.
 
 c52a1 loads the library from :mod:`pycharmm.loader` (``lib.symbol``).
-MMML call sites still use ``import pycharmm.lib as lib`` and
+KARML call sites still use ``import pycharmm.lib as lib`` and
 ``lib.charmm.symbol``. ``charmm`` is that same lazy library object.
 
 Path helpers below are what ``tests/unit/test_pycharmm_lib_loader.py`` execs.
@@ -57,8 +57,8 @@ def _find_charmm_lib_in_dir(directory, suffix):
 def _discover_repo_charmm_lib(suffix):
     """Walk up from this file for a ``setup/charmm`` dir holding ``libcharmm<suffix>``.
 
-    Self-contained on purpose: importing ``mmml`` here would pull in jax/physnet
-    at CHARMM-load time. Mirrors ``mmml...charmm_paths.default_repo_charmm_home``.
+    Self-contained on purpose: importing ``karml`` here would pull in jax/physnet
+    at CHARMM-load time. Mirrors ``karml...charmm_paths.default_repo_charmm_home``.
     """
     here = os.path.dirname(os.path.abspath(__file__))
     while True:

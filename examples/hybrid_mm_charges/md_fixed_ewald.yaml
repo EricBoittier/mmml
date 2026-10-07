@@ -4,7 +4,7 @@
 # Pure JAX -- no external PME library, no CUDA requirement (unlike
 # nvalchemiops_pme). Same operator the checkpoint was trained against.
 #
-#   mmml md-system --config examples/hybrid_mm_charges/md_fixed_ewald.yaml --run-all
+#   karml md-system --config examples/hybrid_mm_charges/md_fixed_ewald.yaml --run-all
 #
 # Requires: PBC setup, Mode A hybrid checkpoint trained with lr_solver: ewald.
 # --no-periodic-charmm-vdw keeps LJ off (same as train mm_include_lj: false).

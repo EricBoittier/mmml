@@ -182,7 +182,7 @@ WARNING: Geometry Optimization
          For restart on a previous wavefunction, please use MOREAD
 
 Using external energy/gradient program given in input:
-  "/mmhome/boittier/home/mmml/examples/orca/mmml-orca-client"
+  "/mmhome/boittier/home/karml/examples/orca/karml-orca-client"
 
 
 WARNING: four-center integrals in TRAH must be done with SHARK!
@@ -197,7 +197,7 @@ NAME = water_opt.inp
 |  2> %maxcore 2000
 |  3> 
 |  4> %method
-|  5>   ProgExt "/mmhome/boittier/home/mmml/examples/orca/mmml-orca-client"
+|  5>   ProgExt "/mmhome/boittier/home/karml/examples/orca/karml-orca-client"
 |  6>   Ext_Params "-b 127.0.0.1:8888"
 |  7> end
 |  8> 
@@ -286,7 +286,7 @@ INTERNAL COORDINATES (A.U.)
  H      1   0   0     1.809933571931     0.00000000     0.00000000
  H      1   2   0     1.809933571931   104.47983882     0.00000000
 
-Calling /mmhome/boittier/home/mmml/examples/orca/mmml-orca-client water_opt_EXT.extinp.tmp -b 127.0.0.1:8888  ... 
+Calling /mmhome/boittier/home/karml/examples/orca/karml-orca-client water_opt_EXT.extinp.tmp -b 127.0.0.1:8888  ... 
 
 
 External program completed successfully in 0.830 sec
@@ -422,7 +422,7 @@ INTERNAL COORDINATES (A.U.)
  H      1   0   0     1.771527274282     0.00000000     0.00000000
  H      1   2   0     1.771527274282   104.01818877     0.00000000
 
-Calling /mmhome/boittier/home/mmml/examples/orca/mmml-orca-client water_opt_EXT.extinp.tmp -b 127.0.0.1:8888  > water_opt.lastext ...  done
+Calling /mmhome/boittier/home/karml/examples/orca/karml-orca-client water_opt_EXT.extinp.tmp -b 127.0.0.1:8888  > water_opt.lastext ...  done
 
 External program completed successfully in 0.521 sec
 ------------------------------------------------------------------------------
@@ -539,7 +539,7 @@ INTERNAL COORDINATES (A.U.)
  H      1   0   0     1.689215883494     0.00000000     0.00000000
  H      1   2   0     1.689215883494   102.65880244     0.00000000
 
-Calling /mmhome/boittier/home/mmml/examples/orca/mmml-orca-client water_opt_EXT.extinp.tmp -b 127.0.0.1:8888  > water_opt.lastext ...  done
+Calling /mmhome/boittier/home/karml/examples/orca/karml-orca-client water_opt_EXT.extinp.tmp -b 127.0.0.1:8888  > water_opt.lastext ...  done
 
 External program completed successfully in 0.519 sec
 ------------------------------------------------------------------------------
@@ -656,7 +656,7 @@ INTERNAL COORDINATES (A.U.)
  H      1   0   0     1.737536156280     0.00000000     0.00000000
  H      1   2   0     1.737536156280   103.58997925     0.00000000
 
-Calling /mmhome/boittier/home/mmml/examples/orca/mmml-orca-client water_opt_EXT.extinp.tmp -b 127.0.0.1:8888  > water_opt.lastext ...  done
+Calling /mmhome/boittier/home/karml/examples/orca/karml-orca-client water_opt_EXT.extinp.tmp -b 127.0.0.1:8888  > water_opt.lastext ...  done
 
 External program completed successfully in 0.517 sec
 ------------------------------------------------------------------------------
@@ -773,7 +773,7 @@ INTERNAL COORDINATES (A.U.)
  H      1   0   0     1.726645860498     0.00000000     0.00000000
  H      1   2   0     1.726645860498   103.40448698     0.00000000
 
-Calling /mmhome/boittier/home/mmml/examples/orca/mmml-orca-client water_opt_EXT.extinp.tmp -b 127.0.0.1:8888  > water_opt.lastext ...  done
+Calling /mmhome/boittier/home/karml/examples/orca/karml-orca-client water_opt_EXT.extinp.tmp -b 127.0.0.1:8888  > water_opt.lastext ...  done
 
 External program completed successfully in 0.519 sec
 ------------------------------------------------------------------------------
@@ -890,7 +890,7 @@ INTERNAL COORDINATES (A.U.)
  H      1   0   0     1.716206143787     0.00000000     0.00000000
  H      1   2   0     1.716206143787   103.21908270     0.00000000
 
-Calling /mmhome/boittier/home/mmml/examples/orca/mmml-orca-client water_opt_EXT.extinp.tmp -b 127.0.0.1:8888  > water_opt.lastext ...  done
+Calling /mmhome/boittier/home/karml/examples/orca/karml-orca-client water_opt_EXT.extinp.tmp -b 127.0.0.1:8888  > water_opt.lastext ...  done
 
 External program completed successfully in 0.526 sec
 ------------------------------------------------------------------------------
@@ -1007,7 +1007,7 @@ INTERNAL COORDINATES (A.U.)
  H      1   0   0     1.718499935186     0.00000000     0.00000000
  H      1   2   0     1.718499935186   103.27158058     0.00000000
 
-Calling /mmhome/boittier/home/mmml/examples/orca/mmml-orca-client water_opt_EXT.extinp.tmp -b 127.0.0.1:8888  > water_opt.lastext ...  done
+Calling /mmhome/boittier/home/karml/examples/orca/karml-orca-client water_opt_EXT.extinp.tmp -b 127.0.0.1:8888  > water_opt.lastext ...  done
 
 External program completed successfully in 0.491 sec
 ------------------------------------------------------------------------------
@@ -1131,7 +1131,7 @@ INTERNAL COORDINATES (A.U.)
  H      1   0   0     1.718221156431     0.00000000     0.00000000
  H      1   2   0     1.718221156431   103.27433591     0.00000000
 
-Calling /mmhome/boittier/home/mmml/examples/orca/mmml-orca-client water_opt_EXT.extinp.tmp -b 127.0.0.1:8888  ... 
+Calling /mmhome/boittier/home/karml/examples/orca/karml-orca-client water_opt_EXT.extinp.tmp -b 127.0.0.1:8888  ... 
 
 
 External program completed successfully in 0.518 sec

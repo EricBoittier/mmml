@@ -1,7 +1,7 @@
 """Loading and unit conversion for the atomic reference-energy table.
 
 These references are subtracted from every total energy before training
-(:func:`mmml.data.units.subtract_atom_refs`), so a wrong level, a wrong charge
+(:func:`karml.data.units.subtract_atom_refs`), so a wrong level, a wrong charge
 state, or a silently mis-scaled unit shifts the entire learning target by a
 constant per atom. That is the kind of error a model absorbs into its bias and
 nobody notices.
@@ -19,8 +19,8 @@ import numpy as np
 import pytest
 from ase.data import atomic_numbers
 
-from mmml.data import atomic_references as ar
-from mmml.data.atomic_references import (
+from karml.data import atomic_references as ar
+from karml.data.atomic_references import (
     DEFAULT_CHARGE_STATE,
     DEFAULT_REFERENCE_LEVEL,
     DEFAULT_UNIT,
@@ -237,13 +237,13 @@ def test_shipped_table_is_a_single_well_formed_json_document():
 
     A merge once concatenated two versions of this file -- the second document's
     opening brace landed where a comma belonged, leaving 271 '{' against 270
-    '}'. Nothing caught it until `import mmml.md.energy.terms` died in CI,
-    because the table is read at module scope by `mmml.data.preprocessing`, so a
+    '}'. Nothing caught it until `import karml.md.energy.terms` died in CI,
+    because the table is read at module scope by `karml.data.preprocessing`, so a
     malformed file takes down the whole package rather than one code path.
 
     Fork PRs get no CI in this repository, so this file is the guard.
     """
-    from mmml.data.atomic_references import _DATA_PATH
+    from karml.data.atomic_references import _DATA_PATH
 
     raw = Path(_DATA_PATH).read_text(encoding="utf-8")
 
@@ -265,7 +265,7 @@ def test_shipped_table_is_a_single_well_formed_json_document():
 
 def test_shipped_table_has_no_duplicate_levels():
     """Duplicate top-level keys parse fine and silently drop the earlier one."""
-    from mmml.data.atomic_references import _DATA_PATH
+    from karml.data.atomic_references import _DATA_PATH
 
     seen: list[str] = []
     json.loads(

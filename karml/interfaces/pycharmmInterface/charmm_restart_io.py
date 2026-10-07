@@ -122,7 +122,7 @@ def _resolve_restart_cell(
     if cell is not None:
         return np.asarray(cell, dtype=float).reshape(3, 3)
     try:
-        from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+        from karml.interfaces.pycharmmInterface.mlpot.pbc_env import (
             _read_charmm_box_sides_A,
         )
 
@@ -172,7 +172,7 @@ def write_charmm_restart_from_memory(
     path: Path,
     *,
     positions: np.ndarray | None = None,
-    title: str = "MMML snapshot",
+    title: str = "KARML snapshot",
     global_step: int | None = None,
     nsavc: int = 1,
     nsavv: int = 0,
@@ -192,7 +192,7 @@ def write_charmm_restart_from_memory(
     if positions is not None:
         pos = np.asarray(positions, dtype=float)
     else:
-        from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+        from karml.interfaces.pycharmmInterface.mlpot.setup import (
             get_charmm_positions_array,
         )
 
@@ -206,7 +206,7 @@ def write_charmm_restart_from_memory(
     natom = int(pos.shape[0])
     step = 0 if global_step is None else max(0, int(global_step))
     if global_step is None and p.is_file():
-        from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
             read_restart_last_step,
         )
 
@@ -244,7 +244,7 @@ def write_charmm_restart_from_memory(
         vel = velocities_akma
         if vel is None:
             try:
-                from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+                from karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
                     charmm_synced_velocities_akma,
                 )
 
@@ -253,7 +253,7 @@ def write_charmm_restart_from_memory(
                 vel = None
         if vel is None:
             try:
-                from mmml.interfaces.pycharmmInterface.mlpot.run_state_checkpoint import (
+                from karml.interfaces.pycharmmInterface.mlpot.run_state_checkpoint import (
                     _charmm_velocities_array,
                 )
 

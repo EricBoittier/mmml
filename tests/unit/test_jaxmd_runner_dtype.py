@@ -6,7 +6,7 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from mmml.cli.run.jaxmd_runner import (
+from karml.cli.run.jaxmd_runner import (
     _JAXMD_DTYPE,
     as_jaxmd_dtype,
     directional_force_energy_error,
@@ -120,7 +120,7 @@ def test_nve_force_energy_should_attempt_rescue():
 
 
 def test_nve_etot_drift_rescue_helpers():
-    from mmml.cli.run.jaxmd_runner import (
+    from karml.cli.run.jaxmd_runner import (
         nve_etot_drift_grace_threshold_eV,
         nve_etot_drift_halved_dt_ps,
         nve_etot_drift_rescue_tricks,
@@ -156,7 +156,7 @@ def test_nve_etot_drift_rescue_helpers():
 
 def test_jaxmd_suite_nve_preflight_cli_defaults():
     """NVE gates must be wired into jargs (not only suite argparse)."""
-    from mmml.cli.run.md_pbc_suite import jaxmd as jaxmd_suite
+    from karml.cli.run.md_pbc_suite import jaxmd as jaxmd_suite
 
     src = Path(jaxmd_suite.__file__).read_text()
     assert "--nve-etot-drift-abort-eV" in src
@@ -179,7 +179,7 @@ def test_jaxmd_suite_nve_preflight_cli_defaults():
 
 
 def test_resolve_nve_max_f_start_gate_scales_with_system_size():
-    from mmml.cli.run.jaxmd_runner import (
+    from karml.cli.run.jaxmd_runner import (
         NVE_MAX_F_START_BASE_EVA,
         resolve_nve_max_f_start_gate_eVA,
     )
@@ -207,7 +207,7 @@ def test_resolve_nve_max_f_start_gate_scales_with_system_size():
 
 
 def test_nve_requires_float64_message_in_runner():
-    from mmml.cli.run import jaxmd_runner as jr
+    from karml.cli.run import jaxmd_runner as jr
 
     src = Path(jr.__file__).read_text()
     assert "NVE requires JAX float64" in src
@@ -225,7 +225,7 @@ def test_nve_pbc_does_not_write_molecular_wrap_into_integrator_state():
 
     NL binning may use a wrapped copy; energy/forces must see continuous unwrapped R.
     """
-    from mmml.cli.run import jaxmd_runner as jr
+    from karml.cli.run import jaxmd_runner as jr
 
     src = Path(jr.__file__).read_text(encoding="utf-8")
     assert "wrapped_for_nl" in src
@@ -243,7 +243,7 @@ def test_nve_pbc_does_not_write_molecular_wrap_into_integrator_state():
 def test_configure_jaxmd_dtype_honours_explicit_dtype(monkeypatch):
     import jax
 
-    from mmml.cli.run import jaxmd_runner
+    from karml.cli.run import jaxmd_runner
 
     if not jax.config.read("jax_enable_x64"):
         pytest.skip("float64 needs jax_enable_x64")
@@ -253,7 +253,7 @@ def test_configure_jaxmd_dtype_honours_explicit_dtype(monkeypatch):
 
 
 def test_epot_blow_up_ignores_arbitrary_zero_crossing():
-    from mmml.cli.run.jaxmd_runner import epot_blew_up
+    from karml.cli.run.jaxmd_runner import epot_blew_up
 
     # 26 Sep ACO:266 NVT: -87.4 -> +1.1 eV in 0.8 ps is thermalisation (0.03 eV/atom).
     assert not epot_blew_up(1.118, -87.43, 2660)
@@ -261,7 +261,7 @@ def test_epot_blow_up_ignores_arbitrary_zero_crossing():
 
 
 def test_nve_float32_runs_with_warning_unless_strict(monkeypatch):
-    from mmml.cli.run.jaxmd_runner import NVE_REQUIRE_FLOAT64_ENV, nve_float64_policy
+    from karml.cli.run.jaxmd_runner import NVE_REQUIRE_FLOAT64_ENV, nve_float64_policy
 
     monkeypatch.delenv(NVE_REQUIRE_FLOAT64_ENV, raising=False)
     assert nve_float64_policy(True, jnp.float64) == ("ok", "")
@@ -277,7 +277,7 @@ def test_nve_float32_runs_with_warning_unless_strict(monkeypatch):
 
 def test_nve_float32_skips_fd_preflight_only_for_float32():
     """The FD gate runs only on float64 (float32 noise > the 0.01 A FD signal)."""
-    from mmml.cli.run import jaxmd_runner as jr
+    from karml.cli.run import jaxmd_runner as jr
 
     src = Path(jr.__file__).read_text(encoding="utf-8")
     assert "if fd_tol > 0.0 and is_f64:" in src
@@ -287,7 +287,7 @@ def test_nve_float32_skips_fd_preflight_only_for_float32():
 def test_nve_require_float64_flag_reaches_runner():
     import inspect
 
-    from mmml.cli.run.md_pbc_suite import jaxmd
+    from karml.cli.run.md_pbc_suite import jaxmd
 
     src = inspect.getsource(jaxmd)
     block = src[src.index("jargs = SimpleNamespace(") :]
@@ -300,7 +300,7 @@ def test_nve_require_float64_flag_reaches_runner():
 def test_cast_carry_like_keeps_input_dtypes():
     import jax
 
-    from mmml.cli.run.jaxmd_runner import cast_carry_like
+    from karml.cli.run.jaxmd_runner import cast_carry_like
 
     if not jax.config.read("jax_enable_x64"):
         pytest.skip("needs x64 to produce float64 leaves")
@@ -313,7 +313,7 @@ def test_cast_carry_like_keeps_input_dtypes():
 
 
 def test_summarize_jaxmd_recoveries():
-    from mmml.cli.run.jaxmd_runner import summarize_jaxmd_recoveries
+    from karml.cli.run.jaxmd_runner import summarize_jaxmd_recoveries
 
     out = summarize_jaxmd_recoveries(None, None)
     assert out == {

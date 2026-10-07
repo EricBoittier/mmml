@@ -1,5 +1,5 @@
-# Conda environment for MMML with GPU support (CUDA 13)
-name: mmml-gpu-cuda13
+# Conda environment for KARML with GPU support (CUDA 13)
+name: karml-gpu-cuda13
 channels:
   - conda-forge
   - nvidia
@@ -75,5 +75,5 @@ dependencies:
       - typing-extensions
       - pint
       
-      # Install mmml in editable mode (pip runs from setup/, so use .. for project root)
+      # Install karml in editable mode (pip runs from setup/, so use .. for project root)
       - -e ..

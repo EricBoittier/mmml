@@ -4,10 +4,10 @@ executor: slurm
 jobs: 4
 latency-wait: 120
 retries: 1
-# Only list vars that must be set before launch. MMML_PYTHON/MMML_BIN are
-# resolved from .venv by scripts/resolve_mmml_env.sh when unset.
+# Only list vars that must be set before launch. KARML_PYTHON/KARML_BIN are
+# resolved from .venv by scripts/resolve_karml_env.sh when unset.
 envvars:
-  - MMML_CKPT
+  - KARML_CKPT
 default-resources:
   - gpu=1
   - charmm_slot=1

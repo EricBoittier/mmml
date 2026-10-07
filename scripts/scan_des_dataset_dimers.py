@@ -20,7 +20,7 @@ import numpy as np
 from ase.data import atomic_masses
 from ase import Atoms
 
-from mmml.data.cgenff_dataset import (
+from karml.data.cgenff_dataset import (
     assign_frame_cgenff,
     compute_inter_monomer_mm,
     load_reference,
@@ -46,7 +46,7 @@ def _physnet_energy_fn(checkpoint: Path, pad: int):
     import jax
     import jax.numpy as jnp
 
-    from mmml.cli.misc.physnet_evaluate import _load_physnet_checkpoint
+    from karml.cli.misc.physnet_evaluate import _load_physnet_checkpoint
 
     _, params, model = _load_physnet_checkpoint(checkpoint, pad)
 
@@ -81,7 +81,7 @@ def _physnet_energy_fn(checkpoint: Path, pad: int):
 
 
 def _spooky_energy_fn(checkpoint: Path, ref):
-    from mmml.models.spookynet_calc import SpookyNetCalculator
+    from karml.models.spookynet_calc import SpookyNetCalculator
 
     calc = SpookyNetCalculator(checkpoint=checkpoint, mbd_checkpoint=False)
     # Older Spooky checkpoints predate the optional CGenFF-vdW training path.

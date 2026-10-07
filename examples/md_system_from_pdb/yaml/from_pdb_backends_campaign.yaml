@@ -1,14 +1,14 @@
 # Campaign: same full-system PDB through ASE, JAX-MD, and PyCHARMM vacuum NVE.
 #
-#   uv run mmml md-system \
+#   uv run karml md-system \
 #     --config examples/md_system_from_pdb/yaml/from_pdb_backends_campaign.yaml \
 #     --run-all
 #
 # Single backend:
-#   uv run mmml md-system --config ... --job-id ase_nve
+#   uv run karml md-system --config ... --job-id ase_nve
 
 defaults:
-  from_pdb: mmml/generate/sample/pdb/aco_monomer.pdb
+  from_pdb: karml/generate/sample/pdb/aco_monomer.pdb
   checkpoint: examples/ckpts_json/DESdimers_params.json
   setup: free_nve
   ps: 0.1

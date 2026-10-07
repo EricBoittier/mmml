@@ -1,5 +1,5 @@
 # %% [markdown]
-# # QCML / MMML dimer-scan campaign overview
+# # QCML / KARML dimer-scan campaign overview
 #
 # Target molecules:
 #
@@ -22,14 +22,14 @@
 # | Asset | Path | Status | Notes |
 # |---|---|---:|---|
 # | QCML multipole model + training/eval | `scripts/train_qcml_multipoles.py`, `scripts/analyze_qcml_multipoles.py` | usable | Unified and degree-specific model support exists. |
-# | Learned molecular multipole electrostatics | `mmml/models/multipoles/electrostatics.py` | prototype | q+dipole only; units/sign tests are present. |
+# | Learned molecular multipole electrostatics | `karml/models/multipoles/electrostatics.py` | prototype | q+dipole only; units/sign tests are present. |
 # | QCML MBD model + training/eval | `scripts/train_qcml_mbd.py`, `scripts/analyze_qcml_mbd.py` | usable | Package-level ASE calculator exists. |
-# | Dimer scan helpers | `mmml/analysis/dimer_scans.py` | usable | Builds deterministic ASE rigid dimer scans and optional xTB calculators. |
+# | Dimer scan helpers | `karml/analysis/dimer_scans.py` | usable | Builds deterministic ASE rigid dimer scans and optional xTB calculators. |
 # | QCML ASE diagnostics notebook | `notebooks/qcml_ase_calculators_diagnostics.py` | usable | Contains historical prototypes and multipole diagnostics. |
 # | DCM/acetone dimer LR scan | `scripts/run_dcm_aco_dimer_lr_scans.sh` | usable for DCM/ACO | Wraps PyCHARMM MLpot scan and LR solver sweep. |
 # | PyCHARMM dimer scan engine | `scripts/scan_mlpot_dimer_2d_pycharmm.py` | usable | Produces decomposed ML/MM, CHARMM, USER/VDW/ELEC terms. |
 # | Dimer LR plotting | `scripts/plot_dimer_lr_scan_compare.py` | likely reusable | Existing plot entry point for current NPZ layout. |
-# | Energy-provider abstraction | `mmml/interfaces/energy_forces` | reusable | Useful for normalizing ASE-style calculators. |
+# | Energy-provider abstraction | `karml/interfaces/energy_forces` | reusable | Useful for normalizing ASE-style calculators. |
 
 # %% [markdown]
 # ## Molecule metadata to fill
@@ -83,7 +83,7 @@ CALCULATORS = pd.DataFrame(
             "name": "learned_multipole_qmu",
             "kind": "ASE",
             "existing": True,
-            "entry_point": "mmml.models.multipoles.LearnedMolecularMultipoleElectrostatics",
+            "entry_point": "karml.models.multipoles.LearnedMolecularMultipoleElectrostatics",
             "outputs": "q+dipole electrostatic energy; field plots",
             "todo": "add l2/l3 after finite-difference sign tests; add dimer scan wrapper",
         },
@@ -91,7 +91,7 @@ CALCULATORS = pd.DataFrame(
             "name": "learned_mbd",
             "kind": "ASE",
             "existing": True,
-            "entry_point": "mmml.models.mbd.QCMLMBDCalculator",
+            "entry_point": "karml.models.mbd.QCMLMBDCalculator",
             "outputs": "MBD energy, forces, polarizabilities, C6",
             "todo": "validate units vs QCML cache and add force finite-difference smoke test",
         },
@@ -99,7 +99,7 @@ CALCULATORS = pd.DataFrame(
             "name": "xtb_gfn2",
             "kind": "ASE",
             "existing": "optional",
-            "entry_point": "mmml.analysis.dimer_scans.make_xtb_calculator",
+            "entry_point": "karml.analysis.dimer_scans.make_xtb_calculator",
             "outputs": "xTB energy/forces through xtb-python ASE calculator",
             "todo": "install/validate xtb-python on target nodes; decide GFN1 vs GFN2 default",
         },
@@ -107,7 +107,7 @@ CALCULATORS = pd.DataFrame(
             "name": "spookynet_or_spookyphysnet",
             "kind": "ASE/MLpot",
             "existing": True,
-            "entry_point": "mmml.interfaces.energy_forces / CHARMM MLpot",
+            "entry_point": "karml.interfaces.energy_forces / CHARMM MLpot",
             "outputs": "ML energy/forces",
             "todo": "standardize checkpoint metadata and neutral singlet assumptions",
         },
@@ -222,8 +222,8 @@ SCAN_DEFAULTS
 #
 # ### Phase 1 — reusable calculators
 #
-# - Use package-level `mmml.models.mbd.QCMLMBDCalculator`.
-# - Use `mmml.analysis.dimer_scans.make_xtb_calculator` for optional xTB scans.
+# - Use package-level `karml.models.mbd.QCMLMBDCalculator`.
+# - Use `karml.analysis.dimer_scans.make_xtb_calculator` for optional xTB scans.
 # - Keep `LearnedMolecularMultipoleElectrostatics` q+dipole-only until l2/l3 are
 #   separately validated.
 # - Add tests:

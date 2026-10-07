@@ -1,4 +1,4 @@
-# `mmml orca-server`
+# `karml orca-server`
 
 Persistent JAX server for ORCA.
 
@@ -6,13 +6,13 @@ Persistent JAX server for ORCA.
 ## Usage
 
 ```bash
-mmml orca-server --help
+karml orca-server --help
 ```
 
 !!! note
     No `build_parser()` hook — see module docstring or run the command without arguments for usage.
 
-Implementation: `mmml.interfaces.orca_external.server`
+Implementation: `karml.interfaces.orca_external.server`
 
 
 

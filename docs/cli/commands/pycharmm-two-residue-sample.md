@@ -1,4 +1,4 @@
-# `mmml pycharmm-two-residue-sample`
+# `karml pycharmm-two-residue-sample`
 
 Restrained sampling for two-residue CHARMM system.
 
@@ -6,13 +6,13 @@ Restrained sampling for two-residue CHARMM system.
 ## Usage
 
 ```bash
-mmml pycharmm-two-residue-sample --help
+karml pycharmm-two-residue-sample --help
 ```
 
 ## Options
 
 ```text
-usage: mmml pycharmm-two-residue-sample [-h] --pdbfile PDBFILE [--cell CELL]
+usage: karml pycharmm-two-residue-sample [-h] --pdbfile PDBFILE [--cell CELL]
                                         [--skip-setup-energy-show]
                                         [--pycharmm-minimize-steps N]
                                         [--output-pdb OUTPUT_PDB]

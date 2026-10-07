@@ -6,8 +6,8 @@ import pytest
 
 ase = pytest.importorskip("ase")
 
-from mmml.interfaces.pycharmmInterface.mmml_calculator import ev2kcalmol
-from mmml.models.physnetjax.physnetjax.calc.helper_mlp import pycharmm_conversion
+from karml.interfaces.pycharmmInterface.karml_calculator import ev2kcalmol
+from karml.models.physnetjax.physnetjax.calc.helper_mlp import pycharmm_conversion
 
 
 def test_pycharmm_conversion_matches_ev2kcalmol():

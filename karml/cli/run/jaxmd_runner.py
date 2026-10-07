@@ -17,27 +17,27 @@ from rich.table import Table
 
 import jax.numpy as jnp
 
-from mmml.cli.run.summaries import (
+from karml.cli.run.summaries import (
     print_flat_bottom_summary,
     print_forces_summary,
     save_calculator_summary_json,
 )
-from mmml.utils.rich_report import emit_md_system_calculator_report
-from mmml.md.constraints import maybe_wrap_rigid_water
-from mmml.interfaces.pycharmmInterface.pbc_utils_jax import (
+from karml.utils.rich_report import emit_md_system_calculator_report
+from karml.md.constraints import maybe_wrap_rigid_water
+from karml.interfaces.pycharmmInterface.pbc_utils_jax import (
     group_ids_from_groups,
     wrap_groups_by_id_with_weight_sum,
 )
-from mmml.interfaces.pycharmmInterface.ml_dtypes import resolve_ml_compute_dtype
-from mmml.utils.geometry_checks import (
+from karml.interfaces.pycharmmInterface.ml_dtypes import resolve_ml_compute_dtype
+from karml.utils.geometry_checks import (
     TEMPLATE_DONOR_IDEAL_TIP3,
     TEMPLATE_DONOR_MAX_FORCE_EVA,
     assert_no_intermonomer_atom_overlap,
     rebuild_high_force_monomers_from_peers,
 )
-from mmml.utils.hdf5_reporter import make_jaxmd_reporter
-from mmml.utils.jax_gpu_warmup import block_jax_values, ensure_xla_gpu_warmed
-from mmml.interfaces.pycharmmInterface.mm_energy_forces import refresh_mm_pairs
+from karml.utils.hdf5_reporter import make_jaxmd_reporter
+from karml.utils.jax_gpu_warmup import block_jax_values, ensure_xla_gpu_warmed
+from karml.interfaces.pycharmmInterface.mm_energy_forces import refresh_mm_pairs
 
 import ase.io as ase_io
 from typing import Callable, Optional
@@ -266,7 +266,7 @@ def _nl_update_positions(positions):
     """Pass JAX arrays to ``update_mm_pairs`` so it can avoid host sync on cache hits."""
     import os
 
-    if hasattr(positions, "__dlpack_device__") and os.environ.get("MMML_MM_NL_FORCE_HOST") != "1":
+    if hasattr(positions, "__dlpack_device__") and os.environ.get("KARML_MM_NL_FORCE_HOST") != "1":
         return positions
     return np.asarray(positions)
 
@@ -282,7 +282,7 @@ def epot_blew_up(e_pot: float, e_pot_start: float, n_atoms: int) -> bool:
     return rise > JAXMD_EPOT_BLOWUP_RISE_EV_PER_ATOM * max(int(n_atoms), 1)
 
 
-NVE_REQUIRE_FLOAT64_ENV = "MMML_NVE_REQUIRE_FLOAT64"
+NVE_REQUIRE_FLOAT64_ENV = "KARML_NVE_REQUIRE_FLOAT64"
 
 
 def nve_float64_policy(x64_on: bool, ml_dtype, *, require_float64: bool = False) -> tuple[str, str]:
@@ -290,14 +290,14 @@ def nve_float64_policy(x64_on: bool, ml_dtype, *, require_float64: bool = False)
 
     float32 NVE is allowed with a warning (production CHARMM NVE runs float32 ML;
     the E_tot drift gate still aborts a non-conservative run). ``require_float64``
-    (``--nve-require-float64`` or ``MMML_NVE_REQUIRE_FLOAT64=1``) restores the refusal.
+    (``--nve-require-float64`` or ``KARML_NVE_REQUIRE_FLOAT64=1``) restores the refusal.
     """
     if bool(x64_on) and ml_dtype == jnp.float64:
         return "ok", ""
     strict = bool(require_float64) or os.environ.get(NVE_REQUIRE_FLOAT64_ENV, "").strip() == "1"
     msg = (
         f"NVE with float32 (jax_enable_x64={bool(x64_on)}, ml_dtype={ml_dtype}). "
-        "For float64 use --ml-compute-dtype float64 / MMML_ML_DTYPE=float64 "
+        "For float64 use --ml-compute-dtype float64 / KARML_ML_DTYPE=float64 "
         "with JAX_ENABLE_X64=1."
     )
     if strict:
@@ -977,11 +977,11 @@ def apply_npt_perturbation(box, perturbation, dtype=None):
     return p @ box_m
 
 
-NPT_VIRIAL_ENV = "MMML_NPT_VIRIAL"
+NPT_VIRIAL_ENV = "KARML_NPT_VIRIAL"
 
 
 def default_npt_virial(dtype) -> str:
-    """Runner's barostat virial mode: ``$MMML_NPT_VIRIAL``, else ``fd64`` for a
+    """Runner's barostat virial mode: ``$KARML_NPT_VIRIAL``, else ``fd64`` for a
     float32 state under x64 (float64-promoted difference), else ``fd``."""
     env = os.environ.get(NPT_VIRIAL_ENV, "").strip().lower()
     if env:
@@ -1040,7 +1040,7 @@ def make_npt_energy_fn(
           calculator's arithmetic is promoted to float64 under a float32 ML dtype
           -- the CHARMM callback gets that promotion from its float64 box.
           ``virial="fd"`` (default here, or
-          ``MMML_NPT_VIRIAL=fd`` for the runner) is the central
+          ``KARML_NPT_VIRIAL=fd`` for the runner) is the central
           difference of the real energy along the strain. In float32 that
           difference is dominated by the hybrid energy's rounding noise
           (0.05-0.3 eV between E(1+h) and E(1-h) on ACO:266 / DCM:308 32 A
@@ -1383,7 +1383,7 @@ def _add_psf_angle_restraints(args, positions, energy_fn, force_fn):
     if not bool(getattr(args, "psf_angle_restraints", False)):
         return energy_fn, force_fn, None
 
-    from mmml.md.restraints.psf_angles import build_psf_angle_restraint_fns
+    from karml.md.restraints.psf_angles import build_psf_angle_restraint_fns
 
     psf_path = getattr(args, "from_psf", None)
     if psf_path is None:
@@ -1644,7 +1644,7 @@ def set_up_nhc_sim_routine(
     )
     print_forces_summary(init_forces, energy_eV=float(init_energy), console=c)
     try:
-        from mmml.analysis.hybrid_force_breakdown import (
+        from karml.analysis.hybrid_force_breakdown import (
             hybrid_force_term_breakdown,
             print_hybrid_force_term_breakdown,
             write_hybrid_force_term_breakdown_json,
@@ -1907,7 +1907,7 @@ def set_up_nhc_sim_routine(
         # ``perturbation`` is jax-md's LINEAR strain (box -> box * p); see
         # make_npt_energy_fn. It used to be applied as p**(1/3), which made
         # the barostat see P_kin + P_vir/3.
-        # Barostat virial (MMML_NPT_VIRIAL=fd|fd64|analytic overrides). With a
+        # Barostat virial (KARML_NPT_VIRIAL=fd|fd64|analytic overrides). With a
         # float32 state the calculator ran entirely in float32 and the float32
         # energy difference was off by 0.2-2 katm per call; fd64 hands it a
         # float64 box/positions (promoted arithmetic, as in CHARMM's callback):
@@ -1954,7 +1954,7 @@ def set_up_nhc_sim_routine(
         ))
     else:  # nve
         init_fn, apply_fn = simulate.nve(wrapped_force_fn, shift, dt)
-    # No-op unless --rigid-water; interleaved RATTLE for NVE. See mmml.md.constraints.
+    # No-op unless --rigid-water; interleaved RATTLE for NVE. See karml.md.constraints.
     apply_fn = maybe_wrap_rigid_water(
         apply_fn, args, n_monomers, monomer_offsets, force_fn=wrapped_force_fn,
         shift_fn=shift, dt=dt, box=getattr(args, "cell", None),
@@ -2516,7 +2516,7 @@ def set_up_nhc_sim_routine(
             current_neighbors = (npt_pair_idx, npt_pair_mask)
             npt_pressure = pressure  # Use same pressure as NPT block (handles --pressure 0)
 
-            # MMML_NPT_VIRIAL_SELFCHECK=1: verify the barostat sees the right
+            # KARML_NPT_VIRIAL_SELFCHECK=1: verify the barostat sees the right
             # potential pressure. It compares the virial pressure jax-md derives
             # from dU/d(perturbation) -- through the custom VJP, exactly as
             # quantity.pressure and the NpT box force take it -- with an
@@ -2531,7 +2531,7 @@ def set_up_nhc_sim_routine(
             # strain, and the barostat saw P_kin + P_vir/3.
             import os as _os
 
-            if _os.environ.get("MMML_NPT_VIRIAL_SELFCHECK") == "1":
+            if _os.environ.get("KARML_NPT_VIRIAL_SELFCHECK") == "1":
                 try:
                     _nb = (npt_pair_idx, npt_pair_mask)
                     _vc = npt_virial_selfcheck(
@@ -2777,7 +2777,7 @@ def set_up_nhc_sim_routine(
                 # Hellmann–Feynman (∂E_MM/∂R|_q) — same as hybrid_forward training.
                 # FD of E(R, q(R)) therefore disagrees with F unless q is frozen.
                 try:
-                    from mmml.models.mm_charge_mode import mm_charge_mode_needs_q_ml
+                    from karml.models.mm_charge_mode import mm_charge_mode_needs_q_ml
 
                     _freeze_q_for_fd = bool(
                         getattr(args, "include_mm", True)
@@ -3433,7 +3433,7 @@ def set_up_nhc_sim_routine(
                         # Cell-list binning needs primary-cell coords, but do NOT write
                         # the wrap into integrator state. Whole-monomer ±L jumps make
                         # the hybrid energy discontinuous (~0.1 eV) even though MIC
-                        # pair distances are invariant — see mmml_calculator ASE note
+                        # pair distances are invariant — see karml_calculator ASE note
                         # ("Do NOT wrap positions during energy/force evaluation").
                         wrapped_for_nl = _wrap_monomers(state.position, _cell_jax)
                         if getattr(args, "debug", False) and (i < 3 or i % 50 == 0) and steps_done == 0:
@@ -3486,7 +3486,7 @@ def set_up_nhc_sim_routine(
                             if not _rescued_state_energy_finite(state):
                                 run_status = "error"
                                 run_error = (
-                                    f"non-finite MMML energy after overlap rescue "
+                                    f"non-finite KARML energy after overlap rescue "
                                     f"at record {i + 1}"
                                 )
                                 c.print(Panel(
@@ -3512,7 +3512,7 @@ def set_up_nhc_sim_routine(
                             if not _rescued_state_energy_finite(state):
                                 run_status = "error"
                                 run_error = (
-                                    f"non-finite MMML energy after overlap rescue "
+                                    f"non-finite KARML energy after overlap rescue "
                                     f"at record {i + 1}"
                                 )
                                 c.print(Panel(
@@ -3528,7 +3528,7 @@ def set_up_nhc_sim_routine(
                         if not _rescued_state_energy_finite(state):
                             run_status = "error"
                             run_error = (
-                                f"non-finite MMML energy after overlap rescue "
+                                f"non-finite KARML energy after overlap rescue "
                                 f"at record {i + 1}"
                             )
                             c.print(Panel(

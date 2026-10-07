@@ -6,30 +6,30 @@
 #     srun --partition=gpu --gres=gpu:1 --cpus-per-task=4 bash scripts/job_shell.sh
 #   Other tags:
 #     bash scripts/job_shell.sh minimal_dcm_77_t300_l32
-#     MMML_WORKFLOW_CONFIG=config.prep_sweep.yaml bash scripts/job_shell.sh resilient_dcm_52_t50_l28_sw_baseline
+#     KARML_WORKFLOW_CONFIG=config.prep_sweep.yaml bash scripts/job_shell.sh resilient_dcm_52_t50_l28_sw_baseline
 set -euo pipefail
 
 WORKFLOW_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 REPO_ROOT="$(cd "$WORKFLOW_ROOT/../.." && pwd)"
-DEFAULT_RUN_TAG="${MMML_DEFAULT_RUN_TAG:-resilient_dcm_52_t50_l28_ht_bussi_sw_ovlp25}"
+DEFAULT_RUN_TAG="${KARML_DEFAULT_RUN_TAG:-resilient_dcm_52_t50_l28_ht_bussi_sw_ovlp25}"
 RUN_TAG="${1:-$DEFAULT_RUN_TAG}"
 
 cd "$REPO_ROOT"
 
-# shellcheck source=../../../scripts/resolve_mmml_env.sh
-source "$REPO_ROOT/scripts/resolve_mmml_env.sh"
-mmml_resolve_env "$REPO_ROOT"
-PY="${MMML_PYTHON}"
+# shellcheck source=../../../scripts/resolve_karml_env.sh
+source "$REPO_ROOT/scripts/resolve_karml_env.sh"
+karml_resolve_env "$REPO_ROOT"
+PY="${KARML_PYTHON}"
 
 export JAX_ENABLE_X64="${JAX_ENABLE_X64:-1}"
 
-# Slurm profile forwards MMML_CKPT from the driver; fall back to dcm1 on cluster.
+# Slurm profile forwards KARML_CKPT from the driver; fall back to dcm1 on cluster.
 # shellcheck source=ckpt_defaults.sh
 source "$WORKFLOW_ROOT/scripts/ckpt_defaults.sh"
-export MMML_CKPT="${MMML_CKPT:-$(default_mmml_ckpt "$REPO_ROOT")}"
+export KARML_CKPT="${KARML_CKPT:-$(default_karml_ckpt "$REPO_ROOT")}"
 
-if [[ -n "${MMML_WORKFLOW_CONFIG:-}" ]]; then
-  _cfg_raw="${MMML_WORKFLOW_CONFIG}"
+if [[ -n "${KARML_WORKFLOW_CONFIG:-}" ]]; then
+  _cfg_raw="${KARML_WORKFLOW_CONFIG}"
 else
   _cfg_raw="$("$PY" -c "
 import sys
@@ -44,7 +44,7 @@ if [[ "$_cfg_raw" = /* ]]; then
 else
   CFG="${WORKFLOW_ROOT}/${_cfg_raw}"
 fi
-export MMML_WORKFLOW_CONFIG="$CFG"
+export KARML_WORKFLOW_CONFIG="$CFG"
 
 _MLPOT_PROF="$("$PY" -c "
 import sys
@@ -71,13 +71,13 @@ cfg = load_config(Path('${CFG}'))
 print(int(bool(cfg.get('jax_pme_profile', False))))
 " 2>/dev/null || echo 0)"
 if [[ "$_MLPOT_PROF" == "1" ]]; then
-  export MMML_MLPOT_PROFILE="${MMML_MLPOT_PROFILE:-1}"
+  export KARML_MLPOT_PROFILE="${KARML_MLPOT_PROFILE:-1}"
 fi
 if [[ "$_JAX_TIMERS" == "1" ]]; then
-  export MMML_JAX_COMPILE_TIMERS="${MMML_JAX_COMPILE_TIMERS:-1}"
+  export KARML_JAX_COMPILE_TIMERS="${KARML_JAX_COMPILE_TIMERS:-1}"
 fi
 if [[ "$_JAX_PME_PROF" == "1" ]]; then
-  export MMML_JAX_PME_PROFILE="${MMML_JAX_PME_PROFILE:-1}"
+  export KARML_JAX_PME_PROFILE="${KARML_JAX_PME_PROFILE:-1}"
 fi
 
 if ! ldconfig -p 2>/dev/null | grep -q 'libOpenCL\.so'; then
@@ -93,7 +93,7 @@ echo "=== dcm_density_setup_compare: ${RUN_TAG} ==="
 echo "REPO_ROOT=${REPO_ROOT}"
 echo "WORKFLOW_CONFIG=${CFG}"
 echo "PY=${PY}"
-echo "MMML_CKPT=${MMML_CKPT:-<unset>}"
+echo "KARML_CKPT=${KARML_CKPT:-<unset>}"
 echo "JAX_ENABLE_X64=${JAX_ENABLE_X64}"
 
 N_ML="$("$PY" -c "
@@ -101,7 +101,7 @@ import sys
 from pathlib import Path
 sys.path.insert(0, '${WORKFLOW_ROOT}/scripts')
 from campaign_lib import load_config, cell_from_tag
-from mmml.interfaces.pycharmmInterface.mlpot.mlpot_limits import estimate_ml_atoms
+from karml.interfaces.pycharmmInterface.mlpot.mlpot_limits import estimate_ml_atoms
 cfg = load_config(Path('${CFG}'))
 cell = cell_from_tag(cfg, '${RUN_TAG}')
 print(estimate_ml_atoms(cell.n_monomers, solvent=cell.solvent))
@@ -129,8 +129,8 @@ from campaign_lib import load_config
 cfg = load_config(Path('${CFG}'))
 print(int(cfg.get('jax_compile_threads', cfg.get('warmup_compile_threads', 4))))
 ")"
-export MMML_NO_JAX_COMPILE_THREADS="${MMML_NO_JAX_COMPILE_THREADS:-0}"
-export MMML_JAX_COMPILE_THREADS="${MMML_JAX_COMPILE_THREADS:-$_JAX_COMPILE_THREADS}"
+export KARML_NO_JAX_COMPILE_THREADS="${KARML_NO_JAX_COMPILE_THREADS:-0}"
+export KARML_JAX_COMPILE_THREADS="${KARML_JAX_COMPILE_THREADS:-$_JAX_COMPILE_THREADS}"
 
 WARMUP_ENABLED="$("$PY" -c "
 import sys
@@ -147,7 +147,7 @@ if [[ "$WARMUP_ENABLED" == "1" ]]; then
   while IFS= read -r _var; do
     [[ -n "$_var" ]] && unset "$_var" 2>/dev/null || true
   done < <(env | cut -d= -f1 | grep -E '^(OMPI_|PMI_|PMIX_|MPI_LOCALRANKID$|SLURM_MPI_TYPE$)' || true)
-  export MMML_WARMUP_MLPOT_JAX_ONLY=1
+  export KARML_WARMUP_MLPOT_JAX_ONLY=1
   export XLA_PYTHON_CLIENT_PREALLOCATE=false
   export OMP_NUM_THREADS="${OMP_NUM_THREADS:-$_JAX_COMPILE_THREADS}"
   export OMPI_MCA_ess=singleton
@@ -163,11 +163,11 @@ cell = cell_from_tag(cfg, '${RUN_TAG}')
 print(' '.join(warmup_mlpot_argv(cfg, cell)))
 ")"
   # shellcheck disable=SC2086
-  if ! "$PY" -m mmml.cli.__main__ $WARMUP_ARGS; then
+  if ! "$PY" -m karml.cli.__main__ $WARMUP_ARGS; then
     echo "ERROR: warmup-mlpot-jax failed" >&2
     exit 1
   fi
-  unset MMML_WARMUP_MLPOT_JAX_ONLY
+  unset KARML_WARMUP_MLPOT_JAX_ONLY
 fi
 
 "$PY" -c "

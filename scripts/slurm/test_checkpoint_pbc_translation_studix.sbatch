@@ -10,12 +10,12 @@
 #SBATCH --error=artifacts/npt_argon_water/checkpoint_pes_compare_20260802/spooky_charges_epoch3/pbc-repeat-%j.err
 set -euo pipefail
 
-ROOT="${MMML_REPO:-$HOME/mmml}"
+ROOT="${KARML_REPO:-$HOME/karml}"
 cd "$ROOT"
-source "$ROOT/scripts/resolve_mmml_env.sh"
-mmml_resolve_env "$ROOT"
+source "$ROOT/scripts/resolve_karml_env.sh"
+karml_resolve_env "$ROOT"
 export JAX_ENABLE_X64=1
-export MMML_ML_DTYPE=float64
+export KARML_ML_DTYPE=float64
 export XLA_PYTHON_CLIENT_PREALLOCATE=false
 
 BOX="$ROOT/artifacts/lj_scales_des_validation/boxes/tip3"
@@ -27,7 +27,7 @@ EXTRA_ARGS=()
 if [[ "${REPEAT_ONLY:-0}" == "1" ]]; then
   EXTRA_ARGS+=(--repeat-only)
 fi
-"$MMML_PYTHON" scripts/test_checkpoint_pbc_translation.py \
+"$KARML_PYTHON" scripts/test_checkpoint_pbc_translation.py \
   --pdb "$BOX/model.pdb" \
   --psf "$BOX/model.psf" \
   --checkpoint "$ROOT/$CHECKPOINT_REL" \

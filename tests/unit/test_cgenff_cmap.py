@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from mmml.interfaces.pycharmmInterface.cgenff_cmap import (
+from karml.interfaces.pycharmmInterface.cgenff_cmap import (
     calc_map_derivatives,
     parse_cmap_types_from_prm,
 )
@@ -44,7 +44,7 @@ def test_calc_map_derivatives_shape_and_finite() -> None:
 
 
 def test_bicubic_patch_evaluates_finite() -> None:
-    from mmml.interfaces.pycharmmInterface.cgenff_cmap import _eval_bicubic
+    from karml.interfaces.pycharmmInterface.cgenff_cmap import _eval_bicubic
     import jax.numpy as jnp
 
     size = 4
@@ -57,7 +57,7 @@ def test_bicubic_patch_evaluates_finite() -> None:
 
 
 def test_resolve_cmap_key_forward_and_reverse() -> None:
-    from mmml.interfaces.pycharmmInterface.cgenff_cmap import (
+    from karml.interfaces.pycharmmInterface.cgenff_cmap import (
         CmapType,
         _resolve_cmap_type_key,
     )
@@ -77,7 +77,7 @@ def test_resolve_cmap_key_forward_and_reverse() -> None:
 
 
 def test_resolve_cmap_key_with_cgenff_aliases() -> None:
-    from mmml.interfaces.pycharmmInterface.cgenff_cmap import (
+    from karml.interfaces.pycharmmInterface.cgenff_cmap import (
         CmapType,
         _resolve_cmap_type_key,
     )
@@ -102,7 +102,7 @@ def test_resolve_cmap_key_with_cgenff_aliases() -> None:
 
 
 def test_build_cmap_arrays_from_bundled_tria_prm() -> None:
-    from mmml.interfaces.pycharmmInterface.cgenff_cmap import (
+    from karml.interfaces.pycharmmInterface.cgenff_cmap import (
         build_cmap_arrays,
         trialanine_backbone_cmap_prm_path,
     )
@@ -135,10 +135,10 @@ def test_build_cmap_arrays_from_bundled_tria_prm() -> None:
 def test_parse_protein_prm_skips_cmap_blocks() -> None:
     from pathlib import Path
 
-    from mmml.interfaces.pycharmmInterface.cgenff_topology import (
+    from karml.interfaces.pycharmmInterface.cgenff_topology import (
         _merge_charmm_prm_parameters,
     )
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import CHARMM_HOME
+    from karml.interfaces.pycharmmInterface.import_pycharmm import CHARMM_HOME
 
     base = Path(CHARMM_HOME) / "toppar"
     protein_prm = base / "par_all36m_prot.prm"

@@ -17,8 +17,8 @@ import optax
 import orbax.checkpoint as ocp
 from flax.training import train_state
 
-from mmml.data.orbax_shards import partition_shards
-from mmml.models.mbd import E3xMBDModel, mbd_energy_and_forces
+from karml.data.orbax_shards import partition_shards
+from karml.models.mbd import E3xMBDModel, mbd_energy_and_forces
 
 
 @dataclass(frozen=True)

@@ -2,7 +2,7 @@
 # short heat + NVE with hybrid Ewald, self term omitted (MIC-trained PhysNet).
 #
 #   export CKPT=/path/to/checkpoint.json
-#   mmml md-system --config examples/tip3_50_ewald_smoke/md.yaml --run-all
+#   karml md-system --config examples/tip3_50_ewald_smoke/md.yaml --run-all
 #
 # Or: ./scripts/run_tip3_50_ewald_smoke.sh
 

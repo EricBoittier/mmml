@@ -1,6 +1,6 @@
 """`--evaluate-npz` must honour the ML/MM term flags.
 
-`_evaluate_jaxmd_mmml` hardcoded doML/doMM/doML_dimer to True at all three of
+`_evaluate_jaxmd_karml` hardcoded doML/doMM/doML_dimer to True at all three of
 its construction and evaluation sites, so single-point evaluation silently
 ignored --no-do-ml, --no-include-mm, --do-ml-dimer/--no-do-ml-dimer and
 --skip-ml-dimers. Scoring one 600-frame water-dimer grid four ways -- full, no
@@ -18,7 +18,7 @@ from argparse import Namespace
 
 import pytest
 
-from mmml.cli.run.md_evaluate_npz import evaluate_term_flags
+from karml.cli.run.md_evaluate_npz import evaluate_term_flags
 
 
 def test_defaults_are_everything_on():

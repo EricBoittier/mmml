@@ -28,7 +28,7 @@ from collections.abc import Callable
 import numpy as np
 
 from _common import have_jax_pme_package, print_header
-from mmml.interfaces.pycharmmInterface.jax_pme_hybrid_coulomb import (
+from karml.interfaces.pycharmmInterface.jax_pme_hybrid_coulomb import (
     hybrid_jax_pme_mm_lr_correction,
 )
 
@@ -130,7 +130,7 @@ def _wrapped_mm_fn(
     sr_cutoff: float,
     include_dispersion: bool,
 ) -> Callable[[], None]:
-    from mmml.interfaces.pycharmmInterface.mm_energy_forces import build_mm_energy_forces_fn
+    from karml.interfaces.pycharmmInterface.mm_energy_forces import build_mm_energy_forces_fn
 
     n_monomers = len(offsets) - 1
     atoms_per = int(offsets[1] - offsets[0])
@@ -191,7 +191,7 @@ def main() -> int:
     parser.add_argument(
         "--profile",
         action="store_true",
-        help="set MMML_JAX_PME_PROFILE=per_call for component-level timings",
+        help="set KARML_JAX_PME_PROFILE=per_call for component-level timings",
     )
     parser.add_argument(
         "--wrapped-mm",
@@ -204,7 +204,7 @@ def main() -> int:
         print("SKIP: jax-pme is not installed")
         return 0
     if args.profile:
-        os.environ["MMML_JAX_PME_PROFILE"] = "per_call"
+        os.environ["KARML_JAX_PME_PROFILE"] = "per_call"
 
     positions, charges, c6_sqrt, offsets, monomer_id = _synthetic_cluster(
         n_monomers=args.n_monomers,

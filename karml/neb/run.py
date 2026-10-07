@@ -1,4 +1,4 @@
-"""Run ASE NEB with an MMML PhysNet (or compatible) checkpoint calculator."""
+"""Run ASE NEB with an KARML PhysNet (or compatible) checkpoint calculator."""
 
 from __future__ import annotations
 
@@ -9,8 +9,8 @@ from typing import Any, Callable, Sequence
 
 import numpy as np
 
-from mmml.data.units import EV_TO_KCAL_MOL
-from mmml.neb.config import NebConfig
+from karml.data.units import EV_TO_KCAL_MOL
+from karml.neb.config import NebConfig
 
 
 def _import_neb():
@@ -87,7 +87,7 @@ def _default_calculator_factory(
     *,
     calculator: str | None = None,
 ) -> Callable[[], Any]:
-    from mmml.models.kernnn import KerNNCalculator, is_kernnn_checkpoint
+    from karml.models.kernnn import KerNNCalculator, is_kernnn_checkpoint
 
     calc_name = (calculator or "").strip().lower()
     if calc_name == "kernnn" or (not calc_name and is_kernnn_checkpoint(checkpoint)):
@@ -98,7 +98,7 @@ def _default_calculator_factory(
 
         return make_kernnn
 
-    from mmml.interfaces.calculators.checkpoint_loading import (
+    from karml.interfaces.calculators.checkpoint_loading import (
         create_calculator_from_checkpoint,
         load_checkpoint_bundle,
         _build_physnet_ef_calculator,

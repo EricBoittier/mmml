@@ -12,17 +12,17 @@ def test_protein_toppar_paths_missing_raises(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.import_pycharmm.CHARMM_HOME",
+        "karml.interfaces.pycharmmInterface.import_pycharmm.CHARMM_HOME",
         str(tmp_path),
     )
-    from mmml.interfaces.pycharmmInterface.protein_charmm_build import protein_toppar_paths
+    from karml.interfaces.pycharmmInterface.protein_charmm_build import protein_toppar_paths
 
     with pytest.raises(FileNotFoundError, match="Protein toppar"):
         protein_toppar_paths()
 
 
 def test_alad_dataclass_fields() -> None:
-    from mmml.interfaces.pycharmmInterface.protein_charmm_build import AladBuildResult
+    from karml.interfaces.pycharmmInterface.protein_charmm_build import AladBuildResult
 
     pos = np.zeros((3, 3))
     result = AladBuildResult(positions=pos, n_atoms=3)
@@ -31,7 +31,7 @@ def test_alad_dataclass_fields() -> None:
 
 
 def test_trialanine_water_box_coords_path_prefers_npy(tmp_path: Path) -> None:
-    from mmml.interfaces.pycharmmInterface.trialanine_water_box import (
+    from karml.interfaces.pycharmmInterface.trialanine_water_box import (
         trialanine_water_box_coords_path,
     )
 
@@ -43,7 +43,7 @@ def test_trialanine_water_box_coords_path_prefers_npy(tmp_path: Path) -> None:
 
 
 def test_trialanine_water_box_coords_path_falls_back_to_npy(tmp_path: Path) -> None:
-    from mmml.interfaces.pycharmmInterface.trialanine_water_box import (
+    from karml.interfaces.pycharmmInterface.trialanine_water_box import (
         trialanine_water_box_coords_path,
     )
 
@@ -54,11 +54,11 @@ def test_trialanine_water_box_coords_path_falls_back_to_npy(tmp_path: Path) -> N
 
 
 def test_load_trialanine_water_atoms_for_docs_real_coords() -> None:
-    from mmml.interfaces.pycharmmInterface.trialanine_water_box import (
+    from karml.interfaces.pycharmmInterface.trialanine_water_box import (
         load_trialanine_water_atoms_for_docs,
         peptide_atoms_from_trialanine_box,
     )
-    from mmml.paths import default_trialanine_water_smoke_extxyz
+    from karml.paths import default_trialanine_water_smoke_extxyz
 
     assert default_trialanine_water_smoke_extxyz().is_file()
     atoms = load_trialanine_water_atoms_for_docs()

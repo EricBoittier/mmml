@@ -1,4 +1,4 @@
-"""Capture, compare, save, and visualize CHARMM vs MMML inter-monomer neighbor lists."""
+"""Capture, compare, save, and visualize CHARMM vs KARML inter-monomer neighbor lists."""
 
 from __future__ import annotations
 
@@ -40,7 +40,7 @@ def uniform_monomer_offsets(n_monomers: int, atoms_per_monomer: int) -> np.ndarr
 
 
 def monomer_id_from_offsets(monomer_offsets: Sequence[int], n_atoms: int) -> np.ndarray:
-    from mmml.interfaces.pycharmmInterface.nl_reference import monomer_id_from_offsets as _mid
+    from karml.interfaces.pycharmmInterface.nl_reference import monomer_id_from_offsets as _mid
 
     return _mid(monomer_offsets, n_atoms)
 
@@ -57,7 +57,7 @@ def _pair_records(
     cell: np.ndarray | None,
     monomer_id: np.ndarray,
 ) -> list[InterMonomerPair]:
-    from mmml.interfaces.pycharmmInterface.nl_reference import cell_matrix_3x3, mic_distance
+    from karml.interfaces.pycharmmInterface.nl_reference import cell_matrix_3x3, mic_distance
 
     R = np.asarray(positions, dtype=np.float64)
     cell_mat = cell_matrix_3x3(cell) if cell is not None else None
@@ -94,7 +94,7 @@ def capture_charmm_inter_monomer_pairs(
     """Capture inter-monomer pairs from CHARMM ``COOR DMAT`` (live PyCHARMM session)."""
     import pycharmm.nbonds as nbonds
 
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import capture_neighbour_list
+    from karml.interfaces.pycharmmInterface.import_pycharmm import capture_neighbour_list
 
     nbonds.update_bnbnd()
     cleanup: tempfile.TemporaryDirectory[str] | None = None
@@ -103,7 +103,7 @@ def capture_charmm_inter_monomer_pairs(
         if work_dir is not None:
             work_dir.mkdir(parents=True, exist_ok=True)
         else:
-            cleanup = tempfile.TemporaryDirectory(prefix="mmml_nl_dmat_")
+            cleanup = tempfile.TemporaryDirectory(prefix="karml_nl_dmat_")
             work_dir = Path(cleanup.name)
         import os
 
@@ -118,7 +118,7 @@ def capture_charmm_inter_monomer_pairs(
 
     if positions is None:
 
-        from mmml.interfaces.pycharmmInterface.import_pycharmm import coor
+        from karml.interfaces.pycharmmInterface.import_pycharmm import coor
 
         positions = coor.get_positions().to_numpy(dtype=np.float64)
     else:
@@ -161,7 +161,7 @@ def capture_charmm_jnb_inter_monomer_pairs(
     """Capture inter-monomer pairs from CHARMM primary ``JNB/INBLO`` (not DMAT)."""
     import pycharmm.nbonds as nbonds
 
-    from mmml.interfaces.pycharmmInterface.nl_reference import (
+    from karml.interfaces.pycharmmInterface.nl_reference import (
         apply_mm_pair_filters,
         inter_monomer_pair_set,
         walk_charmm_primary_jnb_pair_set,
@@ -176,7 +176,7 @@ def capture_charmm_jnb_inter_monomer_pairs(
 
     if positions is None:
 
-        from mmml.interfaces.pycharmmInterface.import_pycharmm import coor
+        from karml.interfaces.pycharmmInterface.import_pycharmm import coor
 
         positions = coor.get_positions().to_numpy(dtype=np.float64)
     else:
@@ -215,7 +215,7 @@ def capture_charmm_image_inter_monomer_pairs(
     """Capture inter-monomer pairs from CHARMM image MIC export (JNB + IMJNB)."""
     import pycharmm.image as image
 
-    from mmml.interfaces.pycharmmInterface.nl_reference import (
+    from karml.interfaces.pycharmmInterface.nl_reference import (
         apply_mm_pair_filters,
         filter_pairs_under_cutoff,
         inter_monomer_pair_set,
@@ -230,7 +230,7 @@ def capture_charmm_image_inter_monomer_pairs(
     raw = walk_charmm_mic_pair_set(pair_i, pair_j)
 
     if positions is None:
-        from mmml.interfaces.pycharmmInterface.import_pycharmm import coor
+        from karml.interfaces.pycharmmInterface.import_pycharmm import coor
 
         positions = coor.get_positions().to_numpy(dtype=np.float64)
     else:
@@ -280,7 +280,7 @@ def capture_mlpot_mlmm_inter_monomer_pairs(
     """Capture inter-monomer ML–MM pairs from Fortran ``idxu/idxv`` (callback path)."""
     from pycharmm.energy_mlpot import export_mlpot_mlmm_pairs
 
-    from mmml.interfaces.pycharmmInterface.nl_reference import (
+    from karml.interfaces.pycharmmInterface.nl_reference import (
         apply_mm_pair_filters,
         canonical_half_pair,
         filter_pairs_under_cutoff,
@@ -299,7 +299,7 @@ def capture_mlpot_mlmm_inter_monomer_pairs(
 
     if positions is None:
 
-        from mmml.interfaces.pycharmmInterface.import_pycharmm import coor
+        from karml.interfaces.pycharmmInterface.import_pycharmm import coor
 
         positions = coor.get_positions().to_numpy(dtype=np.float64)
     else:
@@ -347,7 +347,7 @@ def compare_snapshots_aligned(
     mm_r_min: float | None = None,
 ) -> dict[str, Any]:
     """Pair diff plus semantic tags (cutoff skew, ``mm_r_min``, true mismatch)."""
-    from mmml.interfaces.pycharmmInterface.nl_reference import (
+    from karml.interfaces.pycharmmInterface.nl_reference import (
         canonical_half_pair,
         classify_inter_monomer_diff,
     )
@@ -377,7 +377,7 @@ def compare_snapshots_aligned(
     return base
 
 
-def capture_mmml_inter_monomer_pairs(
+def capture_karml_inter_monomer_pairs(
     *,
     positions: np.ndarray,
     cell: np.ndarray,
@@ -386,9 +386,9 @@ def capture_mmml_inter_monomer_pairs(
     backend: MmNlBackendName = "vesin",
     mm_r_min: float | None = None,
 ) -> NeighborListSnapshot:
-    """Capture MMML switched-MM inter-monomer pairs (Vesin / cell-list / jax-md)."""
-    from mmml.interfaces.pycharmmInterface.nl_backend import build_mm_pairs_with_backend
-    from mmml.interfaces.pycharmmInterface.nl_reference import (
+    """Capture KARML switched-MM inter-monomer pairs (Vesin / cell-list / jax-md)."""
+    from karml.interfaces.pycharmmInterface.nl_backend import build_mm_pairs_with_backend
+    from karml.interfaces.pycharmmInterface.nl_reference import (
         apply_mm_pair_filters,
         extract_valid_pairs,
         filter_pairs_under_cutoff,
@@ -426,7 +426,7 @@ def capture_mmml_inter_monomer_pairs(
     mic_filtered = filter_pairs_under_cutoff(filtered, R, cell_arr, cutoff)
     pairs = _pair_records(mic_filtered, positions=R, cell=cell_arr, monomer_id=mid)
     return NeighborListSnapshot(
-        source=f"mmml_{used}",
+        source=f"karml_{used}",
         cutoff_A=cutoff,
         pairs=pairs,
         meta={
@@ -489,7 +489,7 @@ def snapshot_to_jsonable(
     cell: np.ndarray,
     monomer_offsets: Sequence[int],
     charmm: NeighborListSnapshot | None = None,
-    mmml: NeighborListSnapshot | None = None,
+    karml: NeighborListSnapshot | None = None,
     comparison: dict[str, Any] | None = None,
     extra_meta: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
@@ -506,12 +506,12 @@ def snapshot_to_jsonable(
             "meta": charmm.meta,
             "pairs": [asdict(p) for p in charmm.pairs],
         }
-    if mmml is not None:
-        payload["mmml"] = {
-            "source": mmml.source,
-            "cutoff_A": mmml.cutoff_A,
-            "meta": mmml.meta,
-            "pairs": [asdict(p) for p in mmml.pairs],
+    if karml is not None:
+        payload["karml"] = {
+            "source": karml.source,
+            "cutoff_A": karml.cutoff_A,
+            "meta": karml.meta,
+            "pairs": [asdict(p) for p in karml.pairs],
         }
     if comparison is not None:
         payload["comparison"] = comparison
@@ -537,20 +537,20 @@ def save_neighbor_list_artifacts(
     cell: np.ndarray,
     monomer_offsets: Sequence[int],
     charmm: NeighborListSnapshot | None = None,
-    mmml: NeighborListSnapshot | None = None,
+    karml: NeighborListSnapshot | None = None,
     extra_meta: dict[str, Any] | None = None,
     top_pairs: int = 30,
 ) -> dict[str, Path]:
     """Write JSON, CSV pair tables, positions NPY, and a matplotlib PNG."""
     out = Path(out_dir).expanduser().resolve()
     out.mkdir(parents=True, exist_ok=True)
-    comparison = compare_snapshots(charmm, mmml) if charmm is not None and mmml is not None else None
+    comparison = compare_snapshots(charmm, karml) if charmm is not None and karml is not None else None
     payload = snapshot_to_jsonable(
         positions=positions,
         cell=cell,
         monomer_offsets=monomer_offsets,
         charmm=charmm,
-        mmml=mmml,
+        karml=karml,
         comparison=comparison,
         extra_meta=extra_meta,
     )
@@ -562,10 +562,10 @@ def save_neighbor_list_artifacts(
         csv_path = out / "charmm_pairs.csv"
         write_pairs_csv(csv_path, charmm.pairs)
         paths["charmm_csv"] = csv_path
-    if mmml is not None:
-        csv_path = out / "mmml_pairs.csv"
-        write_pairs_csv(csv_path, mmml.pairs)
-        paths["mmml_csv"] = csv_path
+    if karml is not None:
+        csv_path = out / "karml_pairs.csv"
+        write_pairs_csv(csv_path, karml.pairs)
+        paths["karml_csv"] = csv_path
     if comparison is not None:
         cmp_path = out / "comparison.json"
         cmp_path.write_text(json.dumps(comparison, indent=2), encoding="utf-8")
@@ -576,7 +576,7 @@ def save_neighbor_list_artifacts(
         cell=cell,
         monomer_offsets=monomer_offsets,
         charmm=charmm,
-        mmml=mmml,
+        karml=karml,
         out_path=plot_path,
         top_pairs=top_pairs,
     )
@@ -590,7 +590,7 @@ def plot_neighbor_lists(
     cell: np.ndarray,
     monomer_offsets: Sequence[int],
     charmm: NeighborListSnapshot | None = None,
-    mmml: NeighborListSnapshot | None = None,
+    karml: NeighborListSnapshot | None = None,
     out_path: Path,
     top_pairs: int = 30,
 ) -> None:
@@ -600,7 +600,7 @@ def plot_neighbor_lists(
     R = np.asarray(positions, dtype=np.float64)
     offsets = np.asarray(monomer_offsets, dtype=np.int32)
     mid = monomer_id_from_offsets(offsets, R.shape[0])
-    n_panels = int(charmm is not None) + int(mmml is not None)
+    n_panels = int(charmm is not None) + int(karml is not None)
     if n_panels == 0:
         raise ValueError("plot_neighbor_lists requires at least one snapshot")
 
@@ -659,8 +659,8 @@ def plot_neighbor_lists(
 
     if charmm is not None:
         _draw_panel(charmm, title=f"CHARMM ({charmm.cutoff_A:.1f} Å)", color="#d62728")
-    if mmml is not None:
-        _draw_panel(mmml, title=f"MMML ({mmml.cutoff_A:.1f} Å)", color="#1f77b4")
+    if karml is not None:
+        _draw_panel(karml, title=f"KARML ({karml.cutoff_A:.1f} Å)", color="#1f77b4")
 
     fig.tight_layout()
     out = Path(out_path).expanduser().resolve()
@@ -679,11 +679,11 @@ def setup_charmm_from_psf_crd(
     mm_switch_width: float | None = None,
 ) -> tuple[np.ndarray, np.ndarray, float]:
     """Load PSF+CRD into PyCHARMM, apply PBC nbonds, return positions and effective cutoff."""
-    from mmml.interfaces.pycharmmInterface.cgenff_bonded_reference import read_psf_card_file
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import read_cgenff_toppar
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import apply_crd_file_to_charmm
-    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import apply_pbc_nbonds, prepare_charmm_pbc
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+    from karml.interfaces.pycharmmInterface.cgenff_bonded_reference import read_psf_card_file
+    from karml.interfaces.pycharmmInterface.import_pycharmm import read_cgenff_toppar
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import apply_crd_file_to_charmm
+    from karml.interfaces.pycharmmInterface.mlpot.pbc_env import apply_pbc_nbonds, prepare_charmm_pbc
+    from karml.interfaces.pycharmmInterface.mlpot.setup import (
         charmm_relaxed_bomlev,
         get_charmm_positions_array,
     )

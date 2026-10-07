@@ -52,21 +52,21 @@ def validate_tier2_spatial_mpi_env(
 ) -> Tier2MlpotMpiReport:
     """Check env for Tier 2 spatial ML MPI (does not run MLpot).
 
-    With ``prelaunch=True``, serial checks before ``mmml-charmm-mpirun.sh`` do not
+    With ``prelaunch=True``, serial checks before ``karml-charmm-mpirun.sh`` do not
     fail ``strict`` on expected warnings (spatial env unset, not under mpirun, etc.).
     """
-    from mmml.interfaces.pycharmmInterface.charmm_mpi import (
+    from karml.interfaces.pycharmmInterface.charmm_mpi import (
         _under_mpirun,
         charmm_lib_links_mpi,
         charmm_mpirun_path,
         defer_jax_warmup_until_after_mlpot_sd,
     )
-    from mmml.interfaces.pycharmmInterface.jax_device_policy import (
+    from karml.interfaces.pycharmmInterface.jax_device_policy import (
         mlpot_jax_device_name,
         mlpot_local_gpu_count,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
-    from mmml.interfaces.pycharmmInterface.mlpot.spatial_mpi_policy import (
+    from karml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
+    from karml.interfaces.pycharmmInterface.mlpot.spatial_mpi_policy import (
         spatial_mpi_enabled,
     )
 
@@ -81,33 +81,33 @@ def validate_tier2_spatial_mpi_env(
 
     if not report.spatial_mpi_enabled:
         report.warnings.append(
-            "MMML_MLPOT_SPATIAL_MPI is off; Tier 2 uses rank-0 MLpot bridge (slow at np>1)"
+            "KARML_MLPOT_SPATIAL_MPI is off; Tier 2 uses rank-0 MLpot bridge (slow at np>1)"
         )
 
     if not report.charmm_links_mpi:
         report.warnings.append("libcharmm.so is not MPI-linked; mpirun optional")
 
     if report.charmm_links_mpi and charmm_mpirun_path() is None:
-        report.errors.append("MPI-linked CHARMM but no matching mpirun (set MMML_MPIRUN)")
+        report.errors.append("MPI-linked CHARMM but no matching mpirun (set KARML_MPIRUN)")
         report.ok = False
 
     if report.spatial_mpi_enabled and report.mpi_size < 2:
         report.warnings.append(
-            f"spatial MPI enabled but mpi_size={report.mpi_size}; use MMML_MPI_NP>=2"
+            f"spatial MPI enabled but mpi_size={report.mpi_size}; use KARML_MPI_NP>=2"
         )
 
     if report.spatial_mpi_enabled and report.mlpot_device == "gpu" and report.jax_gpu_count == 0:
         report.errors.append(
-            "spatial MPI + MMML_MLPOT_DEVICE=gpu but JAX sees no GPU (uv sync --extra gpu)"
+            "spatial MPI + KARML_MLPOT_DEVICE=gpu but JAX sees no GPU (uv sync --extra gpu)"
         )
         report.ok = False
 
     if report.spatial_mpi_enabled and report.mpi_size > 1:
-        ml_gpus = int(os.environ.get("MMML_MLPOT_N_GPUS", "1") or "1")
+        ml_gpus = int(os.environ.get("KARML_MLPOT_N_GPUS", "1") or "1")
         if ml_gpus > 1:
             report.errors.append(
-                f"MMML_MLPOT_N_GPUS={ml_gpus} with mpi_size={report.mpi_size} "
-                "oversubscribes GPUs; use --ml-gpu-count 1 and MMML_MPI_PIN_GPU_PER_RANK=1"
+                f"KARML_MLPOT_N_GPUS={ml_gpus} with mpi_size={report.mpi_size} "
+                "oversubscribes GPUs; use --ml-gpu-count 1 and KARML_MPI_PIN_GPU_PER_RANK=1"
             )
             report.ok = False
         if report.jax_gpu_count > 0 and report.jax_gpu_count < report.mpi_size:
@@ -119,29 +119,29 @@ def validate_tier2_spatial_mpi_env(
     omp = os.environ.get("OMP_NUM_THREADS")
     if report.charmm_links_mpi and omp not in (None, "1"):
         report.warnings.append(
-            f"OMP_NUM_THREADS={omp}; MPI-linked CHARMM expects 1 (see MMML_CHARMM_OMP_THREADS)"
+            f"OMP_NUM_THREADS={omp}; MPI-linked CHARMM expects 1 (see KARML_CHARMM_OMP_THREADS)"
         )
 
     if report.charmm_links_mpi and report.defer_jax_warmup:
         report.warnings.append(
-            "MMML_DEFER_JAX_WARMUP_UNTIL_AFTER_SD=1: JAX GPU warmup deferred until after "
+            "KARML_DEFER_JAX_WARMUP_UNTIL_AFTER_SD=1: JAX GPU warmup deferred until after "
             "MLpot SD (legacy/debug; default is immediate GPU warmup after registration)"
         )
 
-    if os.environ.get("MMML_MLPOT_RANK0_BRIDGE", "1").strip().lower() in ("0", "false"):
+    if os.environ.get("KARML_MLPOT_RANK0_BRIDGE", "1").strip().lower() in ("0", "false"):
         if report.spatial_mpi_enabled and report.mpi_size > 1:
             report.warnings.append(
-                "MMML_MLPOT_RANK0_BRIDGE=0 with spatial MPI: every rank runs full MLpot (debug only)"
+                "KARML_MLPOT_RANK0_BRIDGE=0 with spatial MPI: every rank runs full MLpot (debug only)"
             )
         elif report.mpi_size > 1:
             report.errors.append(
-                "MMML_MLPOT_RANK0_BRIDGE=0 at np>1 without spatial MPI duplicates MLpot incorrectly"
+                "KARML_MLPOT_RANK0_BRIDGE=0 at np>1 without spatial MPI duplicates MLpot incorrectly"
             )
             report.ok = False
 
     report.recommended_launch = (
-        "MMML_MPI_NP=4 MMML_MLPOT_SPATIAL_MPI=1 MMML_MPI_PIN_GPU_PER_RANK=1 "
-        "./scripts/mmml-charmm-mpirun.sh md-system --ml-spatial-mpi --ml-gpu-count 1 ..."
+        "KARML_MPI_NP=4 KARML_MLPOT_SPATIAL_MPI=1 KARML_MPI_PIN_GPU_PER_RANK=1 "
+        "./scripts/karml-charmm-mpirun.sh md-system --ml-spatial-mpi --ml-gpu-count 1 ..."
     )
 
     if strict and report.warnings:
@@ -158,7 +158,7 @@ def validate_tier2_spatial_mpi_env(
 def _prelaunch_ok_warning(message: str) -> bool:
     """Warnings that are normal for serial ``mpi-check`` before ``mpirun`` launch."""
     ok_fragments = (
-        "MMML_MLPOT_SPATIAL_MPI is off",
+        "KARML_MLPOT_SPATIAL_MPI is off",
         "spatial MPI enabled but mpi_size=",
         "Defer JAX until after MLpot SD applies under mpirun",
         "OMP_NUM_THREADS=",
@@ -168,7 +168,7 @@ def _prelaunch_ok_warning(message: str) -> bool:
 
 def render_tier2_report(report: Tier2MlpotMpiReport, *, prelaunch: bool = False) -> str:
     lines = [
-        "MMML Tier 2 spatial MPI + MLpot check",
+        "KARML Tier 2 spatial MPI + MLpot check",
         "====================================",
         f"Status: {'OK' if report.ok else 'FAIL'}",
         f"Under mpirun: {report.under_mpirun} (rank {report.mpi_rank}/{report.mpi_size})",
@@ -188,14 +188,14 @@ def render_tier2_report(report: Tier2MlpotMpiReport, *, prelaunch: bool = False)
             [
                 "",
                 "Pre-launch note: serial mpi-check is OK. For strict Tier 2 under launch:",
-                "  MMML_MPI_NP=2 MMML_MLPOT_SPATIAL_MPI=1 ./scripts/mmml-charmm-mpirun.sh mpi-check --tier2 --strict",
+                "  KARML_MPI_NP=2 KARML_MLPOT_SPATIAL_MPI=1 ./scripts/karml-charmm-mpirun.sh mpi-check --tier2 --strict",
             ]
         )
     lines.extend(
         [
             "",
             "Live MLpot Tier 2 smoke (CHARMM node):",
-            "  MMML_MPI_NP=2 MMML_MLPOT_SPATIAL_MPI=1 ./scripts/mmml-charmm-mpirun.sh python \\",
+            "  KARML_MPI_NP=2 KARML_MLPOT_SPATIAL_MPI=1 ./scripts/karml-charmm-mpirun.sh python \\",
             "    tests/functionality/mlpot/06_spatial_mpi_tier2_smoke.py",
         ]
     )

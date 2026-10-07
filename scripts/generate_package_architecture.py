@@ -18,17 +18,17 @@ def _count_python(relative: str) -> int:
 def generated_text() -> str:
     text = DOC.read_text(encoding="utf-8")
     counts = {
-        "CLI": _count_python("mmml/cli"),
-        "IFACE": _count_python("mmml/interfaces"),
-        "MODELS": _count_python("mmml/models"),
-        "UTILS": _count_python("mmml/utils"),
-        "DATA": _count_python("mmml/data"),
-        "GEN": _count_python("mmml/generate"),
-        "GUI": _count_python("mmml/gui"),
-        "SPEC": _count_python("mmml/spectra"),
+        "CLI": _count_python("karml/cli"),
+        "IFACE": _count_python("karml/interfaces"),
+        "MODELS": _count_python("karml/models"),
+        "UTILS": _count_python("karml/utils"),
+        "DATA": _count_python("karml/data"),
+        "GEN": _count_python("karml/generate"),
+        "GUI": _count_python("karml/gui"),
+        "SPEC": _count_python("karml/spectra"),
     }
-    total = _count_python("mmml")
-    from mmml.cli.registry import COMMAND_REGISTRY
+    total = _count_python("karml")
+    from karml.cli.registry import COMMAND_REGISTRY
 
     text = re.sub(r"\(~\d+ Python modules\)", f"({total} Python modules)", text, count=1)
     for node, count in counts.items():

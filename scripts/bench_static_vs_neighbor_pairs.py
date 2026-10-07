@@ -72,7 +72,7 @@ def water_box(n_mol: int, density_kg_m3: float = 997.0, seed: int = 0):
         for m in range(n_mol)
     ]).astype(np.int32)
 
-    from mmml.md.system import FFParams, MolecularSystem
+    from karml.md.system import FFParams, MolecularSystem
 
     ff = FFParams(
         charges=charges,
@@ -93,9 +93,9 @@ def energy_and_grad(system, ctofnb: float = 12.0, ctonnb: float = 10.0):
     import jax
     import jax.numpy as jnp
 
-    from mmml.interfaces.pycharmmInterface.mm_system_energy import CharmmNbondSettings
-    from mmml.md.energy import EnergyContext
-    from mmml.md.energy.terms import MMNonbondedTerm
+    from karml.interfaces.pycharmmInterface.mm_system_energy import CharmmNbondSettings
+    from karml.md.energy import EnergyContext
+    from karml.md.energy.terms import MMNonbondedTerm
 
     settings = CharmmNbondSettings(cutnb=ctofnb, ctonnb=ctonnb, ctofnb=ctofnb)
     fn = MMNonbondedTerm(settings).make(system, EnergyContext()).jax_energy_fn
@@ -117,14 +117,14 @@ def energy_and_grad(system, ctofnb: float = 12.0, ctonnb: float = 10.0):
 
 
 def static_pairs(system):
-    from mmml.md.static_pairs import make_static_pair_fn
+    from karml.md.static_pairs import make_static_pair_fn
 
     fn = make_static_pair_fn(system, verbose=False)
     return {k: np.asarray(v) for k, v in fn(None, None).items()}
 
 
 def nbr_pairs(system, positions, cutoff_A: float, skin_A: float = 0.0):
-    from mmml.md.neighbors import make_intermolecular_neighbor_fn
+    from karml.md.neighbors import make_intermolecular_neighbor_fn
 
     fn = make_intermolecular_neighbor_fn(system, cutoff_A=cutoff_A, skin_A=skin_A)
     return fn(np.asarray(positions), np.asarray(system.box))

@@ -2,7 +2,7 @@
 """Finite-difference force check for the PyCHARMM MLpot callback.
 
 This script builds a small CHARMM cluster, registers the same decomposed MLpot
-used by ``mmml md-system --backend pycharmm``, and compares callback forces
+used by ``karml md-system --backend pycharmm``, and compares callback forces
 against central differences of the callback energy.
 """
 
@@ -22,8 +22,8 @@ if str(REPO_ROOT) not in sys.path:
 
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    from mmml.interfaces.pycharmmInterface.cutoffs import add_handoff_cutoff_args
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+    from karml.interfaces.pycharmmInterface.cutoffs import add_handoff_cutoff_args
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
         add_cluster_args,
         add_charmm_output_args,
     )
@@ -141,13 +141,13 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 
 def _setup_charmm(args: argparse.Namespace, positions: np.ndarray) -> float | None:
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
         apply_charmm_output_from_args,
         resolve_pbc_box_side,
         resolve_use_pbc,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import setup_charmm_environment
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import setup_default_nbonds
+    from karml.interfaces.pycharmmInterface.mlpot.pbc_env import setup_charmm_environment
+    from karml.interfaces.pycharmmInterface.mlpot.setup import setup_default_nbonds
 
     apply_charmm_output_from_args(args)
     if not resolve_use_pbc(args):
@@ -165,8 +165,8 @@ def _register_model(
     n_monomers: int,
     box_side: float | None,
 ) -> tuple[Any, Any]:
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import resolve_checkpoint
-    from mmml.interfaces.pycharmmInterface.mlpot.run_workflow import _register_mlpot_context
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import resolve_checkpoint
+    from karml.interfaces.pycharmmInterface.mlpot.run_workflow import _register_mlpot_context
 
     ckpt = resolve_checkpoint(args.checkpoint)
     return _register_mlpot_context(
@@ -239,8 +239,8 @@ def _ml_energy_and_force(
     import jax
     import jax.numpy as jnp
 
-    from mmml.interfaces.pycharmmInterface.jax_device_policy import mlpot_jax_device_context
-    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import cubic_box_matrix_from_side
+    from karml.interfaces.pycharmmInterface.jax_device_policy import mlpot_jax_device_context
+    from karml.interfaces.pycharmmInterface.mlpot.pbc_env import cubic_box_matrix_from_side
 
     pos = np.asarray(positions, dtype=np.float64)
     n = int(len(pos))
@@ -275,8 +275,8 @@ def _monomer_only_energy_and_force(calc: Any, positions: np.ndarray) -> tuple[fl
 
 
 def _selected_atom_indices(args: argparse.Namespace, n_atoms: int) -> np.ndarray:
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import parse_resid_list
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import select_by_resids
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import parse_resid_list
+    from karml.interfaces.pycharmmInterface.mlpot.setup import select_by_resids
 
     resids = tuple(parse_resid_list(args.resids))
     if resids:
@@ -414,8 +414,8 @@ def _parse_float_list(text: str) -> list[float]:
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
 
-    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+    import karml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
         build_cluster_from_args_with_tag,
         print_cluster_geometry_summary,
     )
@@ -463,7 +463,7 @@ def main(argv: list[str] | None = None) -> int:
             {k: v for k, v in r.items() if k != "components"} for r in report["sweep"]
         ]
     worst = report["worst"] if "worst" in report else None
-    from mmml.utils.rich_report import print_colored_json
+    from karml.utils.rich_report import print_colored_json
 
     print_colored_json(display_report)
     if worst is not None:

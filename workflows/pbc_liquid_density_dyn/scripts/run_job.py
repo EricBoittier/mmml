@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run one liquid-density PBC dynamics campaign via mmml md-system --run-all."""
+"""Run one liquid-density PBC dynamics campaign via karml md-system --run-all."""
 
 from __future__ import annotations
 
@@ -32,16 +32,16 @@ def _repo_root() -> Path:
 
 
 def _resolve_mpirun_wrapper(cfg: dict) -> Path:
-    raw = Path(str(cfg.get("mpirun_wrapper", "../../scripts/mmml-charmm-mpirun.sh")))
+    raw = Path(str(cfg.get("mpirun_wrapper", "../../scripts/karml-charmm-mpirun.sh")))
     if raw.is_absolute():
         return raw
     return (workflow_root() / raw).resolve()
 
 
-def _resolve_mmml_cmd(md_argv: list[str]) -> list[str]:
+def _resolve_karml_cmd(md_argv: list[str]) -> list[str]:
     """Invoke md-system with the workflow's Python (editable repo checkout)."""
-    py = os.environ.get("MMML_PYTHON", sys.executable)
-    return [py, "-m", "mmml.cli.__main__", "md-system", *md_argv]
+    py = os.environ.get("KARML_PYTHON", sys.executable)
+    return [py, "-m", "karml.cli.__main__", "md-system", *md_argv]
 
 
 def _use_mpirun_wrapper(cfg: dict) -> bool:
@@ -87,18 +87,18 @@ def main() -> int:
     os.chdir(_repo_root())
 
     env = os.environ.copy()
-    env.setdefault("MMML_MPI_NP", str(cfg.get("MMML_MPI_NP", 1)))
+    env.setdefault("KARML_MPI_NP", str(cfg.get("KARML_MPI_NP", 1)))
     if _use_mpirun_wrapper(cfg):
         mpirun_wrapper = _resolve_mpirun_wrapper(cfg)
         if not mpirun_wrapper.is_file():
             raise SystemExit(f"MPI wrapper not found: {mpirun_wrapper}")
         # Outer wrapper already provides mpirun; suppress nested CLI re-exec.
-        env["MMML_NO_MPI_RERUN"] = "1"
+        env["KARML_NO_MPI_RERUN"] = "1"
         cmd = [str(mpirun_wrapper), "md-system", *md_argv]
     else:
         # Prefer direct Python like methane/solvent_burst: md-campaign re-execs
         # under OpenMPI when MPI-linked CHARMM is required.
-        cmd = _resolve_mmml_cmd(md_argv)
+        cmd = _resolve_karml_cmd(md_argv)
 
     tag = cell_run_tag(cell, cfg)
     print(f"Campaign jobs ({tag}): {campaign_job_order(cfg)}", flush=True)

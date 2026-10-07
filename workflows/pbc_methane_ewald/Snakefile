@@ -6,7 +6,7 @@ from pathlib import Path
 
 
 _REPO_ROOT = Path(workflow.basedir).resolve().parents[1]
-_CFG_PATH = os.environ.get("MMML_WORKFLOW_CONFIG") or str(Path(workflow.basedir) / "config.yaml")
+_CFG_PATH = os.environ.get("KARML_WORKFLOW_CONFIG") or str(Path(workflow.basedir) / "config.yaml")
 _SCRIPTS = Path(workflow.basedir) / "scripts"
 if str(_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS))
@@ -36,10 +36,10 @@ def _slurm_extra(wildcards) -> str:
     if mail:
         parts.append(f"--mail-user={mail} --mail-type=END,FAIL")
     nodelist = slurm_nodelist(_CFG)
-    suppress = os.environ.get("MMML_SLURM_NO_NODELIST", "").lower() in {"1", "true", "yes", "on"}
+    suppress = os.environ.get("KARML_SLURM_NO_NODELIST", "").lower() in {"1", "true", "yes", "on"}
     if nodelist and not suppress:
         parts.append(f"--nodelist={nodelist}")
-    extra = os.environ.get("MMML_SLURM_EXTRA", "").strip()
+    extra = os.environ.get("KARML_SLURM_EXTRA", "").strip()
     if extra:
         parts.append(extra)
     return " ".join(parts)
@@ -77,7 +77,7 @@ rule run_methane_ewald:
         """
         set -euo pipefail
         mkdir -p {params.out_dir}
-        export MMML_WORKFLOW_CONFIG="{params.config}"
+        export KARML_WORKFLOW_CONFIG="{params.config}"
         bash {params.workflow_dir}/scripts/job_shell.sh {wildcards.tag} \
           > {log.stdout} 2>&1
         test -s {output}

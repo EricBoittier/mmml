@@ -1,7 +1,7 @@
 {
-  "checkpoint": "/mmhome/boittier/home/mmml/artifacts/lj_scales/ckpts/params_hybrid_mm_lever2_on5_softwell_2026-08-02_22-15-54.json",
-  "sidecar": "/mmhome/boittier/home/mmml/artifacts/lj_scales/ckpts/hybrid_mm_lever2_on5_softwell-657cb7db-74a1-4623-84a5-f772b8fe7928/hybrid_mm.json",
-  "pdb": "/mmhome/boittier/home/mmml/artifacts/lj_scales/liquid_dense_L24/model.pdb",
+  "checkpoint": "/mmhome/boittier/home/karml/artifacts/lj_scales/ckpts/params_hybrid_mm_lever2_on5_softwell_2026-08-02_22-15-54.json",
+  "sidecar": "/mmhome/boittier/home/karml/artifacts/lj_scales/ckpts/hybrid_mm_lever2_on5_softwell-657cb7db-74a1-4623-84a5-f772b8fe7928/hybrid_mm.json",
+  "pdb": "/mmhome/boittier/home/karml/artifacts/lj_scales/liquid_dense_L24/model.pdb",
   "box_A": 24.0,
   "n_atoms": 600,
   "n_monomers": 120,

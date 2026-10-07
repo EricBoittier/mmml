@@ -1,6 +1,6 @@
 """Lower the two front-end configs into one :class:`RunConfig`.
 
-Both entry points feed the shared assembly layer (``mmml.md.assemble``) through a
+Both entry points feed the shared assembly layer (``karml.md.assemble``) through a
 single internal representation (constraint 7). This module holds the pure
 mapping functions:
 
@@ -19,9 +19,9 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Mapping
 
-from mmml.md.config import EnsembleSpec, RunConfig
-from mmml.md.system import SystemSpec
-from mmml.md.temperature import parse_temperature_schedule
+from karml.md.config import EnsembleSpec, RunConfig
+from karml.md.system import SystemSpec
+from karml.md.temperature import parse_temperature_schedule
 
 __all__ = [
     "terms_from_cg_config",
@@ -156,7 +156,7 @@ def ensemble_from_setup(setup: str) -> tuple[str, str]:
 
 
 def runconfig_from_md_system_args(args: Any) -> RunConfig:
-    """Lower an ``mmml md-system`` argparse ``Namespace`` (jaxmd backend)."""
+    """Lower an ``karml md-system`` argparse ``Namespace`` (jaxmd backend)."""
     space, ensemble_name = ensemble_from_setup(getattr(args, "setup"))
     dt_fs = float(getattr(args, "dt_fs", 1.0))
     ps = float(getattr(args, "ps", 0.0))

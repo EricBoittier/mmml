@@ -10,13 +10,13 @@ CHARMM Fortran (DOMDEC builds)
   - Coordinate tests: ``testcoord_domdec`` (``setup/image/upimag.F90``).
   - Nonbond and image routines gate on ``q_domdec`` and ``q_recip_node``.
 
-Per-rank atom map access (MMML, no upstream PyCHARMM changes)
+Per-rank atom map access (KARML, no upstream PyCHARMM changes)
   - ``domdec_atoms`` reads ``domdec_common`` scalars and allocatable arrays
     directly from the already-loaded ``libcharmm.so`` via ctypes:
 
     .. code-block:: python
 
-        from mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domdec_atoms import (
+        from karml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domdec_atoms import (
             is_domdec_active,
             get_ndir,
             get_local_atom_indices,
@@ -26,9 +26,9 @@ Per-rank atom map access (MMML, no upstream PyCHARMM changes)
   - Returns ``False`` / ``(1,1,1)`` / empty arrays when DOMDEC is compiled out
     (``KEY_DOMDEC=0``) or ``libcharmm.so`` is not loaded yet.
 
-MMML current behavior
+KARML current behavior
   - MLpot paths can call ``disable_charmm_domdec()`` once per process when
-    ``MMML_FORCE_DOMDEC_OFF=1`` is set.  The default is to skip ``domdec off``
+    ``KARML_FORCE_DOMDEC_OFF=1`` is set.  The default is to skip ``domdec off``
     because calling it on inactive DOMDEC builds can corrupt OpenMPI pools and
     segfault in ``send_coord_to_recip`` / ``PMPI_Free_mem``.
   - ``charmm_mpi`` handles OpenMPI bootstrap only; no ML force gather/scatter.
@@ -66,7 +66,7 @@ class DomdecApiSurvey:
     pycharmm_domdec_script: bool
     pycharmm_local_atom_api: bool
     pycharmm_ghost_atom_api: bool
-    mmml_disable_domdec_for_mlpot: bool
+    karml_disable_domdec_for_mlpot: bool
     recommended_phase2_grid: str
     halo_width_formula: str
     open_questions: Sequence[str]
@@ -85,7 +85,7 @@ def survey_domdec_api() -> DomdecApiSurvey:
         pycharmm_domdec_script=True,
         pycharmm_local_atom_api=True,   # implemented in domdec_atoms.py
         pycharmm_ghost_atom_api=True,   # implemented in domdec_atoms.py
-        mmml_disable_domdec_for_mlpot=True,
+        karml_disable_domdec_for_mlpot=True,
         recommended_phase2_grid=(
             "DomdecAlignedGrid (Phase 3): reads NDIR from domdec_common, "
             "falls back to SpatialDomainGrid when DOMDEC inactive"

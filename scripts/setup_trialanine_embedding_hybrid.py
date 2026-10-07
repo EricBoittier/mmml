@@ -3,7 +3,7 @@
 
 Example (CHARMM env required for build/hybrid steps)::
 
-    ./scripts/mmml-charmm-mpirun.sh uv run python scripts/setup_trialanine_embedding_hybrid.py \\
+    ./scripts/karml-charmm-mpirun.sh uv run python scripts/setup_trialanine_embedding_hybrid.py \\
       --epoch-dir artifacts/md_embedding/aaa_docs/checkpoints/aaa_long-.../epoch-49 \\
       -o artifacts/md_embedding/aaa_docs/hybrid
 
@@ -74,7 +74,7 @@ def main(argv: list[str] | None = None) -> int:
     epoch_dir = Path(args.epoch_dir)
     json_path = Path(args.json) if args.json is not None else out / "aaa_long_epoch49_params.json"
 
-    from mmml.interfaces.pycharmmInterface.mlpot.embedding_hybrid import (
+    from karml.interfaces.pycharmmInterface.mlpot.embedding_hybrid import (
         EmbeddingValidationResult,
         export_embedding_checkpoint,
         prepare_trialanine_hybrid_session,

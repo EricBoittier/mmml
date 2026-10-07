@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Tuple, Union, Any
 import matplotlib.pyplot as plt
 
-from mmml.interfaces.pycharmmInterface.calculator_utils import safe_norm
+from karml.interfaces.pycharmmInterface.calculator_utils import safe_norm
 
 
 def extract_lj_parameters_from_calculator(
@@ -51,8 +51,8 @@ def extract_lj_parameters_from_calculator(
             iac_to_param_idx: Mapping from IAC codes to parameter array indices
     """
     import pycharmm.param as param
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import psf, CGENFF_RTF, CGENFF_PRM, read, settings, reset_block
-    from mmml.interfaces.pycharmmInterface.mmml_calculator import dimer_permutations
+    from karml.interfaces.pycharmmInterface.import_pycharmm import psf, CGENFF_RTF, CGENFF_PRM, read, settings, reset_block
+    from karml.interfaces.pycharmmInterface.karml_calculator import dimer_permutations
 
     # Normalize ATOMS_PER_MONOMER to atoms_per_monomer_list
     if isinstance(ATOMS_PER_MONOMER, (list, tuple, np.ndarray)):
@@ -451,7 +451,7 @@ def create_hybrid_fitting_factory(
                 skip_ml_dimers = args.skip_ml_dimers if args and hasattr(args, 'skip_ml_dimers') else False
                 
                 # Prepare batches manually (matching calculator's format)
-                from mmml.interfaces.pycharmmInterface.mmml_calculator import (
+                from karml.interfaces.pycharmmInterface.karml_calculator import (
                     prepare_batches_md,
                     dimer_permutations,
                     indices_of_monomer,
@@ -691,7 +691,7 @@ def create_hybrid_fitting_factory(
         # Apply cutoff-dependent switching if optimizing cutoffs
         if optimize_mode == "cutoff_only":
             # Import switching functions
-            from mmml.interfaces.pycharmmInterface.mmml_calculator import ml_switch_simple, mm_switch_simple
+            from karml.interfaces.pycharmmInterface.karml_calculator import ml_switch_simple, mm_switch_simple
             
             # Ensure cutoff parameters are valid (positive, finite)
             ml_cutoff_val = jnp.maximum(ml_cutoff_val, 0.1)  # Minimum 0.1 Å
@@ -2339,7 +2339,7 @@ def fit_hybrid_parameters_iteratively(
             - "lj_loss_history": List of LJ optimization loss histories
             - "cutoff_loss_history": List of cutoff optimization loss histories
     """
-    from mmml.interfaces.pycharmmInterface.mmml_calculator import CutoffParameters
+    from karml.interfaces.pycharmmInterface.karml_calculator import CutoffParameters
     
     # Initialize parameters
     current_ep_scale = initial_ep_scale

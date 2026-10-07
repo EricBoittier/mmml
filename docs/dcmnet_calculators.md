@@ -1,9 +1,9 @@
 # DCMNet and Joint PhysNet+DCMNet Calculators
 
-This note explains the two ASE calculator paths used for DCM-style inference in MMML:
+This note explains the two ASE calculator paths used for DCM-style inference in KARML:
 
-- `DCMNetCalculator` in `mmml/models/dcmnet/dcmnet_ase.py`
-- `SimpleInferenceCalculator` in `mmml/interfaces/calculators/simple_inference.py` (for joint PhysNet+DCMNet checkpoints)
+- `DCMNetCalculator` in `karml/models/dcmnet/dcmnet_ase.py`
+- `SimpleInferenceCalculator` in `karml/interfaces/calculators/simple_inference.py` (for joint PhysNet+DCMNet checkpoints)
 
 ## 1) `DCMNetCalculator` (standalone DCMNet)
 

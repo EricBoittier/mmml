@@ -4,11 +4,11 @@ Pure PyCHARMM runner: heating and equilibration only (no MM/ML).
 
 Runs CHARMM setup, minimization, heating, and equilibration. Does not run
 ASE MD, JAX-MD, or any ML calculator. Use this for classical CHARMM-only
-simulations or to prepare structures before running mmml run (MM/ML).
+simulations or to prepare structures before running karml run (MM/ML).
 
 Usage:
-    python -m mmml.cli.run.run_pycharmm --pdbfile pdb/init-packmol.pdb --cell 40
-    mmml run-pycharmm --pdbfile pdb/init-packmol.pdb --cell 40
+    python -m karml.cli.run.run_pycharmm --pdbfile pdb/init-packmol.pdb --cell 40
+    karml run-pycharmm --pdbfile pdb/init-packmol.pdb --cell 40
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ import shutil
 import sys
 from pathlib import Path
 
-from mmml.cli.run.pycharmm_sampling_args import add_two_residue_sampling_args
+from karml.cli.run.pycharmm_sampling_args import add_two_residue_sampling_args
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -99,7 +99,7 @@ def _make_braille_show_frame(live, args):
     """Return show_frame callback for braille viewer, or None if disabled."""
     if not getattr(args, "view_braille", False):
         return None
-    from mmml.utils.visualize.braille_molecule import render_atoms_braille
+    from karml.utils.visualize.braille_molecule import render_atoms_braille
     from rich.panel import Panel
     from rich.text import Text
 
@@ -114,9 +114,9 @@ def _make_braille_show_frame(live, args):
 
 def run_pycharmm(args: argparse.Namespace):
     """Run pure PyCHARMM heating and equilibration."""
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import coor
-    from mmml.interfaces.pycharmmInterface.setupBox import setup_box_generic
-    from mmml.cli.run.pycharmm_runner import (
+    from karml.interfaces.pycharmmInterface.import_pycharmm import coor
+    from karml.interfaces.pycharmmInterface.setupBox import setup_box_generic
+    from karml.cli.run.pycharmm_runner import (
         run_dyna,
         run_equilibration,
         run_heat,
@@ -163,13 +163,13 @@ def main() -> int:
     parsed_argv = sys.argv[1:]
     args = build_parser().parse_args(parsed_argv)
 
-    from mmml.interfaces.pycharmmInterface.charmm_mpi import (
-        maybe_rerun_mmml_under_mpirun,
+    from karml.interfaces.pycharmmInterface.charmm_mpi import (
+        maybe_rerun_karml_under_mpirun,
         prepare_serial_charmm_mpi_env,
     )
 
     prepare_serial_charmm_mpi_env()
-    rerun_code = maybe_rerun_mmml_under_mpirun(parsed_argv, subcommand="run-pycharmm")
+    rerun_code = maybe_rerun_karml_under_mpirun(parsed_argv, subcommand="run-pycharmm")
     if rerun_code is not None:
         return int(rerun_code)
 

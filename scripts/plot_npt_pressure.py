@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Plot NPT instantaneous pressure parts from a jaxmd-unified trajectory.npz.
 
-Expects keys written by ``mmml.md.drivers.jaxmd.JaxmdDriver``:
+Expects keys written by ``karml.md.drivers.jaxmd.JaxmdDriver``:
 ``pressures_bar``, optionally ``pressures_kin_bar`` / ``pressures_vir_bar``,
 ``target_pressure_bar``, ``volumes_A3``.
 
@@ -21,7 +21,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 
-from mmml.utils.plotting.styles import apply_plot_style, comparison_colors, legend_outside
+from karml.utils.plotting.styles import apply_plot_style, comparison_colors, legend_outside
 
 
 def _times_ps(z, n: int) -> np.ndarray:

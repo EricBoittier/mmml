@@ -29,8 +29,8 @@ def _npz(tmp_path, *, with_cgenff=True, n=4, natoms=6):
 
 
 def test_hybrid_mm_defaults_off_and_flags_match_the_md_side():
-    from mmml.cli.make.make_training import parse_args
-    from mmml.interfaces.pycharmmInterface.cutoffs import (
+    from karml.cli.make.make_training import parse_args
+    from karml.interfaces.pycharmmInterface.cutoffs import (
         DEFAULT_ML_SWITCH_WIDTH,
         DEFAULT_MM_SWITCH_ON,
         DEFAULT_MM_SWITCH_WIDTH,
@@ -50,7 +50,7 @@ def test_hybrid_mm_defaults_off_and_flags_match_the_md_side():
 
 
 def test_config_builder_returns_none_when_off(tmp_path):
-    from mmml.cli.make.make_training import _build_hybrid_mm_config, parse_args
+    from karml.cli.make.make_training import _build_hybrid_mm_config, parse_args
 
     p = _npz(tmp_path)
     args = parse_args(["--data", str(p)])
@@ -58,8 +58,8 @@ def test_config_builder_returns_none_when_off(tmp_path):
 
 
 def test_config_builder_loads_master_tables_and_switching(tmp_path):
-    from mmml.cli.make.make_training import _build_hybrid_mm_config, parse_args
-    from mmml.interfaces.pycharmmInterface.cutoffs import (
+    from karml.cli.make.make_training import _build_hybrid_mm_config, parse_args
+    from karml.interfaces.pycharmmInterface.cutoffs import (
         DEFAULT_ML_SWITCH_WIDTH,
         DEFAULT_MM_SWITCH_ON,
         DEFAULT_MM_SWITCH_WIDTH,
@@ -79,7 +79,7 @@ def test_config_builder_loads_master_tables_and_switching(tmp_path):
 
 
 def test_no_complementary_handoff_flag_is_honoured(tmp_path):
-    from mmml.cli.make.make_training import _build_hybrid_mm_config, parse_args
+    from karml.cli.make.make_training import _build_hybrid_mm_config, parse_args
 
     p = _npz(tmp_path)
     args = parse_args(["--data", str(p), "--hybrid-mm", "--no-complementary-handoff", "--quiet"])
@@ -88,7 +88,7 @@ def test_no_complementary_handoff_flag_is_honoured(tmp_path):
 
 def test_missing_cgenff_fields_fail_loudly(tmp_path):
     """A plain dataset + --hybrid-mm must error, not silently train ML-only."""
-    from mmml.cli.make.make_training import _build_hybrid_mm_config, parse_args
+    from karml.cli.make.make_training import _build_hybrid_mm_config, parse_args
 
     p = _npz(tmp_path, with_cgenff=False)
     args = parse_args(["--data", str(p), "--hybrid-mm", "--quiet"])
@@ -99,8 +99,8 @@ def test_missing_cgenff_fields_fail_loudly(tmp_path):
 def test_train_model_and_train_step_accept_hybrid_mm():
     import inspect
 
-    from mmml.models.physnetjax.physnetjax.training.training import train_model
-    from mmml.models.physnetjax.physnetjax.training.trainstep import _forward
+    from karml.models.physnetjax.physnetjax.training.training import train_model
+    from karml.models.physnetjax.physnetjax.training.trainstep import _forward
 
     assert "hybrid_mm" in inspect.signature(train_model).parameters
     assert "hybrid_mm" in inspect.signature(_forward).parameters
@@ -108,14 +108,14 @@ def test_train_model_and_train_step_accept_hybrid_mm():
 
 def test_batch_keys_are_the_per_atom_fields_only():
     """Master tables must NOT be batch keys: they are (n_types,), not per-sample."""
-    from mmml.models.hybrid_energy import HYBRID_MM_BATCH_KEYS
+    from karml.models.hybrid_energy import HYBRID_MM_BATCH_KEYS
 
     assert set(HYBRID_MM_BATCH_KEYS) == {"cgenff_type_idx", "mol_id", "cgenff_charge"}
     assert not any("master" in k for k in HYBRID_MM_BATCH_KEYS)
 
 
 def test_charge_correction_flag_defaults_off_and_reaches_the_config(tmp_path):
-    from mmml.cli.make.make_training import _build_hybrid_mm_config, parse_args
+    from karml.cli.make.make_training import _build_hybrid_mm_config, parse_args
 
     p = _npz(tmp_path)
     args = parse_args(["--data", str(p), "--hybrid-mm", "--quiet"])
@@ -139,7 +139,7 @@ def test_charge_correction_flag_defaults_off_and_reaches_the_config(tmp_path):
 
 def test_charge_correction_without_a_charge_head_errors(tmp_path):
     """--mm-charge-correction / latent without --charges must fail loudly."""
-    from mmml.cli.make.make_training import _build_hybrid_mm_config, parse_args
+    from karml.cli.make.make_training import _build_hybrid_mm_config, parse_args
 
     p = _npz(tmp_path)
     args = parse_args(["--data", str(p), "--hybrid-mm", "--mm-charge-correction", "--quiet"])

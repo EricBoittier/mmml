@@ -59,21 +59,21 @@ def main() -> None:
     jax.config.update("jax_enable_x64", True)
     import jax.numpy as jnp
 
-    from mmml.cli.run.md_system_unified import build_packmol_system_with_ffparams
-    from mmml.interfaces.calculators.simple_inference import create_calculator_from_checkpoint
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import ensure_pycharmm_loaded
-    from mmml.md.assemble import _auto_neighbor_fn, build_hybrid_energy
-    from mmml.md.config import EnsembleSpec, RunConfig
-    from mmml.md.drivers import JaxmdDriver
-    from mmml.md.energy.registry import EnergyContext
-    from mmml.md.system import SystemSpec
+    from karml.cli.run.md_system_unified import build_packmol_system_with_ffparams
+    from karml.interfaces.calculators.simple_inference import create_calculator_from_checkpoint
+    from karml.interfaces.pycharmmInterface.import_pycharmm import ensure_pycharmm_loaded
+    from karml.md.assemble import _auto_neighbor_fn, build_hybrid_energy
+    from karml.md.config import EnsembleSpec, RunConfig
+    from karml.md.drivers import JaxmdDriver
+    from karml.md.energy.registry import EnergyContext
+    from karml.md.system import SystemSpec
 
     if not ensure_pycharmm_loaded():
         raise RuntimeError("PyCHARMM not available (CHARMM_LIB_DIR / libcharmm.so)")
 
     calc = create_calculator_from_checkpoint(str(checkpoint_path))
-    model = getattr(calc, "model", getattr(calc, "_mmml_physnet_model", None))
-    params = getattr(calc, "params", getattr(calc, "_mmml_physnet_params", None))
+    model = getattr(calc, "model", getattr(calc, "_karml_physnet_model", None))
+    params = getattr(calc, "params", getattr(calc, "_karml_physnet_params", None))
     ctx = EnergyContext(model=model, params=params)
 
     spec = SystemSpec(
@@ -130,7 +130,7 @@ def main() -> None:
         "mean_rel_error": float(rel_err.mean()),
         "max_force_component_ev_per_A": float(np.abs(analytic_force).max()),
     }
-    from mmml.utils.rich_report import print_colored_json
+    from karml.utils.rich_report import print_colored_json
 
     print("Finite-difference force check:")
     print_colored_json(fd_report)

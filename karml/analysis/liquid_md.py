@@ -378,7 +378,7 @@ def load_h5_for_analysis(
     stride: int = 1,
     max_frames: int | None = None,
 ) -> dict[str, Any]:
-    """Load positions / energies / temperature from an mmml jaxmd HDF5."""
+    """Load positions / energies / temperature from an karml jaxmd HDF5."""
     import h5py
 
     stride = max(1, int(stride))

@@ -1,4 +1,4 @@
-# `mmml doctor`
+# `karml doctor`
 
 Is this machine ready? (JAX, CHARMM, Packmol).
 
@@ -6,16 +6,16 @@ Is this machine ready? (JAX, CHARMM, Packmol).
 ## Usage
 
 ```bash
-mmml doctor --help
+karml doctor --help
 ```
 
 ## Options
 
 ```text
-usage: mmml doctor [-h] [--json] [--require-gpu] [--mpi]
+usage: karml doctor [-h] [--json] [--require-gpu] [--mpi]
                    [--checkpoint CHECKPOINT] [--strict]
 
-Check that this machine can run MMML (Python, JAX, CHARMM, Packmol).
+Check that this machine can run KARML (Python, JAX, CHARMM, Packmol).
 
 Input & configuration:
   --checkpoint CHECKPOINT

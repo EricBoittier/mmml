@@ -1,12 +1,12 @@
 # DCM:3 PyCHARMM MLpot NVE sweep: cutoff presets × initial COM geometries.
 # Goal: rank ML/MM switch widths by NVE energy smoothness (low drift / low step noise).
 #
-# Prerequisites: export MMML_CKPT before snakemake (see README).
+# Prerequisites: export KARML_CKPT before snakemake (see README).
 
 composition: DCM:3
-checkpoint: "${MMML_CKPT}"
+checkpoint: "${KARML_CKPT}"
 output_root: results
-mpirun_wrapper: ../../scripts/mmml-charmm-mpirun.sh
+mpirun_wrapper: ../../scripts/karml-charmm-mpirun.sh
 
 # Round-4 validation leg (5 ps @ 0.25 fs → 20000 steps).
 ps_nve: 5.0

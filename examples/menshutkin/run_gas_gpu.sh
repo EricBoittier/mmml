@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # Launch the gas-phase PMF on the GPU host.
 #
-#   ssh gpu09 /mmhome/andreychev/mmml/mmml/examples/menshutkin/run_gas_gpu.sh
+#   ssh gpu09 /mmhome/andreychev/karml/karml/examples/menshutkin/run_gas_gpu.sh
 #
 # Writes a log next to the artifacts so progress can be tailed from anywhere.
 set -euo pipefail
 
-ROOT=/mmhome/andreychev/mmml/mmml
+ROOT=/mmhome/andreychev/karml/karml
 cd "${ROOT}"
 # shellcheck source=/dev/null
 source "${ROOT}/examples/menshutkin/_env.sh"

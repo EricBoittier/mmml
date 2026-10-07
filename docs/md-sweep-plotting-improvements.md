@@ -17,7 +17,7 @@ and didn't use the existing structural-analysis module.
 noise in an otherwise-flat trace, or small while the trace trends steadily
 between two coincidentally-close endpoints.
 
-**Fix**: [`mmml/md/results.py`](https://github.com/EricBoittier/mmml/blob/main/mmml/md/results.py) gains
+**Fix**: [`karml/md/results.py`](https://github.com/EricBoittier/karml/blob/main/karml/md/results.py) gains
 `energy_drift_metrics(energies)`, returning:
 
 - `energy_fluctuation_std_ev` — std over the whole trace (noise floor).
@@ -32,7 +32,7 @@ traces make these numbers much less statistically meaningful than
 `mixed_calculator_sweep`'s 100-sample ones), and both `scripts/plot_results.py`
 (fitted trend line overlaid on every energy trace; summary bars now show
 fluctuation/tendency instead of the bare delta). Regression-tested in
-[`tests/unit/test_md_results.py`](https://github.com/EricBoittier/mmml/blob/main/tests/unit/test_md_results.py).
+[`tests/unit/test_md_results.py`](https://github.com/EricBoittier/karml/blob/main/tests/unit/test_md_results.py).
 
 Old `summary.csv` rows from before this change don't have the new columns;
 `plot_results.py` falls back to recomputing the metrics directly from
@@ -41,15 +41,15 @@ don't need to be re-run to get correct plots.
 
 ## 2. Structural analysis: reused the existing module, didn't reinvent it
 
-[`mmml/utils/plotting/trajectory_structure.py`](https://github.com/EricBoittier/mmml/blob/main/mmml/utils/plotting/trajectory_structure.py)
+[`karml/utils/plotting/trajectory_structure.py`](https://github.com/EricBoittier/karml/blob/main/karml/utils/plotting/trajectory_structure.py)
 (added 2026-07-11) already computes bond-length/angle/dihedral distributions
 and periodic element-pair RDFs from `Sequence[ase.Atoms]`. New:
 
 - **`JaxmdDriver`/`RigidBodySampler` now save `Z` and `box`** alongside
-  `positions`/`energies` in `trajectory.npz` (`mmml/md/drivers/jaxmd.py`,
-  `mmml/md/samplers/rigid.py`) — needed to reconstruct `ase.Atoms` per frame
+  `positions`/`energies` in `trajectory.npz` (`karml/md/drivers/jaxmd.py`,
+  `karml/md/samplers/rigid.py`) — needed to reconstruct `ase.Atoms` per frame
   without re-running any dynamics (topology is static per run).
-- **New script**: [`workflows/mixed_calculator_sweep/scripts/plot_structure.py`](https://github.com/EricBoittier/mmml/blob/main/workflows/mixed_calculator_sweep/scripts/plot_structure.py) —
+- **New script**: [`workflows/mixed_calculator_sweep/scripts/plot_structure.py`](https://github.com/EricBoittier/karml/blob/main/workflows/mixed_calculator_sweep/scripts/plot_structure.py) —
   loads one setting's `trajectory.npz`, reconstructs `Atoms` per frame
   (rebuilding topology on the fly for older `trajectory.npz` files that
   predate the `Z`/`box` fix — a fast, dynamics-free system rebuild, not a
@@ -73,7 +73,7 @@ bond/angle/dihedral distribution.
 lists and no font/dpi conventions, not matching how the rest of the repo
 plots.
 
-**Fix**: [`mmml/utils/plotting/styles.py`](https://github.com/EricBoittier/mmml/blob/main/mmml/utils/plotting/styles.py) —
+**Fix**: [`karml/utils/plotting/styles.py`](https://github.com/EricBoittier/karml/blob/main/karml/utils/plotting/styles.py) —
 already the repo's style module (`PlotStyle` presets: `nature`, `google`,
 `xmgrace`, `tron`, `mpl_classic`) — is now used via `apply_plot_style("nature")`
 + `comparison_colors(style, n)` in both workflows' `plot_results.py`. New doc,
@@ -90,7 +90,7 @@ already the repo's style module (`PlotStyle` presets: `nature`, `google`,
 ## 4. Bonus finding: the recurring "packmol not found" failures had a real, fixable cause
 
 Not part of the original ask, but found while re-syncing the cluster during
-this pass: `mmml/generate/packmol/packmol` (the platform-specific compiled
+this pass: `karml/generate/packmol/packmol` (the platform-specific compiled
 binary) was **tracked in git** despite already being listed in `.gitignore`
 — it had been committed before that rule was added, so the gitignore entry
 never took effect. Every `git pull`/`merge` on pc-studix was silently

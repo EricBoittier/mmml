@@ -12,7 +12,7 @@ from typing import Any, Mapping
 
 import numpy as np
 
-from mmml.acquisition.ids import composition_key
+from karml.acquisition.ids import composition_key
 
 
 def _real_mask(Z: np.ndarray, N: np.ndarray | None) -> np.ndarray:
@@ -54,7 +54,7 @@ def energy_errors(
     }
     if subtract_atom_refs:
         try:
-            from mmml.data.units import subtract_atom_refs as sub
+            from karml.data.units import subtract_atom_refs as sub
 
             ep_s = sub(ep, z, energy_unit=energy_unit)
             er_s = sub(er, z, energy_unit=energy_unit)

@@ -14,7 +14,7 @@ from PIL import Image
 from rdkit import Chem
 from rdkit.Chem import Draw, rdDepictor
 
-from mmml.data.cgenff_dataset import load_reference
+from karml.data.cgenff_dataset import load_reference
 
 
 def read_counts(path: Path, top: int) -> list[tuple[str, int]]:

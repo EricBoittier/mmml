@@ -19,11 +19,11 @@ elif [[ "${SOLVENT}" == "tip3" ]]; then
 elif [[ "${SOLVENT}" == "acn" ]]; then
   CFG="config.yaml"
 else
-  echo "FAIL: SOLVENT=${SOLVENT} (use tip3|acn, or set MMML_WORKFLOW_CONFIG=...)" >&2
+  echo "FAIL: SOLVENT=${SOLVENT} (use tip3|acn, or set KARML_WORKFLOW_CONFIG=...)" >&2
   exit 1
 fi
 
-export MMML_WORKFLOW_CONFIG="${MMML_WORKFLOW_CONFIG:-${CFG}}"
+export KARML_WORKFLOW_CONFIG="${KARML_WORKFLOW_CONFIG:-${CFG}}"
 cd "${WF}"
 
 EXTRA=()
@@ -35,5 +35,5 @@ if [[ "${LOCAL:-0}" == "1" || "${DRY_RUN:-0}" == "1" ]]; then
   exec bash scripts/snakemake_local.sh "${JOBS}" "${EXTRA[@]}"
 fi
 
-echo "=== snakemake GPU: config=${MMML_WORKFLOW_CONFIG} -j${JOBS} ==="
+echo "=== snakemake GPU: config=${KARML_WORKFLOW_CONFIG} -j${JOBS} ==="
 exec bash scripts/snakemake_slurm.sh "${JOBS}" "${EXTRA[@]}"

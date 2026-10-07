@@ -1,4 +1,4 @@
-"""Unit tests for mmml health-check."""
+"""Unit tests for karml health-check."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from unittest import mock
 
 import pytest
 
-from mmml.cli.run.health_check import (
+from karml.cli.run.health_check import (
     check_checkpoint,
     check_core,
     check_gpu_quantum,
@@ -75,7 +75,7 @@ def test_render_health_report():
 
 
 def test_checkpoint_hint_for_hf_portable(tmp_path):
-    from mmml.cli.run.health_check import _checkpoint_hint
+    from karml.cli.run.health_check import _checkpoint_hint
 
     p = tmp_path / "hf_json" / "neutral_best_forces_portable.json"
     p.parent.mkdir()
@@ -99,46 +99,46 @@ def test_jax_cpu_summary_mentions_require_gpu():
 
 
 def test_main_json_exit_code(monkeypatch):
-    from mmml.cli.run import health_check
+    from karml.cli.run import health_check
 
     with mock.patch(
-        "mmml.cli.run.health_check.run_health_check",
+        "karml.cli.run.health_check.run_health_check",
         return_value=run_health_check(only=["core"]),
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.charmm_mpi.prepare_serial_charmm_mpi_env",
+        "karml.interfaces.pycharmmInterface.charmm_mpi.prepare_serial_charmm_mpi_env",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.charmm_mpi.maybe_rerun_mmml_under_mpirun",
+        "karml.interfaces.pycharmmInterface.charmm_mpi.maybe_rerun_karml_under_mpirun",
         return_value=None,
     ):
         assert health_check.main(["--json", "--only", "core"]) == 0
 
 
 def test_main_reruns_under_mpirun(monkeypatch, tmp_path):
-    from mmml.cli.run import health_check
-    from mmml.interfaces.pycharmmInterface import charmm_mpi
+    from karml.cli.run import health_check
+    from karml.interfaces.pycharmmInterface import charmm_mpi
 
     mpirun = tmp_path / "mpirun"
     mpirun.write_text("#!/bin/sh\nexit 0\n")
     mpirun.chmod(0o755)
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.charmm_mpi._under_mpirun",
+        "karml.interfaces.pycharmmInterface.charmm_mpi._under_mpirun",
         return_value=False,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.charmm_mpi._needs_mpi_setup",
+        "karml.interfaces.pycharmmInterface.charmm_mpi._needs_mpi_setup",
         return_value=True,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.charmm_mpi.charmm_lib_links_mpi",
+        "karml.interfaces.pycharmmInterface.charmm_mpi.charmm_lib_links_mpi",
         return_value=True,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.charmm_mpi.charmm_mpirun_path",
+        "karml.interfaces.pycharmmInterface.charmm_mpi.charmm_mpirun_path",
         return_value=mpirun.resolve(),
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.charmm_mpi.prepare_serial_charmm_mpi_env",
+        "karml.interfaces.pycharmmInterface.charmm_mpi.prepare_serial_charmm_mpi_env",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.charmm_mpi.subprocess.run",
+        "karml.interfaces.pycharmmInterface.charmm_mpi.subprocess.run",
         return_value=mock.Mock(returncode=0),
     ) as mock_run:
-        code = charmm_mpi.maybe_rerun_mmml_under_mpirun(
+        code = charmm_mpi.maybe_rerun_karml_under_mpirun(
             ["--only", "core"],
             subcommand="health-check",
         )

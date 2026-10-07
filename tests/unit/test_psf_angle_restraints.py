@@ -16,7 +16,7 @@ PDB = ROOT / "artifacts/lj_scales/prod_20ps_dual/nvt20_gpu0/pbc_nvt_jaxmd_minimi
 def test_psf_angle_restraint_opposes_angle_distortion():
     from ase.io import read
 
-    from mmml.md.restraints.psf_angles import build_psf_angle_restraint_fns
+    from karml.md.restraints.psf_angles import build_psf_angle_restraint_fns
 
     atoms = read(str(PDB))
     pos = np.asarray(atoms.get_positions(), dtype=np.float64)

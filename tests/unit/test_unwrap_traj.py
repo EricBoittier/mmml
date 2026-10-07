@@ -13,7 +13,7 @@ from ase import Atoms
 from ase.io import read
 from ase.io.trajectory import Trajectory
 
-from mmml.cli.misc import unwrap_traj
+from karml.cli.misc import unwrap_traj
 
 
 def test_unwrap_positions_crossing_boundary() -> None:
@@ -58,7 +58,7 @@ def test_cli_unwraps_ase_traj_to_fast_extxyz(tmp_path: Path, monkeypatch: pytest
     monkeypatch.setattr(
         sys,
         "argv",
-        ["mmml unwrap-traj", str(wrapped), "-o", str(output), "--format", "extxyz", "--fast", "--quiet"],
+        ["karml unwrap-traj", str(wrapped), "-o", str(output), "--format", "extxyz", "--fast", "--quiet"],
     )
 
     assert unwrap_traj.main() == 0
@@ -76,7 +76,7 @@ def test_cli_writes_cell_metadata_to_xyz_comment(tmp_path: Path, monkeypatch: py
     monkeypatch.setattr(
         sys,
         "argv",
-        ["mmml unwrap-traj", str(wrapped), "-o", str(output), "--format", "xyz", "--quiet"],
+        ["karml unwrap-traj", str(wrapped), "-o", str(output), "--format", "xyz", "--quiet"],
     )
 
     assert unwrap_traj.main() == 0
@@ -121,7 +121,7 @@ def test_cli_infers_variable_size_molecules_for_ase_traj(tmp_path: Path, monkeyp
     monkeypatch.setattr(
         sys,
         "argv",
-        ["mmml unwrap-traj", str(wrapped), "-o", str(output), "--format", "xyz", "--fast", "--quiet"],
+        ["karml unwrap-traj", str(wrapped), "-o", str(output), "--format", "xyz", "--fast", "--quiet"],
     )
 
     assert unwrap_traj.main() == 0
@@ -142,7 +142,7 @@ def test_cli_unwraps_h5_coordinates_to_fast_xyz(tmp_path: Path, monkeypatch: pyt
     monkeypatch.setattr(
         sys,
         "argv",
-        ["mmml unwrap-traj", str(h5_path), "-o", str(output), "--format", "xyz", "--fast", "--quiet"],
+        ["karml unwrap-traj", str(h5_path), "-o", str(output), "--format", "xyz", "--fast", "--quiet"],
     )
 
     assert unwrap_traj.main() == 0
@@ -165,7 +165,7 @@ def test_cli_unwraps_coordinate_only_h5_with_reference(tmp_path: Path, monkeypat
         sys,
         "argv",
         [
-            "mmml unwrap-traj",
+            "karml unwrap-traj",
             str(h5_path),
             "-o",
             str(output),
@@ -213,7 +213,7 @@ def test_cli_dcd_and_psf(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Non
         sys,
         "argv",
         [
-            "mmml unwrap-traj",
+            "karml unwrap-traj",
             str(h5_path),
             "-o",
             str(dcd_output),
@@ -233,7 +233,7 @@ def test_cli_dcd_and_psf(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Non
         sys,
         "argv",
         [
-            "mmml unwrap-traj",
+            "karml unwrap-traj",
             str(dcd_output),
             "-o",
             str(xyz_output),

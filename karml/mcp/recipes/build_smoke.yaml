@@ -40,14 +40,14 @@ stages:
       - configs/hybrid_pycharmm.yaml
 
   make_res:
-    description: CGENFF residue via mmml make-res (PDB/PSF in run residue/)
+    description: CGENFF residue via karml make-res (PDB/PSF in run residue/)
     commands:
       - make-res
     outputs:
       - residue/
 
   box_build:
-    description: Periodic liquid box via mmml liquid-box (MM-only certification)
+    description: Periodic liquid box via karml liquid-box (MM-only certification)
     commands:
       - liquid-box
     outputs:

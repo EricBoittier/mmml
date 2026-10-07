@@ -8,7 +8,7 @@ import sys
 
 def main() -> int:
     try:
-        from mmml.cli.misc.build_crystal import main as run
+        from karml.cli.misc.build_crystal import main as run
     except ModuleNotFoundError as exc:
         if "pyxtal" in str(exc).lower():
             print(

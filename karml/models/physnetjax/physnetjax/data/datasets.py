@@ -6,7 +6,7 @@ from tqdm import tqdm
 from typing import Dict, List, Tuple, Union
 from pathlib import Path
 
-from mmml.data.units import subtract_atom_refs
+from karml.data.units import subtract_atom_refs
 from physnetjax.data.full_padding import pad_atomic_numbers, pad_coordinates, pad_forces
 from physnetjax.data.read_npz import process_npz_file
 from physnetjax.utils.pretty_printer import print_dict_as_table

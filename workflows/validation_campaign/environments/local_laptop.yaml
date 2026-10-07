@@ -6,6 +6,6 @@ cpus: 4
 gpus: 0
 environment:
   JAX_ENABLE_X64: "1"
-  MMML_ML_DTYPE: float64
+  KARML_ML_DTYPE: float64
   OMP_NUM_THREADS: "4"
 

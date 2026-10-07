@@ -15,7 +15,7 @@ import numpy as np
 from ase import Atoms
 from ase.io import read
 
-from mmml.utils.plotting.fes import calculate_fes, evaluate_coordinates, plot_fes
+from karml.utils.plotting.fes import calculate_fes, evaluate_coordinates, plot_fes
 
 
 def _indices(text: str) -> list[int]:

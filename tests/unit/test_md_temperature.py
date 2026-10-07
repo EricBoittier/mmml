@@ -1,6 +1,6 @@
 import pytest
 
-from mmml.md.temperature import parse_temperature_schedule
+from karml.md.temperature import parse_temperature_schedule
 
 
 def test_constant_and_linear_temperature_schedules():

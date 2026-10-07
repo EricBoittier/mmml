@@ -21,8 +21,8 @@ from _common import (
     print_header,
     resolve_checkpoint,
 )
-from mmml.interfaces.pycharmmInterface.mmml_calculator import ev2kcalmol
-from mmml.models.physnetjax.physnetjax.calc.helper_mlp import get_ase_calc, get_pyc
+from karml.interfaces.pycharmmInterface.karml_calculator import ev2kcalmol
+from karml.models.physnetjax.physnetjax.calc.helper_mlp import get_ase_calc, get_pyc
 
 
 def _run_calculate_charmm(pyc, positions: np.ndarray, z: np.ndarray) -> tuple[float, np.ndarray]:

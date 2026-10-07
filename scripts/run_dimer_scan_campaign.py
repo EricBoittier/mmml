@@ -24,13 +24,13 @@ import pandas as pd
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(_REPO_ROOT))
 
-from mmml.analysis.dimer_molecules import (
+from karml.analysis.dimer_molecules import (
     MOLECULES,
     ORIENTED_MONOMERS,
     PAIR_SCAN_CONFIG,
     make_oriented_scan_geometries,
 )
-from mmml.analysis.dimer_scans import (
+from karml.analysis.dimer_scans import (
     evaluate_scan,
     evaluate_scan_monomer_decomposed,
     find_safe_min_distance,
@@ -39,9 +39,9 @@ from mmml.analysis.dimer_scans import (
     min_fragment_contact_distance,
     molecule_pair_labels,
 )
-from mmml.models.mbd import QCMLMBDCalculator
-from mmml.models.multipoles import LearnedMolecularMultipoleElectrostatics
-from mmml.models.spookynet_calc import SpookyNetCalculator
+from karml.models.mbd import QCMLMBDCalculator
+from karml.models.multipoles import LearnedMolecularMultipoleElectrostatics
+from karml.models.spookynet_calc import SpookyNetCalculator
 
 EV_TO_KCAL_MOL = 23.060548867
 
@@ -201,10 +201,10 @@ def _init_charmm():
 
     pycharmm.settings.set_bomb_level(-5)
 
-    from mmml.cli.run.md_pbc_suite.ase import _build_cluster_from_composition
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import pycharmm_quiet
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_energy_row
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+    from karml.cli.run.md_pbc_suite.ase import _build_cluster_from_composition
+    from karml.interfaces.pycharmmInterface.import_pycharmm import pycharmm_quiet
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_energy_row
+    from karml.interfaces.pycharmmInterface.mlpot.setup import (
         setup_default_nbonds,
         sync_charmm_positions,
     )
@@ -555,8 +555,8 @@ def main():
         geometries = list(make_oriented_scan_geometries(label_a, label_b, distances, offsets))
 
         if use_spookynet:
-            from mmml.analysis.dimer_cgenff import attach_cgenff_dimer_metadata
-            from mmml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_PRM
+            from karml.analysis.dimer_cgenff import attach_cgenff_dimer_metadata
+            from karml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_PRM
 
             for geometry in geometries:
                 attach_cgenff_dimer_metadata(
@@ -721,7 +721,7 @@ def main():
             "cgenff_lj_max_ev": float(lj_values.max()) if len(hybrid) else np.nan,
             "cgenff_inputs_consumed": bool(spookynet_calc.cgenff_lj_inputs_supplied),
             "jax_enable_x64": bool(__import__("jax").config.jax_enable_x64),
-            "mmml_ml_dtype": os.environ.get("MMML_ML_DTYPE"),
+            "karml_ml_dtype": os.environ.get("KARML_ML_DTYPE"),
         }
         (args.output_dir / "component_reconstruction_audit.json").write_text(
             json.dumps(audit, indent=2) + "\n", encoding="utf-8"

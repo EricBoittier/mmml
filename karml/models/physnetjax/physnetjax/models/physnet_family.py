@@ -21,7 +21,7 @@ from typing import Any, Optional, Type
 import jax.numpy as jnp
 from flax import linen as nn
 
-from mmml.models.physnetjax.physnetjax.models.mpnn_kernels import (
+from karml.models.physnetjax.physnetjax.models.mpnn_kernels import (
     calc_electrostatics_switches,
     encode_geometry_and_basis,
     molecular_dipole_from_charges,
@@ -60,12 +60,12 @@ def resolve_physnet_class(config: PhysNetFamilyConfig) -> Type[nn.Module]:
     deprecated ChargeSpin fork).
     """
     if config.condition_on_charge_spin:
-        from mmml.models.physnetjax.physnetjax.models.spooky_model import (
+        from karml.models.physnetjax.physnetjax.models.spooky_model import (
             SpookyPhysNet,
         )
 
         return SpookyPhysNet
-    from mmml.models.physnetjax.physnetjax.models.model import PhysNet
+    from karml.models.physnetjax.physnetjax.models.model import PhysNet
 
     return PhysNet
 

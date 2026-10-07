@@ -5,9 +5,9 @@ from pathlib import Path
 import pytest
 import yaml
 
-from mmml.cli.__main__ import main as mmml_main
-from mmml.cli.misc.dimer_scan import _distance_grid, build_parser, main
-from mmml.cli.registry import command_by_name
+from karml.cli.__main__ import main as karml_main
+from karml.cli.misc.dimer_scan import _distance_grid, build_parser, main
+from karml.cli.registry import command_by_name
 
 
 EXPECTED_CALCULATORS = {
@@ -27,12 +27,12 @@ EXPECTED_CALCULATORS = {
 def test_dimer_scan_cli_is_registered_and_help_is_reachable(monkeypatch, capsys):
     spec = command_by_name("dimer-scan")
     assert spec is not None
-    assert spec.module == "mmml.cli.misc.dimer_scan"
-    assert build_parser().prog == "mmml dimer-scan"
+    assert spec.module == "karml.cli.misc.dimer_scan"
+    assert build_parser().prog == "karml dimer-scan"
 
-    monkeypatch.setattr("sys.argv", ["mmml", "dimer-scan", "--help"])
+    monkeypatch.setattr("sys.argv", ["karml", "dimer-scan", "--help"])
     with pytest.raises(SystemExit) as exc:
-        mmml_main()
+        karml_main()
     assert exc.value.code == 0
     assert "reproducible rigid 1D dimer" in capsys.readouterr().out
 
@@ -76,6 +76,6 @@ def test_dimer_scan_accepts_validated_yaml_config_with_policy_provenance(
         captured["config"] = config
         return _Result()
 
-    monkeypatch.setattr("mmml.cli.misc.dimer_scan.run_dimer_scan", fake_run)
+    monkeypatch.setattr("karml.cli.misc.dimer_scan.run_dimer_scan", fake_run)
     assert main(["--config", str(config_path), "--output", str(tmp_path / "out")]) == 0
     assert captured["config"].interaction_policy == tmp_path / "interaction_policy.yaml"

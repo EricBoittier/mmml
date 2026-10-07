@@ -1,5 +1,5 @@
 /**
- * API client for the MMML molecular viewer backend.
+ * API client for the KARML molecular viewer backend.
  */
 
 const API_BASE = '/api';

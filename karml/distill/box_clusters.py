@@ -17,7 +17,7 @@ first-shell peak. The frame's ``info["phase"]`` (``fire``/``md``) is kept in
 ``Geometry.source``.
 
 Provenance: every cut cluster carries its frame's ``info["seed"]``
-(``group_seed``; ``mmml pet-box-dataset`` writes one per trajectory), the
+(``group_seed``; ``karml pet-box-dataset`` writes one per trajectory), the
 input-file index (``group_file``, the fallback group for frames without a
 seed), the frame's index in ``frames`` (``group_frame``), ``info["step"]`` and
 the phase. ``write_distill_npz(split="seed")`` keeps each trajectory on one
@@ -32,7 +32,7 @@ from dataclasses import dataclass
 import numpy as np
 from ase import Atoms
 
-from mmml.distill.acetone_pool import Geometry
+from karml.distill.acetone_pool import Geometry
 
 SOURCE_REFERENCE = "pdb_eq"  # label_geometries takes E_ref from this monomer
 SOURCE_BOX_MONOMER = "box_monomer"

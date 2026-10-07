@@ -983,7 +983,7 @@ def run_with_command_line(command_line: str, init_velocities=None, **kwargs):
     # 3. For present arrays, gfortran still expects a CFI descriptor (not a raw
     #    data pointer).  Passing raw ctypes Arrays as c_void_p gives gfortran a
     #    non-CFI pointer and will likely segfault inside _gfortran_cfi_desc_to_gfc_desc.
-    #    The velocity-injection path (MMML_BUSSI_INIT_VELOCITIES_HANDOFF=1) is
+    #    The velocity-injection path (KARML_BUSSI_INIT_VELOCITIES_HANDOFF=1) is
     #    therefore kept explicitly broken by design until a proper CFI wrapper exists.
 
     fn.argtypes = [
@@ -1002,7 +1002,7 @@ def run_with_command_line(command_line: str, init_velocities=None, **kwargs):
     if init_velocities is not None:
         # Velocity path: pass raw data pointers. NOTE: gfortran will interpret
         # these as CFI descriptors and will likely crash (see note 3 above).
-        # This path is only reached when MMML_BUSSI_INIT_VELOCITIES_HANDOFF=1.
+        # This path is only reached when KARML_BUSSI_INIT_VELOCITIES_HANDOFF=1.
         success = fn(
             ctypes.byref(options),
             buf,

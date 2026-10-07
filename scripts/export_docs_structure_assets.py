@@ -9,7 +9,7 @@ Run from repo root::
     export CHARMM_HOME=... CHARMM_LIB_DIR=... LD_LIBRARY_PATH=...
     uv run python scripts/export_docs_structure_assets.py
 
-Writes under ``mmml/data/charmm/`` and ``mmml/data/structures/``.
+Writes under ``karml/data/charmm/`` and ``karml/data/structures/``.
 """
 
 from __future__ import annotations
@@ -25,7 +25,7 @@ from pathlib import Path
 import numpy as np
 
 REPO = Path(__file__).resolve().parents[1]
-PACKMOL = REPO / "mmml" / "generate" / "packmol" / "packmol"
+PACKMOL = REPO / "karml" / "generate" / "packmol" / "packmol"
 
 OPENMM_ALAD_PDB_URL = (
     "https://raw.githubusercontent.com/openmm/openmm/master/"
@@ -39,13 +39,13 @@ def export_trialanine_water_box(*, seed: int = 11) -> tuple[Path, Path]:
 
     import pycharmm.write as write
 
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import ensure_pycharmm_loaded
-    from mmml.interfaces.pycharmmInterface.trialanine_water_box import (
+    from karml.interfaces.pycharmmInterface.import_pycharmm import ensure_pycharmm_loaded
+    from karml.interfaces.pycharmmInterface.trialanine_water_box import (
         TRIA_RESI_NAME,
         build_trialanine_water_box_in_charmm,
         n_peptide_atoms_in_trialanine_box,
     )
-    from mmml.paths import bundled_file
+    from karml.paths import bundled_file
 
     ensure_pycharmm_loaded()
     workdir = REPO / ".docs_export" / "trialanine_water"
@@ -68,7 +68,7 @@ def export_trialanine_water_box(*, seed: int = 11) -> tuple[Path, Path]:
     finally:
         os.chdir(prev_cwd)
 
-    from mmml.utils.charmm_ase import element_symbols_from_psf
+    from karml.utils.charmm_ase import element_symbols_from_psf
 
     side = float(box.box_side_A)
     symbols = element_symbols_from_psf(box.psf_path, n_atoms=box.positions.shape[0])
@@ -100,7 +100,7 @@ def export_trialanine_water_box(*, seed: int = 11) -> tuple[Path, Path]:
 def export_aco_make_box(*, n_molecules: int = 8, side_length: float = 22.0, seed: int = 42) -> Path:
     from ase.io import read as ase_read, write as ase_write
 
-    from mmml.paths import bundled_file, default_aco_template_pdb
+    from karml.paths import bundled_file, default_aco_template_pdb
 
     workdir = REPO / ".docs_export" / "aco_make_box"
     if workdir.exists():
@@ -149,7 +149,7 @@ end structure
 
 
 def export_alad_reference(*, prefer_charmm: bool = True) -> Path:
-    from mmml.paths import bundled_file
+    from karml.paths import bundled_file
 
     out_pdb = bundled_file("data", "charmm", "alad_reference.pdb")
     out_psf = bundled_file("data", "charmm", "alad_reference.psf")
@@ -157,8 +157,8 @@ def export_alad_reference(*, prefer_charmm: bool = True) -> Path:
 
     if prefer_charmm:
         try:
-            from mmml.interfaces.pycharmmInterface.import_pycharmm import ensure_pycharmm_loaded
-            from mmml.interfaces.pycharmmInterface.protein_charmm_build import write_alad_artifacts
+            from karml.interfaces.pycharmmInterface.import_pycharmm import ensure_pycharmm_loaded
+            from karml.interfaces.pycharmmInterface.protein_charmm_build import write_alad_artifacts
 
             ensure_pycharmm_loaded()
             workdir = REPO / ".docs_export" / "alad"

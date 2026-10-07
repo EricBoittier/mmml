@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from mmml.umbrella.energy import build_packed_graph, pack_positions
+from karml.umbrella.energy import build_packed_graph, pack_positions
 
 
 def test_pack_positions_tiles():

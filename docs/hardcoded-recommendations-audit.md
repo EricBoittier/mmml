@@ -1,6 +1,6 @@
 # Hard-coded recommendation audit
 
-MMML treats scientific defaults and operational recommendations as claims, not
+KARML treats scientific defaults and operational recommendations as claims, not
 as decoration. CI runs `scripts/audit_hardcoded_recommendations.py`; high-risk
 language must have a nearby `[evidence: <claim_id>]` marker or say `UNVERIFIED`.
 
@@ -23,6 +23,6 @@ authoritative inventory, and reviewers should add claims when subtler language
 implies support, accuracy, stability, or transferability.
 
 Cluster paths and checkpoint locations are not scientific defaults. Active
-workflow launchers now resolve them from `MMML_CKPT`, workflow configuration,
+workflow launchers now resolve them from `KARML_CKPT`, workflow configuration,
 or repository checkpoint resolution; examples use `/path/to/...` placeholders.
 Scheduler/node selections belong in versioned environment or workflow profiles.

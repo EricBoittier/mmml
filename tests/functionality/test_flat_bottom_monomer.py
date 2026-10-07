@@ -6,7 +6,7 @@ import pytest
 jax = pytest.importorskip("jax")
 import jax.numpy as jnp
 
-from mmml.interfaces.pycharmmInterface.calculator_utils import apply_flat_bottom
+from karml.interfaces.pycharmmInterface.calculator_utils import apply_flat_bottom
 
 
 def _mic_identity(a, b, _cell):

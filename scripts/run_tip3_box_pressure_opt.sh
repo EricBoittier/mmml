@@ -58,7 +58,7 @@ echo "  target P = ${TARGET_P_ATM} atm   T = ${TEMP_K} K   ρ_target = ${TARGET_
 echo "  BOX_MODE=$BOX_MODE  WIPE=$WIPE"
 
 echo ""
-echo "=== [1/2] mmml liquid-box (MM certify) ==="
+echo "=== [1/2] karml liquid-box (MM certify) ==="
 LB_ARGS=(
   --output-dir "$LIQUID_DIR"
   --seed "$SEED"
@@ -81,7 +81,7 @@ else
 fi
 
 set +e
-mmml liquid-box "${LB_ARGS[@]}"
+karml liquid-box "${LB_ARGS[@]}"
 lb_rc=$?
 set -e
 
@@ -114,7 +114,7 @@ if status != "pass":
 # tip3_count30_recipe], so BOX_SIZE/TARGET_DENSITY overrides (e.g. a less
 # dense box) are validated on their own terms.
 if str("$BOX_MODE") == "count":
-    from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import (
+    from karml.interfaces.pycharmmInterface.mlpot.box_sizing import (
         n_molecules_for_target_density_in_fixed_box,
     )
 
@@ -152,7 +152,7 @@ else
 fi
 uv run python - <<PY
 from pathlib import Path
-from mmml.interfaces.pycharmmInterface.mlpot.box_pressure_opt import (
+from karml.interfaces.pycharmmInterface.mlpot.box_pressure_opt import (
     BoxPressureOptConfig,
     run_box_pressure_opt_from_box_json,
 )

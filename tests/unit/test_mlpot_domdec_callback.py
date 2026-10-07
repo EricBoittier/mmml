@@ -10,17 +10,17 @@ from unittest.mock import patch
 import numpy as np
 import pytest
 
-from mmml.interfaces.pycharmmInterface.mlpot.medium_pbc_validation import (
+from karml.interfaces.pycharmmInterface.mlpot.medium_pbc_validation import (
     lattice_positions_cubic_pbc,
 )
-from mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.batch_builder import (
+from karml.interfaces.pycharmmInterface.mlpot.mpi_spatial.batch_builder import (
     SpatialBatchIndices,
     build_domdec_spatial_batch_indices,
     build_spatial_batch_indices,
     make_domdec_aligned_grid,
     make_spatial_domain_grid,
 )
-from mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domain import (
+from karml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domain import (
     DomdecAlignedGrid,
     SpatialDomainGrid,
 )
@@ -29,7 +29,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domain import (
 # Shared fixtures
 # ---------------------------------------------------------------------------
 
-_DOMDEC_MODULE = "mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domdec_atoms"
+_DOMDEC_MODULE = "karml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domdec_atoms"
 
 
 def _make_geometry(n_monomers: int = 8, atoms_per: int = 10, box: float = 30.0):

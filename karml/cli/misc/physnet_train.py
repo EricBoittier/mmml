@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""CLI entry point for PhysNetJAX training (`mmml physnet-train`)."""
+"""CLI entry point for PhysNetJAX training (`karml physnet-train`)."""
 
-from mmml.cli.make.make_training import main
+from karml.cli.make.make_training import main
 
 __all__ = ["main"]
 

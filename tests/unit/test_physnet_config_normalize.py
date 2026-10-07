@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from mmml.utils.model_checkpoint import (
+from karml.utils.model_checkpoint import (
     canonicalize_physnet_config_for_save,
     normalize_physnet_config,
     physnet_constructor_kwargs,
@@ -34,7 +34,7 @@ def test_canonicalize_for_save_matches_normalize() -> None:
 
 
 def test_build_physnet_from_config_legacy_n_res() -> None:
-    from mmml.utils.model_checkpoint import build_physnet_from_config
+    from karml.utils.model_checkpoint import build_physnet_from_config
 
     model = build_physnet_from_config(
         {"features": 32, "n_res": 3, "natoms": 34, "num_iterations": 2, "cutoff": 6.0},

@@ -12,7 +12,7 @@ to be used.
 Counterpoise (Boys-Bernardi) correction uses PySCF's ghost-atom convention
 (``X-`` prefix on the element symbol — basis functions only, no nuclear
 charge/electrons), matching the existing pattern in
-``mmml/interfaces/pyscf4gpuInterface/calcs.py:compute_interaction_energy``.
+``karml/interfaces/pyscf4gpuInterface/calcs.py:compute_interaction_energy``.
 
 ``--methods`` accepts ``HF``, ``MP2``, ``CCSD``, or any PySCF/GPU4PySCF XC functional keyword
 (e.g. ``PBE0``, ``B3LYP``, ``wB97M-V``).
@@ -39,8 +39,8 @@ import pandas as pd
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(_REPO_ROOT))
 
-from mmml.analysis.dimer_molecules import PAIR_SCAN_CONFIG, make_oriented_scan_geometries
-from mmml.analysis.dimer_scans import min_fragment_contact_distance
+from karml.analysis.dimer_molecules import PAIR_SCAN_CONFIG, make_oriented_scan_geometries
+from karml.analysis.dimer_scans import min_fragment_contact_distance
 from scripts.run_dimer_scan_campaign import build_pair_distance_grid
 from scripts.run_orca_hf_mp2_scan import _cache_key, load_cached_results
 

@@ -1,4 +1,4 @@
-"""Regression test for GH #127 ("mmml gui not compiling"): the root cause
+"""Regression test for GH #127 ("karml gui not compiling"): the root cause
 was a bare 404 on ``GET /`` when the frontend hasn't been built (static_dir
 missing/empty), which reads as "the GUI is broken" rather than "run npm
 install && npm run build". The fix makes that state an explicit, actionable
@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
-from mmml.gui.api.main import create_app
+from karml.gui.api.main import create_app
 
 
 def test_root_explains_missing_frontend_instead_of_404(tmp_path):

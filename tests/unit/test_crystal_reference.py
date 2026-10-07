@@ -8,8 +8,8 @@ import pytest
 
 
 def test_metrics_from_dcm_cif():
-    from mmml.interfaces.crystal_reference import metrics_from_cif
-    from mmml.paths import default_dcm_crystal_cif
+    from karml.interfaces.crystal_reference import metrics_from_cif
+    from karml.paths import default_dcm_crystal_cif
 
     m = metrics_from_cif(default_dcm_crystal_cif(), space_group=60)
     assert m.natoms == 20
@@ -19,8 +19,8 @@ def test_metrics_from_dcm_cif():
 
 
 def test_metrics_from_benzene_cif():
-    from mmml.interfaces.crystal_reference import metrics_from_cif
-    from mmml.paths import default_benzene_crystal_cif
+    from karml.interfaces.crystal_reference import metrics_from_cif
+    from karml.paths import default_benzene_crystal_cif
 
     m = metrics_from_cif(default_benzene_crystal_cif(), space_group=14)
     assert m.natoms == 24
@@ -30,7 +30,7 @@ def test_metrics_from_benzene_cif():
 
 
 def test_comparison_table_markdown_with_built():
-    from mmml.interfaces.crystal_reference import (
+    from karml.interfaces.crystal_reference import (
         CrystalMetrics,
         comparison_table_markdown,
     )
@@ -63,7 +63,7 @@ def test_comparison_table_markdown_with_built():
 
 
 def test_literature_comparison_markdown_runs():
-    from mmml.interfaces.crystal_reference import literature_comparison_markdown
+    from karml.interfaces.crystal_reference import literature_comparison_markdown
 
     md = literature_comparison_markdown()
     assert "COD 2100015" in md

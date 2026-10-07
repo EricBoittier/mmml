@@ -54,7 +54,7 @@ _write_cfg kernnn_distill kernnn "$KERNN_DISTILL"
 
 for name in physnet kernnn_gt kernnn_distill; do
   echo "=== ic-scan $name ==="
-  uv run mmml ic-scan \
+  uv run karml ic-scan \
     --config "$CFG_DIR/${name}.yaml" \
     --output "$OUT/$name" \
     --overwrite
@@ -63,8 +63,8 @@ done
 echo "=== compare plots ==="
 uv run python - <<PY
 from pathlib import Path
-from mmml.ic_scan.result import ScanResult
-from mmml.ic_scan.plotting import plot_model_comparison
+from karml.ic_scan.result import ScanResult
+from karml.ic_scan.plotting import plot_model_comparison
 
 root = Path("$OUT")
 series = {

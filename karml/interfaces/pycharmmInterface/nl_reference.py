@@ -581,7 +581,7 @@ def pad_pair_arrays(
     xp = _array_module(pair_i)
     n_valid = int(pair_i.shape[0])
     if n_valid > max_pairs:
-        from mmml.interfaces.pycharmmInterface.cell_list import PairListTruncationError
+        from karml.interfaces.pycharmmInterface.cell_list import PairListTruncationError
 
         raise PairListTruncationError(n_valid, max_pairs)
     cap = int(max_pairs)

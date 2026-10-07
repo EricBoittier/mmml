@@ -19,7 +19,7 @@ from pathlib import Path
 import numpy as np
 from ase.io import read
 
-from mmml.utils.dcd_writer import save_trajectory_dcd
+from karml.utils.dcd_writer import save_trajectory_dcd
 
 
 def main() -> None:

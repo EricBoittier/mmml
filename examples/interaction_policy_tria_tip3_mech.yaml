@@ -6,7 +6,7 @@
 # Lowered on ``md-system --jaxmd-unified`` to ``ml_resnames: [TRIA]``.
 # Near/far policies (see interaction_policy_peptide_water.yaml) still fail closed.
 #
-#   uv run mmml md-system \
+#   uv run karml md-system \
 #     --config examples/tria_md_system/yaml/campaign_nvt_npt_nve.yaml \
 #     --run-all
 

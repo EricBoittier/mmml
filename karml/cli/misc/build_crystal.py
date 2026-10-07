@@ -6,8 +6,8 @@ import argparse
 import sys
 from pathlib import Path
 
-from mmml.interfaces.aseInterface.pyxtal_optimize import optimize_ase_atoms
-from mmml.interfaces.crystal_charmm import (
+from karml.interfaces.aseInterface.pyxtal_optimize import optimize_ase_atoms
+from karml.interfaces.crystal_charmm import (
     DEFAULT_MIN_BOX_SIDE_A,
     LITERATURE_CRYSTAL_PRESETS,
     build_charmm_literature_supercell,
@@ -16,7 +16,7 @@ from mmml.interfaces.crystal_charmm import (
     suggest_supercell_reps,
     write_crystal_charmm_topology,
 )
-from mmml.interfaces.pyxtal_placement import (
+from karml.interfaces.pyxtal_placement import (
     MolecularCrystalBuildRequest,
     ase_supercell,
     atoms_to_reference_npz,
@@ -512,7 +512,7 @@ def main(argv: list[str] | None = None) -> int:
         if not args.emt and atoms.calc is None:
             print(
                 "Error: --optimize requires --emt or a pre-attached atoms.calc "
-                "(e.g. MMML/CHARMM calculator in a notebook).",
+                "(e.g. KARML/CHARMM calculator in a notebook).",
                 file=sys.stderr,
             )
             return 1
@@ -565,7 +565,7 @@ def main(argv: list[str] | None = None) -> int:
     # Molecule count from residue template size when available.
     n_mol = None
     try:
-        from mmml.interfaces.crystal_charmm import (
+        from karml.interfaces.crystal_charmm import (
             load_monomer_template,
             resolve_make_res_monomer_pdb,
         )

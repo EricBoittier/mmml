@@ -31,11 +31,11 @@ import numpy as np
 
 
 def _read_dcd_trajectory(path: Path, *, max_frames: int | None = None):
-    """Load DCD coords without ``import mmml.utils`` (eager JAX in ``__init__``)."""
+    """Load DCD coords without ``import karml.utils`` (eager JAX in ``__init__``)."""
     import importlib.util
 
-    mod_path = _REPO / "mmml" / "utils" / "dcd_reader.py"
-    spec = importlib.util.spec_from_file_location("_mmml_dcd_reader", mod_path)
+    mod_path = _REPO / "karml" / "utils" / "dcd_reader.py"
+    spec = importlib.util.spec_from_file_location("_karml_dcd_reader", mod_path)
     if spec is None or spec.loader is None:
         raise ImportError(f"cannot load DCD reader from {mod_path}")
     mod = importlib.util.module_from_spec(spec)

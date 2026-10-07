@@ -31,11 +31,11 @@ for _stale_workflow_mod in (
 import collect_diagnostics as cd  # noqa: E402
 import monitor_lib as ml  # noqa: E402
 import trajectory_diag as td  # noqa: E402
-from mmml.utils.psf_reader import read_psf_atom_types  # noqa: E402
+from karml.utils.psf_reader import read_psf_atom_types  # noqa: E402
 
 
 def _load_dcd_writer():
-    path = REPO / "mmml" / "utils" / "dcd_writer.py"
+    path = REPO / "karml" / "utils" / "dcd_writer.py"
     spec = importlib.util.spec_from_file_location("dcd_writer", path)
     mod = importlib.util.module_from_spec(spec)
     assert spec.loader is not None
@@ -293,7 +293,7 @@ def test_mic_distances_wraps_across_box():
 
 
 def test_dcd_reader_frame_stride(tmp_path: Path):
-    from mmml.utils.dcd_reader import read_dcd_trajectory, scan_dcd_frame_count
+    from karml.utils.dcd_reader import read_dcd_trajectory, scan_dcd_frame_count
 
     coords = np.zeros((4, 5, 3), dtype=np.float32)
     for i in range(4):

@@ -7,7 +7,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from mmml.interfaces.pycharmmInterface.cluster_geometry import (
+from karml.interfaces.pycharmmInterface.cluster_geometry import (
     atoms_from_reference_npz,
     reference_frame_geometry,
     resolve_cluster_residue_labels,
@@ -76,7 +76,7 @@ def test_atoms_from_reference_npz(tmp_path: Path) -> None:
 
 
 def test_ensure_monomer_3d_coords_breaks_collinear() -> None:
-    from mmml.interfaces.pycharmmInterface.cluster_geometry import ensure_monomer_3d_coords
+    from karml.interfaces.pycharmmInterface.cluster_geometry import ensure_monomer_3d_coords
 
     flat = np.array([[0.0, 0.0, 0.0], [6.0, 0.0, 0.0]], dtype=float)
     spread = ensure_monomer_3d_coords(flat)
@@ -86,7 +86,7 @@ def test_ensure_monomer_3d_coords_breaks_collinear() -> None:
 
 
 def test_ensure_charmm_session_ready_sets_bomlev(monkeypatch: pytest.MonkeyPatch) -> None:
-    from mmml.interfaces.pycharmmInterface import cluster_geometry as cg
+    from karml.interfaces.pycharmmInterface import cluster_geometry as cg
 
     cg._charmm_session_ready = False
     calls: list[int] = []
@@ -96,15 +96,15 @@ def test_ensure_charmm_session_ready_sets_bomlev(monkeypatch: pytest.MonkeyPatch
         return {"prnlev": prnlev, "warnlev": warnlev, "bomlev": bomlev}
 
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.apply_charmm_verbosity",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.apply_charmm_verbosity",
         _fake_apply,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.prepare_charmm_vacuum",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.prepare_charmm_vacuum",
         lambda: None,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.import_pycharmm.reset_block",
+        "karml.interfaces.pycharmmInterface.import_pycharmm.reset_block",
         lambda: None,
     )
 
@@ -118,20 +118,20 @@ def test_ensure_charmm_session_ready_does_not_mkdir_cwd_layout(
     monkeypatch: pytest.MonkeyPatch, tmp_path
 ) -> None:
     """md-system session init must not litter CWD with unused pdb/res/dcd/psf/xyz."""
-    from mmml.interfaces.pycharmmInterface import cluster_geometry as cg
+    from karml.interfaces.pycharmmInterface import cluster_geometry as cg
 
     cg._charmm_session_ready = False
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.apply_charmm_verbosity",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.apply_charmm_verbosity",
         lambda **kwargs: kwargs,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.prepare_charmm_vacuum",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.prepare_charmm_vacuum",
         lambda: None,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.import_pycharmm.reset_block",
+        "karml.interfaces.pycharmmInterface.import_pycharmm.reset_block",
         lambda: None,
     )
 
@@ -142,7 +142,7 @@ def test_ensure_charmm_session_ready_does_not_mkdir_cwd_layout(
 
 
 def test_set_up_directories_respects_base(tmp_path) -> None:
-    from mmml.interfaces.pycharmmInterface.utils import set_up_directories
+    from karml.interfaces.pycharmmInterface.utils import set_up_directories
 
     set_up_directories(tmp_path / "out")
     for name in ("pdb", "res", "dcd", "psf", "xyz"):
@@ -152,7 +152,7 @@ def test_set_up_directories_respects_base(tmp_path) -> None:
 
 
 def test_build_same_residue_reference_cluster_copies_first_monomer():
-    from mmml.interfaces.pycharmmInterface.cluster_geometry import (
+    from karml.interfaces.pycharmmInterface.cluster_geometry import (
         build_same_residue_reference_cluster,
     )
 
@@ -178,7 +178,7 @@ def test_build_same_residue_reference_cluster_copies_first_monomer():
 
 
 def test_apply_same_residue_template_to_positions():
-    from mmml.interfaces.pycharmmInterface.cluster_geometry import (
+    from karml.interfaces.pycharmmInterface.cluster_geometry import (
         apply_same_residue_template_to_positions,
     )
 
@@ -199,7 +199,7 @@ def test_apply_same_residue_template_to_positions():
 def test_same_residue_cluster_reference_from_ctx(monkeypatch: pytest.MonkeyPatch):
     from types import SimpleNamespace
 
-    from mmml.interfaces.pycharmmInterface.cluster_geometry import (
+    from karml.interfaces.pycharmmInterface.cluster_geometry import (
         same_residue_cluster_reference_from_ctx,
     )
 
@@ -219,7 +219,7 @@ def test_same_residue_cluster_reference_from_ctx(monkeypatch: pytest.MonkeyPatch
         pyCModel=SimpleNamespace(_atoms_per_monomer=[3, 3]),
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         lambda: pos,
     )
     ref = same_residue_cluster_reference_from_ctx(ctx, n_atoms=6)
@@ -232,7 +232,7 @@ def test_same_residue_cluster_reference_from_ctx(monkeypatch: pytest.MonkeyPatch
 
 
 def test_build_packmol_template_reference_cluster_uses_isolated_template():
-    from mmml.interfaces.pycharmmInterface.cluster_geometry import (
+    from karml.interfaces.pycharmmInterface.cluster_geometry import (
         build_packmol_template_reference_cluster,
     )
 
@@ -269,7 +269,7 @@ def test_build_packmol_template_reference_cluster_uses_isolated_template():
 def test_packmol_template_reference_from_ctx():
     from types import SimpleNamespace
 
-    from mmml.interfaces.pycharmmInterface.cluster_geometry import (
+    from karml.interfaces.pycharmmInterface.cluster_geometry import (
         packmol_template_reference_from_ctx,
     )
 
@@ -299,7 +299,7 @@ def test_packmol_template_reference_from_ctx():
     def _fake_pos():
         return pos
 
-    import mmml.interfaces.pycharmmInterface.mlpot.setup as setup_mod
+    import karml.interfaces.pycharmmInterface.mlpot.setup as setup_mod
 
     orig = setup_mod.get_charmm_positions_array
     setup_mod.get_charmm_positions_array = _fake_pos

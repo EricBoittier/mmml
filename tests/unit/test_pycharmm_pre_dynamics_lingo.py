@@ -8,7 +8,7 @@ from unittest import mock
 
 import pytest
 
-from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
     apply_pre_dynamics_lingo_from_args,
     normalize_pycharmm_pre_dynamics_lingo,
     parse_adumb_rc_params,
@@ -75,7 +75,7 @@ def test_split_charmm_lingo_commands_joins_continuations() -> None:
 
 
 def test_mmfp_rcm_distance_wall_script_uses_outside_harmonic() -> None:
-    from mmml.interfaces.pycharmmInterface.mlpot.restraints import (
+    from karml.interfaces.pycharmmInterface.mlpot.restraints import (
         _mmfp_adumb_rc_distance_walls_script,
         adumb_rc_wall_droff,
     )
@@ -90,7 +90,7 @@ def test_mmfp_rcm_distance_wall_script_uses_outside_harmonic() -> None:
 
 
 def test_noe_adumb_rc_distance_wall_script_upper_bound() -> None:
-    from mmml.interfaces.pycharmmInterface.mlpot.restraints import (
+    from karml.interfaces.pycharmmInterface.mlpot.restraints import (
         _noe_adumb_rc_distance_wall_assign,
         _noe_adumb_rc_distance_walls_script,
     )
@@ -106,7 +106,7 @@ def test_noe_adumb_rc_distance_wall_script_upper_bound() -> None:
 
 
 def test_resd_adumb_rc_distance_wall_commands_positive_upper_bound() -> None:
-    from mmml.interfaces.pycharmmInterface.mlpot.restraints import (
+    from karml.interfaces.pycharmmInterface.mlpot.restraints import (
         _resd_adumb_rc_distance_wall_commands,
     )
 
@@ -119,7 +119,7 @@ def test_resd_adumb_rc_distance_wall_commands_positive_upper_bound() -> None:
 
 
 def test_charmm_output_indicates_failure_detects_resd_syntax() -> None:
-    from mmml.interfaces.pycharmmInterface.mlpot.restraints import (
+    from karml.interfaces.pycharmmInterface.mlpot.restraints import (
         _charmm_output_indicates_failure,
         _resd_restraint_count_from_log,
     )
@@ -136,7 +136,7 @@ def test_charmm_output_indicates_failure_detects_resd_syntax() -> None:
 
 
 def test_resd_restraint_count_skips_when_capture_empty() -> None:
-    from mmml.interfaces.pycharmmInterface.mlpot.restraints import (
+    from karml.interfaces.pycharmmInterface.mlpot.restraints import (
         _resd_restraint_count_from_log,
     )
 
@@ -172,7 +172,7 @@ def test_parse_adumb_rc_wall_params_reads_set_commands() -> None:
 
 
 def test_parse_adumb_rc_wall_params_caps_at_umbrella_max() -> None:
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
         resolve_adumb_wall_rcmax,
     )
 
@@ -190,7 +190,7 @@ def test_parse_adumb_rc_wall_params_caps_at_umbrella_max() -> None:
 
 
 def test_parse_adumb_rc_wall_params_rdif_keeps_both_pairs_uncapped() -> None:
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
         resolve_adumb_wall_rcmax,
     )
 
@@ -275,14 +275,14 @@ def test_run_charmm_lingo_expands_adumb_tokens_before_umbrella(tmp_path: Path) -
     """
     inp = tmp_path / "lingo.inp"
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.require_adumbrxncor_for_umbrella_rxncor",
+        "karml.interfaces.pycharmmInterface.mlpot.cli_common.require_adumbrxncor_for_umbrella_rxncor",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.adumb_rc_walls_enabled",
+        "karml.interfaces.pycharmmInterface.mlpot.cli_common.adumb_rc_walls_enabled",
         return_value=False,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.restraints.install_adumb_rxncor_distance_walls",
+        "karml.interfaces.pycharmmInterface.mlpot.restraints.install_adumb_rxncor_distance_walls",
     ) as install, mock.patch(
-        "mmml.interfaces.pycharmmInterface.charmm_mpi.mpi_charmm_script",
+        "karml.interfaces.pycharmmInterface.charmm_mpi.mpi_charmm_script",
         return_value=True,
     ) as script_fn:
         run_charmm_lingo_script(script, inp_path=inp, workdir=tmp_path)
@@ -305,14 +305,14 @@ def test_run_charmm_lingo_installs_adumb_walls_when_enabled(tmp_path: Path) -> N
     umbrella init nsim 4 update 50 equi 25 thresh 10 temp 300 wuni 44 ucun 50
     """
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.require_adumbrxncor_for_umbrella_rxncor",
+        "karml.interfaces.pycharmmInterface.mlpot.cli_common.require_adumbrxncor_for_umbrella_rxncor",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.adumb_rc_walls_enabled",
+        "karml.interfaces.pycharmmInterface.mlpot.cli_common.adumb_rc_walls_enabled",
         return_value=True,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.restraints.install_adumb_rxncor_distance_walls",
+        "karml.interfaces.pycharmmInterface.mlpot.restraints.install_adumb_rxncor_distance_walls",
     ) as install, mock.patch(
-        "mmml.interfaces.pycharmmInterface.charmm_mpi.mpi_charmm_script",
+        "karml.interfaces.pycharmmInterface.charmm_mpi.mpi_charmm_script",
         return_value=True,
     ) as script_fn:
         run_charmm_lingo_script(script, inp_path=tmp_path / "lingo.inp", workdir=tmp_path)
@@ -336,7 +336,7 @@ def test_apply_pre_dynamics_lingo_sets_adumb_rc_guard(tmp_path: Path) -> None:
         output_dir=tmp_path,
     )
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.run_charmm_lingo_script",
+        "karml.interfaces.pycharmmInterface.mlpot.cli_common.run_charmm_lingo_script",
     ):
         apply_pre_dynamics_lingo_from_args(args)
     guard = getattr(args, "_adumb_rc_guard", None)
@@ -354,7 +354,7 @@ def test_apply_pre_dynamics_lingo_no_op_when_empty() -> None:
         output_dir=None,
     )
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.run_charmm_lingo_script"
+        "karml.interfaces.pycharmmInterface.mlpot.cli_common.run_charmm_lingo_script"
     ) as run:
         apply_pre_dynamics_lingo_from_args(args)
     run.assert_not_called()
@@ -368,7 +368,7 @@ def test_apply_pre_dynamics_lingo_runs_via_helper(tmp_path: Path) -> None:
         output_dir=tmp_path,
     )
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.run_charmm_lingo_script"
+        "karml.interfaces.pycharmmInterface.mlpot.cli_common.run_charmm_lingo_script"
     ) as run:
         apply_pre_dynamics_lingo_from_args(args)
     run.assert_called_once()
@@ -386,7 +386,7 @@ def test_apply_pre_dynamics_lingo_from_file(tmp_path: Path) -> None:
         output_dir=tmp_path,
     )
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.run_charmm_lingo_script"
+        "karml.interfaces.pycharmmInterface.mlpot.cli_common.run_charmm_lingo_script"
     ) as run:
         apply_pre_dynamics_lingo_from_args(args)
     run.assert_called_once()
@@ -398,9 +398,9 @@ def test_run_charmm_lingo_uses_line_commands_not_inp_api(tmp_path: Path) -> None
     script = "cons fix sele resid 1 end\nopen unit 44 write card name adumb-wuni.dat"
     inp = tmp_path / "lingo.inp"
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.charmm_mpi._invoke_charmm_inp_file",
+        "karml.interfaces.pycharmmInterface.charmm_mpi._invoke_charmm_inp_file",
     ) as invoke, mock.patch(
-        "mmml.interfaces.pycharmmInterface.charmm_mpi.mpi_charmm_script",
+        "karml.interfaces.pycharmmInterface.charmm_mpi.mpi_charmm_script",
         return_value=True,
     ) as script_fn:
         run_charmm_lingo_script(script, inp_path=inp, workdir=tmp_path)
@@ -412,7 +412,7 @@ def test_run_charmm_lingo_uses_line_commands_not_inp_api(tmp_path: Path) -> None
     )
     assert inp.is_file()
     body = inp.read_text(encoding="utf-8")
-    assert body.startswith("* MMML pre-dynamics")
+    assert body.startswith("* KARML pre-dynamics")
     assert "cons fix sele resid 1 end" in body
 
 

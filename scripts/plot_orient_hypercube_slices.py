@@ -17,7 +17,7 @@ This script turns those ray tables (and optional xTB validate CSVs) into:
 5. ML vs xTB ray overlays / depth scatter when ``--validate`` is given
 
 House style: ``docs/plotting-style-guide.md`` /
-``mmml.utils.plotting.styles`` (``icml`` + ``default_cmap`` + ``STATUS_COLORS``).
+``karml.utils.plotting.styles`` (``icml`` + ``default_cmap`` + ``STATUS_COLORS``).
 
 Example::
 
@@ -40,7 +40,7 @@ from matplotlib import colors as mcolors
 from mpl_toolkits.mplot3d import Axes3D  # noqa: F401 — registers 3d projection
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 
-from mmml.utils.plotting.styles import (
+from karml.utils.plotting.styles import (
     STATUS_COLORS,
     apply_plot_style,
     comparison_colors,

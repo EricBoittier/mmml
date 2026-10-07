@@ -7,12 +7,12 @@ from unittest.mock import MagicMock
 import numpy as np
 import pytest
 
-from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
-from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
+from karml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
+from karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
     DecomposedMlpotModel,
     _DeferredDecomposedMlpotCalculator,
 )
-from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+from karml.interfaces.pycharmmInterface.mlpot.setup import (
     MlpotContext,
     _calculator_atomic_numbers,
     _masses_consistent_with_z,
@@ -135,11 +135,11 @@ def test_verify_mlpot_charmm_atom_consistency_accepts_deferred_calculator(monkey
     monkeypatch.setitem(sys.modules, "pycharmm.coor", fake_coor)
     monkeypatch.setitem(
         sys.modules,
-        "mmml.interfaces.pycharmmInterface.import_pycharmm",
-        types.ModuleType("mmml.interfaces.pycharmmInterface.import_pycharmm"),
+        "karml.interfaces.pycharmmInterface.import_pycharmm",
+        types.ModuleType("karml.interfaces.pycharmmInterface.import_pycharmm"),
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.utils.get_Z_from_psf",
+        "karml.interfaces.pycharmmInterface.utils.get_Z_from_psf",
         lambda: z.copy(),
     )
 
@@ -169,11 +169,11 @@ def _install_fake_psf(monkeypatch, z: np.ndarray) -> None:
     monkeypatch.setitem(sys.modules, "pycharmm.coor", fake_coor)
     monkeypatch.setitem(
         sys.modules,
-        "mmml.interfaces.pycharmmInterface.import_pycharmm",
-        types.ModuleType("mmml.interfaces.pycharmmInterface.import_pycharmm"),
+        "karml.interfaces.pycharmmInterface.import_pycharmm",
+        types.ModuleType("karml.interfaces.pycharmmInterface.import_pycharmm"),
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.utils.get_Z_from_psf",
+        "karml.interfaces.pycharmmInterface.utils.get_Z_from_psf",
         lambda: np.array(z, dtype=int),
     )
 

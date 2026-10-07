@@ -3,7 +3,7 @@ jobs: 2
 latency-wait: 5
 printshellcmds: true
 envvars:
-  - MMML_WORKFLOW_CONFIG
+  - KARML_WORKFLOW_CONFIG
   - JAX_ENABLE_X64
 default-resources:
   - mem_mb=4000

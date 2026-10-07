@@ -142,7 +142,7 @@ class Provenance:
         return cls(
             created_utc=datetime.now(UTC).isoformat(),
             software={
-                "mmml": _package_version("mmml"),
+                "karml": _package_version("karml"),
                 "python": platform.python_version(),
                 "ase": ase.__version__,
                 "numpy": _package_version("numpy"),

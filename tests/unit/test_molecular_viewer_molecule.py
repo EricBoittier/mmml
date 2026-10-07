@@ -1,12 +1,12 @@
 """Unit tests for the GL-free structure/trajectory parsers in
-mmml.gui.molecular_viewer.molecule. The GL renderer/viewer/VR loop needs a
+karml.gui.molecular_viewer.molecule. The GL renderer/viewer/VR loop needs a
 real display context and is left to manual testing."""
 
 from __future__ import annotations
 
 import pytest
 
-from mmml.gui.molecular_viewer.molecule import (
+from karml.gui.molecular_viewer.molecule import (
     Atom,
     _cell_from_cryst1,
     _cell_from_lattice,

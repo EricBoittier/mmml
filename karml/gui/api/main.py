@@ -1,5 +1,5 @@
 """
-FastAPI application for MMML molecular viewer.
+FastAPI application for KARML molecular viewer.
 """
 
 from fastapi import FastAPI, HTTPException, Query
@@ -34,7 +34,7 @@ def create_app(
         Directory containing static frontend files
     enable_runner : bool, optional
         When True, mount job-runner endpoints (/api/jobs, SSE stream) that can
-        launch and stream ``mmml md-system`` runs on this host. Opt-in because
+        launch and stream ``karml md-system`` runs on this host. Opt-in because
         it executes subprocesses.
     runner_cwd : str, optional
         Working directory jobs launch from (defaults to data_dir or cwd).
@@ -45,7 +45,7 @@ def create_app(
         Configured FastAPI application
     """
     app = FastAPI(
-        title="MMML Molecular Viewer",
+        title="KARML Molecular Viewer",
         description="API for viewing molecular structures and properties",
         version="1.0.0",
     )
@@ -465,7 +465,7 @@ def create_app(
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
     
-    # Job runner (opt-in): launch and stream `mmml md-system` runs on this host.
+    # Job runner (opt-in): launch and stream `karml md-system` runs on this host.
     # Registered before the static mount so its /api/* routes are not shadowed.
     if enable_runner:
         from .runner import JobManager
@@ -495,14 +495,14 @@ def create_app(
             return HTMLResponse(
                 status_code=503,
                 content=(
-                    "<h1>MMML viewer frontend is not built</h1>"
+                    "<h1>KARML viewer frontend is not built</h1>"
                     "<p>The API server is running, but no built frontend was found "
-                    "(looked for <code>mmml/gui/viewer/dist/index.html</code>).</p>"
+                    "(looked for <code>karml/gui/viewer/dist/index.html</code>).</p>"
                     "<p>Build it once with:</p>"
-                    "<pre>cd mmml/gui/viewer &amp;&amp; npm install &amp;&amp; npm run build</pre>"
-                    "<p>then restart <code>mmml gui</code>, or run "
-                    "<code>mmml gui --dev</code> and use the Vite dev server "
-                    "(<code>npm run dev</code> in <code>mmml/gui/viewer/</code>) instead.</p>"
+                    "<pre>cd karml/gui/viewer &amp;&amp; npm install &amp;&amp; npm run build</pre>"
+                    "<p>then restart <code>karml gui</code>, or run "
+                    "<code>karml gui --dev</code> and use the Vite dev server "
+                    "(<code>npm run dev</code> in <code>karml/gui/viewer/</code>) instead.</p>"
                     "<p>API endpoints under <code>/api/*</code> are available now.</p>"
                 ),
             )

@@ -52,10 +52,10 @@ def test_from_pdb_cluster_metadata_uses_per_residue_psf_names(monkeypatch) -> No
 
     import numpy as np
 
-    from mmml.interfaces.pycharmmInterface.mlpot import setup as setup_mod
+    from karml.interfaces.pycharmmInterface.mlpot import setup as setup_mod
 
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.trimer_scan.atoms_per_monomer_from_psf",
+        "karml.interfaces.pycharmmInterface.mlpot.trimer_scan.atoms_per_monomer_from_psf",
         lambda: [42, 3, 3],
     )
     fake_psf = SimpleNamespace(get_res=lambda: ["TRIA", "TIP3", "TIP3"])
@@ -76,7 +76,7 @@ def test_from_pdb_cluster_metadata_uses_per_residue_psf_names(monkeypatch) -> No
 
 
 def test_from_pdb_selects_the_from_pdb_builder() -> None:
-    from mmml.md.lowering import runconfig_from_md_system_args
+    from karml.md.lowering import runconfig_from_md_system_args
 
     spec = runconfig_from_md_system_args(_from_pdb_args()).system
     assert spec.builder == "from_pdb"
@@ -85,7 +85,7 @@ def test_from_pdb_selects_the_from_pdb_builder() -> None:
 
 
 def test_composition_still_selects_packmol() -> None:
-    from mmml.md.lowering import runconfig_from_md_system_args
+    from karml.md.lowering import runconfig_from_md_system_args
 
     spec = runconfig_from_md_system_args(_composition_args()).system
     assert spec.builder == "packmol"
@@ -93,21 +93,21 @@ def test_composition_still_selects_packmol() -> None:
 
 
 def test_explicit_builder_still_wins() -> None:
-    from mmml.md.lowering import runconfig_from_md_system_args
+    from karml.md.lowering import runconfig_from_md_system_args
 
     args = _args(from_pdb="x.pdb", composition=None, builder="pyxtal", box_size=30.0)
     assert runconfig_from_md_system_args(args).system.builder == "pyxtal"
 
 
 def test_guard_accepts_from_pdb() -> None:
-    from mmml.cli.run.md_system_unified import check_md_system_args_supported
+    from karml.cli.run.md_system_unified import check_md_system_args_supported
 
     check_md_system_args_supported(_from_pdb_args())  # must not raise
 
 
 def test_guard_rejects_neither_from_pdb_nor_composition() -> None:
     """Fail on the missing input, not deep inside the packmol builder."""
-    from mmml.cli.run.md_system_unified import check_md_system_args_supported
+    from karml.cli.run.md_system_unified import check_md_system_args_supported
 
     args = _args(from_pdb=None, composition=None, builder=None, box_size=30.0)
     with pytest.raises(ValueError, match="--from-pdb"):
@@ -115,7 +115,7 @@ def test_guard_rejects_neither_from_pdb_nor_composition() -> None:
 
 
 def test_guard_rejects_unsupported_builder() -> None:
-    from mmml.cli.run.md_system_unified import check_md_system_args_supported
+    from karml.cli.run.md_system_unified import check_md_system_args_supported
 
     args = _args(from_pdb=None, composition="TIP3:10", builder="pyxtal", box_size=30.0)
     with pytest.raises(NotImplementedError, match="pyxtal"):
@@ -124,8 +124,8 @@ def test_guard_rejects_unsupported_builder() -> None:
 
 def test_run_unified_jaxmd_routes_on_builder(monkeypatch) -> None:
     """The dispatch, not just the spec: from_pdb must not reach packmol."""
-    import mmml.cli.run.md_system_unified as unified
-    import mmml.interfaces.pycharmmInterface.import_pycharmm as import_pycharmm
+    import karml.cli.run.md_system_unified as unified
+    import karml.interfaces.pycharmmInterface.import_pycharmm as import_pycharmm
 
     monkeypatch.setattr(import_pycharmm, "ensure_pycharmm_loaded", lambda: True)
     routed: list[str] = []
@@ -150,10 +150,10 @@ def test_run_unified_jaxmd_routes_on_builder(monkeypatch) -> None:
 def test_builder_stays_from_pdb_after_the_alias_sets_composition() -> None:
     """``apply_from_pdb_alias`` sets composition=<pdb path>; that must not
     re-route the run to the packmol composition builder."""
-    from mmml.interfaces.pycharmmInterface.mlpot.composition_spec import (
+    from karml.interfaces.pycharmmInterface.mlpot.composition_spec import (
         apply_from_pdb_alias,
     )
-    from mmml.md.lowering import runconfig_from_md_system_args
+    from karml.md.lowering import runconfig_from_md_system_args
 
     args = _from_pdb_args()
     args.from_psf = None
@@ -167,7 +167,7 @@ def test_from_pdb_builder_reads_box_back_off_args() -> None:
     """The box is resolved during the load, so the pre-load spec cannot supply it."""
     import inspect
 
-    from mmml.cli.run.md_system_unified import build_from_pdb_system_with_ffparams
+    from karml.cli.run.md_system_unified import build_from_pdb_system_with_ffparams
 
     src = inspect.getsource(build_from_pdb_system_with_ffparams)
     assert 'getattr(args, "box_size", None) or spec.box_size' in src
@@ -180,9 +180,9 @@ def test_run_unified_applies_ml_resnames(monkeypatch) -> None:
     """ml_resnames must restrict ml_intra and merge solute mol_ids before assemble."""
     import numpy as np
 
-    import mmml.cli.run.md_system_unified as unified
-    import mmml.interfaces.pycharmmInterface.import_pycharmm as import_pycharmm
-    from mmml.md.system import MolecularSystem
+    import karml.cli.run.md_system_unified as unified
+    import karml.interfaces.pycharmmInterface.import_pycharmm as import_pycharmm
+    from karml.md.system import MolecularSystem
 
     monkeypatch.setattr(import_pycharmm, "ensure_pycharmm_loaded", lambda: True)
 
@@ -221,7 +221,7 @@ def test_run_unified_applies_ml_resnames(monkeypatch) -> None:
         captured["terms"] = run_config.terms
         return _Traj()
 
-    monkeypatch.setattr("mmml.md.assemble.assemble_and_run", _assemble)
+    monkeypatch.setattr("karml.md.assemble.assemble_and_run", _assemble)
 
     args = _from_pdb_args()
     args.ml_resnames = ["AMM1", "CH3CL"]

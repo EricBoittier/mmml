@@ -6,7 +6,7 @@ from pathlib import Path
 
 import numpy as np
 
-from mmml.interfaces.pycharmmInterface.mlpot.run_state_checkpoint import (
+from karml.interfaces.pycharmmInterface.mlpot.run_state_checkpoint import (
     load_overlap_run_state,
     load_run_state_tree,
     save_overlap_run_state,

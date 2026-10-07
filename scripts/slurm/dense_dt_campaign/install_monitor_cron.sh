@@ -8,7 +8,7 @@ mkdir -p "$LOG_DIR"
 chmod +x "$MONITOR" "${ROOT}/scripts/slurm/dense_dt_campaign/"*.sh
 
 CRON_LINE="*/15 * * * * PATH=${HOME}/.local/bin:${HOME}/.cargo/bin:/usr/bin:/bin:\$PATH /usr/bin/bash ${MONITOR} --react >> ${LOG_DIR}/monitor.log 2>&1"
-MARKER="# mmml-dense-dt-campaign-monitor"
+MARKER="# karml-dense-dt-campaign-monitor"
 
 TMP="$(mktemp)"
 ( crontab -l 2>/dev/null | grep -v "$MARKER" | grep -v "dense_dt_campaign/monitor_and_progress" || true ) > "$TMP"

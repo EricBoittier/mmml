@@ -3,7 +3,7 @@
 
 Input is the JSON written by ``scripts/scan_des_chemical_space.py`` — a real
 streaming pass over the SO3LR-format DES dimer set that ran the production
-CGenFF assignment (:mod:`mmml.data.cgenff_dataset`) on a strided sample. Nothing
+CGenFF assignment (:mod:`karml.data.cgenff_dataset`) on a strided sample. Nothing
 here is illustrative; every count comes from that scan.
 
 Outputs -> docs/images/des-so3lr-dimers/:
@@ -27,8 +27,8 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
-from mmml.data.cgenff_dataset import load_reference
-from mmml.utils.plotting.styles import apply_plot_style
+from karml.data.cgenff_dataset import load_reference
+from karml.utils.plotting.styles import apply_plot_style
 
 REPO = Path(__file__).resolve().parents[1]
 OUT = REPO / "docs" / "images" / "des-so3lr-dimers"

@@ -65,7 +65,7 @@ and versioning process.
   exceed 44 550**. Padding is not free — masked slots are still evaluated,
   because fixed shapes are what keeps the kernel jitted.
 
-  New `mmml.md.energy.capacity.pair_capacity` halves the shell estimate, applies
+  New `karml.md.energy.capacity.pair_capacity` halves the shell estimate, applies
   a single explicit `PAIR_HEADROOM`, and caps the result at `n(n-1)/2` minus the
   intramolecular pairs the builder drops. `PAIR_HEADROOM = 3.0` is chosen from
   measurement rather than inherited: on TIP3P water from 300 to 10 800 atoms the
@@ -99,7 +99,7 @@ and versioning process.
   measured number (**~7 000** at the time; the capacity fix above has since
   moved it to ~4 800). The two paths were competing answers to the same
   bottleneck — one arrived with the electrical-embedding work, the other grew
-  on `main` as `nl_skin_A` + `mmml.md.nl_cadence` — so the default was decided
+  on `main` as `nl_skin_A` + `karml.md.nl_cadence` — so the default was decided
   on data rather than on which landed last.
 
   **Correctness is identical**, which is what makes this a pure performance
@@ -134,7 +134,7 @@ and versioning process.
 ### Added
 
 - Metatomic ASE / PyCHARMM MLpot path (`uv sync --extra metatomic`): TorchScript
-  AtomisticModel (`.pt`) as CHARMM USER via `MetatomicMlpotModel`, with the MMML
+  AtomisticModel (`.pt`) as CHARMM USER via `MetatomicMlpotModel`, with the KARML
   fragment ML/MM scheme (`--metatomic-eval-mode fragments`) or a single whole-system
   evaluation. Optional JAX MM stays in an MM-only `setup_calculator` spherical_fn
   (torch is never jitted). The hybrid MLpot factory returns the metatomic adapter
@@ -146,17 +146,17 @@ and versioning process.
   PyCHARMM ENER/SD/NVE smoke is `tests/functionality/metatomic/pycharmm_md_smoke.py`.
   CPU cost vs bundled JAX PhysNet is `tests/functionality/metatomic/compare_jax_cost.py`.
   PET-MAD teacher → PhysNet student (acetone pool + synthetic augmentations) is
-  `mmml pet-physnet-distill`; dummy-teacher tests in
+  `karml pet-physnet-distill`; dummy-teacher tests in
   `tests/unit/test_pet_physnet_distill.py`.
   Periodic PET-MAD MD example: 32 Å liquid ethanol (ETOH:338 at 0.789 g/cm³,
   300 K, 0.5 fs, `--metatomic-eval-mode whole_system`) in
   `examples/pet_mad_etoh_pbc/` and
   [`docs/examples/pet-mad-etoh-pbc.md`](docs/examples/pet-mad-etoh-pbc.md).
   ASE NVE conservation path: FIRE mini then VelocityVerlet with a PE/KE/Etot
-  log (`run_nve.sh`). First-class CLI: `mmml metatomic-pbc-md` (CHARMM-free
+  log (`run_nve.sh`). First-class CLI: `karml metatomic-pbc-md` (CHARMM-free
   cubic liquid box; ethanol 32 Å / 300 K / 0.5 fs is the default recipe).
   YAML `nve` job is 0.2 ps after mini.
-  Interaction PES: `mmml pet-interaction-pes` writes linear OH···O vs
+  Interaction PES: `karml pet-interaction-pes` writes linear OH···O vs
   acceptor–acceptor 1D slices (O–O, not COM copies), an angular cut at
   \(r_e\), one 2D \(E_\mathrm{int}(r,\theta)\) surface (\(\theta\) =
   donor–H–acceptor), and a trimer leftover \(E_3\) (CHARMM-free single
@@ -177,15 +177,15 @@ and versioning process.
 - `md-system` `interaction_policy: ./policy.yaml`: config-relative path
   resolution, load/validate on all runners, fail-closed for multi-provider /
   near–far policies, manifest provenance. See `docs/md-interaction-policies.md`.
-- Batched pure-ML distance umbrella sampling (`mmml umbrella-sample`) and
-  CV MBAR post-processing (`mmml umbrella-mbar`): pack K restrained copies into
+- Batched pure-ML distance umbrella sampling (`karml umbrella-sample`) and
+  CV MBAR post-processing (`karml umbrella-mbar`): pack K restrained copies into
   one PhysNet/SpookyNet batch, NVT via JAX-MD Langevin by default (Nose-Hoover
   optional), optional Hamiltonian replica exchange (`--replica-exchange`), then
   pymbar. Seeding fixes `atom_i` and can rigidly translate `--move-with` groups
   (default `dt=0.1` fs). Exports CoM-centered window XYZs (optional) and an ASE
   `umbrella_bin_minima.traj` of the lowest `E_ML+W` frame per window. See
   `docs/umbrella.md`.
-- First-class CLI: `mmml compare-charmm-ml` (CHARMM PSF charges vs joint
+- First-class CLI: `karml compare-charmm-ml` (CHARMM PSF charges vs joint
   PhysNet/DCMNet dipoles and ESP on a validation split).
 
 - CI test-shape gates: `scripts/ci/check_test_report.py` reads the JUnit XML each
@@ -200,7 +200,7 @@ and versioning process.
   round-tripped perfectly and disagreed only with physics — invisible to any
   test of the module holding it. The guard parses the package with `ast` (no
   imports, so it also covers modules needing JAX/PySCF/CHARMM) and asserts that
-  every module-level constant reusing a `mmml.data.units` name agrees with the
+  every module-level constant reusing a `karml.data.units` name agrees with the
   canonical value, and that ~25 conversions with no canonical twin match an
   SI/CODATA derivation spelled out in the test. Tolerance 1e-4: rounded literals
   in the tree deviate by at most 1.5e-5, the historical `1.88873` transposition
@@ -219,7 +219,7 @@ and versioning process.
   `run_staged_workflow` alone holds 699 of the 902 uncovered statements in its
   module and caps that file near 35% coverage; the ratchet keeps the pattern
   from spreading while decomposition waits on the golden-record harness.
-- `MMML_DISABLE_CHARMM=1` makes CHARMM discovery report nothing and blocks
+- `KARML_DISABLE_CHARMM=1` makes CHARMM discovery report nothing and blocks
   `import pycharmm` outright, so `make test-ci` genuinely reproduces the
   libcharmm-free CI environment. Setting `CHARMM_LIB_DIR` to a nonexistent path
   does not work: a lib-less explicit override is treated as stale and replaced
@@ -304,8 +304,8 @@ and versioning process.
   `build_packmol_composition_cluster` now compares every monomer's covalent
   skeleton against the template Packmol placed, both before writing the cache and
   on cache hit, and raises instead of caching
-  (`mmml/utils/monomer_internal_geometry.py`, threshold 0.35 Å, override
-  `MMML_MAX_MONOMER_INTERNAL_DEVIATION_A`). Threshold calibrated on real
+  (`karml/utils/monomer_internal_geometry.py`, threshold 0.35 Å, override
+  `KARML_MAX_MONOMER_INTERNAL_DEVIATION_A`). Threshold calibrated on real
   pc-studix builds — worst healthy monomer across MEOH/TIP3, two densities and a
   20× range of minimization length was 0.073 Å
   (`scripts/validate_packmol_monomer_geometry.py`). `minimize_charmm_mm_only`
@@ -329,7 +329,7 @@ and versioning process.
   error during collection" and runs **zero** tests, so it failed the whole
   build rather than skipping one file. Guarded with a module-level skip;
   deferring that import in `lambda_dynamics` would let the tests run in CI.
-- `mmml pes-design` was registered without a `CLI_NAV_GROUPS` entry, which made
+- `karml pes-design` was registered without a `CLI_NAV_GROUPS` entry, which made
   `scripts/generate_cli_docs.py` refuse to run at all and left the generated
   CLI reference and package-architecture docs stale in CI.
 - **DCMNet dipole units.** `dcmnet/loss.py:pred_dipole` multiplied by `1.88873`
@@ -337,7 +337,7 @@ and versioning process.
   the Angstrom -> bohr factor `1.8897261` (5.3e-4 relative), and the unit was
   never Debye — both callers in `dcmnet/analysis.py` convert the residual with
   `au_to_debye` afterwards. The docstring now states atomic units (e*bohr) and
-  the factor comes from `mmml.data.units.ANGSTROM_TO_BOHR`.
+  the factor comes from `karml.data.units.ANGSTROM_TO_BOHR`.
 
   `dcmnet_ase.DCMNetCalculator._compute_molecular_dipole` carried the same
   literal under an "atomic units to Debye" comment while its input was
@@ -346,7 +346,7 @@ and versioning process.
   in the example script's printout. It now applies `EANGSTROM_TO_DEBYE`.
 
   `dcmnet/analysis.py` held a third independent literal for e*bohr -> Debye;
-  it now uses the shared `EBOHR_TO_DEBYE`, which `mmml.data.units` derives from
+  it now uses the shared `EBOHR_TO_DEBYE`, which `karml.data.units` derives from
   the other two so the chain cannot drift apart again. `au_to_kcal` likewise
   moved to `HARTREE_TO_KCAL_MOL` (`627.509` -> `627.509474`).
 
@@ -375,14 +375,14 @@ and versioning process.
   spawned a subprocess then died in the dynamic loader (exit -6) with a message
   naming neither the cause nor the culprit; six unrelated tests failed that way
   in a full-suite run while passing in isolation.
-- `python -m mmml.data.npz_schema` raised `NameError` instead of printing usage:
+- `python -m karml.data.npz_schema` raised `NameError` instead of printing usage:
   `sys` was imported inside `main()` only, but the module-level guard calls
   `sys.exit(main())`.
 - Codecov could not report a regression: `patch: false` waived coverage on new
   code entirely and a 50-percentage-point project threshold let total coverage
   halve while the status stayed green.
-- Missing comma in `mmml/data/qcml/atomic_reference_energies.json` that broke
-  `json.load` (and any import of `mmml.data`) after the QCML reference table
+- Missing comma in `karml/data/qcml/atomic_reference_energies.json` that broke
+  `json.load` (and any import of `karml.data`) after the QCML reference table
   update.
 
 ## [0.1.0a2] - 2026-07-27
@@ -432,7 +432,7 @@ than listing every prior commit.
 
 ### Highlights
 
-- Hybrid ML/MM molecular dynamics via `mmml md-system`, with ASE, JAX-MD, and
+- Hybrid ML/MM molecular dynamics via `karml md-system`, with ASE, JAX-MD, and
   PyCHARMM backends, and species-aware monomer/pair interaction ownership
   (see [`docs/md-interaction-policies.md`](docs/md-interaction-policies.md)).
 - Structure/box building (`make-res`, `make-box`, `build-crystal`,
@@ -441,17 +441,17 @@ than listing every prior commit.
   (`physnet-train`, `physnet-evaluate`, `train-joint`, `efield-train`,
   `efield-evaluate`).
 - MD analysis tooling: IR/VCD/Raman spectra from trajectories
-  (`mmml.spectra`), vibrational-mode / finite-difference validation
+  (`karml.spectra`), vibrational-mode / finite-difference validation
   (`mode-check`), and a capability-aware smoke-test matrix for scientific
-  validation campaigns (`mmml.validation.smoke_matrix`).
-- A FastAPI + web molecular viewer (`mmml gui`).
-- `mmml doctor` / `mmml health-check` / `mmml env` for verifying JAX, CHARMM,
+  validation campaigns (`karml.validation.smoke_matrix`).
+- A FastAPI + web molecular viewer (`karml gui`).
+- `karml doctor` / `karml health-check` / `karml env` for verifying JAX, CHARMM,
   and Packmol readiness before running a simulation.
 
 ### Changed
 
 - CLI reference docs (`docs/cli/commands/`) are now generated and CI-checked
-  from `mmml/cli/registry.py`; run `scripts/generate_cli_docs.py` after any
+  from `karml/cli/registry.py`; run `scripts/generate_cli_docs.py` after any
   CLI flag/command change (see `CLAUDE.md`).
 
 ### Removed
@@ -470,12 +470,12 @@ than listing every prior commit.
   first stable (non-alpha) release.
 - Dependency versions are loosely pinned outside of a few git-pinned extras
   (`jax-md`, `jax-pme`); expect to need `uv lock --upgrade` occasionally.
-- Test coverage is uneven across subpackages; `mmml/gui`'s FastAPI routes and
-  the OpenGL/OpenXR viewer, and parts of `mmml/interfaces/pycharmmInterface`
+- Test coverage is uneven across subpackages; `karml/gui`'s FastAPI routes and
+  the OpenGL/OpenXR viewer, and parts of `karml/interfaces/pycharmmInterface`
   that require a live PyCHARMM/MPI runtime, are exercised primarily by manual
   and CI-only (`tests/charmm_mpi/`) testing rather than by the default unit
   suite.
 
-[Unreleased]: https://github.com/EricBoittier/mmml/compare/v0.1.0a2...HEAD
-[0.1.0a2]: https://github.com/EricBoittier/mmml/compare/v0.1.0a1...v0.1.0a2
-[0.1.0a1]: https://github.com/EricBoittier/mmml/releases/tag/v0.1.0a1
+[Unreleased]: https://github.com/EricBoittier/karml/compare/v0.1.0a2...HEAD
+[0.1.0a2]: https://github.com/EricBoittier/karml/compare/v0.1.0a1...v0.1.0a2
+[0.1.0a1]: https://github.com/EricBoittier/karml/releases/tag/v0.1.0a1

@@ -3,7 +3,7 @@
 # DCM-only, L=28/32 Å (N ≤ 308 @ 100% bulk). No ACO; no L≥36 (OOM risk).
 #
 # Launch (both GPUs):
-#   MMML_WORKFLOW_CONFIG=config.gpu08.local.yaml \
+#   KARML_WORKFLOW_CONFIG=config.gpu08.local.yaml \
 #     nohup bash scripts/snakemake_local.sh 2 >> snakemake_gpu08.log 2>&1 &
 
 solvents: [DCM]
@@ -11,7 +11,7 @@ bulk_density_fractions: [0.9, 1.0]
 bulk_density_n_min: 10
 temperatures: [300.0]
 box_sizes: [28.0, 32.0]
-checkpoint: ${MMML_CKPT}
+checkpoint: ${KARML_CKPT}
 output_root: artifacts/pbc_liquid_density_gpu08
 seed_base: 7272
 
@@ -84,8 +84,8 @@ ml_switch_width: 1.5
 warmup_mlpot_jax: true
 warmup_do_mm: false
 
-mpirun_wrapper: ../../scripts/mmml-charmm-mpirun.sh
-MMML_MPI_NP: 1
+mpirun_wrapper: ../../scripts/karml-charmm-mpirun.sh
+KARML_MPI_NP: 1
 
 # Local executor: single fast GPU pool (no slow-tier split).
 slurm_gpu_nodes_slow: []

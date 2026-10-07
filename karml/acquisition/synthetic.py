@@ -6,7 +6,7 @@ from typing import Any
 
 import numpy as np
 
-from mmml.acquisition.ids import composition_key
+from karml.acquisition.ids import composition_key
 
 
 def make_smoke_pool(

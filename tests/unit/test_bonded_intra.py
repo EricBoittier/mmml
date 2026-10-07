@@ -12,7 +12,7 @@ import pytest
 
 def test_build_bonded_intra_evaluator_rejects_heterogeneous_monomers() -> None:
     """The batched path slices one static width, so mixed sizes must not proceed."""
-    from mmml.interfaces.pycharmmInterface.mmml_calculator import (
+    from karml.interfaces.pycharmmInterface.karml_calculator import (
         build_bonded_intra_evaluator,
     )
 
@@ -29,7 +29,7 @@ def test_build_bonded_intra_evaluator_requires_a_psf() -> None:
     That is not a water potential, and the failure would be invisible in the
     energies -- so it must raise rather than degrade.
     """
-    from mmml.interfaces.pycharmmInterface.mmml_calculator import (
+    from karml.interfaces.pycharmmInterface.karml_calculator import (
         build_bonded_intra_evaluator,
     )
 
@@ -48,7 +48,7 @@ def test_bonded_intra_contribution_sums_and_scatters() -> None:
     """
     import jax.numpy as jnp
 
-    from mmml.interfaces.pycharmmInterface.mmml_calculator import (
+    from karml.interfaces.pycharmmInterface.karml_calculator import (
         bonded_intra_contribution,
     )
 
@@ -83,7 +83,7 @@ def test_bonded_intra_damping_brackets_the_measured_regimes() -> None:
     """
     import jax.numpy as jnp
 
-    from mmml.interfaces.pycharmmInterface.mmml_calculator import bonded_intra_damping
+    from karml.interfaces.pycharmmInterface.karml_calculator import bonded_intra_damping
 
     kcal = 1.0 / 23.060548
     e = jnp.asarray([0.0, 0.3, 5.0, 10.0, 15.3, 40.0]) * kcal
@@ -109,7 +109,7 @@ def test_bonded_intra_damping_derivative_matches_finite_differences() -> None:
     """
     import jax.numpy as jnp
 
-    from mmml.interfaces.pycharmmInterface.mmml_calculator import bonded_intra_damping
+    from karml.interfaces.pycharmmInterface.karml_calculator import bonded_intra_damping
 
     kcal = 1.0 / 23.060548
     onset, cutoff = 5.0, 15.0
@@ -133,7 +133,7 @@ def test_bonded_intra_damping_derivative_matches_finite_differences() -> None:
 
 def test_resolve_bonded_intra_damping_defaults_to_off() -> None:
     """Silence here means existing bonded_intra runs keep their exact behaviour."""
-    from mmml.interfaces.pycharmmInterface.mmml_calculator import (
+    from karml.interfaces.pycharmmInterface.karml_calculator import (
         resolve_bonded_intra_damping,
     )
 
@@ -158,7 +158,7 @@ def test_bonded_intra_bundle_matches_the_unbundled_pieces() -> None:
     """The bundle is glue; it must not change the energy or force it glues."""
     import jax.numpy as jnp
 
-    from mmml.interfaces.pycharmmInterface.mmml_calculator import (
+    from karml.interfaces.pycharmmInterface.karml_calculator import (
         bonded_intra_bundle,
         bonded_intra_contribution,
         bonded_intra_damping,
@@ -282,7 +282,7 @@ def _assemble(sys_, positions):
     import jax
     import jax.numpy as jnp
 
-    from mmml.interfaces.pycharmmInterface.mmml_calculator import (
+    from karml.interfaces.pycharmmInterface.karml_calculator import (
         apply_bonded_intra_damping,
         bonded_intra_damping,
     )
@@ -319,7 +319,7 @@ def _total_damped_energy(sys_, positions):
     import jax
     import jax.numpy as jnp
 
-    from mmml.interfaces.pycharmmInterface.mmml_calculator import bonded_intra_damping
+    from karml.interfaces.pycharmmInterface.karml_calculator import bonded_intra_damping
 
     e_bonded_mono = jax.vmap(sys_["e_bonded"])(positions[sys_["mono_idx"]])
     s, _ = bonded_intra_damping(
@@ -431,7 +431,7 @@ def test_full_damping_zeroes_a_dimer(jax_x64) -> None:
 
 
 def test_md_system_parser_accepts_bonded_intra() -> None:
-    from mmml.cli.run.md_system import build_parser
+    from karml.cli.run.md_system import build_parser
 
     args = build_parser().parse_args(
         ["--ml-potential-mode", "bonded_intra", "--jax-mm-spoof-psf", "/tmp/x.psf"]
@@ -444,7 +444,7 @@ def test_md_system_parser_accepts_bonded_intra() -> None:
 
 
 def test_md_system_parser_accepts_the_damping_window() -> None:
-    from mmml.cli.run.md_system import build_parser
+    from karml.cli.run.md_system import build_parser
 
     args = build_parser().parse_args([])
     assert args.bonded_intra_damp_onset is None, "damping must be opt-in"
@@ -457,13 +457,13 @@ def test_md_system_parser_accepts_the_damping_window() -> None:
     assert args.bonded_intra_damp_cutoff == 12.0
 
 
-def test_factory_mmml_forwards_bonded_intra_configuration() -> None:
+def test_factory_karml_forwards_bonded_intra_configuration() -> None:
     """The mode is useless if the factory drops it before setup_calculator."""
     import inspect
 
-    from mmml.cli.run.md_pbc_suite.ase import _factory_mmml
+    from karml.cli.run.md_pbc_suite.ase import _factory_karml
 
-    params = inspect.signature(_factory_mmml).parameters
+    params = inspect.signature(_factory_karml).parameters
     assert "ml_potential_mode" in params
     assert "jax_mm_spoof_psf" in params
     assert "bonded_intra_damp_onset" in params
@@ -474,7 +474,7 @@ def test_setup_calculator_accepts_the_damping_window() -> None:
     """A renamed kwarg here would be a TypeError only at run time, on a cluster."""
     import inspect
 
-    from mmml.interfaces.pycharmmInterface.mmml_calculator import setup_calculator
+    from karml.interfaces.pycharmmInterface.karml_calculator import setup_calculator
 
     params = inspect.signature(setup_calculator).parameters
     assert params["bonded_intra_damp_onset_kcal"].default is None
@@ -493,10 +493,10 @@ def test_both_evaluate_backends_forward_the_damping_window() -> None:
     import ast
     from pathlib import Path
 
-    import mmml
+    import karml
 
-    source = (Path(mmml.__file__).parent / "cli/run/md_evaluate_npz.py").read_text()
-    wanted = {"_factory_mmml": "bonded_intra_damp_onset",
+    source = (Path(karml.__file__).parent / "cli/run/md_evaluate_npz.py").read_text()
+    wanted = {"_factory_karml": "bonded_intra_damp_onset",
               "setup_calculator": "bonded_intra_damp_onset_kcal"}
 
     seen = {name: 0 for name in wanted}

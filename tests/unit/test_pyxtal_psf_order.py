@@ -10,7 +10,7 @@ from ase import Atoms
 
 
 def test_assign_ase_cluster_to_psf_order_homogeneous(tmp_path):
-    from mmml.interfaces.pyxtal_placement import assign_ase_cluster_to_psf_order
+    from karml.interfaces.pyxtal_placement import assign_ase_cluster_to_psf_order
 
     tmpl_pos = np.array(
         [
@@ -52,7 +52,7 @@ def test_assign_ase_cluster_to_psf_order_homogeneous(tmp_path):
 
 
 def test_assign_ase_cluster_trims_excess_atoms(tmp_path):
-    from mmml.interfaces.pyxtal_placement import assign_ase_cluster_to_psf_order
+    from karml.interfaces.pyxtal_placement import assign_ase_cluster_to_psf_order
 
     tmpl_pos = np.array(
         [
@@ -92,7 +92,7 @@ def test_assign_ase_cluster_trims_excess_atoms(tmp_path):
 
 def test_assign_ase_cluster_connectivity_split_scrambled_order(tmp_path):
     """PyXtal exports atoms in crystal order, not contiguous per-molecule blocks."""
-    from mmml.interfaces.pyxtal_placement import assign_ase_cluster_to_psf_order
+    from karml.interfaces.pyxtal_placement import assign_ase_cluster_to_psf_order
 
     tmpl_pos = np.array(
         [
@@ -148,8 +148,8 @@ def test_assign_ase_cluster_connectivity_split_scrambled_order(tmp_path):
 
 
 def test_resolve_pyxtal_use_and_packmol_exclusion():
-    from mmml.interfaces.pycharmmInterface.packmol_placement import resolve_packmol_use
-    from mmml.interfaces.pyxtal_placement import resolve_pyxtal_use
+    from karml.interfaces.pycharmmInterface.packmol_placement import resolve_packmol_use
+    from karml.interfaces.pyxtal_placement import resolve_pyxtal_use
 
     assert resolve_pyxtal_use(composition="MEOH:4", pyxtal=True)
     assert not resolve_pyxtal_use(composition="MEOH:4", pyxtal=False)
@@ -164,7 +164,7 @@ def test_resolve_pyxtal_use_and_packmol_exclusion():
 
 
 def test_validate_pyxtal_cluster_args_rejects_packmol_combo():
-    from mmml.interfaces.pyxtal_placement import validate_pyxtal_cluster_args
+    from karml.interfaces.pyxtal_placement import validate_pyxtal_cluster_args
 
     with pytest.raises(ValueError, match="Cannot combine"):
         validate_pyxtal_cluster_args(

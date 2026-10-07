@@ -13,23 +13,23 @@ from unittest import mock
 import numpy as np
 import pytest
 
-from mmml.cli.run.md_pbc_suite.ase import (
+from karml.cli.run.md_pbc_suite.ase import (
     certified_box_geometry_requested,
     cluster_geometry_from_certified_artifacts,
     resolve_cluster_geometry,
 )
-from mmml.cli.run.md_system import build_command
+from karml.cli.run.md_system import build_command
 
 
 def test_ase_suite_import_does_not_eagerly_load_pycharmm():
     env = os.environ.copy()
-    env["MMML_WARMUP_MLPOT_JAX_ONLY"] = "1"
+    env["KARML_WARMUP_MLPOT_JAX_ONLY"] = "1"
     result = subprocess.run(
         [
             sys.executable,
             "-c",
             (
-                "import mmml.cli.run.md_pbc_suite.ase as suite; "
+                "import karml.cli.run.md_pbc_suite.ase as suite; "
                 "assert suite.read is None"
             ),
         ],
@@ -52,7 +52,7 @@ def test_certified_box_geometry_requested_requires_both():
 
 
 def test_maybe_apply_certified_box_json_overrides_box_size(tmp_path: Path):
-    from mmml.cli.run.md_pbc_suite.ase import _maybe_apply_certified_box_json
+    from karml.cli.run.md_pbc_suite.ase import _maybe_apply_certified_box_json
 
     crd = tmp_path / "model.crd"
     crd.write_text("dummy\n", encoding="utf-8")
@@ -75,7 +75,7 @@ def test_maybe_apply_certified_box_json_overrides_box_size(tmp_path: Path):
 
 
 def test_maybe_apply_certified_box_json_falls_back_to_box_size(tmp_path: Path):
-    from mmml.cli.run.md_pbc_suite.ase import _maybe_apply_certified_box_json
+    from karml.cli.run.md_pbc_suite.ase import _maybe_apply_certified_box_json
 
     crd = tmp_path / "model.crd"
     crd.write_text("dummy\n", encoding="utf-8")
@@ -97,7 +97,7 @@ def test_maybe_apply_certified_box_json_falls_back_to_box_size(tmp_path: Path):
 def test_maybe_apply_certified_box_json_requires_box_json_without_box_size(
     tmp_path: Path,
 ):
-    from mmml.cli.run.md_pbc_suite.ase import _maybe_apply_certified_box_json
+    from karml.cli.run.md_pbc_suite.ase import _maybe_apply_certified_box_json
 
     crd = tmp_path / "model.crd"
     crd.write_text("dummy\n", encoding="utf-8")
@@ -121,15 +121,15 @@ def test_resolve_cluster_geometry_uses_certified_artifacts(monkeypatch):
         return z, r0, 2, "dcm2"
 
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.load_cluster_from_artifacts",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.load_cluster_from_artifacts",
         _fake_load,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.trimer_scan.atoms_per_monomer_from_psf",
+        "karml.interfaces.pycharmmInterface.mlpot.trimer_scan.atoms_per_monomer_from_psf",
         lambda: [5, 5],
     )
     monkeypatch.setattr(
-        "mmml.cli.run.md_pbc_suite.ase._maybe_apply_certified_box_json",
+        "karml.cli.run.md_pbc_suite.ase._maybe_apply_certified_box_json",
         lambda *_a, **_k: 28.167,
     )
     packmol_calls = {"n": 0}
@@ -139,7 +139,7 @@ def test_resolve_cluster_geometry_uses_certified_artifacts(monkeypatch):
         raise AssertionError("Packmol rebuild must not run for certified geometry")
 
     monkeypatch.setattr(
-        "mmml.cli.run.md_pbc_suite.ase.build_initial_cluster_from_args",
+        "karml.cli.run.md_pbc_suite.ase.build_initial_cluster_from_args",
         _fail_build,
     )
 
@@ -161,15 +161,15 @@ def test_cluster_geometry_from_certified_requires_matching_atom_counts(monkeypat
         box_size=None,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.load_cluster_from_artifacts",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.load_cluster_from_artifacts",
         lambda _a: (np.zeros(5, dtype=int), np.zeros((5, 3)), 1, "x"),
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.trimer_scan.atoms_per_monomer_from_psf",
+        "karml.interfaces.pycharmmInterface.mlpot.trimer_scan.atoms_per_monomer_from_psf",
         lambda: [3, 3],
     )
     monkeypatch.setattr(
-        "mmml.cli.run.md_pbc_suite.ase._maybe_apply_certified_box_json",
+        "karml.cli.run.md_pbc_suite.ase._maybe_apply_certified_box_json",
         lambda *_a, **_k: 28.0,
     )
     with pytest.raises(ValueError, match="resid atom counts"):
@@ -180,7 +180,7 @@ def test_validate_psf_charges_works_when_module_psf_cache_is_none(monkeypatch):
     """Certified-box load never fills ase.psf; validation must import pycharmm.psf."""
     import types
 
-    import mmml.cli.run.md_pbc_suite.ase as ase_mod
+    import karml.cli.run.md_pbc_suite.ase as ase_mod
 
     fake_psf = types.SimpleNamespace(
         get_atype=lambda: np.array(["CG331", "HGA3", "CG331", "HGA3"], dtype=str),
@@ -206,7 +206,7 @@ def test_run_charmm_minimize_loads_module_cache_when_none(monkeypatch):
     """Certified-box path leaves ase.coor None; pre-min must hydrate the cache."""
     import types
 
-    import mmml.cli.run.md_pbc_suite.ase as ase_mod
+    import karml.cli.run.md_pbc_suite.ase as ase_mod
     from ase import Atoms
 
     pos = np.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]], dtype=float)
@@ -233,7 +233,7 @@ def test_run_charmm_minimize_loads_module_cache_when_none(monkeypatch):
     monkeypatch.setattr(ase_mod, "reset_block", lambda: None)
     monkeypatch.setattr(ase_mod.pyci, "pycharmm_quiet", lambda: None)
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.nbonds_config.apply_vacuum_nbonds",
+        "karml.interfaces.pycharmmInterface.nbonds_config.apply_vacuum_nbonds",
         lambda **_k: None,
     )
 
@@ -265,7 +265,7 @@ def test_build_command_jaxmd_forwards_from_psf_crd_and_skips_packmol():
 
 def parse_md_system_minimal(**overrides):
     """Build a Namespace sufficient for build_command(jaxmd)."""
-    from mmml.cli.run.md_system import parse_md_system_args
+    from karml.cli.run.md_system import parse_md_system_args
 
     base = [
         "--setup",
@@ -286,10 +286,10 @@ def parse_md_system_minimal(**overrides):
     if "from_crd" in overrides:
         base.extend(["--from-crd", str(overrides["from_crd"])])
     with mock.patch(
-        "mmml.cli.run.md_system._validate_packmol_args",
+        "karml.cli.run.md_system._validate_packmol_args",
         lambda _a: None,
     ), mock.patch(
-        "mmml.cli.run.md_system._validate_builder_args",
+        "karml.cli.run.md_system._validate_builder_args",
         lambda _a: None,
     ):
         return parse_md_system_args(base)

@@ -26,7 +26,7 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    from mmml.utils.pbc_super_system_plot import generate_pbc_doc_figures
+    from karml.utils.pbc_super_system_plot import generate_pbc_doc_figures
 
     paths = generate_pbc_doc_figures(args.output_dir)
     for name, path in paths.items():

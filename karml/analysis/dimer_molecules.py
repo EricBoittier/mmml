@@ -30,7 +30,7 @@ import numpy as np
 from ase import Atoms
 from ase.build import molecule as ase_molecule
 
-from mmml.analysis.dimer_scans import centered_atoms
+from karml.analysis.dimer_scans import centered_atoms
 
 
 # ---------------------------------------------------------------------------
@@ -366,7 +366,7 @@ for _pair, _cfg in PAIR_SCAN_CONFIG.items():
 
 def _to_campaign_label(label: str) -> str:
     """Map a user/CGenFF residue name onto a campaign ``MOLECULES`` key when possible."""
-    from mmml.interfaces.pycharmmInterface.cgenff_residues import (
+    from karml.interfaces.pycharmmInterface.cgenff_residues import (
         normalize_cgenff_residue_name,
     )
 
@@ -382,7 +382,7 @@ def _to_campaign_label(label: str) -> str:
 
 def _report_residue_label(label: str) -> str:
     """Prefer canonical CGenFF spelling in scan metadata when applicable."""
-    from mmml.interfaces.pycharmmInterface.cgenff_residues import (
+    from karml.interfaces.pycharmmInterface.cgenff_residues import (
         is_cgenff_residue_name,
         normalize_cgenff_residue_name,
     )
@@ -428,9 +428,9 @@ def make_oriented_scan_geometries(
     generate_missing:
         When True, unknown residues may be built via ``make-res`` (PyCHARMM).
     """
-    from mmml.analysis.dimer_scans import distance_scan_geometries_2d
-    from mmml.analysis.residue_geometry import load_residue_monomer_atoms
-    from mmml.interfaces.pycharmmInterface.cgenff_residues import is_cgenff_residue_name
+    from karml.analysis.dimer_scans import distance_scan_geometries_2d
+    from karml.analysis.residue_geometry import load_residue_monomer_atoms
+    from karml.interfaces.pycharmmInterface.cgenff_residues import is_cgenff_residue_name
 
     reported = (_report_residue_label(label_a), _report_residue_label(label_b))
     camp_a = _to_campaign_label(label_a)
@@ -474,7 +474,7 @@ def make_oriented_scan_geometries(
         if not is_cgenff_residue_name(key) and key not in {"WATER", "OCTANOL"}:
             raise KeyError(
                 f"Residue {label!r} is not a known campaign molecule or CGenFF "
-                "RESI. List names with: mmml make-res --list-residues"
+                "RESI. List names with: karml make-res --list-residues"
             )
 
     mon_a = centered_atoms(

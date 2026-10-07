@@ -1,4 +1,4 @@
-# `mmml efield-train`
+# `karml efield-train`
 
 Train external electric-field PhysNet.
 
@@ -6,13 +6,13 @@ Train external electric-field PhysNet.
 ## Usage
 
 ```bash
-mmml efield-train --help
+karml efield-train --help
 ```
 
 ## Options
 
 ```text
-usage: mmml efield-train [-h] [--data DATA] [--train-npz TRAIN_NPZ]
+usage: karml efield-train [-h] [--data DATA] [--train-npz TRAIN_NPZ]
                          [--valid-npz VALID_NPZ] [--test-npz TEST_NPZ]
                          [--output-dir OUTPUT_DIR] [--features FEATURES]
                          [--max_degree MAX_DEGREE]

@@ -6,7 +6,7 @@ What this script does:
 1) Converts an Orbax checkpoint to portable JSON (cross-platform).
 2) Builds a PSF/PDB cluster in PSF atom order using CHARMM residue generation.
 3) Runs PhysNetJax calculator test.
-4) Runs MMML hybrid calculator test.
+4) Runs KARML hybrid calculator test.
 """
 
 from __future__ import annotations
@@ -19,9 +19,9 @@ import ase
 import numpy as np
 from ase.io import write
 
-from mmml.cli.base import load_physnet_params_and_ef_model, resolve_checkpoint_paths
-import mmml.interfaces.pycharmmInterface.import_pycharmm as pyci
-from mmml.interfaces.pycharmmInterface.import_pycharmm import (
+from karml.cli.base import load_physnet_params_and_ef_model, resolve_checkpoint_paths
+import karml.interfaces.pycharmmInterface.import_pycharmm as pyci
+from karml.interfaces.pycharmmInterface.import_pycharmm import (
     coor,
     pycharmm,
     reset_block,
@@ -29,11 +29,11 @@ from mmml.interfaces.pycharmmInterface.import_pycharmm import (
 )
 reset_block()
 reset_block_no_internal()
-from mmml.interfaces.pycharmmInterface.mmml_calculator import CutoffParameters, setup_calculator
-from mmml.cli.run.md_pbc_suite.cluster import _build_psf_ordered_cluster
-from mmml.models.physnetjax.physnetjax.calc.helper_mlp import get_ase_calc
-from mmml.models.physnetjax.physnetjax.restart.restart import get_params_model
-from mmml.utils.model_checkpoint import orbax_to_json
+from karml.interfaces.pycharmmInterface.karml_calculator import CutoffParameters, setup_calculator
+from karml.cli.run.md_pbc_suite.cluster import _build_psf_ordered_cluster
+from karml.models.physnetjax.physnetjax.calc.helper_mlp import get_ase_calc
+from karml.models.physnetjax.physnetjax.restart.restart import get_params_model
+from karml.utils.model_checkpoint import orbax_to_json
 from orbax.checkpoint import PyTreeCheckpointer
 
 import pycharmm.psf as psf
@@ -44,7 +44,7 @@ import pycharmm.read as read
 import pycharmm.settings as settings
 import pycharmm.write as pywrite
 
-# Some MMML modules import these names from import_pycharmm, but they are not
+# Some KARML modules import these names from import_pycharmm, but they are not
 # always exported there. Inject them for compatibility in this utility script.
 pyci.read = read
 pyci.settings = settings
@@ -90,7 +90,7 @@ def run(args: argparse.Namespace) -> int:
         import shutil
 
         shutil.copy2(ckpt_root, portable_json)
-        from mmml.utils.model_checkpoint import load_model_checkpoint
+        from karml.utils.model_checkpoint import load_model_checkpoint
 
         ck_meta = load_model_checkpoint(ckpt_root, use_orbax=False)
         ckpt_natoms = int((ck_meta.get("config") or {}).get("natoms", 0))
@@ -203,27 +203,27 @@ def run(args: argparse.Namespace) -> int:
         verbose=True,
     )
     if len(calc_result) == 3:
-        mmml_calc, _, _ = calc_result
+        karml_calc, _, _ = calc_result
     else:
-        mmml_calc, _ = calc_result
-    atoms_mmml = atoms.copy()
-    atoms_mmml.calc = mmml_calc
-    mmml_energy = float(atoms_mmml.get_potential_energy())
-    mmml_forces = atoms_mmml.get_forces()
-    mmml_max_force = float(np.abs(mmml_forces).max())
-    mmml_model = getattr(mmml_calc, "results", {})
-    mmml_components = {
-        "total_E_eV": _to_float(mmml_model.get("model_energy", mmml_energy)),
-        "internal_E_eV": _to_float(mmml_model.get("model_internal_E", 0.0)),
-        "ml_2b_E_eV": _to_float(mmml_model.get("model_ml_2b_E", 0.0)),
-        "mm_E_eV": _to_float(mmml_model.get("model_mm_E", 0.0)),
-        "internal_F_max_eVA": float(np.abs(np.asarray(mmml_model.get("model_internal_F", 0.0))).max()) if "model_internal_F" in mmml_model else 0.0,
-        "ml_2b_F_max_eVA": float(np.abs(np.asarray(mmml_model.get("model_ml_2b_F", 0.0))).max()) if "model_ml_2b_F" in mmml_model else 0.0,
-        "mm_F_max_eVA": float(np.abs(np.asarray(mmml_model.get("model_mm_F", 0.0))).max()) if "model_mm_F" in mmml_model else 0.0,
+        karml_calc, _ = calc_result
+    atoms_karml = atoms.copy()
+    atoms_karml.calc = karml_calc
+    karml_energy = float(atoms_karml.get_potential_energy())
+    karml_forces = atoms_karml.get_forces()
+    karml_max_force = float(np.abs(karml_forces).max())
+    karml_model = getattr(karml_calc, "results", {})
+    karml_components = {
+        "total_E_eV": _to_float(karml_model.get("model_energy", karml_energy)),
+        "internal_E_eV": _to_float(karml_model.get("model_internal_E", 0.0)),
+        "ml_2b_E_eV": _to_float(karml_model.get("model_ml_2b_E", 0.0)),
+        "mm_E_eV": _to_float(karml_model.get("model_mm_E", 0.0)),
+        "internal_F_max_eVA": float(np.abs(np.asarray(karml_model.get("model_internal_F", 0.0))).max()) if "model_internal_F" in karml_model else 0.0,
+        "ml_2b_F_max_eVA": float(np.abs(np.asarray(karml_model.get("model_ml_2b_F", 0.0))).max()) if "model_ml_2b_F" in karml_model else 0.0,
+        "mm_F_max_eVA": float(np.abs(np.asarray(karml_model.get("model_mm_F", 0.0))).max()) if "model_mm_F" in karml_model else 0.0,
     }
-    mmml_sanity_failed = (
-        mmml_max_force <= args.mmml_zero_force_threshold
-        and abs(mmml_energy) > args.mmml_high_energy_threshold
+    karml_sanity_failed = (
+        karml_max_force <= args.karml_zero_force_threshold
+        and abs(karml_energy) > args.karml_high_energy_threshold
     )
 
     summary = {
@@ -245,11 +245,11 @@ def run(args: argparse.Namespace) -> int:
             "energy_eV": phys_energy,
             "max_force_eVA": float(np.abs(phys_forces).max()),
         },
-        "mmml": {
-            "energy_eV": mmml_energy,
-            "max_force_eVA": mmml_max_force,
-            "sanity_failed": bool(mmml_sanity_failed),
-            "components": mmml_components,
+        "karml": {
+            "energy_eV": karml_energy,
+            "max_force_eVA": karml_max_force,
+            "sanity_failed": bool(karml_sanity_failed),
+            "components": karml_components,
         },
     }
     summary_path = out_dir / "cluster_4res_test_summary.json"
@@ -261,27 +261,27 @@ def run(args: argparse.Namespace) -> int:
     print(f"CHARMM ENER pre/post (kcal/mol): {charmm_pre.get('ENER', float('nan')):.6f} -> {charmm_post.get('ENER', float('nan')):.6f}")
     print(f"PhysNetJax energy (eV): {phys_energy:.8f}")
     print(f"PhysNetJax max |force| (eV/A): {np.abs(phys_forces).max():.8f}")
-    print(f"MMML energy (eV): {mmml_energy:.8f}")
-    print(f"MMML max |force| (eV/A): {mmml_max_force:.8f}")
+    print(f"KARML energy (eV): {karml_energy:.8f}")
+    print(f"KARML max |force| (eV/A): {karml_max_force:.8f}")
     print(
-        "MMML components (eV): "
-        f"internal={mmml_components['internal_E_eV']:.6f}, "
-        f"ml_2b={mmml_components['ml_2b_E_eV']:.6f}, "
-        f"mm={mmml_components['mm_E_eV']:.6f}"
+        "KARML components (eV): "
+        f"internal={karml_components['internal_E_eV']:.6f}, "
+        f"ml_2b={karml_components['ml_2b_E_eV']:.6f}, "
+        f"mm={karml_components['mm_E_eV']:.6f}"
     )
     print(
-        "MMML component max|F| (eV/A): "
-        f"internal={mmml_components['internal_F_max_eVA']:.6e}, "
-        f"ml_2b={mmml_components['ml_2b_F_max_eVA']:.6e}, "
-        f"mm={mmml_components['mm_F_max_eVA']:.6e}"
+        "KARML component max|F| (eV/A): "
+        f"internal={karml_components['internal_F_max_eVA']:.6e}, "
+        f"ml_2b={karml_components['ml_2b_F_max_eVA']:.6e}, "
+        f"mm={karml_components['mm_F_max_eVA']:.6e}"
     )
     print(f"Summary: {summary_path}")
-    if mmml_sanity_failed:
+    if karml_sanity_failed:
         msg = (
-            "MMML sanity check failed: near-zero max force with high absolute energy. "
-            f"(energy={mmml_energy:.6f} eV, max|F|={mmml_max_force:.3e} eV/A)"
+            "KARML sanity check failed: near-zero max force with high absolute energy. "
+            f"(energy={karml_energy:.6f} eV, max|F|={karml_max_force:.3e} eV/A)"
         )
-        if args.strict_mmml_sanity:
+        if args.strict_karml_sanity:
             raise RuntimeError(msg)
         print(f"WARNING: {msg}")
     return 0
@@ -289,7 +289,7 @@ def run(args: argparse.Namespace) -> int:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Create PSF-ordered 4-residue cluster and test PhysNetJax + MMML calculators."
+        description="Create PSF-ordered 4-residue cluster and test PhysNetJax + KARML calculators."
     )
     parser.add_argument(
         "--checkpoint",
@@ -298,7 +298,7 @@ def parse_args() -> argparse.Namespace:
         help=(
             "Orbax root, epoch-* dir, or portable .json. "
             "Default: bundled manifest model with lowest validation force MAE "
-            "(or $MMML_CKPT)."
+            "(or $KARML_CKPT)."
         ),
     )
     parser.add_argument("--output-dir", type=Path, default=Path("artifacts/checkpoint_smoke"), help="Output directory")
@@ -306,20 +306,20 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--template-pdb",
         type=Path,
-        default=Path("mmml/generate/sample/pdb/meoh.pdb"),
+        default=Path("karml/generate/sample/pdb/meoh.pdb"),
         help="Template PDB whose atom-name coordinates seed each residue (PSF order applied).",
     )
     parser.add_argument("--n-molecules", type=int, default=4, help="Number of same residues in the cluster")
     parser.add_argument("--spacing", type=float, default=6.0, help="Residue COM grid spacing in Angstrom")
-    parser.add_argument("--ml-cutoff", type=float, default=5.0, help="MMML ML cutoff (Angstrom)")
-    parser.add_argument("--mm-switch-on", type=float, default=5.0, help="MMML switch-on (Angstrom)")
-    parser.add_argument("--mm-cutoff", type=float, default=3.0, help="MMML switch width (Angstrom)")
+    parser.add_argument("--ml-cutoff", type=float, default=5.0, help="KARML ML cutoff (Angstrom)")
+    parser.add_argument("--mm-switch-on", type=float, default=5.0, help="KARML switch-on (Angstrom)")
+    parser.add_argument("--mm-cutoff", type=float, default=3.0, help="KARML switch width (Angstrom)")
     parser.add_argument("--minimize-steps", type=int, default=500, help="PyCHARMM ABNR minimization steps")
     parser.add_argument("--tolenr", type=float, default=1e-3, help="ABNR energy tolerance")
     parser.add_argument("--tolgrd", type=float, default=1e-3, help="ABNR gradient tolerance")
-    parser.add_argument("--mmml-zero-force-threshold", type=float, default=1e-8, help="Near-zero MMML max force threshold")
-    parser.add_argument("--mmml-high-energy-threshold", type=float, default=1e3, help="High-energy threshold for MMML sanity check")
-    parser.add_argument("--strict-mmml-sanity", action="store_true", help="Raise error when MMML sanity check fails")
+    parser.add_argument("--karml-zero-force-threshold", type=float, default=1e-8, help="Near-zero KARML max force threshold")
+    parser.add_argument("--karml-high-energy-threshold", type=float, default=1e3, help="High-energy threshold for KARML sanity check")
+    parser.add_argument("--strict-karml-sanity", action="store_true", help="Raise error when KARML sanity check fails")
     return parser.parse_args()
 
 

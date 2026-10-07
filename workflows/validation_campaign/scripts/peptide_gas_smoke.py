@@ -77,7 +77,7 @@ def _worker(system: str, workdir: Path, temperature: float, steps: int) -> int:
     """Build, minimize, probe forces and run short NVE/NVT. Emits JSON on stdout."""
     import numpy as np
 
-    from mmml.interfaces.pycharmmInterface.peptide_builder import build_peptide_in_charmm
+    from karml.interfaces.pycharmmInterface.peptide_builder import build_peptide_in_charmm
 
     workdir.mkdir(parents=True, exist_ok=True)
     out: dict[str, Any] = {"system": system}

@@ -1,4 +1,4 @@
-"""SHAKE / RATTLE holonomic constraints (``mmml.md.constraints``).
+"""SHAKE / RATTLE holonomic constraints (``karml.md.constraints``).
 
 Rigid water is not optional on the ML path — the DES dimers the models are
 trained on have a fixed O-H — so the constraint projection runs on every step of
@@ -24,9 +24,9 @@ DT_PS = 0.5e-3
 
 def _constraint_setup(n_molecules: int):
     try:
-        from mmml.md.constraints import tip3_rigid_constraints
+        from karml.md.constraints import tip3_rigid_constraints
     except Exception as exc:  # pragma: no cover - branch-dependent
-        raise skip(f"mmml.md.constraints unavailable: {exc}") from exc
+        raise skip(f"karml.md.constraints unavailable: {exc}") from exc
 
     box = water_box(int(n_molecules))
     return tip3_rigid_constraints(int(n_molecules)), box
@@ -45,9 +45,9 @@ class ShakeProjection:
     def setup(self, n_waters, iterations):
         jax = require_jax()
         try:
-            from mmml.md.constraints import shake_positions
+            from karml.md.constraints import shake_positions
         except Exception as exc:  # pragma: no cover - branch-dependent
-            raise skip(f"mmml.md.constraints unavailable: {exc}") from exc
+            raise skip(f"karml.md.constraints unavailable: {exc}") from exc
 
         import jax.numpy as jnp
 
@@ -83,9 +83,9 @@ class RattleProjection:
     def setup(self, n_waters, iterations):
         jax = require_jax()
         try:
-            from mmml.md.constraints import rattle_velocities
+            from karml.md.constraints import rattle_velocities
         except Exception as exc:  # pragma: no cover - branch-dependent
-            raise skip(f"mmml.md.constraints unavailable: {exc}") from exc
+            raise skip(f"karml.md.constraints unavailable: {exc}") from exc
 
         import jax.numpy as jnp
 
@@ -130,7 +130,7 @@ class ConstrainedNVEStep:
         try:
             from jax_md import simulate, space
 
-            from mmml.md.constraints import constrained_nve
+            from karml.md.constraints import constrained_nve
         except Exception as exc:  # pragma: no cover - branch-dependent
             raise skip(f"constrained_nve unavailable: {exc}") from exc
 
@@ -181,9 +181,9 @@ class ConstraintResiduals:
     def setup(self, n_waters):
         jax = require_jax()
         try:
-            from mmml.md.constraints import constraint_residuals
+            from karml.md.constraints import constraint_residuals
         except Exception as exc:  # pragma: no cover - branch-dependent
-            raise skip(f"mmml.md.constraints unavailable: {exc}") from exc
+            raise skip(f"karml.md.constraints unavailable: {exc}") from exc
 
         import jax.numpy as jnp
 

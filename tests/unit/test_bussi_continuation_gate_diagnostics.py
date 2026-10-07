@@ -10,7 +10,7 @@ from unittest import mock
 import numpy as np
 import pytest
 
-from mmml.interfaces.pycharmmInterface.mlpot.bussi_continuation_gate_diagnostics import (
+from karml.interfaces.pycharmmInterface.mlpot.bussi_continuation_gate_diagnostics import (
     BUSSI_GATE_RESTART_LIVE_RMSD_EQUAL_A,
     DIAGNOSTICS_SCHEMA,
     bond_type_from_atomic_numbers,
@@ -24,7 +24,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.bussi_continuation_gate_diagnostics
     resolve_bussi_gate_diagnostics_path,
     write_bussi_continuation_gate_diagnostics,
 )
-from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
     _bussi_subchunk_grms_blocks_continuation,
 )
 
@@ -206,11 +206,11 @@ def test_gate_calls_dump_when_grms_exceeds_limit():
     ctx = SimpleNamespace(workflow_args=SimpleNamespace(output_dir="/tmp/x"))
     with (
         mock.patch(
-            "mmml.interfaces.pycharmmInterface.mlpot.cli_common.charmm_grms",
+            "karml.interfaces.pycharmmInterface.mlpot.cli_common.charmm_grms",
             return_value=70.0,
         ),
         mock.patch(
-            "mmml.interfaces.pycharmmInterface.mlpot.bussi_continuation_gate_diagnostics."
+            "karml.interfaces.pycharmmInterface.mlpot.bussi_continuation_gate_diagnostics."
             "dump_bussi_continuation_gate_diagnostics",
             return_value=Path("/tmp/x/cleanup/bussi_continuation_gate_step100.json"),
         ) as dump,
@@ -233,11 +233,11 @@ def test_gate_calls_dump_when_grms_exceeds_limit():
 def test_gate_skips_dump_when_grms_ok():
     with (
         mock.patch(
-            "mmml.interfaces.pycharmmInterface.mlpot.cli_common.charmm_grms",
+            "karml.interfaces.pycharmmInterface.mlpot.cli_common.charmm_grms",
             return_value=12.0,
         ),
         mock.patch(
-            "mmml.interfaces.pycharmmInterface.mlpot.bussi_continuation_gate_diagnostics."
+            "karml.interfaces.pycharmmInterface.mlpot.bussi_continuation_gate_diagnostics."
             "dump_bussi_continuation_gate_diagnostics"
         ) as dump,
     ):

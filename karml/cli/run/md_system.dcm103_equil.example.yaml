@@ -1,15 +1,15 @@
 # DCM:103 equilibration from a certified liquid-box artifact.
 #
 # Prerequisites:
-#   mmml liquid-box --config ...   → boxes/dcm103/{model.psf,model.crd,box.json}
+#   karml liquid-box --config ...   → boxes/dcm103/{model.psf,model.crd,box.json}
 #   ./scripts/ensure_charmm_mlpot_limits.sh --n-ml 103 --pbc --box-size <L>
 #   export CHARMM_LIB_DIR=.../tier_*_nodomdec/lib
 #
 # Run:
-#   mmml md-system --config mmml/cli/run/md_system.dcm103_equil.example.yaml \
+#   karml md-system --config karml/cli/run/md_system.dcm103_equil.example.yaml \
 #     --job-id dcm103_equil
 #
-# Preset docs: mmml/cli/run/presets/README.md
+# Preset docs: karml/cli/run/presets/README.md
 
 include:
   - presets/base-dt0.25.yaml

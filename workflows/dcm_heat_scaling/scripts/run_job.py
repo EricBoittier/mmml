@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run one DCM:N heat scaling job via mmml md-system."""
+"""Run one DCM:N heat scaling job via karml md-system."""
 
 from __future__ import annotations
 
@@ -26,26 +26,26 @@ def _repo_root() -> Path:
     return workflow_root().parents[1]
 
 
-def _resolve_mmml_cmd(md_argv: list[str]) -> list[str]:
-    mmml_bin = os.environ.get("MMML_BIN")
-    if mmml_bin:
-        return [mmml_bin, "md-system", *md_argv]
+def _resolve_karml_cmd(md_argv: list[str]) -> list[str]:
+    karml_bin = os.environ.get("KARML_BIN")
+    if karml_bin:
+        return [karml_bin, "md-system", *md_argv]
 
-    venv_mmml = _repo_root() / ".venv" / "bin" / "mmml"
-    if venv_mmml.is_file():
-        return [str(venv_mmml), "md-system", *md_argv]
+    venv_karml = _repo_root() / ".venv" / "bin" / "karml"
+    if venv_karml.is_file():
+        return [str(venv_karml), "md-system", *md_argv]
 
     from shutil import which
 
-    on_path = which("mmml")
+    on_path = which("karml")
     if on_path:
         return [on_path, "md-system", *md_argv]
 
-    return [sys.executable, "-m", "mmml.cli.__main__", "md-system", *md_argv]
+    return [sys.executable, "-m", "karml.cli.__main__", "md-system", *md_argv]
 
 
 def _resolve_mpirun_wrapper(cfg: dict) -> Path:
-    raw = Path(str(cfg.get("mpirun_wrapper", "../../scripts/mmml-charmm-mpirun.sh")))
+    raw = Path(str(cfg.get("mpirun_wrapper", "../../scripts/karml-charmm-mpirun.sh")))
     if raw.is_absolute():
         return raw
     return (workflow_root() / raw).resolve()
@@ -89,7 +89,7 @@ def main() -> int:
             raise SystemExit(f"MPI wrapper not found: {mpirun_wrapper}")
         cmd = [str(mpirun_wrapper), "md-system", *md_argv]
     else:
-        cmd = _resolve_mmml_cmd(md_argv)
+        cmd = _resolve_karml_cmd(md_argv)
 
     print(f"Running: {' '.join(cmd)}", flush=True)
     rc = subprocess.call(cmd)

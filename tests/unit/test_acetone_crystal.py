@@ -23,7 +23,7 @@ CONTACT_TOLERANCE_A = 0.01
 
 @pytest.fixture(scope="module")
 def phases():
-    from mmml.analysis.acetone_crystal import ACETONE_CRYSTAL_PHASES
+    from karml.analysis.acetone_crystal import ACETONE_CRYSTAL_PHASES
 
     return ACETONE_CRYSTAL_PHASES
 
@@ -51,7 +51,7 @@ def test_all_five_published_phases_are_bundled(phases):
     ],
 )
 def test_deposited_cell_matches_the_paper(key, lengths, volume, z, space_group):
-    from mmml.analysis.acetone_crystal import acetone_phase, read_acetone_phase
+    from karml.analysis.acetone_crystal import acetone_phase, read_acetone_phase
 
     phase = acetone_phase(key)
     assert phase.space_group_number == space_group
@@ -69,8 +69,8 @@ def test_symmetry_expansion_gives_whole_molecules_not_the_asymmetric_unit(phases
     If ASE ever stopped applying the operators this would silently return an
     eighth of the crystal, and every energy downstream would be wrong.
     """
-    from mmml.analysis.acetone_crystal import read_acetone_phase
-    from mmml.analysis.lattice_energy import unwrap_molecules
+    from karml.analysis.acetone_crystal import read_acetone_phase
+    from karml.analysis.lattice_energy import unwrap_molecules
 
     for key, phase in phases.items():
         atoms = read_acetone_phase(key)
@@ -90,7 +90,7 @@ def test_deuterated_neutron_structure_is_protiated_on_request():
     Left alone they inflate the density by 10%, which would quietly corrupt any
     comparison against the X-ray phases.
     """
-    from mmml.analysis.acetone_crystal import read_acetone_phase
+    from karml.analysis.acetone_crystal import read_acetone_phase
 
     heavy = read_acetone_phase("pbca_5k", protiate=False)
     light = read_acetone_phase("pbca_5k", protiate=True)
@@ -128,7 +128,7 @@ def test_disordered_high_pressure_phase_is_flagged(phases):
     ],
 )
 def test_published_carbonyl_contacts_are_reproduced(key, published):
-    from mmml.analysis.acetone_crystal import carbonyl_contacts, read_acetone_phase
+    from karml.analysis.acetone_crystal import carbonyl_contacts, read_acetone_phase
 
     contacts = carbonyl_contacts(read_acetone_phase(key), max_distance_A=3.8)
     distances = [c.distance_A for c in contacts]
@@ -150,7 +150,7 @@ def test_published_carbonyl_contacts_are_reproduced(key, published):
     ],
 )
 def test_published_ch_o_contacts_are_reproduced(key, published):
-    from mmml.analysis.acetone_crystal import ch_o_contacts, read_acetone_phase
+    from karml.analysis.acetone_crystal import ch_o_contacts, read_acetone_phase
 
     contacts = ch_o_contacts(read_acetone_phase(key), max_distance_A=3.0)
     distances = [c.distance_A for c in contacts]
@@ -162,7 +162,7 @@ def test_published_ch_o_contacts_are_reproduced(key, published):
 
 def test_carbonyl_motifs_are_classified_as_the_paper_describes():
     """Pbca shows antiparallel and perpendicular; Cmcm shows sheared-parallel."""
-    from mmml.analysis.acetone_crystal import carbonyl_contacts, read_acetone_phase
+    from karml.analysis.acetone_crystal import carbonyl_contacts, read_acetone_phase
 
     pbca = carbonyl_contacts(read_acetone_phase("pbca_150k"), max_distance_A=3.6)
     motifs = {c.motif for c in pbca}
@@ -177,7 +177,7 @@ def test_carbonyl_motifs_are_classified_as_the_paper_describes():
 
 def test_contacts_shorten_on_cooling_as_the_paper_reports():
     """The structural claim behind the 127 K heat-capacity anomaly."""
-    from mmml.analysis.acetone_crystal import ch_o_contacts, read_acetone_phase
+    from karml.analysis.acetone_crystal import ch_o_contacts, read_acetone_phase
 
     shortest = [
         ch_o_contacts(read_acetone_phase(key), max_distance_A=3.0)[0].distance_A
@@ -188,8 +188,8 @@ def test_contacts_shorten_on_cooling_as_the_paper_reports():
 
 @pytest.fixture(scope="module")
 def lattice_energy_150k():
-    from mmml.analysis.acetone_crystal import read_acetone_phase
-    from mmml.analysis.lattice_energy import crystal_lattice_energy
+    from karml.analysis.acetone_crystal import read_acetone_phase
+    from karml.analysis.lattice_energy import crystal_lattice_energy
 
     atoms = read_acetone_phase("pbca_150k")
     return crystal_lattice_energy(
@@ -220,8 +220,8 @@ def test_lattice_energy_regression(lattice_energy_150k):
 
 def test_sublimation_enthalpy_is_within_reach_of_experiment(lattice_energy_150k):
     """CGenFF overbinds the crystal, but by a force-field amount, not an order."""
-    from mmml.analysis.acetone_crystal import ACETONE_SUBLIMATION_REFERENCE
-    from mmml.analysis.lattice_energy import KCAL_MOL_TO_KJ_MOL
+    from karml.analysis.acetone_crystal import ACETONE_SUBLIMATION_REFERENCE
+    from karml.analysis.lattice_energy import KCAL_MOL_TO_KJ_MOL
 
     dh_kj = lattice_energy_150k.sublimation_enthalpy(150.0) * KCAL_MOL_TO_KJ_MOL
     reference = ACETONE_SUBLIMATION_REFERENCE.dsub_h_kj_mol
@@ -238,8 +238,8 @@ def test_lattice_energy_is_converged_at_the_default_cutoff():
     seconds, not a minute -- the convergence behaviour is a property of the sums,
     not of which crystal they are applied to.
     """
-    from mmml.analysis.acetone_crystal import read_acetone_phase
-    from mmml.analysis.lattice_energy import crystal_lattice_energy
+    from karml.analysis.acetone_crystal import read_acetone_phase
+    from karml.analysis.lattice_energy import crystal_lattice_energy
 
     atoms = read_acetone_phase("cmcm_160k")
     results = [
@@ -261,9 +261,9 @@ def test_learned_lj_scales_change_the_lattice_energy():
     Shrinking every well depth must weaken the crystal; the assertion is on the
     direction, since the magnitude depends on which types acetone uses.
     """
-    from mmml.analysis.acetone_crystal import read_acetone_phase
-    from mmml.analysis.lattice_energy import crystal_lattice_energy
-    from mmml.data.cgenff_dataset import load_reference
+    from karml.analysis.acetone_crystal import read_acetone_phase
+    from karml.analysis.lattice_energy import crystal_lattice_energy
+    from karml.data.cgenff_dataset import load_reference
 
     atoms = read_acetone_phase("cmcm_160k")
     n_types = len(load_reference().sigmas)

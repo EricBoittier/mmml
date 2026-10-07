@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Print monomer counts for the DCM / ACO density sweep.
 
-Uses mmml's own sizing helper so the table can never drift from what
+Uses karml's own sizing helper so the table can never drift from what
 ``md-system`` / ``liquid-box`` would actually build.
 
     uv run python workflows/liquid_density_sweep/scripts/print_density_table.py
@@ -26,7 +26,7 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import (
+    from karml.interfaces.pycharmmInterface.mlpot.box_sizing import (
         SOLVENT_BULK_PROPS,
         n_molecules_for_target_density_in_fixed_box,
     )
@@ -62,7 +62,7 @@ def main() -> int:
                 cells.append(f"{n:>6} ({n * atoms_per:>5} atoms)")
             print(f"{side:>6g} {solvent:>8} {rho:>7.3f} " + " ".join(cells))
     print("\nAtom counts are the ML-region size: compare against max_Nml from "
-          "`mmml doctor`.")
+          "`karml doctor`.")
     return 0
 
 

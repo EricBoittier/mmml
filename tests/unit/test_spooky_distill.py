@@ -17,8 +17,8 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from mmml.models.physnetjax.physnetjax.models.spooky_model import SpookyPhysNet
-from mmml.models.physnetjax.physnetjax.training.spooky_distill import (
+from karml.models.physnetjax.physnetjax.models.spooky_model import SpookyPhysNet
+from karml.models.physnetjax.physnetjax.training.spooky_distill import (
     EnergyAlignment,
     fit_energy_alignment,
     element_counts_from_atomic_numbers,
@@ -397,7 +397,7 @@ def _init_params(model, batch):
 @pytest.fixture(scope="module")
 def distill_fixture():
     trainer = _load_trainer()
-    from mmml.models.physnetjax.physnetjax.training.spooky_distill import (
+    from karml.models.physnetjax.physnetjax.training.spooky_distill import (
         fit_energy_alignment as _fit,
     )
 

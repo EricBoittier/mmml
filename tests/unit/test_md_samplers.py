@@ -5,13 +5,13 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from mmml.md.samplers.rigid import quat_from_axis_angle, quat_to_matrix
+from karml.md.samplers.rigid import quat_from_axis_angle, quat_to_matrix
 
 
 def test_import_samplers_is_jax_free():
     import sys
 
-    import mmml.md.samplers  # noqa: F401
+    import karml.md.samplers  # noqa: F401
 
     assert "jax" not in sys.modules or True  # jax may be loaded elsewhere; not required here
 
@@ -50,7 +50,7 @@ class _HarmonicToOrigin:
     def make(self, system, ctx):
         import jax.numpy as jnp
 
-        from mmml.md.energy.registry import TermFns
+        from karml.md.energy.registry import TermFns
 
         def energy_fn(R, **kw):
             return 0.5 * jnp.sum(R**2)
@@ -59,7 +59,7 @@ class _HarmonicToOrigin:
 
 
 def _two_triatomics():
-    from mmml.md.system import MolecularSystem
+    from karml.md.system import MolecularSystem
 
     # two rigid, bent triatomics offset from the origin
     a = np.array([[5.0, 0.0, 0.0], [5.9, 0.2, 0.0], [4.8, 0.9, 0.1]])
@@ -79,9 +79,9 @@ def _pairwise(sub):
 
 def test_rigid_moves_preserve_intramolecular_geometry():
     pytest.importorskip("jax")
-    from mmml.md.config import EnsembleSpec, RunConfig, SystemSpec
-    from mmml.md.energy import EnergyContext, HybridEnergy
-    from mmml.md.samplers.rigid import RigidBodySampler
+    from karml.md.config import EnsembleSpec, RunConfig, SystemSpec
+    from karml.md.energy import EnergyContext, HybridEnergy
+    from karml.md.samplers.rigid import RigidBodySampler
 
     system = _two_triatomics()
     energy = HybridEnergy([_HarmonicToOrigin()], system, EnergyContext())
@@ -103,9 +103,9 @@ def test_rigid_moves_preserve_intramolecular_geometry():
 
 def test_metropolis_runs_and_reports_acceptance():
     pytest.importorskip("jax")
-    from mmml.md.config import EnsembleSpec, RunConfig, SystemSpec
-    from mmml.md.energy import EnergyContext, HybridEnergy
-    from mmml.md.samplers.rigid import RigidBodySampler
+    from karml.md.config import EnsembleSpec, RunConfig, SystemSpec
+    from karml.md.energy import EnergyContext, HybridEnergy
+    from karml.md.samplers.rigid import RigidBodySampler
 
     system = _two_triatomics()
     energy = HybridEnergy([_HarmonicToOrigin()], system, EnergyContext())
@@ -126,9 +126,9 @@ def test_metropolis_runs_and_reports_acceptance():
 
 def test_zero_temperature_rejected():
     pytest.importorskip("jax")
-    from mmml.md.config import EnsembleSpec, RunConfig, SystemSpec
-    from mmml.md.energy import EnergyContext, HybridEnergy
-    from mmml.md.samplers.rigid import RigidBodySampler
+    from karml.md.config import EnsembleSpec, RunConfig, SystemSpec
+    from karml.md.energy import EnergyContext, HybridEnergy
+    from karml.md.samplers.rigid import RigidBodySampler
 
     system = _two_triatomics()
     energy = HybridEnergy([_HarmonicToOrigin()], system, EnergyContext())
@@ -145,7 +145,7 @@ def test_zero_temperature_rejected():
 
 def _mono_atom_pbc_system(n=4, spacing=5.0, box=20.0):
     """n single-atom "molecules" on a line, so mm_nonbonded needs a pair list."""
-    from mmml.md.system import FFParams, MolecularSystem
+    from karml.md.system import FFParams, MolecularSystem
 
     R = np.zeros((n, 3))
     R[:, 0] = np.arange(n) * spacing
@@ -171,10 +171,10 @@ def test_rigid_sampler_without_neighbor_fn_rejects_mm_nonbonded():
     pytest.importorskip("jax")
     import jax
 
-    from mmml.md.config import EnsembleSpec, RunConfig, SystemSpec
-    from mmml.md.energy import EnergyContext
-    from mmml.md.assemble import build_hybrid_energy
-    from mmml.md.samplers.rigid import RigidBodySampler
+    from karml.md.config import EnsembleSpec, RunConfig, SystemSpec
+    from karml.md.energy import EnergyContext
+    from karml.md.assemble import build_hybrid_energy
+    from karml.md.samplers.rigid import RigidBodySampler
 
     system = _mono_atom_pbc_system()
     energy = build_hybrid_energy(system, ("mm_nonbonded",), EnergyContext())
@@ -188,11 +188,11 @@ def test_rigid_sampler_without_neighbor_fn_rejects_mm_nonbonded():
 
 def test_rigid_sampler_with_neighbor_fn_runs_mm_nonbonded():
     pytest.importorskip("jax")
-    from mmml.md.config import EnsembleSpec, RunConfig, SystemSpec
-    from mmml.md.energy import EnergyContext
-    from mmml.md.assemble import build_hybrid_energy
-    from mmml.md.neighbors import make_intermolecular_neighbor_fn
-    from mmml.md.samplers.rigid import RigidBodySampler
+    from karml.md.config import EnsembleSpec, RunConfig, SystemSpec
+    from karml.md.energy import EnergyContext
+    from karml.md.assemble import build_hybrid_energy
+    from karml.md.neighbors import make_intermolecular_neighbor_fn
+    from karml.md.samplers.rigid import RigidBodySampler
 
     system = _mono_atom_pbc_system()
     energy = build_hybrid_energy(system, ("mm_nonbonded",), EnergyContext())
@@ -214,8 +214,8 @@ def test_assemble_and_run_auto_wires_neighbor_fn_for_rigid_sampler():
     """assemble_and_run must auto-wire mm_nonbonded's neighbor list for the
     rigid sampler exactly like it does for the MD driver."""
     pytest.importorskip("jax")
-    from mmml.md.assemble import assemble_and_run
-    from mmml.md.config import EnsembleSpec, RunConfig, SystemSpec
+    from karml.md.assemble import assemble_and_run
+    from karml.md.config import EnsembleSpec, RunConfig, SystemSpec
 
     system = _mono_atom_pbc_system()
     cfg = RunConfig(

@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from mmml.interfaces.pycharmmInterface.mlpot.topology_recovery import (
+from karml.interfaces.pycharmmInterface.mlpot.topology_recovery import (
     TopologyFingerprint,
     allow_psf_delete_reload,
     attach_topology_recovery_state,
@@ -29,7 +29,7 @@ def test_coerce_iblo_inb_accepts_an_empty_psf_exclusion_list():
 def test_per_atom_resids_expands_from_residue_table():
     import sys
 
-    from mmml.interfaces.pycharmmInterface.mlpot.topology_recovery import _per_atom_resids
+    from karml.interfaces.pycharmmInterface.mlpot.topology_recovery import _per_atom_resids
 
     mock_atom_info = MagicMock()
     mock_atom_info.get_res_ids.return_value = ["1", "1", "2", "2", "3"]
@@ -121,7 +121,7 @@ def test_attach_topology_recovery_state_sets_ctx_fields(tmp_path):
     ctx.pre_mlpot_inb = None
 
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.topology_recovery.capture_topology_fingerprint_from_charmm",
+        "karml.interfaces.pycharmmInterface.mlpot.topology_recovery.capture_topology_fingerprint_from_charmm",
         return_value=live_fp,
     ):
         attach_topology_recovery_state(ctx, psf)
@@ -148,23 +148,23 @@ def test_ensure_composition_unchanged_raises_on_mismatch():
         resids=(1, 1, 2),
     )
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.topology_recovery.capture_topology_fingerprint_from_charmm",
+        "karml.interfaces.pycharmmInterface.mlpot.topology_recovery.capture_topology_fingerprint_from_charmm",
         return_value=live,
     ), pytest.raises(RuntimeError, match="MLpot registration"):
         ensure_composition_unchanged(fp, context="test")
 
 
 def test_allow_psf_delete_reload_env(monkeypatch):
-    monkeypatch.delenv("MMML_ALLOW_PSF_DELETE_RELOAD", raising=False)
+    monkeypatch.delenv("KARML_ALLOW_PSF_DELETE_RELOAD", raising=False)
     assert allow_psf_delete_reload() is False
-    monkeypatch.setenv("MMML_ALLOW_PSF_DELETE_RELOAD", "1")
+    monkeypatch.setenv("KARML_ALLOW_PSF_DELETE_RELOAD", "1")
     assert allow_psf_delete_reload() is True
 
 
 def test_run_bonded_recovery_inplace_never_deletes_psf(tmp_path):
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import BondedMmMiniConfig
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
-    from mmml.interfaces.pycharmmInterface.mlpot.topology_recovery import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import BondedMmMiniConfig
+    from karml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
+    from karml.interfaces.pycharmmInterface.mlpot.topology_recovery import (
         BondedRecoveryMode,
         run_bonded_recovery_inplace,
     )
@@ -192,23 +192,23 @@ def test_run_bonded_recovery_inplace_never_deletes_psf(tmp_path):
     mock_py = MagicMock()
 
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.topology_recovery.capture_topology_fingerprint_from_charmm",
+        "karml.interfaces.pycharmmInterface.mlpot.topology_recovery.capture_topology_fingerprint_from_charmm",
         return_value=fp,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._with_mlpot_detached",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._with_mlpot_detached",
         side_effect=lambda _ctx, fn: fn(),
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.topology_recovery._apply_recovery_block",
+        "karml.interfaces.pycharmmInterface.mlpot.topology_recovery._apply_recovery_block",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.topology_recovery.prepare_rescue_lists_safe",
+        "karml.interfaces.pycharmmInterface.mlpot.topology_recovery.prepare_rescue_lists_safe",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._import_pycharmm_modules",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._import_pycharmm_modules",
         return_value=(mock_py, MagicMock(), MagicMock(), MagicMock()),
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.charmm_grms",
+        "karml.interfaces.pycharmmInterface.mlpot.cli_common.charmm_grms",
         return_value=0.1,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.charmm_levels.run_charmm_script_quiet",
+        "karml.interfaces.pycharmmInterface.charmm_levels.run_charmm_script_quiet",
     ):
         run_bonded_recovery_inplace(
             ctx,
@@ -229,7 +229,7 @@ def test_run_bonded_recovery_inplace_never_deletes_psf(tmp_path):
 def test_prepare_rescue_lists_safe_update_only_no_upinb():
     import sys
 
-    from mmml.interfaces.pycharmmInterface.mlpot.topology_recovery import (
+    from karml.interfaces.pycharmmInterface.mlpot.topology_recovery import (
         prepare_rescue_lists_safe,
     )
 
@@ -242,14 +242,14 @@ def test_prepare_rescue_lists_safe_update_only_no_upinb():
         sys.modules,
         {
             "pycharmm": mock_py,
-            "mmml.interfaces.pycharmmInterface.import_pycharmm": MagicMock(),
+            "karml.interfaces.pycharmmInterface.import_pycharmm": MagicMock(),
         },
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.assert_bonded_mm_energy_active",
+        "karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.assert_bonded_mm_energy_active",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_nbond_diagnostics.maybe_snapshot_nbond_state",
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_nbond_diagnostics.maybe_snapshot_nbond_state",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.charmm_levels.charmm_relaxed_bomlev",
+        "karml.interfaces.pycharmmInterface.charmm_levels.charmm_relaxed_bomlev",
         return_value=__import__("contextlib").nullcontext(),
     ):
         prepare_rescue_lists_safe(ctx, context="test")
@@ -260,7 +260,7 @@ def test_prepare_rescue_lists_safe_update_only_no_upinb():
 def test_prepare_rescue_lists_safe_pbc_uses_finalize_not_bare_update():
     import sys
 
-    from mmml.interfaces.pycharmmInterface.mlpot.topology_recovery import (
+    from karml.interfaces.pycharmmInterface.mlpot.topology_recovery import (
         prepare_rescue_lists_safe,
     )
 
@@ -275,17 +275,17 @@ def test_prepare_rescue_lists_safe_pbc_uses_finalize_not_bare_update():
         sys.modules,
         {
             "pycharmm": mock_py,
-            "mmml.interfaces.pycharmmInterface.import_pycharmm": MagicMock(),
+            "karml.interfaces.pycharmmInterface.import_pycharmm": MagicMock(),
         },
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.assert_bonded_mm_energy_active",
+        "karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.assert_bonded_mm_energy_active",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_nbond_diagnostics.maybe_snapshot_nbond_state",
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_nbond_diagnostics.maybe_snapshot_nbond_state",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup._resolve_mlpot_ctx_pbc_box_side",
+        "karml.interfaces.pycharmmInterface.mlpot.setup._resolve_mlpot_ctx_pbc_box_side",
         return_value=28.894,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup._finalize_pbc_mlpot_exclusions_after_param_read",
+        "karml.interfaces.pycharmmInterface.mlpot.setup._finalize_pbc_mlpot_exclusions_after_param_read",
     ) as finalize:
         prepare_rescue_lists_safe(ctx, context="test-pbc")
     finalize.assert_called_once()

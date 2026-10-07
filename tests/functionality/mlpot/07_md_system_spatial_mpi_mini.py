@@ -13,19 +13,19 @@ python tests/functionality/mlpot/07_md_system_spatial_mpi_mini.py --dry-run
 **Cluster mini (np>=2 recommended):**
 
 ```bash
-export MMML_CKPT=/path/to/DESdimers_params.json
-mmml mpi-check --tier2 --strict
+export KARML_CKPT=/path/to/DESdimers_params.json
+karml mpi-check --tier2 --strict
 
-MMML_MPI_NP=2 MMML_MLPOT_SPATIAL_MPI=1 \\
-  ./scripts/mmml-charmm-mpirun.sh md-system \\
-  --config mmml/cli/run/md_system.spatial_mpi.example.yaml \\
-  --checkpoint "$MMML_CKPT" \\
+KARML_MPI_NP=2 KARML_MLPOT_SPATIAL_MPI=1 \\
+  ./scripts/karml-charmm-mpirun.sh md-system \\
+  --config karml/cli/run/md_system.spatial_mpi.example.yaml \\
+  --checkpoint "$KARML_CKPT" \\
   --output-dir artifacts/spatial_mpi_mini_${SLURM_JOB_ID:-local}
 ```
 
 **Pass criteria:**
 
-1. Exit 0; ``stage_summary.json`` or ``mlpot_mmml`` artifacts under ``--output-dir``
+1. Exit 0; ``stage_summary.json`` or ``mlpot_karml`` artifacts under ``--output-dir``
 2. No segfault; finite energy in logs
 3. At ``np>1``: logs show spatial MPI / per-rank ML (not rank-0-only bridge warning)
 4. Optional: total energy within 0.01 kcal/mol of ``np=1`` reference mini
@@ -45,7 +45,7 @@ def _repo_root() -> Path:
 
 
 def _default_config() -> Path:
-    return _repo_root() / "mmml/cli/run/md_system.spatial_mpi.example.yaml"
+    return _repo_root() / "karml/cli/run/md_system.spatial_mpi.example.yaml"
 
 
 def _parse_args() -> argparse.Namespace:
@@ -64,7 +64,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--run",
         action="store_true",
-        help="Launch ``mmml md-system`` (requires PyCHARMM + checkpoint on cluster).",
+        help="Launch ``karml md-system`` (requires PyCHARMM + checkpoint on cluster).",
     )
     parser.add_argument("--checkpoint", default=None, help="Override checkpoint path")
     parser.add_argument("--output-dir", default=None, help="Override output_dir")
@@ -73,13 +73,13 @@ def _parse_args() -> argparse.Namespace:
 
 
 def _dry_run(config: Path) -> int:
-    from mmml.cli.run.md_config import load_yaml_config
-    from mmml.cli.run.md_system import build_pycharmm_command, parse_md_system_args
-    from mmml.interfaces.pycharmmInterface.mlpot.spatial_mpi_policy import (
+    from karml.cli.run.md_config import load_yaml_config
+    from karml.cli.run.md_system import build_pycharmm_command, parse_md_system_args
+    from karml.interfaces.pycharmmInterface.mlpot.spatial_mpi_policy import (
         spatial_mpi_enabled,
         sync_spatial_mpi_env_from_args,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.spatial_mpi_validate import (
+    from karml.interfaces.pycharmmInterface.mlpot.spatial_mpi_validate import (
         validate_tier2_spatial_mpi_env,
     )
 
@@ -102,8 +102,8 @@ def _dry_run(config: Path) -> int:
     if not spatial_mpi_enabled(args.ml_spatial_mpi):
         print("FAIL: spatial_mpi_enabled() is False after YAML parse", file=sys.stderr)
         return 1
-    if os.environ.get("MMML_MLPOT_SPATIAL_MPI") != "1":
-        print("FAIL: MMML_MLPOT_SPATIAL_MPI env not synced", file=sys.stderr)
+    if os.environ.get("KARML_MLPOT_SPATIAL_MPI") != "1":
+        print("FAIL: KARML_MLPOT_SPATIAL_MPI env not synced", file=sys.stderr)
         return 1
 
     cmd = build_pycharmm_command(args)
@@ -123,8 +123,8 @@ def _dry_run(config: Path) -> int:
     print("PASS dry-run: YAML → ml_spatial_mpi → --ml-spatial-mpi")
     print("Launch:")
     print(
-        "  MMML_MPI_NP=2 MMML_MLPOT_SPATIAL_MPI=1 "
-        "./scripts/mmml-charmm-mpirun.sh md-system "
+        "  KARML_MPI_NP=2 KARML_MLPOT_SPATIAL_MPI=1 "
+        "./scripts/karml-charmm-mpirun.sh md-system "
         f"--config {config}"
     )
     if tier2.errors:
@@ -142,7 +142,7 @@ def _run_md_system(config: Path, args: argparse.Namespace) -> int:
     cmd = [
         sys.executable,
         "-m",
-        "mmml.cli.__main__",
+        "karml.cli.__main__",
         "md-system",
         "--config",
         str(config),
@@ -162,7 +162,7 @@ def _run_md_system(config: Path, args: argparse.Namespace) -> int:
 
     out = Path(args.output_dir) if args.output_dir else None
     if out is None:
-        from mmml.cli.run.md_config import load_yaml_config
+        from karml.cli.run.md_config import load_yaml_config
 
         out = Path(load_yaml_config(config).get("output_dir", "artifacts/spatial_mpi_mini"))
     if not out.expanduser().exists():

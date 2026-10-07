@@ -10,7 +10,7 @@ Writes:
   - ``artifacts/md_embedding/aaa_docs/`` — train/build/eval artifacts
   - ``docs/images/examples/md-embedding/`` — PNG figures for MkDocs
   - ``docs/examples/md-embedding-results.md`` — metrics tables + figure links
-  - ``mmml/data/external/md_embedding_docs_summary.json`` — machine-readable summary
+  - ``karml/data/external/md_embedding_docs_summary.json`` — machine-readable summary
 """
 
 from __future__ import annotations
@@ -29,16 +29,16 @@ import numpy as np
 REPO = Path(__file__).resolve().parents[1]
 ARTIFACTS = REPO / "artifacts" / "md_embedding" / "aaa_docs"
 IMG = REPO / "docs" / "images" / "examples" / "md-embedding"
-SUMMARY_JSON = REPO / "mmml" / "data" / "external" / "md_embedding_docs_summary.json"
+SUMMARY_JSON = REPO / "karml" / "data" / "external" / "md_embedding_docs_summary.json"
 RESULTS_MD = REPO / "docs" / "examples" / "md-embedding-results.md"
-SHORT_CONFIG = REPO / "mmml" / "cli" / "run" / "md_embedding_aaa_train_short.example.yaml"
+SHORT_CONFIG = REPO / "karml" / "cli" / "run" / "md_embedding_aaa_train_short.example.yaml"
 
 
 def _run(cmd: list[str], *, cwd: Path | None = None, charmm_mpi: bool = False) -> None:
     print("+", " ".join(cmd), flush=True)
     env = os.environ.copy()
     if not charmm_mpi:
-        env["MMML_NO_CHARMM_MPI"] = "1"
+        env["KARML_NO_CHARMM_MPI"] = "1"
     subprocess.run(cmd, check=True, cwd=cwd or REPO, env=env)
 
 
@@ -66,7 +66,7 @@ def _copy_figures(artifacts: Path) -> list[str]:
 def _training_loss_plot(ckpt_dir: Path, out: Path) -> Path | None:
     """Plot train/valid loss from orbax metrics if present."""
     try:
-        from mmml.cli.misc.compare_training_runs import collect_all_metrics
+        from karml.cli.misc.compare_training_runs import collect_all_metrics
     except ImportError:
         return None
     if not ckpt_dir.is_dir():
@@ -89,7 +89,7 @@ def _training_loss_plot(ckpt_dir: Path, out: Path) -> Path | None:
 
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
-    from mmml.utils.plotting.styles import apply_plot_style
+    from karml.utils.plotting.styles import apply_plot_style
 
     apply_plot_style("icml")
     fig, ax = plt.subplots(figsize=(5.5, 3.5), dpi=140)
@@ -214,7 +214,7 @@ def main(argv: list[str] | None = None) -> int:
             [
                 py,
                 "-m",
-                "mmml.cli.__main__",
+                "karml.cli.__main__",
                 "md-embedding",
                 "train",
                 "-o",
@@ -229,7 +229,7 @@ def main(argv: list[str] | None = None) -> int:
         ) if (out / "checkpoints").is_dir() else []
         if runs:
             try:
-                from mmml.cli.misc.compare_training_runs import collect_all_metrics
+                from karml.cli.misc.compare_training_runs import collect_all_metrics
 
                 m = collect_all_metrics(runs[-1], verbose=False)
                 if m is not None and len(m.get("valid_loss", [])):
@@ -255,7 +255,7 @@ def main(argv: list[str] | None = None) -> int:
                 [
                     py,
                     "-m",
-                    "mmml.cli.__main__",
+                    "karml.cli.__main__",
                     "physnet-evaluate",
                     "--checkpoint",
                     ckpt_json,
@@ -291,7 +291,7 @@ def main(argv: list[str] | None = None) -> int:
             [
                 py,
                 "-m",
-                "mmml.cli.__main__",
+                "karml.cli.__main__",
                 "md-embedding",
                 "build",
                 "-o",
@@ -309,7 +309,7 @@ def main(argv: list[str] | None = None) -> int:
             [
                 py,
                 "-m",
-                "mmml.cli.__main__",
+                "karml.cli.__main__",
                 "md-embedding",
                 "run",
                 "-o",

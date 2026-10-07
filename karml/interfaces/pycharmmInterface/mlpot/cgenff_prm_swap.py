@@ -13,7 +13,7 @@ _ml_torsions_deleted: bool = False
 
 
 def _cgenff_data_dir() -> Path:
-    # .../mmml/interfaces/pycharmmInterface/mlpot/cgenff_prm_swap.py -> mmml/data/charmm
+    # .../karml/interfaces/pycharmmInterface/mlpot/cgenff_prm_swap.py -> karml/data/charmm
     return Path(__file__).resolve().parents[3] / "data" / "charmm"
 
 
@@ -36,21 +36,21 @@ def zeroed_cgenff_prm_path(*, bonded_only: bool = False) -> Path:
 
 
 def _read_cgenff_prm(path: Path) -> None:
-    from mmml.interfaces.pycharmmInterface.nbonds_config import read_cgenff_prm
+    from karml.interfaces.pycharmmInterface.nbonds_config import read_cgenff_prm
 
     if not path.is_file():
         raise FileNotFoundError(
             f"CGENFF parameter file not found: {path}\n"
             "Generate zeroed copies with:\n"
             "  uv run python scripts/zero_charmm_prm.py "
-            "mmml/data/charmm/par_all36_cgenff.prm "
-            "mmml/data/charmm/zeroed_par_all36_cgenff.prm\n"
+            "karml/data/charmm/par_all36_cgenff.prm "
+            "karml/data/charmm/zeroed_par_all36_cgenff.prm\n"
             "  uv run python scripts/zero_charmm_prm.py "
-            "mmml/data/charmm/par_all36_cgenff.prm "
-            "mmml/data/charmm/zeroed_bonded_par_all36_cgenff.prm --bonded-only\n"
+            "karml/data/charmm/par_all36_cgenff.prm "
+            "karml/data/charmm/zeroed_bonded_par_all36_cgenff.prm --bonded-only\n"
             "  uv run python scripts/zero_charmm_prm.py "
-            "mmml/data/charmm/par_all36_cgenff.prm "
-            "mmml/data/charmm/bonded_par_all36_cgenff.prm --extract-bonded-only"
+            "karml/data/charmm/par_all36_cgenff.prm "
+            "karml/data/charmm/bonded_par_all36_cgenff.prm --extract-bonded-only"
         )
     read_cgenff_prm(path, append=True)
 
@@ -65,8 +65,8 @@ def psf_bond_count() -> int:
     import pycharmm
     import pycharmm.lingo as lingo
 
-    lingo.charmm_script("SET __mmml_nbond ?NBOND")
-    value = pycharmm.get_charmm_variable("__MMML_NBOND")
+    lingo.charmm_script("SET __karml_nbond ?NBOND")
+    value = pycharmm.get_charmm_variable("__KARML_NBOND")
     return int(value) if value is not None else 0
 
 
@@ -86,8 +86,8 @@ def psf_is_all_monoatomic() -> bool:
         import pycharmm
         import pycharmm.lingo as lingo
 
-        lingo.charmm_script("SET __mmml_nres ?NRES")
-        value = pycharmm.get_charmm_variable("__MMML_NRES")
+        lingo.charmm_script("SET __karml_nres ?NRES")
+        value = pycharmm.get_charmm_variable("__KARML_NRES")
         n_res = int(value) if value is not None else -1
     return n_atom > 0 and n_atom == n_res
 
@@ -124,7 +124,7 @@ def apply_zeroed_cgenff_params(
         if bonded_only
         else f"CGENFF params: zeroed bonded+nonbond ({path.name})"
     )
-    from mmml.utils.rich_report import emit_charmm_block
+    from karml.utils.rich_report import emit_charmm_block
 
     emit_charmm_block(summary, verbose=verbose)
     if verbose:
@@ -144,14 +144,14 @@ def apply_full_cgenff_params(*, verbose: bool = False, force: bool = False) -> N
     (``crystal free``) and clears IMAGE tables.  Callers that run ``UPDATE`` afterward
     must rebuild crystal + ML exclusions first (see
     ``_finalize_pbc_mlpot_exclusions_after_param_read`` /
-    :func:`~mmml.interfaces.pycharmmInterface.mlpot.topology_recovery.prepare_rescue_lists_safe`).
+    :func:`~karml.interfaces.pycharmmInterface.mlpot.topology_recovery.prepare_rescue_lists_safe`).
 
     Hybrid registration's ML atom type copies
-    (:mod:`~mmml.interfaces.pycharmmInterface.mlpot.ml_type_copies`) are
+    (:mod:`~karml.interfaces.pycharmmInterface.mlpot.ml_type_copies`) are
     undone first, so ML bonds and angles get their CGenFF parameters back.
 
     Dihedral/improper/CMAP terms that MLpot registration deleted from the PSF
-    on ML atoms (:func:`~mmml.interfaces.pycharmmInterface.mlpot.block_terms.delete_ml_torsion_terms`)
+    on ML atoms (:func:`~karml.interfaces.pycharmmInterface.mlpot.block_terms.delete_ml_torsion_terms`)
     are **not** restored: bonded-MM recovery then runs on ML atoms without
     torsions (a one-time warning says so). Only a PSF reload restores them.
 
@@ -163,7 +163,7 @@ def apply_full_cgenff_params(*, verbose: bool = False, force: bool = False) -> N
     """
     global _active_mode
     _warn_if_ml_torsions_deleted()
-    from mmml.interfaces.pycharmmInterface.mlpot.ml_type_copies import (
+    from karml.interfaces.pycharmmInterface.mlpot.ml_type_copies import (
         restore_ml_atom_types,
     )
 
@@ -179,7 +179,7 @@ def apply_full_cgenff_params(*, verbose: bool = False, force: bool = False) -> N
     n_bond = assert_psf_bonds_present(context="CGENFF MM restore")
     _active_mode = "full"
     summary = f"CGENFF params: bonded restore ({path.name}; PSF bonds={n_bond})"
-    from mmml.utils.rich_report import emit_charmm_block
+    from karml.utils.rich_report import emit_charmm_block
 
     emit_charmm_block(summary, verbose=verbose)
     if verbose:

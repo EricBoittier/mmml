@@ -17,7 +17,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from mmml.models.physnetjax.physnetjax.data.read_h5 import (
+from karml.models.physnetjax.physnetjax.data.read_h5 import (
     _cache_key,
     _cache_key_flat,
     _concatenate_data_dicts,

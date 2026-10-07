@@ -1,21 +1,21 @@
-# `mmml run`
+# `karml run`
 
 MM/ML simulation (ASE + JAX-MD hybrid).
 
 !!! warning "legacy"
-    Legacy command. Prefer **`mmml md-system`**. Prefer md-system for new MD; run kept for hybrid calculator demos.
+    Legacy command. Prefer **`karml md-system`**. Prefer md-system for new MD; run kept for hybrid calculator demos.
 
 
 ## Usage
 
 ```bash
-mmml run --help
+karml run --help
 ```
 
 ## Options
 
 ```text
-usage: mmml run [-h] --pdbfile PDBFILE --checkpoint CHECKPOINT [--validate]
+usage: karml run [-h] --pdbfile PDBFILE --checkpoint CHECKPOINT [--validate]
                 [--energy-catch ENERGY_CATCH] [--cell CELL]
                 [--flat-bottom-radius Å] [--flat-bottom-k eV/Å²]
                 [--flat-bottom-mode {system,monomer}]
@@ -205,7 +205,7 @@ Other options:
                         Defaults: legacy mode -> mm_switch_on*0.9; complementary
                         -> (mm_switch_on-ml_switch_width)*0.9.
   --ml-gpu-count N      Parallel PhysNet chunks on N local GPUs (default 1; or
-                        MMML_MLPOT_N_GPUS).
+                        KARML_MLPOT_N_GPUS).
   --use-ema, --no-use-ema
                         Deploy the checkpoint's EMA params (default: on; Orbax
                         only). Use --no-use-ema for the live training weights.

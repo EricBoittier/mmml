@@ -1,15 +1,15 @@
 # PyCHARMM C API: periodic box and pressure tensor
 
-MMML’s default `libcharmm.so` is a **KEY_LIBRARY** build: many CHARMM **script commands are not linked** (`open`, `nbonds`, `crystal`, `mini`, `dynamics`, `pressure`, …). Failures often appear as truncated warnings (`Unrecognized command: crys`, `mini`, `pres`, …).
+KARML’s default `libcharmm.so` is a **KEY_LIBRARY** build: many CHARMM **script commands are not linked** (`open`, `nbonds`, `crystal`, `mini`, `dynamics`, `pressure`, …). Failures often appear as truncated warnings (`Unrecognized command: crys`, `mini`, `pres`, …).
 
-For periodic workflows, MMML routes box setup, minimization, dynamics, and pressure handling through the **C API** (`pycharmm.*` → `libcharmm` Fortran exports). This page summarizes what you can **get** and **set**, where MMML uses it, and what still requires a `libcharmm` rebuild after API patches.
+For periodic workflows, KARML routes box setup, minimization, dynamics, and pressure handling through the **C API** (`pycharmm.*` → `libcharmm` Fortran exports). This page summarizes what you can **get** and **set**, where KARML uses it, and what still requires a `libcharmm` rebuild after API patches.
 
 Related:
 
 - [PyCHARMM MPI](pycharmm-mpi.md) — launcher, MPI-linked builds
 - [md-system YAML configs](md-system-configs.md) — `box_size`, NPT, liquid prep
 - [NpT jax-md ↔ PyCHARMM CPT (apples to apples)](npt-jaxmd-charmm-comparison.md) — shared pressure / strain virial
-- Rebuild script: [`scripts/rebuild_charmm_mlpot.sh`](https://github.com/EricBoittier/mmml/blob/main/scripts/rebuild_charmm_mlpot.sh)
+- Rebuild script: [`scripts/rebuild_charmm_mlpot.sh`](https://github.com/EricBoittier/karml/blob/main/scripts/rebuild_charmm_mlpot.sh)
 
 ---
 
@@ -27,7 +27,7 @@ Related:
 After changing `setup/charmm/source/api/*.F90`, rebuild:
 
 ```bash
-cd ~/mmml && bash scripts/rebuild_charmm_mlpot.sh
+cd ~/karml && bash scripts/rebuild_charmm_mlpot.sh
 python -c "import pycharmm.lib as l; c=l.charmm; print('crystal_free', hasattr(c,'crystal_free')); print('dynamics_run_kw', hasattr(c,'dynamics_run_kw'))"
 ```
 
@@ -44,7 +44,7 @@ python -c "import pycharmm.lib as l; c=l.charmm; print('crystal_free', hasattr(c
 | Workflow push | `push_charmm_cubic_box_side_A(L)` | Skips if live box already matches; safe **before MLpot registration** |
 
 ```python
-from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+from karml.interfaces.pycharmmInterface.mlpot.pbc_env import (
     push_charmm_cubic_box_side_A,
     prepare_charmm_pbc,
 )
@@ -52,7 +52,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
 side, source = push_charmm_cubic_box_side_A(32.0, quiet=True)
 ```
 
-**When MMML sets the box**
+**When KARML sets the box**
 
 - Initial PBC registration (`setup_charmm_environment`)
 - Post-build MC density equalization → final side passed into `setup_charmm_environment` (MC runs **before** CHARMM PBC install)
@@ -76,7 +76,7 @@ Resolution order in `resolve_charmm_cubic_box_side_A`:
 4. Workflow fallback (`box_size`, last known MIC side)
 
 ```python
-from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+from karml.interfaces.pycharmmInterface.mlpot.pbc_env import (
     get_charmm_cubic_box_side_A,
     resolve_charmm_cubic_box_side_A,
 )
@@ -106,7 +106,7 @@ Two different tensors matter:
 
 There is **no** standalone `crystal_set_pressure` API. Reference pressure is parsed when **CPT dynamics starts**, via the `dynamics_run_kw` keyword tail (same tokens as after `DYNAMics CPT` in a script).
 
-MMML helpers live in `mmml.interfaces.pycharmmInterface.mlpot.pressure_tensor`:
+KARML helpers live in `karml.interfaces.pycharmmInterface.mlpot.pressure_tensor`:
 
 | YAML / CLI | Dynamics keywords |
 |------------|-------------------|
@@ -122,7 +122,7 @@ npt_pressure_log_interval: 100       # writes equi/prod *_pressure_tensor.dat
 ```
 
 ```bash
-mmml md-system ... \
+karml md-system ... \
   --npt-pressure 1.0 \
   --npt-pressure-tensor 2,1,1,0,0,0 \
   --npt-pressure-log-interval 100
@@ -153,7 +153,7 @@ p_yy = lingo.get_energy_value("PIYY")
 p_zz = lingo.get_energy_value("PIZZ")
 ```
 
-MMML’s `report_instantaneous_pressure_tensor` (before equi/prod) uses the
+KARML’s `report_instantaneous_pressure_tensor` (before equi/prod) uses the
 `get_energy_value` path (`PRSI` / `PIXX–PIZZ`) — not the `pressure` script
 (KEY_LIBRARY would warn `Unrecognized command: pres`).
 
@@ -217,9 +217,9 @@ flowchart TB
 
 | Module | Role |
 |--------|------|
-| `mmml...mlpot.pbc_env` | Box get/set, `prepare_charmm_pbc`, `push_charmm_cubic_box_side_A`, pretreat sync |
-| `mmml...mlpot.pressure_tensor` | `NptPressureTensor`, CPT reference kwargs, IUPTEN logging |
-| `mmml...mlpot.dynamics` | `build_cpt_*_dynamics`, `dynamics_run_kw` integration |
+| `karml...mlpot.pbc_env` | Box get/set, `prepare_charmm_pbc`, `push_charmm_cubic_box_side_A`, pretreat sync |
+| `karml...mlpot.pressure_tensor` | `NptPressureTensor`, CPT reference kwargs, IUPTEN logging |
+| `karml...mlpot.dynamics` | `build_cpt_*_dynamics`, `dynamics_run_kw` integration |
 | `pycharmm.crystal` | `define_cubic`, `build`, `free_crystal`, `get_cubic_side` |
 | `pycharmm.image` | `get_ucell` |
 | `pycharmm.lingo` | `get_energy_value` for `PIXX` / `PRSI` / … |

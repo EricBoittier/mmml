@@ -3,16 +3,16 @@
 # Usage: bash scripts/snakemake_slurm.sh [MAX_JOBS] [extra snakemake args...]
 #
 #   nohup bash scripts/snakemake_slurm.sh 8 > snakemake_gpu.log 2>&1 &
-#   MMML_WORKFLOW_CONFIG=config.smoke.yaml bash scripts/snakemake_slurm.sh 3
+#   KARML_WORKFLOW_CONFIG=config.smoke.yaml bash scripts/snakemake_slurm.sh 3
 set -euo pipefail
 
 WORKFLOW_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$WORKFLOW_ROOT"
 REPO_ROOT="$(cd "$WORKFLOW_ROOT/../.." && pwd)"
-# shellcheck source=../../../scripts/resolve_mmml_env.sh
-source "$REPO_ROOT/scripts/resolve_mmml_env.sh"
-mmml_resolve_env "$REPO_ROOT"
-PY="${MMML_PYTHON}"
+# shellcheck source=../../../scripts/resolve_karml_env.sh
+source "$REPO_ROOT/scripts/resolve_karml_env.sh"
+karml_resolve_env "$REPO_ROOT"
+PY="${KARML_PYTHON}"
 
 # Controller should run on the login node. An interactive GPU shell often holds
 # the device and causes cuInit CUDA_ERROR_UNKNOWN in the batch window jobs.
@@ -27,8 +27,8 @@ fi
 # Do not forward the submit host's GPU mask into batch jobs.
 unset CUDA_VISIBLE_DEVICES || true
 
-PROFILE="${MMML_SNAKEMAKE_PROFILE:-profiles/slurm}"
-_cfg_raw="${MMML_WORKFLOW_CONFIG:-config.yaml}"
+PROFILE="${KARML_SNAKEMAKE_PROFILE:-profiles/slurm}"
+_cfg_raw="${KARML_WORKFLOW_CONFIG:-config.yaml}"
 if [[ "$_cfg_raw" = /* ]]; then
   CFG_PATH="$_cfg_raw"
 elif [[ "$_cfg_raw" == */* ]]; then
@@ -36,15 +36,15 @@ elif [[ "$_cfg_raw" == */* ]]; then
 else
   CFG_PATH="${WORKFLOW_ROOT}/${_cfg_raw}"
 fi
-export MMML_WORKFLOW_CONFIG="$CFG_PATH"
+export KARML_WORKFLOW_CONFIG="$CFG_PATH"
 export CHARMM_LIB_DIR="${CHARMM_LIB_DIR:-}"
-export MMML_CKPT="${MMML_CKPT:-}"
-export MMML_CGENFF_EXTRA_RTF="${MMML_CGENFF_EXTRA_RTF:-}"
-export MMML_CGENFF_EXTRA_PRM="${MMML_CGENFF_EXTRA_PRM:-}"
+export KARML_CKPT="${KARML_CKPT:-}"
+export KARML_CGENFF_EXTRA_RTF="${KARML_CGENFF_EXTRA_RTF:-}"
+export KARML_CGENFF_EXTRA_PRM="${KARML_CGENFF_EXTRA_PRM:-}"
 export JAX_ENABLE_X64="${JAX_ENABLE_X64:-1}"
 # Leave JAX_PLATFORMS empty on the controller; batch jobs set cuda in env_shell.
 export JAX_PLATFORMS="${JAX_PLATFORMS:-}"
-export MMML_EXAMPLE_DEVICE="${MMML_EXAMPLE_DEVICE:-}"
+export KARML_EXAMPLE_DEVICE="${KARML_EXAMPLE_DEVICE:-}"
 CONFIG_ARGS=(--configfile "$CFG_PATH")
 
 IFS=$'\t' read -r DEFAULT_JOBS DEFAULT_RES EXCLUDE_NODES <<EOF
@@ -77,7 +77,7 @@ if [[ -n "${EXCLUDE_NODES// }" ]]; then
   echo "Excluding nodes: ${EXCLUDE_NODES}" >&2
 fi
 
-UV="${MMML_UV:-uv}"
+UV="${KARML_UV:-uv}"
 echo "Snakemake Slurm: profile=${PROFILE} config=${CFG_PATH} -j${JOBS} --resources ${DEFAULT_RES}" >&2
 echo "  checkpoint=$("$PY" -c "
 import sys

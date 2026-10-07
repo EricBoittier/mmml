@@ -21,7 +21,7 @@ from typing import Any, Iterable, Sequence
 
 import numpy as np
 
-from mmml.models.mm_nonbonded_tune import (
+from karml.models.mm_nonbonded_tune import (
     EV_TO_KCAL,
     FrameFeatures,
     MonomerNonbonded,
@@ -73,7 +73,7 @@ def iter_box_frames(
     """
     from ase.io import iread
 
-    from mmml.distill.box_clusters import whole_molecules
+    from karml.distill.box_clusters import whole_molecules
 
     for fi, path in enumerate(paths):
         kept = 0
@@ -134,7 +134,7 @@ class PhysNetPairEvaluator:
         import jax
         import jax.numpy as jnp
 
-        from mmml.interfaces.calculators.checkpoint_loading import (
+        from karml.interfaces.calculators.checkpoint_loading import (
             load_physnet_for_hybrid_mlpot,
         )
 
@@ -214,7 +214,7 @@ def teacher_energy_only(teacher, structures: Sequence[tuple]) -> np.ndarray:
 
     A large PET on a ~3000-atom periodic box does not fit a 32 GB GPU once
     forces are requested; energy-only evaluation does. ``teacher`` is a
-    :class:`mmml.distill.batched_teacher.BatchedMetatomicTeacher`.
+    :class:`karml.distill.batched_teacher.BatchedMetatomicTeacher`.
     """
     import torch
     from metatomic.torch import ModelEvaluationOptions, ModelOutput

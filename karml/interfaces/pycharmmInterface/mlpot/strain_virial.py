@@ -23,7 +23,7 @@ CHARMM through ``mlpot_set_virial`` (``api_func.F90``); ``ENERGY`` adds it to
 
 It is computed only while a CPT segment with a live barostat is running
 (:func:`cpt_strain_virial_scope`, entered by ``run_dynamics``), so NVE/NVT pay
-nothing. ``MMML_MLPOT_STRAIN_VIRIAL=1`` forces it on, ``0`` off.
+nothing. ``KARML_MLPOT_STRAIN_VIRIAL=1`` forces it on, ``0`` off.
 """
 
 from __future__ import annotations
@@ -34,7 +34,7 @@ from typing import Any, Iterator
 
 import numpy as np
 
-STRAIN_VIRIAL_ENV = "MMML_MLPOT_STRAIN_VIRIAL"
+STRAIN_VIRIAL_ENV = "KARML_MLPOT_STRAIN_VIRIAL"
 
 _CPT_ACTIVE = False
 

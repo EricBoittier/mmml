@@ -1,6 +1,6 @@
 # Simulation robustness report
 
-**Goal:** demonstrate that the mmml MM+ML / MM-ML hybrid simulation stack — potential
+**Goal:** demonstrate that the karml MM+ML / MM-ML hybrid simulation stack — potential
 energy surfaces, charge/multipole prediction, MD integration, and structural analysis —
 behaves correctly across the range from pure MM to pure ML and everything in between.
 
@@ -23,7 +23,7 @@ A PDF export of this report is built separately — see "PDF export" at the bott
 
 A real 200 fs NVE trajectory of a single ethanol molecule (ASE's reference geometry, not
 hand-placed), using the real charge head of `charged_electrostatic_best_forces`
-(`mmml/models/physnetjax/.../test-b4064dca-...json`), recorded every frame's per-atom
+(`karml/models/physnetjax/.../test-b4064dca-...json`), recorded every frame's per-atom
 partial charges and total molecular dipole. Both fluctuate continuously with the nuclear
 motion, exactly as expected for an *environment-dependent* (not fixed-point-charge)
 electrostatics model — this is the core distinguishing feature of polarizable/ML
@@ -98,7 +98,7 @@ arbitrary — doesn't distract from the fluctuation that actually matters). Pote
 and total energy get **separate panels** (they live on different absolute scales; overlaying
 them either crushes one or forces a distracting second y-axis), each shown as a real
 time-series + marginal-distribution pair — a new house plot pattern,
-`mmml.utils.plotting.styles.timeseries_with_distribution`, so "does it drift" and "how wide
+`karml.utils.plotting.styles.timeseries_with_distribution`, so "does it drift" and "how wide
 is the fluctuation" both read at a glance from one panel.
 
 **Small system, full control over initial conditions.** The same relaxed ethanol molecule,
@@ -138,7 +138,7 @@ itself.
 ## 4. Structural analysis
 
 Using the existing structural-analysis library
-(`mmml.utils.plotting.trajectory_structure` / `scripts/plot_trajectory_structure.py`):
+(`karml.utils.plotting.trajectory_structure` / `scripts/plot_trajectory_structure.py`):
 
 **Internal-coordinate distributions**, from the ethanol NVE trajectory (valid for any
 system size, no periodicity required). Ethanol has real bonds, angles, *and* dihedrals

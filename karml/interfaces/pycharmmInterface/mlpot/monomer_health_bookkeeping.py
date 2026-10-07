@@ -8,7 +8,7 @@ from typing import Any, Literal
 
 import numpy as np
 
-from mmml.interfaces.pycharmmInterface.mlpot.grms_thresholds import (
+from karml.interfaces.pycharmmInterface.mlpot.grms_thresholds import (
     measure_monomer_grms_stats,
 )
 
@@ -313,10 +313,10 @@ def resolve_monomer_offsets_for_ctx(
     n_atoms: int,
 ) -> np.ndarray | None:
     """Return cumulative monomer offsets, preferring PSF / composition atom counts."""
-    from mmml.interfaces.pycharmmInterface.mlpot.mc_density import (
+    from karml.interfaces.pycharmmInterface.mlpot.mc_density import (
         monomer_offsets_from_atoms_per,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import monomer_offsets
+    from karml.interfaces.pycharmmInterface.mlpot.overlap_guard import monomer_offsets
 
     atoms_per = getattr(mlpot_ctx, "atoms_per_monomer", None)
     if atoms_per is None:
@@ -333,7 +333,7 @@ def resolve_monomer_offsets_for_ctx(
     # Mixed systems (MEOH + TIP3, …) when live PSF resid parsing is unavailable.
     args = getattr(mlpot_ctx, "workflow_args", None)
     if args is not None:
-        from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+        from karml.interfaces.pycharmmInterface.mlpot.setup import (
             _cluster_atoms_per_from_composition,
         )
 
@@ -367,7 +367,7 @@ def _per_monomer_velocity_stats(
 
 def _read_velocities_akma(n_atoms: int) -> np.ndarray | None:
     try:
-        from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+        from karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
             charmm_synced_velocities_akma,
         )
 
@@ -377,7 +377,7 @@ def _read_velocities_akma(n_atoms: int) -> np.ndarray | None:
     except Exception:
         pass
     try:
-        from mmml.interfaces.pycharmmInterface.mlpot.run_state_checkpoint import (
+        from karml.interfaces.pycharmmInterface.mlpot.run_state_checkpoint import (
             _charmm_velocities_array,
         )
 
@@ -494,7 +494,7 @@ def record_monomer_health_baseline(
 ) -> MonomerHealthBaseline | None:
     if int(n_monomers) <= 1:
         return None
-    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+    import karml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
     import pycharmm.coor as coor
 
     n_atoms = int(coor.get_natom())
@@ -554,7 +554,7 @@ def _monomer_coms_numpy(
 
 def _mic_delta(a: np.ndarray, b: np.ndarray, cell: np.ndarray | None) -> np.ndarray:
     """Minimum-image ``b - a`` (Å)."""
-    from mmml.utils.geometry_checks import _cell_matrix, _mic
+    from karml.utils.geometry_checks import _cell_matrix, _mic
 
     cell_mat = _cell_matrix(cell)
     d = np.asarray(b, dtype=np.float64) - np.asarray(a, dtype=np.float64)
@@ -571,7 +571,7 @@ def _resolve_com_flyoff_threshold_A(
         return explicit
     side = float(getattr(overlap_config, "fallback_box_side_A", 0.0) or 0.0)
     if side <= 0.0 and cell is not None:
-        from mmml.utils.geometry_checks import _cell_matrix
+        from karml.utils.geometry_checks import _cell_matrix
 
         mat = _cell_matrix(cell)
         if mat is not None:
@@ -629,7 +629,7 @@ def _flag_bond_stretch_monomers(
     if float(stretch_factor) <= 1.0 and float(stretch_abs_A) <= 0.0:
         return out
     try:
-        from mmml.interfaces.pycharmmInterface.mlpot.monomer_geometry_limits import (
+        from karml.interfaces.pycharmmInterface.mlpot.monomer_geometry_limits import (
             psf_bond_pairs_0based,
         )
 
@@ -689,12 +689,12 @@ def flag_geometry_problem_monomers(
     unwrap drift catches rigid-body escapes even when IMAGE centering rewraps
     coordinates into the primary cell.
     """
-    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+    from karml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
         _bond_exclusion_pairs,
         _overlap_cell,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
-    from mmml.utils.geometry_checks import monomer_axis_extent
+    from karml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
+    from karml.utils.geometry_checks import monomer_axis_extent
 
     cfg = health_config or MonomerHealthConfig()
     out: dict[int, tuple[str, ...]] = {}
@@ -736,7 +736,7 @@ def flag_geometry_problem_monomers(
 
     if bool(cfg.com_flyoff_enabled) and n_monomers > 1:
         try:
-            from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+            from karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
                 charmm_masses_amu,
             )
 
@@ -765,7 +765,7 @@ def flag_geometry_problem_monomers(
                 )
 
     if intra_min > 0.0:
-        from mmml.utils.geometry_checks import find_worst_intramonomer_close_contact
+        from karml.utils.geometry_checks import find_worst_intramonomer_close_contact
 
         excluded = _bond_exclusion_pairs(
             exclude_1_3=bool(getattr(overlap_config, "intra_exclude_1_3", True))
@@ -810,7 +810,7 @@ def audit_monomer_health(
     if not config.enabled or int(n_monomers) <= 1:
         return None
 
-    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+    import karml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
     import pycharmm.coor as coor
 
     n_atoms = int(coor.get_natom())
@@ -835,7 +835,7 @@ def audit_monomer_health(
     vel_rms, vel_max, hybrid, charmm = collect_monomer_health_metrics(
         mlpot_ctx, offsets, n_monomers=int(n_monomers)
     )
-    from mmml.interfaces.pycharmmInterface.cluster_geometry import (
+    from karml.interfaces.pycharmmInterface.cluster_geometry import (
         resolve_cluster_residue_labels,
     )
 
@@ -956,7 +956,7 @@ def emit_monomer_health_dot_matrix(
     """
     if not report.entries:
         return
-    from mmml.utils.rich_report import emit, rich_enabled
+    from karml.utils.rich_report import emit, rich_enabled
 
     use_rich = rich_enabled(quiet=quiet)
     # Avoid Rich markup tags like [v]/[f]/[g] (they strip to "=velocity").
@@ -1041,7 +1041,7 @@ def _resolve_health_velocity_temperature_K(mlpot_ctx: Any) -> float:
 
 def _current_velocities_akma(n_atoms: int) -> np.ndarray | None:
     try:
-        from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+        from karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
             charmm_synced_velocities_akma,
         )
 
@@ -1051,7 +1051,7 @@ def _current_velocities_akma(n_atoms: int) -> np.ndarray | None:
     except Exception:
         pass
     try:
-        from mmml.interfaces.pycharmmInterface.mlpot.run_state_checkpoint import (
+        from karml.interfaces.pycharmmInterface.mlpot.run_state_checkpoint import (
             _charmm_velocities_array,
         )
 
@@ -1075,14 +1075,14 @@ def restore_monomer_velocities_from_template(
     """Splice template restart velocities onto flagged monomers (or MB redraw)."""
     if not flagged:
         return False
-    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+    from karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
         _maxwell_boltzmann_akma_numpy,
         _read_restart_velocities_akma,
         charmm_masses_amu,
         sync_charmm_velocities_akma,
         velocities_are_pathological,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         read_restart_velocities,
     )
 
@@ -1099,7 +1099,7 @@ def restore_monomer_velocities_from_template(
         ref_vel = np.asarray(ref_vel, dtype=np.float64).reshape(-1, 3)
 
     masses = charmm_masses_amu()
-    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+    from karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
         clamp_velocity_assignment_temp_k,
     )
 
@@ -1154,7 +1154,7 @@ def redraw_monomer_velocities(
     """Maxwell-Boltzmann redraw for selected monomers without moving coordinates."""
     if not flagged:
         return False
-    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+    from karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
         _maxwell_boltzmann_akma_numpy,
         charmm_masses_amu,
         sync_charmm_velocities_akma,
@@ -1165,7 +1165,7 @@ def redraw_monomer_velocities(
     if vel is None:
         vel = np.zeros((n_atoms, 3), dtype=np.float64)
     masses = charmm_masses_amu()
-    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+    from karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
         clamp_velocity_assignment_temp_k,
     )
 
@@ -1210,15 +1210,15 @@ def restore_flagged_monomers_from_template(
     """Rigid-body template restore for unhealthy monomers only."""
     if not flagged:
         return False
-    from mmml.interfaces.pycharmmInterface.mlpot.monomer_physnet_mini import (
+    from karml.interfaces.pycharmmInterface.mlpot.monomer_physnet_mini import (
         remember_monomer_template_restart_path,
         resolve_monomer_template_reference_positions,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+    from karml.interfaces.pycharmmInterface.mlpot.setup import (
         get_charmm_positions_array,
         sync_charmm_positions,
     )
-    from mmml.utils.geometry_checks import rebuild_monomers_from_reference
+    from karml.utils.geometry_checks import rebuild_monomers_from_reference
 
     remember_monomer_template_restart_path(mlpot_ctx, restart_path)
     n_atoms = int(np.asarray(get_charmm_positions_array()).shape[0])
@@ -1228,7 +1228,7 @@ def restore_flagged_monomers_from_template(
         atoms_per = getattr(pyCModel, "_atoms_per_monomer", None) if pyCModel else None
     if not atoms_per:
         return False
-    from mmml.interfaces.pycharmmInterface.mlpot.mc_density import (
+    from karml.interfaces.pycharmmInterface.mlpot.mc_density import (
         monomer_offsets_from_atoms_per,
     )
 
@@ -1273,10 +1273,10 @@ def _run_per_monomer_jax_on_indices(
 ) -> None:
     if not monomer_indices:
         return
-    from mmml.interfaces.pycharmmInterface.mlpot.bonded_jax_recovery import (
+    from karml.interfaces.pycharmmInterface.mlpot.bonded_jax_recovery import (
         minimize_bonded_jax_per_monomer_recovery,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+    from karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
         _bonded_cfg_from_overlap_config,
     )
 
@@ -1295,7 +1295,7 @@ def _run_per_monomer_jax_on_indices(
     if grms is not None:
         return
 
-    from mmml.interfaces.pycharmmInterface.mlpot.monomer_physnet_mini import (
+    from karml.interfaces.pycharmmInterface.mlpot.monomer_physnet_mini import (
         monomer_physnet_mini_enabled,
         run_selective_monomer_physnet_mini,
         selective_monomer_physnet_mini_config_from_args,
@@ -1417,7 +1417,7 @@ def maybe_intervene_monomer_health(
             quiet=not health_cfg.verbose and not health_cfg.debug_dot_matrix,
         )
 
-    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+    import karml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
     import pycharmm.coor as coor
 
     n_atoms = int(coor.get_natom())
@@ -1446,7 +1446,7 @@ def maybe_intervene_monomer_health(
             "next overlap chunk will reinstall walls / rewind numbered restarts",
             flush=True,
         )
-        from mmml.interfaces.pycharmmInterface.mlpot.restraints import (
+        from karml.interfaces.pycharmmInterface.mlpot.restraints import (
             reinstall_adumb_rxncor_walls_from_workflow_args,
         )
 
@@ -1527,7 +1527,7 @@ def maybe_intervene_monomer_health(
         velocities_redrawn=velocities_redrawn,
     )
     if result.changed:
-        from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
             invalidate_mlpot_calculator_caches,
         )
 

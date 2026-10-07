@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 from ase import Atoms
 
-from mmml.models.multipoles import (
+from karml.models.multipoles import (
     AU_FIELD_TO_V_PER_ANGSTROM,
     AU_POTENTIAL_TO_V,
     BOHR_TO_ANGSTROM,
@@ -622,14 +622,14 @@ def test_pair_energy_multipole_returns_components() -> None:
 
 def test_calculator_max_ell_and_components(monkeypatch) -> None:
     from unittest.mock import MagicMock
-    from mmml.models.multipoles.electrostatics import LearnedMolecularMultipoleElectrostatics
+    from karml.models.multipoles.electrostatics import LearnedMolecularMultipoleElectrostatics
 
     monkeypatch.setattr(
-        "mmml.models.multipoles.electrostatics.load_multipole_model",
+        "karml.models.multipoles.electrostatics.load_multipole_model",
         lambda cp: (MagicMock(), MagicMock())
     )
     monkeypatch.setattr(
-        "mmml.models.multipoles.electrostatics.resolve_multipoles_checkpoint",
+        "karml.models.multipoles.electrostatics.resolve_multipoles_checkpoint",
         lambda cp=None: cp,
     )
 

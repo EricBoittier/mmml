@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Scan MEOH dimer COM distance and compare CHARMM / PhysNetJax / MMML energies and forces.
+Scan MEOH dimer COM distance and compare CHARMM / PhysNetJax / KARML energies and forces.
 """
 
 from __future__ import annotations
@@ -15,19 +15,19 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-import mmml.interfaces.pycharmmInterface.import_pycharmm as pyci
-from mmml.cli.base import load_physnet_params_and_ef_model, resolve_checkpoint_paths
-from mmml.interfaces.pycharmmInterface.import_pycharmm import (
+import karml.interfaces.pycharmmInterface.import_pycharmm as pyci
+from karml.cli.base import load_physnet_params_and_ef_model, resolve_checkpoint_paths
+from karml.interfaces.pycharmmInterface.import_pycharmm import (
     CGENFF_PRM,
     CGENFF_RTF,
     coor,
     pycharmm,
     reset_block,
 )
-from mmml.interfaces.pycharmmInterface.mmml_calculator import CutoffParameters, setup_calculator
-from mmml.interfaces.pycharmmInterface.utils import get_Z_from_psf
-from mmml.models.physnetjax.physnetjax.calc.helper_mlp import get_ase_calc
-from mmml.models.physnetjax.physnetjax.restart.restart import get_params_model
+from karml.interfaces.pycharmmInterface.karml_calculator import CutoffParameters, setup_calculator
+from karml.interfaces.pycharmmInterface.utils import get_Z_from_psf
+from karml.models.physnetjax.physnetjax.calc.helper_mlp import get_ase_calc
+from karml.models.physnetjax.physnetjax.restart.restart import get_params_model
 
 import pycharmm.energy as energy
 import pycharmm.generate as gen
@@ -37,7 +37,7 @@ import pycharmm.psf as psf
 import pycharmm.read as read
 import pycharmm.settings as settings
 
-# Compatibility shims used by MMML internals.
+# Compatibility shims used by KARML internals.
 pyci.read = read
 pyci.settings = settings
 pyci.psf = psf
@@ -132,7 +132,7 @@ def _get_charmm_forces() -> np.ndarray:
     CHARMM's ``dx/dy/dz`` is the energy gradient (``dE/dx``), so the physical force
     is the negative gradient.
     """
-    from mmml.interfaces.pycharmmInterface.charmm_forces import charmm_forces_array
+    from karml.interfaces.pycharmmInterface.charmm_forces import charmm_forces_array
 
     pycharmm.lingo.charmm_script("ENER FORCE")
     return charmm_forces_array()
@@ -232,13 +232,13 @@ def main(args: argparse.Namespace) -> int:
             force_conversion_factor=1.0,
             verbose=True,
         )
-        mmml_calc = calc_result[0]
-        atoms_mmml = atoms.copy()
-        atoms_mmml.calc = mmml_calc
-        mmml_e = float(atoms_mmml.get_potential_energy())
-        mmml_f = atoms_mmml.get_forces()
-        mmml_fnorm = np.linalg.norm(mmml_f, axis=1)
-        res = mmml_calc.results
+        karml_calc = calc_result[0]
+        atoms_karml = atoms.copy()
+        atoms_karml.calc = karml_calc
+        karml_e = float(atoms_karml.get_potential_energy())
+        karml_f = atoms_karml.get_forces()
+        karml_fnorm = np.linalg.norm(karml_f, axis=1)
+        res = karml_calc.results
 
         rows.append(
             {
@@ -251,12 +251,12 @@ def main(args: argparse.Namespace) -> int:
                 "physnet_E_eV": phys_e,
                 "physnet_fnorm_mean": float(phys_fnorm.mean()),
                 "physnet_fnorm_max": float(phys_fnorm.max()),
-                "mmml_E_eV": mmml_e,
-                "mmml_internal_E_eV": _to_float_sum(res.get("model_internal_E", 0.0)),
-                "mmml_ml2b_E_eV": _to_float_sum(res.get("model_ml_2b_E", 0.0)),
-                "mmml_mm_E_eV": _to_float_sum(res.get("model_mm_E", 0.0)),
-                "mmml_fnorm_mean": float(mmml_fnorm.mean()),
-                "mmml_fnorm_max": float(mmml_fnorm.max()),
+                "karml_E_eV": karml_e,
+                "karml_internal_E_eV": _to_float_sum(res.get("model_internal_E", 0.0)),
+                "karml_ml2b_E_eV": _to_float_sum(res.get("model_ml_2b_E", 0.0)),
+                "karml_mm_E_eV": _to_float_sum(res.get("model_mm_E", 0.0)),
+                "karml_fnorm_mean": float(karml_fnorm.mean()),
+                "karml_fnorm_max": float(karml_fnorm.max()),
             }
         )
 
@@ -272,10 +272,10 @@ def main(args: argparse.Namespace) -> int:
     x = np.array([r["distance_A"] for r in rows], dtype=float)
     fig, ax = plt.subplots(figsize=(8, 5))
     ax.plot(x, [r["physnet_E_eV"] for r in rows], label="PhysNet E (eV)")
-    ax.plot(x, [r["mmml_E_eV"] for r in rows], label="MMML total E (eV)")
-    ax.plot(x, [r["mmml_internal_E_eV"] for r in rows], "--", label="MMML internal E")
-    ax.plot(x, [r["mmml_ml2b_E_eV"] for r in rows], "--", label="MMML ML-2B E")
-    ax.plot(x, [r["mmml_mm_E_eV"] for r in rows], "--", label="MMML MM E")
+    ax.plot(x, [r["karml_E_eV"] for r in rows], label="KARML total E (eV)")
+    ax.plot(x, [r["karml_internal_E_eV"] for r in rows], "--", label="KARML internal E")
+    ax.plot(x, [r["karml_ml2b_E_eV"] for r in rows], "--", label="KARML ML-2B E")
+    ax.plot(x, [r["karml_mm_E_eV"] for r in rows], "--", label="KARML MM E")
     ax.set_xlabel("COM distance (A)")
     ax.set_ylabel("Energy")
     ax.legend()
@@ -287,10 +287,10 @@ def main(args: argparse.Namespace) -> int:
     fig, ax = plt.subplots(figsize=(8, 5))
     ax.plot(x, [r["charmm_fnorm_max"] for r in rows], label="CHARMM max|F|")
     ax.plot(x, [r["physnet_fnorm_max"] for r in rows], label="PhysNet max|F|")
-    ax.plot(x, [r["mmml_fnorm_max"] for r in rows], label="MMML max|F|")
+    ax.plot(x, [r["karml_fnorm_max"] for r in rows], label="KARML max|F|")
     ax.plot(x, [r["charmm_fnorm_mean"] for r in rows], "--", label="CHARMM mean|F|")
     ax.plot(x, [r["physnet_fnorm_mean"] for r in rows], "--", label="PhysNet mean|F|")
-    ax.plot(x, [r["mmml_fnorm_mean"] for r in rows], "--", label="MMML mean|F|")
+    ax.plot(x, [r["karml_fnorm_mean"] for r in rows], "--", label="KARML mean|F|")
     ax.set_xlabel("COM distance (A)")
     ax.set_ylabel("Force norm")
     ax.set_yscale("log")
@@ -308,18 +308,18 @@ def main(args: argparse.Namespace) -> int:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="MEOH dimer distance scan with CHARMM/PhysNet/MMML terms.")
+    parser = argparse.ArgumentParser(description="MEOH dimer distance scan with CHARMM/PhysNet/KARML terms.")
     parser.add_argument(
         "--checkpoint",
         type=Path,
         default=None,
         help=(
             "Orbax root, epoch-* dir, or portable .json "
-            "(default: bundled manifest model with lowest validation force MAE, or $MMML_CKPT)."
+            "(default: bundled manifest model with lowest validation force MAE, or $KARML_CKPT)."
         ),
     )
     parser.add_argument("--output-dir", type=Path, default=Path("artifacts/dimer_scan_meoh"))
-    parser.add_argument("--template-pdb", type=Path, default=Path("mmml/generate/sample/pdb/meoh.pdb"))
+    parser.add_argument("--template-pdb", type=Path, default=Path("karml/generate/sample/pdb/meoh.pdb"))
     parser.add_argument("--dmin", type=float, default=3.0, help="Minimum COM distance (A)")
     parser.add_argument("--dmax", type=float, default=8.0, help="Maximum COM distance (A)")
     parser.add_argument("--npoints", type=int, default=11, help="Number of scan points")

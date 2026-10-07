@@ -2,7 +2,7 @@
 """Thin front-end for cg_jaxmd-style peptide-water ML/MM simulations.
 
 Reads a cg_jaxmd JSON config (see ``examples/cg_jaxmd.example.json``) and runs
-its fire -> nvt -> nve phases through the unified ``mmml.md`` pipeline:
+its fire -> nvt -> nve phases through the unified ``karml.md`` pipeline:
 
     JSON config --runconfig_from_cg_config--> RunConfig --assemble_and_run-->
     PeptideWaterSystemBuilder -> HybridEnergy -> JaxmdDriver
@@ -36,23 +36,23 @@ import jax
 
 jax.config.update("jax_enable_x64", True)
 
-from mmml.md.assemble import assemble_and_run, build_system  # noqa: E402
-from mmml.md.energy.registry import EnergyContext  # noqa: E402
-from mmml.md.results import Trajectory  # noqa: E402
-from mmml.md.system import MolecularSystem  # noqa: E402
+from karml.md.assemble import assemble_and_run, build_system  # noqa: E402
+from karml.md.energy.registry import EnergyContext  # noqa: E402
+from karml.md.results import Trajectory  # noqa: E402
+from karml.md.system import MolecularSystem  # noqa: E402
 
 _UNSUPPORTED_TOGGLES = ("constrain_phi_psi",)
 
 
 def _load_model(checkpoint_path: Path) -> tuple[Any, Any]:
     """Load a physnet/spooky model + params from a portable JSON checkpoint."""
-    from mmml.interfaces.calculators.simple_inference import (
+    from karml.interfaces.calculators.simple_inference import (
         create_calculator_from_checkpoint,
     )
 
     calc = create_calculator_from_checkpoint(str(checkpoint_path))
-    model = getattr(calc, "model", getattr(calc, "_mmml_physnet_model", None))
-    params = getattr(calc, "params", getattr(calc, "_mmml_physnet_params", None))
+    model = getattr(calc, "model", getattr(calc, "_karml_physnet_model", None))
+    params = getattr(calc, "params", getattr(calc, "_karml_physnet_params", None))
     if model is None or params is None:
         raise ValueError(f"could not extract model/params from checkpoint {checkpoint_path}")
     return model, params
@@ -61,7 +61,7 @@ def _load_model(checkpoint_path: Path) -> tuple[Any, Any]:
 def term_kwargs_from_cg_config(cfg: Mapping[str, Any], system: MolecularSystem) -> dict[str, dict]:
     """Build per-term constructor kwargs that need the *built* system.
 
-    ``terms_from_cg_config`` (in ``mmml.md.lowering``) only selects term
+    ``terms_from_cg_config`` (in ``karml.md.lowering``) only selects term
     *names* from the config, since it is pure and runs before the system
     exists. Terms whose constructor needs concrete atom indices (``ml_pep_water``,
     ``vdw_core``, ``smd``) are wired here, after ``build_system``.
@@ -121,7 +121,7 @@ def run_cg_config(cfg: Mapping[str, Any], phases: tuple[str, ...] = ("fire", "nv
     """
     check_cg_config_supported(cfg)
 
-    from mmml.md.lowering import runconfig_from_cg_config
+    from karml.md.lowering import runconfig_from_cg_config
 
     first_config = runconfig_from_cg_config(cfg, phase=phases[0])
     if first_config.checkpoint is None:

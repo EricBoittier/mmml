@@ -124,7 +124,7 @@ def test_extract_bonded_only_keeps_constants():
 
 def test_zero_cgenff_prm_file(tmp_path: Path):
     repo = Path(__file__).resolve().parents[2]
-    src = repo / "mmml/data/charmm/par_all36_cgenff.prm"
+    src = repo / "karml/data/charmm/par_all36_cgenff.prm"
     if not src.is_file():
         return
     from scripts.zero_charmm_prm import zero_prm_file

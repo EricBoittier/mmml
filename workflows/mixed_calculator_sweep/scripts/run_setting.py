@@ -69,13 +69,13 @@ def main() -> int:
 
     import numpy as np
 
-    from mmml.cli.run.md_system_unified import build_packmol_system_with_ffparams
-    from mmml.interfaces.calculators.simple_inference import create_calculator_from_checkpoint
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import ensure_pycharmm_loaded
-    from mmml.md.assemble import assemble_and_run, build_system
-    from mmml.md.config import EnsembleSpec, RunConfig
-    from mmml.md.energy.registry import EnergyContext
-    from mmml.md.system import SystemSpec
+    from karml.cli.run.md_system_unified import build_packmol_system_with_ffparams
+    from karml.interfaces.calculators.simple_inference import create_calculator_from_checkpoint
+    from karml.interfaces.pycharmmInterface.import_pycharmm import ensure_pycharmm_loaded
+    from karml.md.assemble import assemble_and_run, build_system
+    from karml.md.config import EnsembleSpec, RunConfig
+    from karml.md.energy.registry import EnergyContext
+    from karml.md.system import SystemSpec
 
     status: dict[str, object] = {
         "setting": args.setting,
@@ -96,8 +96,8 @@ def main() -> int:
 
         checkpoint_path = repo_root / checkpoint_rel
         calc = create_calculator_from_checkpoint(str(checkpoint_path), **calculator_kwargs)
-        model = getattr(calc, "model", getattr(calc, "_mmml_physnet_model", None))
-        params = getattr(calc, "params", getattr(calc, "_mmml_physnet_params", None))
+        model = getattr(calc, "model", getattr(calc, "_karml_physnet_model", None))
+        params = getattr(calc, "params", getattr(calc, "_karml_physnet_params", None))
         ctx = EnergyContext(model=model, params=params, options=mm_nonbonded_kwargs)
 
         if spec["system"] == "water_box":
@@ -164,7 +164,7 @@ def main() -> int:
 
         traj = assemble_and_run(run_config, system=system, ctx=ctx, term_kwargs=term_kwargs)
 
-        from mmml.md.results import energy_drift_metrics
+        from karml.md.results import energy_drift_metrics
 
         energies = np.asarray(traj.metadata["energies"], dtype=float)
         finite = bool(np.all(np.isfinite(energies)))

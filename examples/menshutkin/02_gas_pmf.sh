@@ -104,7 +104,7 @@ for rep in $(seq 1 "${N_REPLICAS}"); do
   echo "--- replica ${rep}/${N_REPLICAS} (seed ${rep}) ---"
   # --seed-mode frames: window k starts from seed k. Stretch-seeding cannot
   # build these geometries because the methyl group inverts along the path.
-  uv run mmml umbrella-sample \
+  uv run karml umbrella-sample \
     --checkpoint "${MENSH_CKPT}" \
     --structure "${SEEDS}" \
     --seed-mode frames \
@@ -136,7 +136,7 @@ uv run python examples/menshutkin/merge_replicas.py "${REP_DIRS[@]}" \
 
 echo
 echo "=== 03: MBAR ==="
-uv run mmml umbrella-mbar --run-dir "${OUT}/umbrella" --checkpoint "${MENSH_CKPT}"
+uv run karml umbrella-mbar --run-dir "${OUT}/umbrella" --checkpoint "${MENSH_CKPT}"
 
 echo
 echo "=== 04: profile + figures ==="

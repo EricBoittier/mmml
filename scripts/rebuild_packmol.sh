@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # Build the vendored Packmol binary for the current platform.
 #
-# Installs to mmml/generate/packmol/packmol (used by packmol_placement / make-box).
+# Installs to karml/generate/packmol/packmol (used by packmol_placement / make-box).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-PACKMOL_SRC="${PACKMOL_SRC:-$ROOT/mmml/generate/packmol}"
+PACKMOL_SRC="${PACKMOL_SRC:-$ROOT/karml/generate/packmol}"
 PACKMOL_OUT="${PACKMOL_OUT:-$PACKMOL_SRC/packmol}"
 
 _platform_tag() {
@@ -53,19 +53,19 @@ _binary_runs_on_host() {
 CLEAN=0
 FORCE=0
 PLATFORM_TAG="$(_platform_tag)"
-BUILD_DIR="${PACKMOL_BUILD_DIR:-${HOME}/.cache/mmml-packmol-build/${PLATFORM_TAG}}"
+BUILD_DIR="${PACKMOL_BUILD_DIR:-${HOME}/.cache/karml-packmol-build/${PLATFORM_TAG}}"
 
 usage() {
   cat <<EOF
 Usage: $(basename "$0") [--clean] [--force]
 
-Build Packmol from mmml/generate/packmol and install to:
+Build Packmol from karml/generate/packmol and install to:
   $PACKMOL_OUT
 
 Environment:
   PACKMOL_SRC       Packmol source tree (default: $PACKMOL_SRC)
   PACKMOL_OUT       Output executable path (default: $PACKMOL_OUT)
-  PACKMOL_BUILD_DIR CMake build directory (default: \$HOME/.cache/mmml-packmol-build/${PLATFORM_TAG})
+  PACKMOL_BUILD_DIR CMake build directory (default: \$HOME/.cache/karml-packmol-build/${PLATFORM_TAG})
 EOF
 }
 

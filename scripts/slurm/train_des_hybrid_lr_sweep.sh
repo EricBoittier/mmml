@@ -29,7 +29,7 @@
 
 set -uo pipefail
 
-REPO="${MMML_REPO:-$HOME/mmml}"
+REPO="${KARML_REPO:-$HOME/karml}"
 cd "$REPO"
 
 LRS=(0.001 0.0003 0.0001)
@@ -63,8 +63,8 @@ export TERM=dumb
 export UV_NO_SYNC=1
 export UV_OFFLINE=1
 
-export MMML_SCICORE_CMAKE="${MMML_SCICORE_CMAKE:-CMake/3.31.8-GCCcore-14.3.0}"
-export MMML_SCICORE_TOOLCHAIN="${MMML_SCICORE_TOOLCHAIN:-foss/2025a}"
+export KARML_SCICORE_CMAKE="${KARML_SCICORE_CMAKE:-CMake/3.31.8-GCCcore-14.3.0}"
+export KARML_SCICORE_TOOLCHAIN="${KARML_SCICORE_TOOLCHAIN:-foss/2025a}"
 source scripts/scicore_env.sh
 source .venv/bin/activate
 set -e
@@ -81,7 +81,7 @@ if [[ ! -f "$DATA" ]]; then
   exit 1
 fi
 
-uv run mmml physnet-train \
+uv run karml physnet-train \
   --config examples/lj_scales/train_des_warmstart.yaml \
   --data "$DATA" \
   --valid-data "" \

@@ -7,7 +7,7 @@ from typing import Any
 import numpy as np
 from ase import Atoms
 
-from mmml.interfaces.qc_backends.npz_output import stack_frame_results
+from karml.interfaces.qc_backends.npz_output import stack_frame_results
 
 
 class XTBBackend:

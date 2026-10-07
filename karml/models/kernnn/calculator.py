@@ -13,8 +13,8 @@ try:
 except ModuleNotFoundError as exc:  # pragma: no cover
     raise ModuleNotFoundError("KerNNCalculator requires ASE.") from exc
 
-from mmml.models.kernnn.checkpoint import load_checkpoint
-from mmml.models.kernnn.model import KerNNConfig, KerNNStats, energy_and_forces
+from karml.models.kernnn.checkpoint import load_checkpoint
+from karml.models.kernnn.model import KerNNConfig, KerNNStats, energy_and_forces
 
 
 class KerNNCalculator(Calculator):

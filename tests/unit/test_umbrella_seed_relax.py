@@ -11,8 +11,8 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from mmml.umbrella.config import UmbrellaConfig
-from mmml.umbrella.hybrid import relax_around_frozen_seed, seed_force_maxima
+from karml.umbrella.config import UmbrellaConfig
+from karml.umbrella.hybrid import relax_around_frozen_seed, seed_force_maxima
 
 
 def _config(**overrides):

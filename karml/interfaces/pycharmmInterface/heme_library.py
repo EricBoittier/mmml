@@ -17,11 +17,11 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Iterator, Sequence
 
-from mmml.interfaces.pycharmmInterface.charmm_paths import mmml_repo_root
-from mmml.interfaces.pycharmmInterface.cgenff_residues import parse_cgenff_residues
+from karml.interfaces.pycharmmInterface.charmm_paths import karml_repo_root
+from karml.interfaces.pycharmmInterface.cgenff_residues import parse_cgenff_residues
 
 _ACTIVE: ContextVar[tuple[str, ...] | None] = ContextVar(
-    "mmml_topology_residues", default=None
+    "karml_topology_residues", default=None
 )
 
 _HEME_STREAM = Path("setup/charmm/toppar/stream/prot/toppar_all36_prot_heme.str")
@@ -38,7 +38,7 @@ _PROT_PRM_CANDIDATES = (
 
 def heme_toppar_paths(repo_root: Path | None = None) -> tuple[Path, Path, Path]:
     """Return ``(protein rtf, protein prm, heme stream)``."""
-    root = repo_root or mmml_repo_root()
+    root = repo_root or karml_repo_root()
     rtf = root / _PROT_RTF
     stream = root / _HEME_STREAM
     prm = next((root / rel for rel in _PROT_PRM_CANDIDATES if (root / rel).is_file()), None)
@@ -97,14 +97,14 @@ def residues_from_cluster_args(args: object) -> tuple[str, ...]:
     """Residue names a cluster build will generate (composition, else ``--residue``)."""
     composition = getattr(args, "composition", None)
     if composition:
-        from mmml.interfaces.pycharmmInterface.mlpot.composition_spec import (
+        from karml.interfaces.pycharmmInterface.mlpot.composition_spec import (
             parse_composition_entries,
         )
 
         return tuple(entry.residue for entry in parse_composition_entries(str(composition)))
     residue = getattr(args, "residue", None)
     if residue:
-        from mmml.interfaces.pycharmmInterface.myoglobin import (
+        from karml.interfaces.pycharmmInterface.myoglobin import (
             is_myoglobin_residue,
             mbco_topology_residue_names,
         )
@@ -125,8 +125,8 @@ def topology_family(residues: Sequence[str] | None) -> str:
     """
     if not residues:
         return "cgenff"
-    from mmml.interfaces.pycharmmInterface.heme_electronic import is_protein_ion
-    from mmml.interfaces.pycharmmInterface.myoglobin import protein_rtf_residue_names
+    from karml.interfaces.pycharmmInterface.heme_electronic import is_protein_ion
+    from karml.interfaces.pycharmmInterface.myoglobin import protein_rtf_residue_names
 
     names = [str(r).strip().upper() for r in residues if str(r).strip()]
     heme = [name for name in names if is_heme_library_residue(name)]
@@ -226,7 +226,7 @@ def heme_reference_positions(atom_names: Sequence[str]):
 
 
 def _write_card(text: str, suffix: str) -> str:
-    fd, path = tempfile.mkstemp(suffix=suffix, prefix="mmml_heme_")
+    fd, path = tempfile.mkstemp(suffix=suffix, prefix="karml_heme_")
     with os.fdopen(fd, "w", encoding="utf-8") as handle:
         handle.write(text)
     return path
@@ -249,8 +249,8 @@ def read_protein_heme_toppar() -> None:
     """
     import pycharmm.read as read
 
-    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
-    from mmml.interfaces.pycharmmInterface.nbonds_config import (
+    from karml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
+    from karml.interfaces.pycharmmInterface.nbonds_config import (
         CGENFF_PRM_BOMLEV,
         _rtf_path_for_append,
     )
@@ -259,7 +259,7 @@ def read_protein_heme_toppar() -> None:
     rtf_card, prm_card = heme_stream_cards(stream)
     cards: list[tuple[str, str]] = [(rtf_card, prm_card)]
     if _active_residues_include_ions():
-        ion_stream = (mmml_repo_root() / _WATER_IONS)
+        ion_stream = (karml_repo_root() / _WATER_IONS)
         if not ion_stream.is_file():
             raise FileNotFoundError(
                 f"TIP3 or protein ions were requested but {ion_stream} is missing"
@@ -286,7 +286,7 @@ def read_protein_heme_toppar() -> None:
 
 
 def _active_residues_include_ions() -> bool:
-    from mmml.interfaces.pycharmmInterface.heme_electronic import is_protein_ion
+    from karml.interfaces.pycharmmInterface.heme_electronic import is_protein_ion
 
     residues = active_topology_residues() or ()
     return any(

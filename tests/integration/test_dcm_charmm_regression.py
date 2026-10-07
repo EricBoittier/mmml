@@ -42,7 +42,7 @@ def _synthetic_meoh_data():
 
 def test_frame_compute():
     """Frame computation matches AXIS1 logic."""
-    from mmml.interfaces.dcmInterface import compute_dcm_frame
+    from karml.interfaces.dcmInterface import compute_dcm_frame
 
     R = np.array([[0, 0, 0], [1, 0, 0], [0.5, 1, 0]], dtype=float)
     frame = (0, 1, 2)  # atom 0, neighbors 1 and 2
@@ -62,7 +62,7 @@ def test_frame_compute():
 
 def test_convert_roundtrip():
     """global_to_local and local_to_global roundtrip."""
-    from mmml.interfaces.dcmInterface import compute_dcm_frame, global_to_local, local_to_global
+    from karml.interfaces.dcmInterface import compute_dcm_frame, global_to_local, local_to_global
 
     R = np.array([[0, 0, 0], [1, 0, 0], [0.5, 1, 0]], dtype=float)
     frame = (0, 1, 2)
@@ -77,7 +77,7 @@ def test_convert_roundtrip():
 
 def test_dcmnet_to_mdcm_and_xyz_roundtrip(tmp_path):
     """DCMNet → mdcm → Python dcm.xyz roundtrip preserves charge positions."""
-    from mmml.interfaces.dcmInterface import (
+    from karml.interfaces.dcmInterface import (
         dcmnet_to_mdcm,
         generate_dcm_xyz,
         get_frames_meoh_like,
@@ -92,8 +92,8 @@ def test_dcmnet_to_mdcm_and_xyz_roundtrip(tmp_path):
     assert mdcm_path.exists()
 
     # Rebuild charges_per_frame for generate_dcm_xyz (normally from mdcm parser)
-    from mmml.interfaces.dcmInterface.convert import global_to_local
-    from mmml.interfaces.dcmInterface.frame import compute_dcm_frame
+    from karml.interfaces.dcmInterface.convert import global_to_local
+    from karml.interfaces.dcmInterface.frame import compute_dcm_frame
 
     charges_per_frame = []
     for fr_idx, frame_atoms in enumerate(frames):
@@ -142,7 +142,7 @@ def test_build_mdcm_average_over_frames(tmp_path):
     """build_mdcm_from_dcmnet with average_over_frames=True produces mdcm."""
     import h5py
 
-    from mmml.interfaces.dcmInterface import build_mdcm_from_dcmnet, generate_dcm_xyz
+    from karml.interfaces.dcmInterface import build_mdcm_from_dcmnet, generate_dcm_xyz
 
     R, Z, charges, positions = _synthetic_meoh_data()
     # Create 3 conformations (slight geometric variation)
@@ -191,7 +191,7 @@ def test_build_mdcm_average_over_frames(tmp_path):
 def test_charmm_dcm_xyz_vs_python(tmp_path):
     """When CHARMM available: compare CHARMM dcm.xyz vs Python dcm.xyz."""
     pytest.importorskip("pycharmm")
-    from mmml.interfaces.dcmInterface import build_mdcm_from_dcmnet, generate_dcm_xyz
+    from karml.interfaces.dcmInterface import build_mdcm_from_dcmnet, generate_dcm_xyz
 
     h5_path = os.environ.get("DCM_REGRESSION_H5")
     if not h5_path or not Path(h5_path).exists():
@@ -219,7 +219,7 @@ def test_charmm_dcm_xyz_vs_python(tmp_path):
     generate_dcm_xyz(R, frames, charges_per_frame, py_xyz)
 
     # Run CHARMM DCM
-    from mmml.interfaces.pycharmmInterface import import_pycharmm
+    from karml.interfaces.pycharmmInterface import import_pycharmm
 
     import_pycharmm()
     import pycharmm  # noqa: F401

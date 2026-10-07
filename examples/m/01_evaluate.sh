@@ -6,13 +6,13 @@
 # so energy MAE is comparable; forces/dipoles are absolute and usually the
 # better quality signal for this checkpoint.
 #
-# Checkpoint: MMML_CKPT (default examples/m/model_ext.json from _env.sh).
+# Checkpoint: KARML_CKPT (default examples/m/model_ext.json from _env.sh).
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=/dev/null
 source "${ROOT}/examples/m/_env.sh"
 cd "${ROOT}"
-mmml_example_env_banner
+karml_example_env_banner
 
 OUT="${ARTIFACTS_DIR}/evaluate"
 DIMER_NPZ="${ARTIFACTS_DIR}/dimer_only.npz"
@@ -20,11 +20,11 @@ NUM_SAMPLES="${NUM_SAMPLES:-512}"
 BATCH_SIZE="${BATCH_SIZE:-16}"
 
 echo "=== Prepare dimer-only NPZ (N=9) ==="
-uv run python examples/m/00_prepare_eval_npz.py --data "${MMML_DATA}" -o "${DIMER_NPZ}"
+uv run python examples/m/00_prepare_eval_npz.py --data "${KARML_DATA}" -o "${DIMER_NPZ}"
 
-echo "=== physnet-evaluate (${MMML_CKPT} × dimers, --subtract-mean) ==="
-uv run mmml physnet-evaluate \
-  --checkpoint "${MMML_CKPT}" \
+echo "=== physnet-evaluate (${KARML_CKPT} × dimers, --subtract-mean) ==="
+uv run karml physnet-evaluate \
+  --checkpoint "${KARML_CKPT}" \
   --data "${DIMER_NPZ}" \
   --natoms 9 \
   --batch-size "${BATCH_SIZE}" \
@@ -42,8 +42,8 @@ p = Path("${OUT}/metrics.json")
 m = json.loads(p.read_text())
 m["energy_reference"] = "subtract_mean"
 m["data_subset"] = "N=9 dimers"
-m["source_npz"] = "${MMML_DATA}"
-m["checkpoint"] = "${MMML_CKPT}"
+m["source_npz"] = "${KARML_DATA}"
+m["checkpoint"] = "${KARML_CKPT}"
 p.write_text(json.dumps(m, indent=2))
 print("Updated", p)
 PY

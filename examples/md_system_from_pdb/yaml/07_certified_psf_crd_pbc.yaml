@@ -1,11 +1,11 @@
 # 07 — Certified liquid-box (PSF/CRD) → JAX-MD PBC NVE
 #
 # Edit from_psf / from_crd (or override on the CLI), then:
-#   uv run mmml md-system --config examples/md_system_from_pdb/yaml/07_certified_psf_crd_pbc.yaml
+#   uv run karml md-system --config examples/md_system_from_pdb/yaml/07_certified_psf_crd_pbc.yaml
 #   bash examples/md_system_from_pdb/07_certified_psf_crd_pbc.sh
 #
 # Build a tiny box first if needed:
-#   uv run mmml liquid-box --composition DCM:8 \
+#   uv run karml liquid-box --composition DCM:8 \
 #     --output-dir artifacts/md_system_from_pdb/box_dcm8
 #
 # For NVT → NVE handoff campaign, see pbc_certified_jaxmd.yaml.

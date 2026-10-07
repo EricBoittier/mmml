@@ -26,7 +26,7 @@ def render(
     out.mkdir(parents=True, exist_ok=True)
 
     rel = lib.rel_output_dir(cfg, run_id, task_id, env["name"])
-    command = lib.render_command(task, rel, python='"$MMML_PYTHON"')
+    command = lib.render_command(task, rel, python='"$KARML_PYTHON"')
     lib.write_json(
         out / "request.json", lib.request_payload(task_id, task, env, run_id, command)
     )
@@ -40,12 +40,12 @@ def render(
             "",
             f"cd {lib.repo_root_shell(env)}",
             "",
-            "source scripts/resolve_mmml_env.sh",
-            'mmml_resolve_env "$PWD"',
+            "source scripts/resolve_karml_env.sh",
+            'karml_resolve_env "$PWD"',
             lib.shell_exports(env),
             "",
             f"mkdir -p {quoted_out}",
-            '"$MMML_PYTHON" workflows/validation_campaign/scripts/finalize_task.py \\',
+            '"$KARML_PYTHON" workflows/validation_campaign/scripts/finalize_task.py \\',
             f"  --output-dir {quoted_out} --phase running",
             "",
             "set +e",
@@ -55,7 +55,7 @@ def render(
             "task_rc=$?",
             "set -e",
             "",
-            '"$MMML_PYTHON" workflows/validation_campaign/scripts/finalize_task.py \\',
+            '"$KARML_PYTHON" workflows/validation_campaign/scripts/finalize_task.py \\',
             f'  --output-dir {quoted_out} --phase finished --exit-code "$task_rc"',
             "",
             "exit $task_rc",

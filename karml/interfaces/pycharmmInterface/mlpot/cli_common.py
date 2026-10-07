@@ -1,4 +1,4 @@
-"""Shared CLI helpers for CHARMM MLpot workflows (tests and ``mmml md-system``)."""
+"""Shared CLI helpers for CHARMM MLpot workflows (tests and ``karml md-system``)."""
 
 from __future__ import annotations
 
@@ -12,13 +12,13 @@ from typing import Any, Literal, Optional, Sequence, Tuple
 
 import numpy as np
 
-from mmml.interfaces.pycharmmInterface.mlpot.pretreat_cli_args import (
+from karml.interfaces.pycharmmInterface.mlpot.pretreat_cli_args import (
     DEFAULT_CHARMM_MM_PRETREAT_DT_FS,
     add_charmm_mm_pretreat_physics_args,
 )
-from mmml.paths import _package_dir
+from karml.paths import _package_dir
 
-# Repository root (parent of the installed ``mmml`` package directory).
+# Repository root (parent of the installed ``karml`` package directory).
 REPO_ROOT = _package_dir().parent
 
 DEFAULT_RESIDUE = "ACO"
@@ -471,7 +471,7 @@ def resolve_dcd_nsavc_for_args(
 
 
 def apply_charmm_output_from_args(args: argparse.Namespace) -> int:
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import apply_charmm_verbosity
+    from karml.interfaces.pycharmmInterface.mlpot.setup import apply_charmm_verbosity
 
     bomlev = int(getattr(args, "bomlev", -2))
     if getattr(args, "quiet", False):
@@ -497,10 +497,10 @@ def resolve_nve_boltzmann_temp(
 
     Defaults to ``0.2 × --temperature`` (same as heat FIRSTT) when
     ``--nve-boltzmann-temp`` is unset. Never below
-    :data:`~mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.MIN_VELOCITY_ASSIGNMENT_TEMP_K`
+    :data:`~karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.MIN_VELOCITY_ASSIGNMENT_TEMP_K`
     (10 K).
     """
-    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+    from karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
         clamp_velocity_assignment_temp_k,
     )
 
@@ -524,7 +524,7 @@ def resolve_heat_firstt_finalt(
     default_temp: float,
 ) -> tuple[float, float]:
     """Return ``(firstt, finalt)`` for the heat stage (Kelvin)."""
-    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+    from karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
         clamp_velocity_assignment_temp_k,
     )
 
@@ -623,7 +623,7 @@ def resolve_charmm_mm_pretreat_for_staged(
     ):
         return False
     if not bool(getattr(args, "charmm_mm_pretreat_with_liquid_prep", False)):
-        from mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
+        from karml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
             liquid_prep_enabled,
         )
 
@@ -857,7 +857,7 @@ def resolve_heat_hoover_tmass(
     if explicit is not None:
         return max(1, int(explicit))
     if psf_tmass is None:
-        from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
             compute_cpt_piston_masses,
         )
 
@@ -866,7 +866,7 @@ def resolve_heat_hoover_tmass(
 
 
 def resolve_heat_comp_damp_kwargs(args: argparse.Namespace) -> dict[str, float | bool]:
-    from mmml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
+    from karml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
         DEFAULT_COMP_FORCE_MIN_KCALMOL_A,
         DEFAULT_COMP_FORCE_SCALE,
     )
@@ -1020,7 +1020,7 @@ def add_cluster_args(parser: argparse.ArgumentParser) -> None:
         "--checkpoint",
         type=Path,
         default=None,
-        help="Checkpoint (.json or Orbax root). Default: MMML_CKPT or repo ckpts.",
+        help="Checkpoint (.json or Orbax root). Default: KARML_CKPT or repo ckpts.",
     )
     parser.add_argument(
         "--ml-resnames",
@@ -1055,7 +1055,7 @@ def add_packmol_cache_args(parser: argparse.ArgumentParser) -> None:
         default=None,
         help=(
             "Packmol cache root (default: <output-dir>/.packmol_cache, "
-            "or MMML_PACKMOL_CACHE)"
+            "or KARML_PACKMOL_CACHE)"
         ),
     )
 
@@ -1199,7 +1199,7 @@ def resolve_test_first_config(
 ) -> Optional["TestFirstConfig"]:
     if not getattr(args, "test_first", False):
         return None
-    from mmml.interfaces.pycharmmInterface.mlpot.derivative_test import TestFirstConfig
+    from karml.interfaces.pycharmmInterface.mlpot.derivative_test import TestFirstConfig
 
     resids = tuple(parse_resid_list(getattr(args, "test_first_resids", "") or ""))
     return TestFirstConfig(
@@ -1262,12 +1262,12 @@ def resolve_checkpoint(explicit: Path | None = None) -> Path:
             raise FileNotFoundError(f"Checkpoint not found: {p}")
         return p
 
-    ckpt_env = os.environ.get("MMML_CKPT")
+    ckpt_env = os.environ.get("KARML_CKPT")
     candidates: list[Path] = []
     if ckpt_env:
         candidates.append(Path(ckpt_env))
     try:
-        from mmml.cli.base import BUNDLED_PORTABLE_SMALL_MOLECULE_PATH
+        from karml.cli.base import BUNDLED_PORTABLE_SMALL_MOLECULE_PATH
 
         candidates.append(BUNDLED_PORTABLE_SMALL_MOLECULE_PATH)
     except Exception:
@@ -1277,15 +1277,15 @@ def resolve_checkpoint(explicit: Path | None = None) -> Path:
             REPO_ROOT / "examples/ckpts_json/DESdimers_params.json",
             REPO_ROOT / "examples/ckpts_json",
             REPO_ROOT / "ckpts_json/DESdimers_params.json",
-            REPO_ROOT / "mmml/models/physnetjax/ckpts/DESdimers",
-            REPO_ROOT / "mmml/models/physnetjax/ckpts",
+            REPO_ROOT / "karml/models/physnetjax/ckpts/DESdimers",
+            REPO_ROOT / "karml/models/physnetjax/ckpts",
         ]
     )
     for ckpt in candidates:
         if ckpt.exists():
             return ckpt.resolve()
     raise FileNotFoundError(
-        "No checkpoint found. Set MMML_CKPT or pass --checkpoint."
+        "No checkpoint found. Set KARML_CKPT or pass --checkpoint."
     )
 
 
@@ -1377,14 +1377,14 @@ def build_ase_cluster(
     In Jupyter, call :func:`ensure_charmm_session_ready` once per kernel first (this
     function calls it automatically).
     """
-    from mmml.interfaces.pycharmmInterface.cluster_geometry import ensure_charmm_session_ready
+    from karml.interfaces.pycharmmInterface.cluster_geometry import ensure_charmm_session_ready
 
     ensure_charmm_session_ready()
-    from mmml.cli.run.md_pbc_suite.cluster import (
+    from karml.cli.run.md_pbc_suite.cluster import (
         _build_psf_ordered_cluster,
         build_cluster_from_reference_npz,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
+    from karml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
 
     if reference_npz is not None:
         z, r = build_cluster_from_reference_npz(
@@ -1397,7 +1397,7 @@ def build_ase_cluster(
         z, r = _build_psf_ordered_cluster(residue.upper(), n_molecules, spacing)
         sync_charmm_positions(r)
     validate_cluster_geometry(r, n_molecules=n_molecules)
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import report_charmm_topology_summary
+    from karml.interfaces.pycharmmInterface.mlpot.setup import report_charmm_topology_summary
 
     report_charmm_topology_summary()
     return z, r
@@ -1409,7 +1409,7 @@ def reference_frame_geometry(
     frame: int = 0,
 ) -> Tuple[np.ndarray, np.ndarray]:
     """Load ``(Z, R)`` from a reference or handoff NPZ (see ``cluster_geometry``)."""
-    from mmml.interfaces.pycharmmInterface.cluster_geometry import (
+    from karml.interfaces.pycharmmInterface.cluster_geometry import (
         reference_frame_geometry as _reference_frame_geometry,
     )
 
@@ -1418,7 +1418,7 @@ def reference_frame_geometry(
 
 def atoms_from_reference_npz(path: str | Path, *, frame: int = 0) -> Any:
     """ASE ``Atoms`` from a reference or handoff NPZ frame."""
-    from mmml.interfaces.pycharmmInterface.cluster_geometry import (
+    from karml.interfaces.pycharmmInterface.cluster_geometry import (
         atoms_from_reference_npz as _atoms_from_reference_npz,
     )
 
@@ -1427,7 +1427,7 @@ def atoms_from_reference_npz(path: str | Path, *, frame: int = 0) -> Any:
 
 def prepare_vacuum_nbonds_for_mm() -> None:
     """Vacuum nbonds preset before first hybrid/MM energy (see ``cluster_geometry``)."""
-    from mmml.interfaces.pycharmmInterface.cluster_geometry import (
+    from karml.interfaces.pycharmmInterface.cluster_geometry import (
         prepare_vacuum_nbonds_for_mm as _prepare_vacuum_nbonds_for_mm,
     )
 
@@ -1436,7 +1436,7 @@ def prepare_vacuum_nbonds_for_mm() -> None:
 
 def ensure_charmm_session_ready(**kwargs: Any) -> None:
     """Initialize CHARMM for notebooks (``bomlev=-2``, vacuum, MM BLOCK)."""
-    from mmml.interfaces.pycharmmInterface.cluster_geometry import (
+    from karml.interfaces.pycharmmInterface.cluster_geometry import (
         ensure_charmm_session_ready as _ensure_charmm_session_ready,
     )
 
@@ -1450,7 +1450,7 @@ def prepare_charmm_notebook(**kwargs: Any) -> None:
 
 def prepare_jax_gpu_notebook(*, required: bool = True) -> bool:
     """Prep JAX GPU env for notebooks — **first cell**, before ``import jax``."""
-    from mmml.interfaces.pycharmmInterface.cluster_geometry import (
+    from karml.interfaces.pycharmmInterface.cluster_geometry import (
         prepare_jax_gpu_notebook as _prepare_jax_gpu_notebook,
     )
 
@@ -1459,7 +1459,7 @@ def prepare_jax_gpu_notebook(*, required: bool = True) -> bool:
 
 def prepare_notebook_kernel(*, jax_required: bool = True) -> None:
     """Bootstrap JAX GPU + CHARMM for Jupyter (JAX prep must run before any ``import jax``)."""
-    from mmml.interfaces.pycharmmInterface.cluster_geometry import (
+    from karml.interfaces.pycharmmInterface.cluster_geometry import (
         prepare_notebook_kernel as _prepare_notebook_kernel,
     )
 
@@ -1474,7 +1474,7 @@ def parse_composition(spec: str) -> list[tuple[str, int]]:
     ``[(resolved_RESN, count), ...]``; use ``parse_composition_entries`` when
     monomer PDB paths are needed.
     """
-    from mmml.interfaces.pycharmmInterface.mlpot.composition_spec import (
+    from karml.interfaces.pycharmmInterface.mlpot.composition_spec import (
         composition_as_pairs,
         composition_mode,
         ensure_packmol_pdb_monomers,
@@ -1490,7 +1490,7 @@ def parse_composition(spec: str) -> list[tuple[str, int]]:
 
 def parse_composition_entries(spec: str, **kwargs):
     """Parse composition into ``CompositionEntry`` rows (including PDB paths)."""
-    from mmml.interfaces.pycharmmInterface.mlpot.composition_spec import (
+    from karml.interfaces.pycharmmInterface.mlpot.composition_spec import (
         parse_composition_entries as _parse_entries,
     )
 
@@ -1505,7 +1505,7 @@ def composition_tag(composition: list[tuple[str, int]] | None, residue: str, n_m
 
 
 def use_packmol_placement(args: argparse.Namespace) -> bool:
-    from mmml.interfaces.pycharmmInterface.packmol_placement import resolve_packmol_use
+    from karml.interfaces.pycharmmInterface.packmol_placement import resolve_packmol_use
 
     return resolve_packmol_use(
         composition=getattr(args, "composition", None),
@@ -1516,7 +1516,7 @@ def use_packmol_placement(args: argparse.Namespace) -> bool:
 
 
 def use_pyxtal_placement(args: argparse.Namespace) -> bool:
-    from mmml.interfaces.pyxtal_placement import resolve_pyxtal_use
+    from karml.interfaces.pyxtal_placement import resolve_pyxtal_use
 
     return resolve_pyxtal_use(
         composition=getattr(args, "composition", None),
@@ -1534,12 +1534,12 @@ def build_cluster_from_args_with_tag(
     args: argparse.Namespace,
 ) -> Tuple[np.ndarray, np.ndarray, int, str]:
     """Build cluster; returns ``(Z, positions, n_monomers, tag)``."""
-    from mmml.interfaces.pycharmmInterface.heme_library import (
+    from karml.interfaces.pycharmmInterface.heme_library import (
         residues_from_cluster_args,
         topology_residue_context,
     )
 
-    from mmml.interfaces.pycharmmInterface.heme_electronic import expand_counterions
+    from karml.interfaces.pycharmmInterface.heme_electronic import expand_counterions
 
     expand_counterions(args)
     with topology_residue_context(residues_from_cluster_args(args)):
@@ -1551,7 +1551,7 @@ def build_cluster_from_args_with_tag(
 def _stash_cluster_atom_names(args: argparse.Namespace) -> None:
     """Remember PSF identity so a later ML/MM cut can find the boundary bonds."""
     try:
-        from mmml.interfaces.pycharmmInterface.myoglobin import psf_per_atom_identity
+        from karml.interfaces.pycharmmInterface.myoglobin import psf_per_atom_identity
 
         names, resnames, resids, segids = psf_per_atom_identity()
     except Exception:
@@ -1566,16 +1566,16 @@ def _stash_cluster_atom_names(args: argparse.Namespace) -> None:
 def _build_cluster_from_args_with_tag(
     args: argparse.Namespace,
 ) -> Tuple[np.ndarray, np.ndarray, int, str]:
-    from mmml.cli.run.md_pbc_suite.ase import (
+    from karml.cli.run.md_pbc_suite.ase import (
         _build_cluster_from_composition,
         _build_cluster_from_composition_packmol,
         _build_cluster_from_composition_pyxtal,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
-    from mmml.interfaces.pycharmmInterface.packmol_cache import (
+    from karml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
+    from karml.interfaces.pycharmmInterface.packmol_cache import (
         packmol_prep_settings_from_namespace,
     )
-    from mmml.interfaces.pycharmmInterface.packmol_placement import (
+    from karml.interfaces.pycharmmInterface.packmol_placement import (
         packmol_center_for_cold_start,
         resolve_packmol_cube_side_from_args,
         resolve_packmol_placement_mode,
@@ -1584,11 +1584,11 @@ def _build_cluster_from_args_with_tag(
 
     spacing = float(args.spacing)
     if getattr(args, "composition", None):
-        from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import (
+        from karml.interfaces.pycharmmInterface.mlpot.box_sizing import (
             apply_box_auto_count_composition,
             resolve_box_auto_mode,
         )
-        from mmml.interfaces.pycharmmInterface.mlpot.composition_spec import (
+        from karml.interfaces.pycharmmInterface.mlpot.composition_spec import (
             apply_from_pdb_alias,
             resolve_composition_plan,
         )
@@ -1603,12 +1603,12 @@ def _build_cluster_from_args_with_tag(
             pyxtal=getattr(args, "pyxtal", None),
         )
         if mode == "full_system_pdb":
-            from mmml.interfaces.pycharmmInterface.mlpot.setup import load_cluster_from_pdb
+            from karml.interfaces.pycharmmInterface.mlpot.setup import load_cluster_from_pdb
 
             return load_cluster_from_pdb(args)
         if use_pyxtal_placement(args):
-            import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
-            from mmml.interfaces.pyxtal_placement import parse_supercell_reps
+            import karml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+            from karml.interfaces.pyxtal_placement import parse_supercell_reps
 
             supercell_reps = None
             if getattr(args, "pyxtal_supercell", None):
@@ -1642,7 +1642,7 @@ def _build_cluster_from_args_with_tag(
                 f"dim={int(getattr(args, 'pyxtal_dim', 3))}"
             )
         elif use_packmol_placement(args):
-            import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+            import karml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
             placement = resolve_packmol_placement_mode(
                 packmol_placement=getattr(args, "packmol_placement", None),
                 packmol_sphere=getattr(args, "packmol_sphere", None),
@@ -1695,7 +1695,7 @@ def _build_cluster_from_args_with_tag(
                 raise ValueError(
                     "PDB composition tokens require Packmol; remove --no-packmol"
                 )
-            from mmml.interfaces.pycharmmInterface.grid_placement import resolve_system_builder
+            from karml.interfaces.pycharmmInterface.grid_placement import resolve_system_builder
 
             builder = resolve_system_builder(
                 builder=getattr(args, "builder", None),
@@ -1736,7 +1736,7 @@ def _build_cluster_from_args_with_tag(
         residue = args.residue.upper()
         n_mol = int(args.n_molecules)
         if residue in {"MBCO", "MYOGLOBIN"}:
-            from mmml.interfaces.pycharmmInterface.myoglobin import (
+            from karml.interfaces.pycharmmInterface.myoglobin import (
                 build_myoglobin_in_charmm,
             )
 
@@ -1817,7 +1817,7 @@ def setup_cons_fix_for_resids(resids: list[int]) -> Any:
         return None
     import pycharmm.cons_fix as cons_fix
 
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import select_by_resids
+    from karml.interfaces.pycharmmInterface.mlpot.setup import select_by_resids
 
     sel = select_by_resids(resids)
     if len(sel.get_atom_indexes()) == 0:
@@ -1836,7 +1836,7 @@ def apply_flat_bottom_from_args(args: argparse.Namespace) -> None:
     fb_rad = getattr(args, "fb_rad", None)
     if fb_rad is None or float(fb_rad) <= 0:
         return
-    from mmml.interfaces.pycharmmInterface.mlpot.restraints import apply_flat_bottom_workflow
+    from karml.interfaces.pycharmmInterface.mlpot.restraints import apply_flat_bottom_workflow
 
     cfg = apply_flat_bottom_workflow(
         radius=float(fb_rad),
@@ -2032,7 +2032,7 @@ def parse_adumb_rc_wall_params(
     **every** ``umbrella rxncor`` distance name (2D: both Cl–C and C–N). Using
     only the first name left C–N unwalled and UM1RXN aborted on ``rcn``.
     """
-    from mmml.interfaces.pycharmmInterface.mlpot.restraints import (
+    from karml.interfaces.pycharmmInterface.mlpot.restraints import (
         adumb_rc_wall_pairs_for_names,
     )
 
@@ -2080,7 +2080,7 @@ def strip_mmfp_blocks_from_script(script: str) -> str:
 
 def adumb_rc_walls_enabled() -> bool:
     """True when ADUMB RC outer walls are installed (NOE default, or MMFP)."""
-    from mmml.interfaces.pycharmmInterface.mlpot.restraints import (
+    from karml.interfaces.pycharmmInterface.mlpot.restraints import (
         adumb_rc_walls_enabled as _enabled,
     )
 
@@ -2255,7 +2255,7 @@ def run_charmm_lingo_script(
     adumb_walls = parse_adumb_rc_wall_params(text)
     exec_text = strip_mmfp_blocks_from_script(text) if adumb_walls else text
 
-    from mmml.interfaces.pycharmmInterface.charmm_mpi import (
+    from karml.interfaces.pycharmmInterface.charmm_mpi import (
         _bootstrap_workdir,
         mpi_charmm_script,
     )
@@ -2264,7 +2264,7 @@ def run_charmm_lingo_script(
     if path is not None:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(
-            "* MMML pre-dynamics CHARMM lingo\n*\n" + text.rstrip() + "\n",
+            "* KARML pre-dynamics CHARMM lingo\n*\n" + text.rstrip() + "\n",
             encoding="utf-8",
         )
 
@@ -2302,7 +2302,7 @@ def run_charmm_lingo_script(
                 and re.match(r"(?i)^\s*umbrella\s+init\b", cmd)
             ):
                 if adumb_rc_walls_enabled():
-                    from mmml.interfaces.pycharmmInterface.mlpot.restraints import (
+                    from karml.interfaces.pycharmmInterface.mlpot.restraints import (
                         install_adumb_rxncor_distance_walls,
                     )
 
@@ -2313,7 +2313,7 @@ def run_charmm_lingo_script(
                 else:
                     print(
                         "ADUMB RC walls disabled "
-                        "(MMML_ADUMB_RC_WALL_BACKEND=off; umbrella max is the only "
+                        "(KARML_ADUMB_RC_WALL_BACKEND=off; umbrella max is the only "
                         "hard limit — UM1RXN aborts if a traced RC exceeds it)",
                         flush=True,
                     )
@@ -2352,7 +2352,7 @@ def apply_pre_dynamics_lingo_from_args(args: argparse.Namespace) -> None:
     run_charmm_lingo_script(script, inp_path=inp_path, workdir=workdir)
 
     if script_uses_umbrella_rxncor(script):
-        from mmml.interfaces.pycharmmInterface.mlpot.restraints import (
+        from karml.interfaces.pycharmmInterface.mlpot.restraints import (
             AdumbRcGuard,
             adumb_rc_wall_margin_A,
         )
@@ -2379,7 +2379,7 @@ def apply_pre_dynamics_lingo_from_args(args: argparse.Namespace) -> None:
             rcmax, rcwall = parse_adumb_rc_params(script)
             wall_rcmax = resolve_adumb_wall_rcmax(rcmax, script)
             if wall_rcmax is not None:
-                from mmml.interfaces.pycharmmInterface.mlpot.restraints import (
+                from karml.interfaces.pycharmmInterface.mlpot.restraints import (
                     adumb_rc_wall_pairs_for_names,
                 )
 
@@ -2524,14 +2524,14 @@ def _vmd_scene_lines() -> list[str]:
 def _vmd_element_assignment_lines() -> list[str]:
     """Copy CHARMM mass to VMD's element field so Jmol colors apply."""
     lines = [
-        "proc mmml_set_element {lo hi symbol} {",
+        "proc karml_set_element {lo hi symbol} {",
         '  set sel [atomselect top "mass >= $lo and mass < $hi"]',
         "  $sel set element $symbol",
         "  $sel delete",
         "}",
     ]
     for lo, hi, symbol in _VMD_MASS_ELEMENTS:
-        lines.append(f"mmml_set_element {lo:.2f} {hi:.2f} {symbol}")
+        lines.append(f"karml_set_element {lo:.2f} {hi:.2f} {symbol}")
     return lines
 
 
@@ -2627,12 +2627,12 @@ def write_vmd_load_script(
     trajectory: Path | Sequence[Path] | None = None,
     n_atoms: int,
 ) -> Path:
-    from mmml.interfaces.pycharmmInterface.mlpot.artifact_paths import VMD_TCL
+    from karml.interfaces.pycharmmInterface.mlpot.artifact_paths import VMD_TCL
 
     topology_psf = Path(topology_psf)
     lines = [
         "# cd into this directory first, then: vmd -e view.vmd.tcl",
-        "# Shared mmml style: DSSP cartoon, Jmol spheres, dynamic bonds, line solvent.",
+        "# Shared karml style: DSSP cartoon, Jmol spheres, dynamic bonds, line solvent.",
         "# Basenames only (sshfs / compute nodes).",
         f"# Atoms: {n_atoms} — must match trajectory frame count.",
         f"mol new {{{topology_psf.name}}}",
@@ -2720,26 +2720,26 @@ def load_physnet_for_cluster(
     checkpoint: Path,
     n_atoms: int,
 ) -> Tuple[Any, Any]:
-    from mmml.cli.base import load_physnet_params_and_ef_model, resolve_checkpoint_paths
+    from karml.cli.base import load_physnet_params_and_ef_model, resolve_checkpoint_paths
 
     if checkpoint.is_file() and checkpoint.suffix == ".json":
         return load_physnet_params_and_ef_model(checkpoint, natoms=n_atoms)
 
     _, epoch_dir = resolve_checkpoint_paths(checkpoint)
-    from mmml.models.physnetjax.physnetjax.restart.restart import get_params_model
+    from karml.models.physnetjax.physnetjax.restart.restart import get_params_model
 
     params, model = get_params_model(str(epoch_dir), natoms=n_atoms)
     return params, model
 
 
 def all_atom_selection():
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import select_all_atoms
+    from karml.interfaces.pycharmmInterface.mlpot.setup import select_all_atoms
 
     return select_all_atoms()
 
 
 def setup_charmm_nbonds() -> None:
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import setup_default_nbonds
+    from karml.interfaces.pycharmmInterface.mlpot.setup import setup_default_nbonds
 
     setup_default_nbonds()
 
@@ -2800,7 +2800,7 @@ def charmm_grms_after_ener_force(*, silent: bool = True) -> float:
     ``ENER`` alone can leave a stale GRMS from a prior MLpot evaluation; always
     use this before GRMS gates and bonded-MM recovery metrics.
     """
-    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+    import karml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
     import pycharmm
 
     # ``ENER FORCE`` on an empty session aborts CHARMM fatally; return a benign
@@ -2809,7 +2809,7 @@ def charmm_grms_after_ener_force(*, silent: bool = True) -> float:
         return 0.0
 
     if silent:
-        from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_silent_command
+        from karml.interfaces.pycharmmInterface.charmm_levels import charmm_silent_command
 
         with charmm_silent_command():
             pycharmm.lingo.charmm_script("ENER FORCE")
@@ -2825,16 +2825,16 @@ def charmm_total_forces_kcalmol_A() -> np.ndarray:
     (``dE/dx``). Physical forces are the negative gradient (see
     ``tests/functionality/mlpot/01_callback_vs_ase_no_charmm.py``).
     """
-    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+    import karml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
 
-    from mmml.interfaces.pycharmmInterface.charmm_forces import charmm_forces_array
+    from karml.interfaces.pycharmmInterface.charmm_forces import charmm_forces_array
 
     return charmm_forces_array()
 
 
 def charmm_total_forces_ev_angstrom() -> np.ndarray:
     """Per-atom CHARMM total forces in eV/Å (canonical evaluate/compare units)."""
-    from mmml.interfaces.pycharmmInterface.mmml_calculator import ev2kcalmol
+    from karml.interfaces.pycharmmInterface.karml_calculator import ev2kcalmol
 
     return np.asarray(charmm_total_forces_kcalmol_A(), dtype=np.float64) / float(ev2kcalmol)
 
@@ -2864,7 +2864,7 @@ def mlpot_hybrid_forces_ev_angstrom(
     natom: int | None = None,
 ) -> np.ndarray | None:
     """Hybrid MLpot forces in eV/Å from the last callback evaluation."""
-    from mmml.interfaces.pycharmmInterface.mmml_calculator import ev2kcalmol
+    from karml.interfaces.pycharmmInterface.karml_calculator import ev2kcalmol
 
     forces_kcal = mlpot_last_hybrid_forces_kcalmol_A(pyCModel)
     if forces_kcal is None:
@@ -2876,7 +2876,7 @@ def mlpot_hybrid_forces_ev_angstrom(
 
 def mlpot_hybrid_needs_charmm_box(pyCModel: Any) -> bool:
     """True when hybrid MM needs a cubic box (MIC PBC or jax-pme long-range Coulomb)."""
-    from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import DecomposedMlpotModel
+    from karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import DecomposedMlpotModel
 
     if not isinstance(pyCModel, DecomposedMlpotModel):
         return False
@@ -2901,7 +2901,7 @@ def _mlpot_spherical_eval_kwargs(
     import jax.numpy as jnp
 
     n = int(pos_np.shape[0])
-    from mmml.interfaces.pycharmmInterface.ml_dtypes import resolve_ml_compute_dtype
+    from karml.interfaces.pycharmmInterface.ml_dtypes import resolve_ml_compute_dtype
     dtype = resolve_ml_compute_dtype()
     pos_j = jnp.asarray(pos_np, dtype=dtype)
     z_j = jnp.asarray(calc.atomic_numbers[:n], dtype=jnp.int32)
@@ -2916,7 +2916,7 @@ def _mlpot_spherical_eval_kwargs(
     )
     needs_box = bool(use_pbc) or mlpot_hybrid_needs_charmm_box(pyCModel)
     if needs_box and box_A is not None:
-        from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import cubic_box_matrix_from_side
+        from karml.interfaces.pycharmmInterface.mlpot.pbc_env import cubic_box_matrix_from_side
 
         box_j = jnp.asarray(cubic_box_matrix_from_side(float(box_A)), dtype=dtype)
         kwargs["box"] = box_j
@@ -2937,7 +2937,7 @@ def mlpot_spherical_forces_ev_angstrom(
     box_A: float | None,
 ) -> np.ndarray | None:
     """Evaluate hybrid ML/MM forces via ``spherical_fn`` (matches ASE evaluate-npz)."""
-    from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
+    from karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
         DecomposedMlpotCalculator,
         DecomposedMlpotModel,
         _DeferredDecomposedMlpotCalculator,
@@ -2980,7 +2980,7 @@ def mlpot_spherical_energy_forces_ev_angstrom(
     (:meth:`DecomposedMlpotCalculator.evaluate_hybrid_ev`: molecules rewrapped whole,
     same MM pair list, dimer candidates and chunk budget).
     """
-    from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
+    from karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
         DecomposedMlpotCalculator,
         DecomposedMlpotModel,
         _DeferredDecomposedMlpotCalculator,
@@ -3122,7 +3122,7 @@ def resolve_evaluate_forces_ev_angstrom(
 
 def charmm_positions_angstrom() -> np.ndarray:
     """Current CHARMM coordinates (Å) from the active PSF."""
-    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+    import karml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
     import pycharmm.coor as coor
 
     pos_df = coor.get_positions()
@@ -3239,7 +3239,7 @@ def _print_hybrid_charmm_grms_diag(
 ) -> None:
     if not context:
         return
-    from mmml.utils.prep_ladder_report import emit_hybrid_grms_diag
+    from karml.utils.prep_ladder_report import emit_hybrid_grms_diag
 
     emit_hybrid_grms_diag(
         context,
@@ -3266,14 +3266,14 @@ def light_resync_mlpot_state(
     Does **not** call ``upinb`` / ``update_bnbnd`` (unsafe with MLpot registered).
     When ``verify_ase_calculator`` is True, compare ASE hybrid forces to JAX spherical_fn.
     """
-    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+    import karml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
     import pycharmm
 
     mlpot_ctx.reregister_mlpot(verbose=verbose, reregister_params=False)
     if getattr(mlpot_ctx, "use_pbc", False):
         pyCModel = getattr(mlpot_ctx, "pyCModel", None)
         if pyCModel is not None:
-            from mmml.interfaces.pycharmmInterface.mlpot.run_workflow import (
+            from karml.interfaces.pycharmmInterface.mlpot.run_workflow import (
                 sync_mlpot_pbc_cell_from_charmm,
             )
 
@@ -3286,7 +3286,7 @@ def light_resync_mlpot_state(
             mlpot_ctx.cubic_box_side_A = float(side)
             mlpot_ctx.charmm_cubic_box_side_A = float(side)
     if silent_charmm:
-        from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_silent_command
+        from karml.interfaces.pycharmmInterface.charmm_levels import charmm_silent_command
 
         with charmm_silent_command():
             pycharmm.lingo.charmm_script("UPDATE")
@@ -3303,7 +3303,7 @@ def light_resync_mlpot_state(
         )
         diag = measure_hybrid_charmm_grms(mlpot_ctx)
     if context:
-        from mmml.utils.prep_ladder_report import emit_hybrid_grms_diag
+        from karml.utils.prep_ladder_report import emit_hybrid_grms_diag
 
         emit_hybrid_grms_diag(
             f"{context} (after light resync)",
@@ -3327,7 +3327,7 @@ def verify_hybrid_ase_charmm_consistency(
     """Compare hybrid GRMS from ASE calculator vs JAX ``spherical_fn``."""
     import ase
 
-    from mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize import (
+    from karml.interfaces.pycharmmInterface.mlpot.calculator_minimize import (
         _hybrid_mlpot_ase_calculator_class,
     )
 
@@ -3345,7 +3345,7 @@ def verify_hybrid_ase_charmm_consistency(
     calc_cls = _hybrid_mlpot_ase_calculator_class()
     atoms.calc = calc_cls(mlpot_ctx)
     ase_forces = np.asarray(atoms.get_forces(), dtype=np.float64)
-    from mmml.interfaces.pycharmmInterface.mmml_calculator import ev2kcalmol
+    from karml.interfaces.pycharmmInterface.karml_calculator import ev2kcalmol
 
     ase_grms = forces_grms_kcalmol_A(ase_forces * float(ev2kcalmol))
     jax_grms = mlpot_hybrid_grms_from_calculator(mlpot_ctx)
@@ -3357,7 +3357,7 @@ def verify_hybrid_ase_charmm_consistency(
             if np.isfinite(ase_grms) and np.isfinite(jax_grms) and jax_grms > 0
             else float("inf")
         )
-        from mmml.utils.prep_ladder_report import emit_ase_jax_verify
+        from karml.utils.prep_ladder_report import emit_ase_jax_verify
 
         emit_ase_jax_verify(
             context,
@@ -3379,7 +3379,7 @@ def probe_and_light_resync_if_desync(
     restart_path: Path | str | None = None,
 ) -> float:
     """Run light resync when hybrid/CHARMM GRMS look desynced; else refresh in place."""
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+    from karml.interfaces.pycharmmInterface.mlpot.setup import (
         mlpot_skip_charmm_ener_force_before_first_sd,
     )
 
@@ -3460,7 +3460,7 @@ def prepare_mlpot_hybrid_state_for_sd(
 
     Returns ``(hybrid_grms, user_kcal)`` when MLpot SD may proceed.
     """
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+    from karml.interfaces.pycharmmInterface.mlpot.setup import (
         assert_mlpot_user_active,
         mlpot_skip_charmm_ener_force_before_first_sd,
     )
@@ -3471,14 +3471,14 @@ def prepare_mlpot_hybrid_state_for_sd(
             workflow_args is not None and getattr(workflow_args, "allow_high_grms", False)
         )
 
-    from mmml.interfaces.pycharmmInterface.mlpot.monomer_physnet_mini import (
+    from karml.interfaces.pycharmmInterface.mlpot.monomer_physnet_mini import (
         remember_monomer_template_restart_path,
     )
 
     remember_monomer_template_restart_path(mlpot_ctx, restart_path)
 
     if getattr(mlpot_ctx, "use_pbc", False) is True:
-        from mmml.interfaces.pycharmmInterface.charmm_image_geometry import (
+        from karml.interfaces.pycharmmInterface.charmm_image_geometry import (
             run_mlpot_pbc_image_registration_gate,
         )
 
@@ -3551,7 +3551,7 @@ def prepare_mlpot_hybrid_state_for_sd(
     workflow_args, atoms_per_list = _geometry_recovery_context(mlpot_ctx)
     intervention_grms: float | None = None
     if workflow_args is not None and atoms_per_list is not None:
-        from mmml.interfaces.pycharmmInterface.mlpot.grms_thresholds import (
+        from karml.interfaces.pycharmmInterface.mlpot.grms_thresholds import (
             resolve_intervention_grms_threshold,
         )
 
@@ -3568,7 +3568,7 @@ def prepare_mlpot_hybrid_state_for_sd(
     elif grms_limit is not None:
         intervention_grms = float(grms_limit) * 0.5
 
-    from mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize import (
+    from karml.interfaces.pycharmmInterface.mlpot.calculator_minimize import (
         HybridCalculatorFireConfig,
         HybridCalculatorMinimizeConfig,
         coerce_hybrid_minimize_result,
@@ -3577,7 +3577,7 @@ def prepare_mlpot_hybrid_state_for_sd(
         minimize_hybrid_calculator_fire_before_sd,
         resolve_calculator_mini_safe_grms,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         BondedMmMiniConfig,
         minimize_bonded_mm_recovery,
     )
@@ -3648,7 +3648,7 @@ def prepare_mlpot_hybrid_state_for_sd(
 
     def _run_monomer_physnet_mini(phase: str) -> None:
         nonlocal hybrid_grms, user, diag, grms_hot, user_hot, ran_monomer_physnet_mini
-        from mmml.interfaces.pycharmmInterface.mlpot.monomer_physnet_mini import (
+        from karml.interfaces.pycharmmInterface.mlpot.monomer_physnet_mini import (
             monomer_physnet_mini_enabled,
             run_selective_monomer_physnet_mini,
             selective_monomer_physnet_mini_config_from_args,
@@ -3757,10 +3757,10 @@ def prepare_mlpot_hybrid_state_for_sd(
                     flush=True,
                 )
             return
-        from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+        from karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
             _run_mlpot_recovery_mini,
         )
-        from mmml.utils.prep_ladder_report import PrepMetrics, emit_prep_phase
+        from karml.utils.prep_ladder_report import PrepMetrics, emit_prep_phase
 
         emit_prep_phase(
             context_prefix,
@@ -3810,7 +3810,7 @@ def prepare_mlpot_hybrid_state_for_sd(
 
     def _run_bonded_recovery() -> None:
         nonlocal hybrid_grms, user, diag, grms_hot, user_hot, ran_bonded_recovery
-        from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+        from karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
             _mlpot_covers_all_atoms,
         )
 
@@ -3838,7 +3838,7 @@ def prepare_mlpot_hybrid_state_for_sd(
                 if str(bonded_recovery_backend).lower() != "charmm"
                 else "bonded-MM SD (MLpot detached)"
             )
-        from mmml.utils.prep_ladder_report import PrepMetrics, emit_prep_phase
+        from karml.utils.prep_ladder_report import PrepMetrics, emit_prep_phase
 
         emit_prep_phase(
             context_prefix,
@@ -3905,10 +3905,10 @@ def prepare_mlpot_hybrid_state_for_sd(
             )
         ):
             return
-        from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import (
+        from karml.interfaces.pycharmmInterface.mlpot.box_sizing import (
             parse_composition_dict,
         )
-        from mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
+        from karml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
             run_geometry_packing_recovery,
         )
 
@@ -3919,7 +3919,7 @@ def prepare_mlpot_hybrid_state_for_sd(
         if box_side is None:
             box_side = getattr(mlpot_ctx, "charmm_cubic_box_side_A", None)
         if verbose:
-            from mmml.utils.prep_ladder_report import PrepMetrics, emit_prep_phase
+            from karml.utils.prep_ladder_report import PrepMetrics, emit_prep_phase
 
             emit_prep_phase(
                 context_prefix,
@@ -3978,7 +3978,7 @@ def prepare_mlpot_hybrid_state_for_sd(
             verbose=verbose,
         )
         if verbose:
-            from mmml.utils.prep_ladder_report import PrepMetrics, emit_prep_phase
+            from karml.utils.prep_ladder_report import PrepMetrics, emit_prep_phase
 
             emit_prep_phase(
                 context_prefix,
@@ -4097,7 +4097,7 @@ def prepare_mlpot_hybrid_state_for_sd(
         mlpot_ctx.sd_watchdog_baseline_grms = float(hybrid_grms)
 
     if ran_calculator_mini or ran_calculator_fire or ran_bonded_recovery or ran_geometry_packing or ran_monomer_physnet_mini:
-        from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+        from karml.interfaces.pycharmmInterface.mlpot.setup import (
             invalidate_mlpot_pre_sd_ener_probe,
         )
 
@@ -4123,7 +4123,7 @@ def mlpot_hybrid_grms_from_calculator(
         return None
 
     if natom is None:
-        import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+        import karml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
         import pycharmm.coor as coor
 
         natom = int(coor.get_natom())
@@ -4146,7 +4146,7 @@ def mlpot_hybrid_grms_from_calculator(
         box_A=float(box_A) if box_A is not None else None,
     )
     if forces_ev is not None and int(forces_ev.shape[0]) >= n:
-        from mmml.interfaces.pycharmmInterface.mmml_calculator import ev2kcalmol
+        from karml.interfaces.pycharmmInterface.karml_calculator import ev2kcalmol
 
         forces_kcal = np.asarray(forces_ev[:n], dtype=np.float64) * float(ev2kcalmol)
         return forces_grms_kcalmol_A(forces_kcal)
@@ -4205,7 +4205,7 @@ def resolve_mlpot_grms_kcalmol_A(
         return float("nan")
     grms = float(charmm_grms())
     if context:
-        from mmml.utils.prep_ladder_report import emit_hybrid_grms_diag
+        from karml.utils.prep_ladder_report import emit_hybrid_grms_diag
 
         emit_hybrid_grms_diag(
             context,
@@ -4233,7 +4233,7 @@ def refresh_mlpot_energy_and_grms(
     ``reregister=True`` (default) reattaches the MLpot callback only — it does **not**
     re-read CGENFF parameters (``READ PARAM APPEND`` clears PBC lists).
     """
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+    from karml.interfaces.pycharmmInterface.mlpot.setup import (
         mlpot_defer_charmm_hybrid_ener,
     )
 
@@ -4246,13 +4246,13 @@ def refresh_mlpot_energy_and_grms(
             )
         return float("nan")
 
-    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+    import karml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
     import pycharmm
 
     if mlpot_ctx is not None and reregister:
         mlpot_ctx.reregister_mlpot(verbose=verbose, reregister_params=False)
     if silent_charmm:
-        from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_silent_command
+        from karml.interfaces.pycharmmInterface.charmm_levels import charmm_silent_command
 
         with charmm_silent_command():
             pycharmm.lingo.charmm_script("ENER FORCE")
@@ -4377,7 +4377,7 @@ def resolve_max_grms_before_dyn(
 
     atoms_per_list = getattr(args, "_cluster_atoms_per_list", None)
     try:
-        from mmml.interfaces.pycharmmInterface.mlpot.grms_thresholds import (
+        from karml.interfaces.pycharmmInterface.mlpot.grms_thresholds import (
             resolve_max_grms_before_dyn_intelligent,
         )
 
@@ -4419,10 +4419,10 @@ def assert_initial_mlpot_grms_before_sd(
     verbose: bool = True,
 ) -> float:
     """Abort when hybrid GRMS is already too large to recover in MLpot SD."""
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+    from karml.interfaces.pycharmmInterface.mlpot.setup import (
         mlpot_skip_charmm_ener_force_before_first_sd,
     )
-    from mmml.utils.intermonomer_geometry import resolve_mlpot_registration_max_grms
+    from karml.utils.intermonomer_geometry import resolve_mlpot_registration_max_grms
 
     if mlpot_skip_charmm_ener_force_before_first_sd(mlpot_ctx):
         if verbose:
@@ -4481,7 +4481,7 @@ def assert_dynamics_ready(
     import pycharmm
     import pycharmm.energy as energy
 
-    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_silent_command
+    from karml.interfaces.pycharmmInterface.charmm_levels import charmm_silent_command
 
     def _ener_force() -> None:
         if silent_charmm:
@@ -4507,7 +4507,7 @@ def assert_dynamics_ready(
         grms = charmm_grms()
     if require_mlpot_user:
         try:
-            from mmml.interfaces.pycharmmInterface.mlpot.mlpot_eterms import (
+            from karml.interfaces.pycharmmInterface.mlpot.mlpot_eterms import (
                 read_mlpot_eterm_kcal,
             )
 
@@ -4545,7 +4545,7 @@ def assert_dynamics_ready(
                 )
     if grms <= max_grms:
         if user_kcal is not None:
-            from mmml.data.units import format_energy_kcal_ev
+            from karml.data.units import format_energy_kcal_ev
 
             extra = f", USER={format_energy_kcal_ev(float(user_kcal))}"
         else:
@@ -4921,7 +4921,7 @@ def add_mlpot_lr_nonbond_args(parser: argparse.ArgumentParser) -> None:
         choices=("auto", "mic", "scafacos", "jax_pme", "nvalchemiops_pme", "ewald"),
         default=None,
         help=(
-            "Long-range Coulomb solver (default: mic; env MMML_LR_SOLVER overrides). "
+            "Long-range Coulomb solver (default: mic; env KARML_LR_SOLVER overrides). "
             "Opt in: jax_pme, scafacos, nvalchemiops_pme, ewald (pure JAX, no "
             "external PME library / CUDA requirement). Legacy alias: auto (= mic)."
         ),
@@ -4968,7 +4968,7 @@ def add_mlpot_lr_nonbond_args(parser: argparse.ArgumentParser) -> None:
         default=None,
         help=(
             "When --lr-solver=jax_pme in jax_mic mode, include reciprocal r^-6 "
-            "LJ dispersion via jax-pme (default: env MMML_JAX_PME_DISPERSION or on). "
+            "LJ dispersion via jax-pme (default: env KARML_JAX_PME_DISPERSION or on). "
             "Use --no-jax-pme-dispersion for Coulomb-only long range."
         ),
     )
@@ -5562,7 +5562,7 @@ def resolve_use_pbc(args: argparse.Namespace) -> bool:
 
 
 def resolve_pbc_box_side(args: argparse.Namespace, positions: np.ndarray) -> float:
-    from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import (
+    from karml.interfaces.pycharmmInterface.mlpot.box_sizing import (
         parse_composition_dict,
         resolve_initial_pbc_box_side,
     )
@@ -5589,7 +5589,7 @@ def resolve_lr_solver_for_mlpot(
 ) -> str:
     """Resolve long-range Coulomb backend for MLpot hybrid MM.
 
-    Explicit ``--lr-solver`` or ``MMML_LR_SOLVER`` wins.  Otherwise default to
+    Explicit ``--lr-solver`` or ``KARML_LR_SOLVER`` wins.  Otherwise default to
     truncated ``mic`` (switched-MM pair loop), including periodic ``jax_mic``
     boxes.  Opt in to k-space with ``--lr-solver jax_pme`` (or env).
     """
@@ -5601,7 +5601,7 @@ def resolve_lr_solver_for_mlpot(
         explicit = getattr(args, "lr_solver", None)
     if explicit is not None and str(explicit).strip():
         return str(explicit).strip().lower()
-    env = (os.environ.get("MMML_LR_SOLVER") or "").strip().lower()
+    env = (os.environ.get("KARML_LR_SOLVER") or "").strip().lower()
     if env:
         return env
     return "mic"
@@ -5612,7 +5612,7 @@ def resolve_jax_pme_sr_cutoff_for_mlpot(
     cutoff_params: Any | None = None,
 ) -> float:
     """Real-space jax-pme cutoff (Å), aligned with switched-MM outer edge by default."""
-    from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
+    from karml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
 
     if args is not None:
         explicit = getattr(args, "jax_pme_sr_cutoff", None)
@@ -5630,7 +5630,7 @@ def warn_if_mic_pbc_without_lr(
     verbose: bool = False,
 ) -> None:
     """Note truncated MIC under PBC when verbose (mic is the default; jax_pme is opt-in)."""
-    from mmml.interfaces.pycharmmInterface.long_range_backend import pick_lr_solver
+    from karml.interfaces.pycharmmInterface.long_range_backend import pick_lr_solver
 
     if not verbose:
         return

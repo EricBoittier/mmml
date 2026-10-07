@@ -1,6 +1,6 @@
 # PBC liquid-density cluster dynamics (persistent PyCHARMM)
 
-Snakemake workflow to equilibrate and run **production MD** on molecular clusters at **bulk liquid density** in cubic PBC. Unlike [pbc_solvent_burst](../pbc_solvent_burst/) (JAX-MD burst alternation), this workflow stays on **PyCHARMM** for the full trajectory and leans on mmml's resilient prep tools.
+Snakemake workflow to equilibrate and run **production MD** on molecular clusters at **bulk liquid density** in cubic PBC. Unlike [pbc_solvent_burst](../pbc_solvent_burst/) (JAX-MD burst alternation), this workflow stays on **PyCHARMM** for the full trajectory and leans on karml's resilient prep tools.
 
 ## Goal
 
@@ -8,7 +8,7 @@ Reach stable **liquid-density** configurations and accumulate **persistent dynam
 
 - `liquid_prep` + `density_prep_ladder` (Packmol / MC / geometry / CHARMM / MLpot recovery)
 - `cleanup` + overlap rescue + bonded-MM repair
-- `mmml warmup-mlpot-jax` (serial JAX cache) → `mmml-charmm-mpirun.sh md-system --run-all --resume`
+- `karml warmup-mlpot-jax` (serial JAX cache) → `karml-charmm-mpirun.sh md-system --run-all --resume`
 - Snakemake matrix over solvent × bulk-density fraction × T × box
 
 ## Do not commit run outputs
@@ -18,7 +18,7 @@ Reach stable **liquid-density** configurations and accumulate **persistent dynam
 ## Prerequisites
 
 ```bash
-export MMML_CKPT=/path/to/DESdimers_params.json
+export KARML_CKPT=/path/to/DESdimers_params.json
 export JAX_ENABLE_X64=1
 ```
 
@@ -96,7 +96,7 @@ Three-step setup on **pc-bach** (OpenMPI **4.1.4** under gcc-12.2.0 — not the 
 
 ```bash
 cd workflows/pbc_liquid_density_dyn
-export MMML_CKPT=/path/to/DESdimers_params.json
+export KARML_CKPT=/path/to/DESdimers_params.json
 bash scripts/check_pc_bach_step1.sh
 ```
 
@@ -105,7 +105,7 @@ Manual spot-check for one cell size:
 ```bash
 source ../../scripts/pc_bach_env.sh
 bash ../../scripts/check_charmm_tier_lib.sh --n-ml 2660 --pbc --box-size 32 --pc-bach
-ls -l ~/.cache/mmml-charmm-build/tier_*_nodomdec/lib/libcharmm.so
+ls -l ~/.cache/karml-charmm-build/tier_*_nodomdec/lib/libcharmm.so
 ```
 
 If Step 1 fails, build tiers once (Step 2) then re-run Step 1.
@@ -119,26 +119,26 @@ source ../../scripts/pc_bach_env.sh
 bash scripts/prebuild_charmm_tiers.sh
 ```
 
-Fresh `libcharmm.so` on pc-bach may require a **PIC FFTW** built locally (module `fftw` sometimes lacks `-fPIC`). See [`docs/fftw-build.md`](../../docs/fftw-build.md) (`bash scripts/build_fftw_pic.sh`, then set `MMML_FFTW_ROOT` before `rebuild_charmm_mlpot.sh` / `ensure_charmm_mlpot_limits.sh`). Skip this entirely when Step 1 already passes.
+Fresh `libcharmm.so` on pc-bach may require a **PIC FFTW** built locally (module `fftw` sometimes lacks `-fPIC`). See [`docs/fftw-build.md`](../../docs/fftw-build.md) (`bash scripts/build_fftw_pic.sh`, then set `KARML_FFTW_ROOT` before `rebuild_charmm_mlpot.sh` / `ensure_charmm_mlpot_limits.sh`). Skip this entirely when Step 1 already passes.
 
 #### Step 3 — job environment (Slurm prolog / interactive)
 
 Add to your Slurm batch prolog or shell before `md-system` (paths replace gcc-14.2 gpu defaults):
 
 ```bash
-source /path/to/mmml/scripts/pc_bach_env.sh
+source /path/to/karml/scripts/pc_bach_env.sh
 # module load gcc/gcc-12.2.0-cmake-3.25.1-openmpi-4.1.4   # optional if pc_bach_env.sh loads them
 # module load charmm/c47a2-gcc-12.2.0-openmpi-4.1.4
 export OPENMPI_ROOT=/opt/gcc-12.2.0/openmpi-4.1.4/build
 export PATH="$OPENMPI_ROOT/bin:$PATH"
 export LD_LIBRARY_PATH="$OPENMPI_ROOT/lib:${LD_LIBRARY_PATH:-}"
 # CHARMM_LIB_DIR set per job by ensure_charmm_mlpot_limits.sh, e.g.:
-# export CHARMM_LIB_DIR=$HOME/.cache/mmml-charmm-build/tier_8000000_nodomdec/lib
-export MMML_CKPT=/path/to/DESdimers_params.json
+# export CHARMM_LIB_DIR=$HOME/.cache/karml-charmm-build/tier_8000000_nodomdec/lib
+export KARML_CKPT=/path/to/DESdimers_params.json
 export JAX_ENABLE_X64=1
-export MMML_MLPOT_DEVICE=cpu JAX_PLATFORMS=cpu
+export KARML_MLPOT_DEVICE=cpu JAX_PLATFORMS=cpu
 
-MMML_MPI_NP=1 ../../scripts/mmml-charmm-mpirun.sh md-system --config ...   # smoke
+KARML_MPI_NP=1 ../../scripts/karml-charmm-mpirun.sh md-system --config ...   # smoke
 ```
 
 `job_shell.sh` and `snakemake_slurm_cpu.sh` source `pc_bach_env.sh` automatically when `scheduler: cpu` or `cluster: pc-bach` in config.
@@ -152,15 +152,15 @@ bash scripts/check_pc_bach_step1.sh
 bash scripts/snakemake_slurm_cpu.sh
 
 # Or explicitly:
-MMML_SNAKEMAKE_PROFILE=profiles/slurm-cpu \
-MMML_WORKFLOW_CONFIG=config.pc-bach.cpu.yaml \
+KARML_SNAKEMAKE_PROFILE=profiles/slurm-cpu \
+KARML_WORKFLOW_CONFIG=config.pc-bach.cpu.yaml \
   bash scripts/snakemake_slurm.sh
 ```
 
 Single cell on `long`:
 
 ```bash
-MMML_WORKFLOW_CONFIG=config.pc-bach.cpu.yaml \
+KARML_WORKFLOW_CONFIG=config.pc-bach.cpu.yaml \
   srun --partition=long --cpus-per-task=8 --mem=32G \
   bash scripts/job_shell.sh dcm_10_t300_l28
 ```
@@ -169,7 +169,7 @@ Default concurrency: 17 jobs (`slurm_max_concurrent` = idle nodes on `long`). No
 
 ## Resume
 
-Re-run Snakemake or `job_shell.sh TAG` — `mmml md-system --run-all --resume` skips completed legs. Prep ladder state lives under `prep_ladder/`; campaign summary under `campaign_summary.json`.
+Re-run Snakemake or `job_shell.sh TAG` — `karml md-system --run-all --resume` skips completed legs. Prep ladder state lives under `prep_ladder/`; campaign summary under `campaign_summary.json`.
 
 ## Relation to pbc_solvent_burst
 

@@ -1,21 +1,21 @@
 # `md-system` YAML configs
 
-`mmml md-system` accepts YAML so that single simulations and multi-leg campaigns can be run from the same, reviewable config file.
+`karml md-system` accepts YAML so that single simulations and multi-leg campaigns can be run from the same, reviewable config file.
 
 Use the example as a starting point:
 
 ```bash
 # Single flat config
-mmml md-system --config mmml/cli/run/md_system.example.yaml
+karml md-system --config karml/cli/run/md_system.example.yaml
 
 # Dense liquid box prep (resilient density mode)
-mmml md-system --config mmml/cli/run/md_system.dense_liquid_prep.example.yaml
+karml md-system --config karml/cli/run/md_system.dense_liquid_prep.example.yaml
 
 # DCM:103 from certified liquid-box (preset stack)
-mmml md-system --config mmml/cli/run/md_system.dcm103_equil.example.yaml --job-id dcm103_equil
+karml md-system --config karml/cli/run/md_system.dcm103_equil.example.yaml --job-id dcm103_equil
 
-# Composable presets — see mmml/cli/run/presets/README.md
-mmml md-system --config my_campaign.yaml --run-all
+# Composable presets — see karml/cli/run/presets/README.md
+karml md-system --config my_campaign.yaml --run-all
 ```
 
 The main goal for these configs is condensed-phase setup: build a dense molecular box, relax overlaps, hand it between PyCHARMM and JAX-MD, then run production with neighbor-list settings that are large and fresh enough for the density.
@@ -38,7 +38,7 @@ flowchart LR
 
 A single-run config is a flat mapping. Keys are the Python form of CLI flags, so `--box-size` becomes `box_size`.
 
-Orbax training checkpoints can be exported first with `mmml orbax-to-json`.
+Orbax training checkpoints can be exported first with `karml orbax-to-json`.
 For SpookyPhysNet/SO3LR checkpoints, see the
 [conversion and JAX-MD example](cli/commands/orbax-to-json.md#spookyphysnet-so3lr-checkpoints).
 
@@ -112,7 +112,7 @@ Campaign-only keys are ignored when building the backend command:
 
 Top-level CLI flags win over YAML only for selected campaign-wide runtime controls, including `ml_batch_size`, `ml_gpu_count`, `ml_max_active_dimers`, `skip_jit_warmup`, `handoff_pre_minimize`, and `ml_spatial_mpi`.
 
-Tier 2 spatial MPI example YAML: `mmml/cli/run/md_system.spatial_mpi.example.yaml` (set `ml_spatial_mpi: true`, `ml_gpu_count: 1`, launch with `MMML_MPI_NP>=2` and `mmml-charmm-mpirun.sh`). Dry-run: `python tests/functionality/mlpot/07_md_system_spatial_mpi_mini.py --dry-run`.
+Tier 2 spatial MPI example YAML: `karml/cli/run/md_system.spatial_mpi.example.yaml` (set `ml_spatial_mpi: true`, `ml_gpu_count: 1`, launch with `KARML_MPI_NP>=2` and `karml-charmm-mpirun.sh`). Dry-run: `python tests/functionality/mlpot/07_md_system_spatial_mpi_mini.py --dry-run`.
 
 ## Recommended campaign structure
 
@@ -158,17 +158,17 @@ composition: "system.pdb"
 # equivalent CLI: --from-pdb system.pdb
 ```
 
-PDB files must carry CGenFF residue and atom names (for example from `mmml make-res`). Packmol-mix PDB monomers must be a single residue; a lone `system.pdb` (count 1) may contain many residues. `--from-pdb` is mutually exclusive with `--from-psf`/`--from-crd`.
+PDB files must carry CGenFF residue and atom names (for example from `karml make-res`). Packmol-mix PDB monomers must be a single residue; a lone `system.pdb` (count 1) may contain many residues. `--from-pdb` is mutually exclusive with `--from-psf`/`--from-crd`.
 
-**Runnable PDB → backend examples.** Numbered YAML jobs (`yaml/01_*.yaml` … `07_*.yaml`) plus matching shell wrappers for `--from-pdb`, Packmol monomer PDBs, and certified PSF/CRD across `ase` / `jaxmd` / `pycharmm` live in [`examples/md_system_from_pdb/`](https://github.com/EricBoittier/mmml/blob/main/examples/md_system_from_pdb/README.md).
+**Runnable PDB → backend examples.** Numbered YAML jobs (`yaml/01_*.yaml` … `07_*.yaml`) plus matching shell wrappers for `--from-pdb`, Packmol monomer PDBs, and certified PSF/CRD across `ase` / `jaxmd` / `pycharmm` live in [`examples/md_system_from_pdb/`](https://github.com/EricBoittier/karml/blob/main/examples/md_system_from_pdb/README.md).
 
-**Packmol is the default for `composition`.** When `composition` is set (CGenFF-only or Packmol-mix PDB), MMML packs minimized monomer templates with Packmol (cube inside `--box-size` for PBC liquids, or sphere with `--packmol-radius`). CHARMM SD/ABNR follows to relax contacts before MLpot registration. See [Packmol placement](packmol-placement.md) for CLI/YAML examples.
+**Packmol is the default for `composition`.** When `composition` is set (CGenFF-only or Packmol-mix PDB), KARML packs minimized monomer templates with Packmol (cube inside `--box-size` for PBC liquids, or sphere with `--packmol-radius`). CHARMM SD/ABNR follows to relax contacts before MLpot registration. See [Packmol placement](packmol-placement.md) for CLI/YAML examples.
 
 **Grid placement is the fast alternative.** Set `packmol: false` and `builder: liquid` (or `--no-packmol --builder liquid`) to place whole molecules on a cubic/spherical grid without the Packmol binary. Useful for CI smoke tests and quick JAX-MD probes. PDB composition tokens require Packmol (or a lone full-system PDB); they are not compatible with `--no-packmol` or PyXtal.
 
 **Spherical liquid/cluster starts.** Use `packmol_placement: sphere` plus `packmol_radius` for finite clusters or flat-bottom restraints. For PBC liquids, prefer cube packing (`packmol_placement: cube`, default) so the initial geometry matches the periodic cell.
 
-**Crystal starts use PyXtal plus CHARMM refinement.** Enable with `builder: crystal` (or legacy `pyxtal: true`) and install `mmml[chem]`. Useful knobs are `pyxtal_spg`, `pyxtal_factor`, `pyxtal_stoichiometry`, `pyxtal_supercell`, `pyxtal_attempts`, and `pyxtal_trim`. This path is still less tested than Packmol liquid placement.
+**Crystal starts use PyXtal plus CHARMM refinement.** Enable with `builder: crystal` (or legacy `pyxtal: true`) and install `karml[chem]`. Useful knobs are `pyxtal_spg`, `pyxtal_factor`, `pyxtal_stoichiometry`, `pyxtal_supercell`, `pyxtal_attempts`, and `pyxtal_trim`. This path is still less tested than Packmol liquid placement.
 
 **Reference/handoff builders reuse prior states.** `depends_on` loads a campaign predecessor handoff. `continue_from` can start from a handoff NPZ, CHARMM restart, ASE `.traj`, or JAX-MD HDF5 (`.h5`) with optional `continue_from_frame`. This is the safest route after equilibration because it preserves box, coordinates, and optionally velocities. See [Cross-backend MD handoff](handoff.md) for NVE restart from a partial trajectory and campaign `repeat:` replicas.
 
@@ -223,7 +223,7 @@ output_dir: results/dcm_liquid_prep
 CLI:
 
 ```bash
-mmml md-system \
+karml md-system \
   --liquid-prep \
   --composition DCM:206 \
   --box-auto density \
@@ -243,7 +243,7 @@ mmml md-system \
 4. **Lattice ABNR** — `mini_lattice_abnr_steps: 200` optimizes the cubic cell (and optionally coordinates) under PBC.
 5. **Mini box equil** — `mini_box_equil_ps: 2.0` short CPT NPT before MLpot registration (`mini_box_equil_allow_fixed_box: true` when `box_size` is set).
 
-See [PyCHARMM C API: PBC box & pressure](pycharmm-c-api-pbc-box-pressure.md) for how MMML sets/gets the cubic cell and CPT pressure tensor on KEY_LIBRARY builds (`crystal` / `dynamics` C API vs script commands).
+See [PyCHARMM C API: PBC box & pressure](pycharmm-c-api-pbc-box-pressure.md) for how KARML sets/gets the cubic cell and CPT pressure tensor on KEY_LIBRARY builds (`crystal` / `dynamics` C API vs script commands).
 
 ### CHARMM MLpot compile limits (`max_Npr`)
 
@@ -259,10 +259,10 @@ PyCHARMM MLpot stores ML atom-pair lists in fixed Fortran buffers sized at **com
 Before a large PBC run (or after changing composition/box), rebuild the matching tier **once per node/cache**:
 
 ```bash
-cd /path/to/mmml
+cd /path/to/karml
 eval "$(./scripts/ensure_charmm_mlpot_limits.sh --n-ml 1030 --pbc --box-size 35)"
 echo "CHARMM_LIB_DIR=$CHARMM_LIB_DIR"
-# → ~/.cache/mmml-charmm-build/tier_12000000_nodomdec/lib for DCM:206 @ L=35
+# → ~/.cache/karml-charmm-build/tier_12000000_nodomdec/lib for DCM:206 @ L=35
 ```
 
 Add `export CHARMM_LIB_DIR=...` to your job script or Slurm prolog. Staged workflows now **preflight** this check right after box sizing (before CHARMM MM pretreat) so you do not waste pretreat time on an undersized lib.
@@ -281,7 +281,7 @@ bash workflows/pbc_solvent_burst/scripts/prebuild_charmm_tiers.sh
 | MC density | box resize toward target ρ | correct volume without breaking monomers |
 | Lattice ABNR (box-only, then full) | CHARMM `MINI ABNR LATTice` | relax cell at fixed or coupled coords |
 | Bonded MM recovery | CHARMM bonded terms only | remove internal strain without ML/nonbond |
-| ASE BFGS + FIRE | hybrid MMML calculator | smooth inter-monomer clashes when GRMS is moderate |
+| ASE BFGS + FIRE | hybrid KARML calculator | smooth inter-monomer clashes when GRMS is moderate |
 | MLpot SD | second hybrid minimization pass | final GRMS gate before heat |
 
 Control knobs:
@@ -295,8 +295,8 @@ Control knobs:
 Copy-paste ready file:
 
 ```bash
-mmml md-system --config mmml/cli/run/md_system.dense_liquid_prep.example.yaml
-mmml md-system --config mmml/cli/run/md_system.dense_liquid_prep.example.yaml --run-all
+karml md-system --config karml/cli/run/md_system.dense_liquid_prep.example.yaml
+karml md-system --config karml/cli/run/md_system.dense_liquid_prep.example.yaml --run-all
 ```
 
 ### Config snippets
@@ -883,11 +883,11 @@ Legacy YAML aliases still work: `ml_cutoff` → `ml_switch_width`, `mm_cutoff` �
 Environment equivalents (override YAML `lr_solver` / jax-pme knobs):
 
 ```bash
-export MMML_LR_SOLVER=jax_pme
+export KARML_LR_SOLVER=jax_pme
 export JAX_PME_METHOD=ewald          # ewald | pme | p3m
-export MMML_JAX_PME_INTRA_MODE=cross # cross | full_minus_intra
-export MMML_JAX_PME_CROSS_KERNEL=auto  # auto | structure_factor | masked
-export MMML_JAX_PME_PROFILE=1        # optional timing to stderr
+export KARML_JAX_PME_INTRA_MODE=cross # cross | full_minus_intra
+export KARML_JAX_PME_CROSS_KERNEL=auto  # auto | structure_factor | masked
+export KARML_JAX_PME_PROFILE=1        # optional timing to stderr
 ```
 
 ### jax-pme cross-monomer (hybrid MM long range)
@@ -898,19 +898,19 @@ Profiling graph and CPU reference timings (hybrid LR ~216 ms steady): [calculato
 
 | Piece | Role |
 |-------|------|
-| `mmml/.../jax_pme_cross_monomer.py` | Fused cross-monomer energy/forces (`structure_factor` or `masked` kernel) |
-| `mmml/.../jax_pme_hybrid_coulomb.py` | COM switching, Coulomb + dispersion corrections |
+| `karml/.../jax_pme_cross_monomer.py` | Fused cross-monomer energy/forces (`structure_factor` or `masked` kernel) |
+| `karml/.../jax_pme_hybrid_coulomb.py` | COM switching, Coulomb + dispersion corrections |
 | `tests/functionality/long_range/09_jax_pme_cross_validate.py` | **Validate vs legacy + CPU benchmark** |
 | `tests/unit/test_jax_pme_cross_monomer.py` | Unit tests (ion dimer, cluster, kernel A/B, chain rule) |
 
 **Run validation and timings locally** (no PyCHARMM; CPU recommended for reproducibility):
 
 ```bash
-cd /path/to/mmml
+cd /path/to/karml
 JAX_PLATFORMS=cpu uv run python tests/functionality/long_range/09_jax_pme_cross_validate.py
 
 # Steadier means + per-kernel profile labels
-MMML_JAX_PME_PROFILE=1 JAX_PLATFORMS=cpu \
+KARML_JAX_PME_PROFILE=1 JAX_PLATFORMS=cpu \
   uv run python tests/functionality/long_range/09_jax_pme_cross_validate.py --reps 10 --warmup 3
 
 # Fast unit regression (mocked shapes; ~1 min)
@@ -950,11 +950,11 @@ Typical compile stages (hybrid MLpot, multi-monomer):
 **Reduce compile / cache misses:**
 
 ```bash
-# Persistent on-disk XLA cache (default under ~/.cache/mmml/jax_compile when unset)
-export JAX_COMPILATION_CACHE_DIR=$HOME/.cache/mmml/jax_compile
+# Persistent on-disk XLA cache (default under ~/.cache/karml/jax_compile when unset)
+export JAX_COMPILATION_CACHE_DIR=$HOME/.cache/karml/jax_compile
 
 # Pre-warm PhysNet + hybrid shapes before mpirun (no CHARMM)
-mmml warmup-mlpot-jax --checkpoint /path/to/ckpt --composition DCM:60 --box-side 32
+karml warmup-mlpot-jax --checkpoint /path/to/ckpt --composition DCM:60 --box-side 32
 
 # Profile hybrid jax-pme LR only (no PyCHARMM): see tests/functionality/long_range/10_hybrid_jax_profile.py
 # Full primitive compile/run table: docs/calculator-profiling.md + 11_calculator_primitive_benchmark.py
@@ -964,13 +964,13 @@ mmml warmup-mlpot-jax --checkpoint /path/to/ckpt --composition DCM:60 --box-side
 
 | Layer | Tool | Command |
 |-------|------|---------|
-| Python hot path | `cProfile` | `python -m cProfile -o md.prof -m mmml.cli md-system --config ...` |
-| MLpot callback split | `MMML_MLPOT_PROFILE=1` | also `--mlpot-profile` on md-system |
-| JAX compile vs run | `MMML_JAX_COMPILE_TIMERS=1` | logged after warmup / atexit |
-| jax-pme components | `MMML_JAX_PME_PROFILE=1` | `10_hybrid_jax_profile.py` or hybrid ENER |
+| Python hot path | `cProfile` | `python -m cProfile -o md.prof -m karml.cli md-system --config ...` |
+| MLpot callback split | `KARML_MLPOT_PROFILE=1` | also `--mlpot-profile` on md-system |
+| JAX compile vs run | `KARML_JAX_COMPILE_TIMERS=1` | logged after warmup / atexit |
+| jax-pme components | `KARML_JAX_PME_PROFILE=1` | `10_hybrid_jax_profile.py` or hybrid ENER |
 | GPU kernels / H2D | `jax.profiler` | `--jax-trace DIR` in `10_hybrid_jax_profile.py`; TensorBoard |
 
-Avoid toggling `MMML_JAX_PME_INTRA_MODE`, `ml_compute_dtype`, or cutoffs between mini legs — those change static JIT keys. For jax-pme mesh on MPI builds, expect one extra promote on the **first** hybrid energy after SD starts.
+Avoid toggling `KARML_JAX_PME_INTRA_MODE`, `ml_compute_dtype`, or cutoffs between mini legs — those change static JIT keys. For jax-pme mesh on MPI builds, expect one extra promote on the **first** hybrid energy after SD starts.
 
 ```mermaid
 flowchart LR
@@ -1166,7 +1166,7 @@ Environment:
 
 ```bash
 export SCAFACOS_LIB=/path/to/libfcs.so
-# optional: export MMML_LR_SOLVER=scafacos
+# optional: export KARML_LR_SOLVER=scafacos
 ```
 
 #### ML + ScaFaCoS Coulomb only (no CHARMM VDW, no JAX MM)
@@ -1337,7 +1337,7 @@ mm_switch_width_grid: "0.5,1.0,1.5,2.0,5.0"
 optimize_output: results/cutoff_scan
 ```
 
-See [Long-range electrostatics](mlpot-long-range-electrostatics.md) and [NONBOND_LISTS.md](https://github.com/EricBoittier/mmml/blob/main/mmml/interfaces/pycharmmInterface/mlpot/NONBOND_LISTS.md) for backend details.
+See [Long-range electrostatics](mlpot-long-range-electrostatics.md) and [NONBOND_LISTS.md](https://github.com/EricBoittier/karml/blob/main/karml/interfaces/pycharmmInterface/mlpot/NONBOND_LISTS.md) for backend details.
 
 ## Neighbor-list requirements
 
@@ -1411,7 +1411,7 @@ loop (skipped for mini-only runs). This option is rejected for ASE/JAX-MD backen
 **Smoke example** (acetone monomer PDB → short vacuum NVE with `cons fix`):
 
 ```bash
-uv run mmml md-system \
+uv run karml md-system \
   --config examples/md_system_from_pdb/yaml/08_from_pdb_pre_dynamics_lingo.yaml
 # or:
 bash examples/md_system_from_pdb/08_from_pdb_pre_dynamics_lingo.sh
@@ -1458,7 +1458,7 @@ pycharmm_pre_dynamics_lingo: |
 
 Commented full-job skeleton (peptide PSF paths left for you to fill in):
 
-[`examples/md_system_from_pdb/yaml/08_umbrella_adumb.example.yaml`](https://github.com/EricBoittier/mmml/blob/main/examples/md_system_from_pdb/yaml/08_umbrella_adumb.example.yaml)
+[`examples/md_system_from_pdb/yaml/08_umbrella_adumb.example.yaml`](https://github.com/EricBoittier/karml/blob/main/examples/md_system_from_pdb/yaml/08_umbrella_adumb.example.yaml)
 
 **Alignment tip:** classic `calc NSTEP = @NRUN * @UPDATE` must match the prod
 `nstep` that md-system derives from `ps_prod` and `dt_fs`. If they disagree,
@@ -1490,9 +1490,9 @@ unique atom names `CL1`, `C1`, and `N1`:
 | multiple `umbrella rxncor` cards | union of all named distances |
 
 The default wall backend is CHARMM `RESDistance POSITIVE`, which does not require
-the NOE module. Set `MMML_ADUMB_RC_WALL_BACKEND=noe`, `mmfp`, or `off` only for
+the NOE module. Set `KARML_ADUMB_RC_WALL_BACKEND=noe`, `mmfp`, or `off` only for
 site-specific debugging. Walls are installed below the umbrella hard maximum
-(`adumrcmax - 0.75 Å` by default; override with `MMML_ADUMB_RC_WALL_MARGIN`) so
+(`adumrcmax - 0.75 Å` by default; override with `KARML_ADUMB_RC_WALL_MARGIN`) so
 the restraint can act before UM1RXN aborts.
 
 Operational constraints:
@@ -1559,7 +1559,7 @@ Hyphenated keys are also normalized to underscores, so `box-size` and `box_size`
 
 ## Default variables
 
-This snapshot is generated from `mmml.cli.run.md_system.build_parser()`. Values shown as `null` are unset until you pass them or set them in YAML.
+This snapshot is generated from `karml.cli.run.md_system.build_parser()`. Values shown as `null` are unset until you pass them or set them in YAML.
 
 ```yaml
 setup: pbc_nve

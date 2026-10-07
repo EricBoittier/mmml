@@ -9,36 +9,36 @@ RUN_TAG="${1:?usage: job_shell.sh RUN_TAG}"
 
 cd "$REPO_ROOT"
 
-# shellcheck source=../../../scripts/resolve_mmml_env.sh
-source "$REPO_ROOT/scripts/resolve_mmml_env.sh"
-mmml_resolve_env "$REPO_ROOT"
-PY="${MMML_PYTHON}"
+# shellcheck source=../../../scripts/resolve_karml_env.sh
+source "$REPO_ROOT/scripts/resolve_karml_env.sh"
+karml_resolve_env "$REPO_ROOT"
+PY="${KARML_PYTHON}"
 
-# Wrapper experiments may leave MMML_NO_MPI_RERUN=1 in the submitter env; scrub
+# Wrapper experiments may leave KARML_NO_MPI_RERUN=1 in the submitter env; scrub
 # so CLI auto-rerun under mpirun still runs for MPI-linked CHARMM.
-if [[ "${MMML_FORCE_NO_MPI_RERUN:-}" != "1" ]]; then
-  unset MMML_NO_MPI_RERUN || true
+if [[ "${KARML_FORCE_NO_MPI_RERUN:-}" != "1" ]]; then
+  unset KARML_NO_MPI_RERUN || true
 fi
 
 export JAX_ENABLE_X64="${JAX_ENABLE_X64:-1}"
-if [[ -z "${MMML_CKPT:-}" || ! -e "${MMML_CKPT:-}" ]]; then
-  _fallback_ckpt="$("$PY" -c "from mmml.cli.base import resolve_checkpoint_paths; print(resolve_checkpoint_paths(None)[0])" 2>/dev/null || true)"
+if [[ -z "${KARML_CKPT:-}" || ! -e "${KARML_CKPT:-}" ]]; then
+  _fallback_ckpt="$("$PY" -c "from karml.cli.base import resolve_checkpoint_paths; print(resolve_checkpoint_paths(None)[0])" 2>/dev/null || true)"
   if [[ -n "$_fallback_ckpt" && -e "$_fallback_ckpt" ]]; then
-    export MMML_CKPT="$_fallback_ckpt"
+    export KARML_CKPT="$_fallback_ckpt"
   fi
 fi
 
-_cfg_raw="${MMML_WORKFLOW_CONFIG:-$WORKFLOW_ROOT/config.yaml}"
+_cfg_raw="${KARML_WORKFLOW_CONFIG:-$WORKFLOW_ROOT/config.yaml}"
 if [[ "$_cfg_raw" = /* ]]; then
   CFG="$_cfg_raw"
 else
   CFG="$WORKFLOW_ROOT/$_cfg_raw"
 fi
-export MMML_WORKFLOW_CONFIG="$CFG"
+export KARML_WORKFLOW_CONFIG="$CFG"
 
 # Local Snakemake (no Slurm): pin one GPU per concurrent job.
-if [[ -z "${SLURM_JOB_ID:-}" && "${MMML_LOCAL_GPU_PIN:-0}" == 1 && -z "${MMML_LOCAL_GPU_ASSIGNED:-}" ]]; then
-  export MMML_LOCAL_GPU_ASSIGNED=1
+if [[ -z "${SLURM_JOB_ID:-}" && "${KARML_LOCAL_GPU_PIN:-0}" == 1 && -z "${KARML_LOCAL_GPU_ASSIGNED:-}" ]]; then
+  export KARML_LOCAL_GPU_ASSIGNED=1
   exec bash "$WORKFLOW_ROOT/scripts/with_local_gpu.sh" bash "$0" "$RUN_TAG"
 fi
 
@@ -51,21 +51,21 @@ cfg = load_config(Path('${CFG}'))
 print(
     scheduler_mode(cfg),
     mlpot_device_name(cfg),
-    int(cfg.get('MMML_MPI_NP', 1)),
+    int(cfg.get('KARML_MPI_NP', 1)),
     int(bool(cfg.get('mlpot_profile', False))),
     int(bool(cfg.get('jax_compile_timers', False))),
 )
 ")"
 
-export MMML_MPI_NP="${MMML_MPI_NP:-$CFG_MPI_NP}"
+export KARML_MPI_NP="${KARML_MPI_NP:-$CFG_MPI_NP}"
 if [[ "$MLPOT_PROF" == "1" ]]; then
-  export MMML_MLPOT_PROFILE=1
+  export KARML_MLPOT_PROFILE=1
 fi
 if [[ "$JAX_TIMERS" == "1" ]]; then
-  export MMML_JAX_COMPILE_TIMERS=1
+  export KARML_JAX_COMPILE_TIMERS=1
 fi
 
-export MMML_MLPOT_DEVICE="${MMML_MLPOT_DEVICE:-$MLPOT_DEV}"
+export KARML_MLPOT_DEVICE="${KARML_MLPOT_DEVICE:-$MLPOT_DEV}"
 export JAX_PLATFORMS="${JAX_PLATFORMS:-$MLPOT_DEV}"
 
 CLUSTER="$("$PY" -c "
@@ -77,7 +77,7 @@ cfg = load_config(Path('${CFG}'))
 print(cluster_name(cfg))
 ")"
 
-if [[ "$SCHEDULER" == "cpu" || "$CLUSTER" == "pc-bach" || "${MMML_CLUSTER:-}" == "pc-bach" ]]; then
+if [[ "$SCHEDULER" == "cpu" || "$CLUSTER" == "pc-bach" || "${KARML_CLUSTER:-}" == "pc-bach" ]]; then
   # shellcheck source=../../../scripts/pc_bach_env.sh
   source "$REPO_ROOT/scripts/pc_bach_env.sh"
 fi
@@ -93,15 +93,15 @@ echo "=== pbc_liquid_density_dyn: ${RUN_TAG} ==="
 echo "REPO_ROOT=${REPO_ROOT}"
 echo "PY=${PY}"
 echo "CONFIG=${CFG}"
-echo "scheduler=${SCHEDULER} MMML_MLPOT_DEVICE=${MMML_MLPOT_DEVICE} MMML_MPI_NP=${MMML_MPI_NP}"
-echo "MMML_CKPT=${MMML_CKPT:-<unset>} MMML_MLPOT_PROFILE=${MMML_MLPOT_PROFILE:-0}"
+echo "scheduler=${SCHEDULER} KARML_MLPOT_DEVICE=${KARML_MLPOT_DEVICE} KARML_MPI_NP=${KARML_MPI_NP}"
+echo "KARML_CKPT=${KARML_CKPT:-<unset>} KARML_MLPOT_PROFILE=${KARML_MLPOT_PROFILE:-0}"
 
 read -r N_ML BOX_SIZE WARMUP_ENABLED <<<"$("$PY" -c "
 import sys
 from pathlib import Path
 sys.path.insert(0, '${WORKFLOW_ROOT}/scripts')
 from campaign_lib import load_config, cell_from_tag
-from mmml.interfaces.pycharmmInterface.mlpot.mlpot_limits import estimate_ml_atoms
+from karml.interfaces.pycharmmInterface.mlpot.mlpot_limits import estimate_ml_atoms
 cfg = load_config(Path('${CFG}'))
 cell = cell_from_tag(cfg, '${RUN_TAG}')
 warm = bool(cfg.get('warmup_mlpot_jax', True))
@@ -120,7 +120,7 @@ if [[ "$WARMUP_ENABLED" == "1" ]]; then
   while IFS= read -r _var; do
     [[ -n "$_var" ]] && unset "$_var" 2>/dev/null || true
   done < <(env | cut -d= -f1 | grep -E '^(OMPI_|PMI_|PMIX_|MPI_LOCALRANKID$|SLURM_MPI_TYPE$)' || true)
-  export MMML_WARMUP_MLPOT_JAX_ONLY=1
+  export KARML_WARMUP_MLPOT_JAX_ONLY=1
   export XLA_PYTHON_CLIENT_PREALLOCATE=false
   _jax_threads="$("$PY" -c "
 import sys
@@ -130,7 +130,7 @@ from campaign_lib import load_config
 cfg = load_config(Path('${CFG}'))
 print(int(cfg.get('jax_compile_threads', cfg.get('warmup_compile_threads', 1))))
 ")"
-  export MMML_JAX_COMPILE_THREADS="${MMML_JAX_COMPILE_THREADS:-$_jax_threads}"
+  export KARML_JAX_COMPILE_THREADS="${KARML_JAX_COMPILE_THREADS:-$_jax_threads}"
   export OMP_NUM_THREADS="${OMP_NUM_THREADS:-$_jax_threads}"
   export OMPI_MCA_ess=singleton
   export OMPI_MCA_mpi_init_support=0
@@ -148,11 +148,11 @@ print(' '.join(warmup_mlpot_argv(cfg, cell)))
     WARMUP_ARGS="${WARMUP_ARGS// --do-mm/}"
   fi
   # shellcheck disable=SC2086
-  if ! "$PY" -m mmml.cli.__main__ $WARMUP_ARGS; then
+  if ! "$PY" -m karml.cli.__main__ $WARMUP_ARGS; then
     echo "ERROR: warmup-mlpot-jax failed" >&2
     exit 1
   fi
-  unset MMML_WARMUP_MLPOT_JAX_ONLY
+  unset KARML_WARMUP_MLPOT_JAX_ONLY
 fi
 
 exec "$PY" "$WORKFLOW_ROOT/scripts/run_job.py" --tag "$RUN_TAG" --config "$CFG"

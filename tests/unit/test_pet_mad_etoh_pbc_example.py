@@ -9,15 +9,15 @@ import numpy as np
 import pytest
 from ase.io import read as ase_read
 
-from mmml.cli.run.md_config import load_yaml_config
-from mmml.cli.run.md_system import build_pycharmm_command, parse_md_system_args
-from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import (
+from karml.cli.run.md_config import load_yaml_config
+from karml.cli.run.md_system import build_pycharmm_command, parse_md_system_args
+from karml.interfaces.pycharmmInterface.mlpot.box_sizing import (
     SOLVENT_BULK_PROPS,
     apply_box_auto_count_composition,
     n_molecules_for_target_density_in_fixed_box,
     total_mass_g_for_composition,
 )
-from mmml.utils.geometry_checks import tile_monomer_in_cubic_cell
+from karml.utils.geometry_checks import tile_monomer_in_cubic_cell
 
 REPO = Path(__file__).resolve().parents[2]
 EXAMPLE = REPO / "examples" / "pet_mad_etoh_pbc"
@@ -161,14 +161,14 @@ def test_example_wrapper_reexports_conservation_stats() -> None:
     assert spec is not None and spec.loader is not None
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
-    from mmml.md.metatomic_pbc import nve_conservation_stats as pkg_stats
+    from karml.md.metatomic_pbc import nve_conservation_stats as pkg_stats
 
     assert mod.nve_conservation_stats is pkg_stats
 
 
 def test_metatomic_pbc_md_parser_etoh_defaults() -> None:
-    from mmml.cli.misc.metatomic_pbc_md import DEFAULT_MONOMER_XYZ, DEFAULT_OUTPUT_DIR, build_parser
-    from mmml.md.metatomic_pbc import n_molecules_for_residue_box
+    from karml.cli.misc.metatomic_pbc_md import DEFAULT_MONOMER_XYZ, DEFAULT_OUTPUT_DIR, build_parser
+    from karml.md.metatomic_pbc import n_molecules_for_residue_box
 
     args = build_parser().parse_args([])
     assert args.residue == "ETOH"
@@ -194,7 +194,7 @@ def test_metatomic_pbc_md_parser_etoh_defaults() -> None:
 
 
 def test_default_etoh_monomer_xyz_is_repo_example() -> None:
-    from mmml.md.metatomic_pbc import default_etoh_monomer_xyz
+    from karml.md.metatomic_pbc import default_etoh_monomer_xyz
 
     path = default_etoh_monomer_xyz()
     assert path == MONOMER.resolve()
@@ -204,7 +204,7 @@ def test_default_etoh_monomer_xyz_is_repo_example() -> None:
 
 
 def test_metatomic_pbc_md_missing_checkpoint(tmp_path: Path) -> None:
-    from mmml.cli.misc.metatomic_pbc_md import main
+    from karml.cli.misc.metatomic_pbc_md import main
 
     rc = main(
         [
@@ -223,7 +223,7 @@ def test_metatomic_pbc_md_missing_checkpoint(tmp_path: Path) -> None:
 
 
 def test_nve_conservation_stats_zero_drift() -> None:
-    from mmml.md.metatomic_pbc import nve_conservation_stats
+    from karml.md.metatomic_pbc import nve_conservation_stats
 
     t = np.array([0.0, 0.1, 0.2, 0.3])
     e = np.array([-10.0, -10.0, -10.0, -10.0])
@@ -235,7 +235,7 @@ def test_nve_conservation_stats_zero_drift() -> None:
 
 
 def test_nve_conservation_stats_linear_drift() -> None:
-    from mmml.md.metatomic_pbc import nve_conservation_stats
+    from karml.md.metatomic_pbc import nve_conservation_stats
 
     t = np.array([0.0, 0.5, 1.0])
     e = np.array([0.0, 1.0, 2.0])  # 2 eV/ps
@@ -247,7 +247,7 @@ def test_nve_conservation_stats_linear_drift() -> None:
 
 
 def test_nve_conservation_stats_rejects_bad_traces() -> None:
-    from mmml.md.metatomic_pbc import nve_conservation_stats
+    from karml.md.metatomic_pbc import nve_conservation_stats
 
     with pytest.raises(ValueError, match="length >= 2"):
         nve_conservation_stats(np.array([0.0]), np.array([1.0]), n_atoms=1)
@@ -262,7 +262,7 @@ def test_nve_conservation_stats_rejects_bad_traces() -> None:
 
 def test_pbc_nvt_yaml_command_parses_in_pycharmm_backend(tmp_path: Path) -> None:
     """Every flag md-system forwards must be accepted by the PyCHARMM backend."""
-    from mmml.cli.run.md_pbc_suite.pycharmm_mlpot import parse_args as parse_backend
+    from karml.cli.run.md_pbc_suite.pycharmm_mlpot import parse_args as parse_backend
 
     dummy = tmp_path / "pet-mad.pt"
     dummy.write_bytes(b"not-a-real-model")

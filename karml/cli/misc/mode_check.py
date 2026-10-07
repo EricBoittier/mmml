@@ -1,4 +1,4 @@
-"""CLI adapter for monomer / small-cluster mode checks (``mmml mode-check``)."""
+"""CLI adapter for monomer / small-cluster mode checks (``karml mode-check``)."""
 
 from __future__ import annotations
 
@@ -6,20 +6,20 @@ import argparse
 import json
 from pathlib import Path
 
-from mmml.mode_check import (
+from karml.mode_check import (
     HybridModeCheckSetup,
     ModeCheckConfig,
     build_psf_and_attach_hybrid,
     run_mode_check,
 )
-from mmml.mode_check.config import (
+from karml.mode_check.config import (
     DEFAULT_MONOMER_SEPARATION_A,
     FAR_MONOMER_SEPARATION_A,
 )
-from mmml.mode_check.cutoff_ladder import cutoff_region_stations
-from mmml.mode_check.cutoff_sweep import run_cutoff_sweep
-from mmml.mode_check.geometry import parse_composition_spec
-from mmml.mode_check.pbc_fd import run_pbc_cluster_fd, write_fd_result
+from karml.mode_check.cutoff_ladder import cutoff_region_stations
+from karml.mode_check.cutoff_sweep import run_cutoff_sweep
+from karml.mode_check.geometry import parse_composition_spec
+from karml.mode_check.pbc_fd import run_pbc_cluster_fd, write_fd_result
 
 
 def _parse_checks(value: str) -> tuple[str, ...]:
@@ -31,7 +31,7 @@ def _parse_checks(value: str) -> tuple[str, ...]:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="mmml mode-check",
+        prog="karml mode-check",
         description=(
             "Local force / vibrational diagnostics for monomers and small "
             "clusters (FD forces, X–H stretch scans, ASE vibrations, optional "
@@ -55,7 +55,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--checkpoint",
         type=Path,
         default=None,
-        help="PhysNet / Spooky portable JSON or Orbax checkpoint ($MMML_CKPT / bundled)",
+        help="PhysNet / Spooky portable JSON or Orbax checkpoint ($KARML_CKPT / bundled)",
     )
     parser.add_argument(
         "--output-dir",
@@ -210,7 +210,7 @@ def _main_pbc_fd(args: argparse.Namespace) -> int:
         mm_charge_mode=str(args.mm_charge_mode),
     )
     path = write_fd_result(result, Path(args.output))
-    from mmml.utils.rich_report import print_colored_json
+    from karml.utils.rich_report import print_colored_json
 
     print_colored_json(result)
     print(f"Wrote {path}")
@@ -224,7 +224,7 @@ def _resolve_monomer_separation_A(
 ) -> float:
     if args.far and args.monomer_separation is not None:
         raise SystemExit(
-            "mmml mode-check: use only one of --far and --monomer-separation"
+            "karml mode-check: use only one of --far and --monomer-separation"
         )
     if args.far:
         return float(FAR_MONOMER_SEPARATION_A)

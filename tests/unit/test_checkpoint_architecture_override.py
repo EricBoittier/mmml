@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import argparse
 
-from mmml.models.physnetjax.checkpoint_utils import (
+from karml.models.physnetjax.checkpoint_utils import (
     CHECKPOINT_ARCH_KEYS,
     apply_checkpoint_architecture,
 )

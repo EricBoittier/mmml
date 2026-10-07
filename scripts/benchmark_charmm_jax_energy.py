@@ -49,7 +49,7 @@ def _parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = _parse_args()
-    from mmml.interfaces.pycharmmInterface.charmm_jax_energy_benchmark import (
+    from karml.interfaces.pycharmmInterface.charmm_jax_energy_benchmark import (
         all_layers_passed,
         render_json_report,
         render_markdown_report,
@@ -57,8 +57,8 @@ def main() -> int:
         run_tip3_water_box_benchmark,
         run_trialanine_water_benchmark,
     )
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import ensure_pycharmm_loaded
-    from mmml.interfaces.pycharmmInterface.trialanine_water_box import (
+    from karml.interfaces.pycharmmInterface.import_pycharmm import ensure_pycharmm_loaded
+    from karml.interfaces.pycharmmInterface.trialanine_water_box import (
         build_trialanine_water_box_in_charmm,
         have_trialanine_cgenff,
     )

@@ -12,10 +12,10 @@ Benefits:
 
 Usage:
     # Auto-detect padding from N field
-    python -m mmml.cli.remove_padding input.npz -o unpadded.npz
+    python -m karml.cli.remove_padding input.npz -o unpadded.npz
     
     # Specify maximum atoms
-    python -m mmml.cli.remove_padding input.npz -o unpadded.npz --max-atoms 10
+    python -m karml.cli.remove_padding input.npz -o unpadded.npz --max-atoms 10
 """
 
 import argparse
@@ -115,14 +115,14 @@ def main():
         epilog="""
 Examples:
   # Auto-detect from N field
-  python -m mmml.cli.remove_padding data.npz -o unpadded.npz
+  python -m karml.cli.remove_padding data.npz -o unpadded.npz
   
   # Specify max atoms
-  python -m mmml.cli.remove_padding data.npz -o unpadded.npz --max-atoms 10
+  python -m karml.cli.remove_padding data.npz -o unpadded.npz --max-atoms 10
   
   # Process all splits
   for f in splits/*.npz; do
-    python -m mmml.cli.remove_padding "$f" -o "unpadded/$(basename $f)"
+    python -m karml.cli.remove_padding "$f" -o "unpadded/$(basename $f)"
   done
         """
     )

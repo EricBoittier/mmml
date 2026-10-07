@@ -21,12 +21,12 @@ def _build_update_fn(skip_charmm: bool, mm_nl_backend: str = "auto"):
     if skip_charmm:
         return None
 
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_PRM
+    from karml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_PRM
 
     if CGENFF_PRM is None:
         raise RuntimeError("PyCHARMM/CGENFF not available")
 
-    from mmml.interfaces.pycharmmInterface.mm_energy_forces import build_mm_energy_forces_fn
+    from karml.interfaces.pycharmmInterface.mm_energy_forces import build_mm_energy_forces_fn
 
     positions, cell, offsets, _mid = setup_charmm_aco_dimer_cluster()
     n_monomers = len(offsets) - 1

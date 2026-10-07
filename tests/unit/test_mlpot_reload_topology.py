@@ -6,10 +6,10 @@ from pathlib import Path
 
 import pytest
 
-from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+from karml.interfaces.pycharmmInterface.mlpot.setup import (
     resolve_topology_psf_for_mlpot_reload,
 )
-from mmml.interfaces.pycharmmInterface.mlpot.topology_recovery import (
+from karml.interfaces.pycharmmInterface.mlpot.topology_recovery import (
     TopologyFingerprint,
     load_topology_sidecar,
     save_topology_sidecar,

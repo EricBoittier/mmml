@@ -9,7 +9,7 @@ so the split is reproducible from (seed, n_train, n_valid, path). Reproducing it
 matters: des-full-fit and the des-lj-prod-* runs pass --valid-data == --data, so
 their "validation" numbers are in-sample. Only des-hybrid-ws (100000/8500) has a
 genuinely disjoint hold-out, and this recovers it as a standalone NPZ that
-`mmml physnet-evaluate` can consume.
+`karml physnet-evaluate` can consume.
 """
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ from pathlib import Path
 import jax
 import numpy as np
 
-from mmml.models.physnetjax.physnetjax.data.data import prepare_datasets
+from karml.models.physnetjax.physnetjax.data.data import prepare_datasets
 
 
 def main() -> int:

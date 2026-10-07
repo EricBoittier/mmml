@@ -17,7 +17,7 @@ def ensure_charmm_session_ready(
     bomlev: int = -2,
     force: bool = False,
 ) -> None:
-    """Initialize CHARMM the same way ``mmml md-system`` does before PSF/minimize work.
+    """Initialize CHARMM the same way ``karml md-system`` does before PSF/minimize work.
 
     Jupyter kernels often leave ``bomlev`` at 0 (CHARMM default). Any benign warning
     during IC build, BLOCK, or minimization then triggers abnormal termination or
@@ -25,9 +25,9 @@ def ensure_charmm_session_ready(
     calculator setup.
     """
     global _charmm_session_ready
-    import mmml.interfaces.pycharmmInterface.import_pycharmm as pyci  # noqa: F401
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import reset_block
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+    import karml.interfaces.pycharmmInterface.import_pycharmm as pyci  # noqa: F401
+    from karml.interfaces.pycharmmInterface.import_pycharmm import reset_block
+    from karml.interfaces.pycharmmInterface.mlpot.setup import (
         apply_charmm_verbosity,
         prepare_charmm_vacuum,
     )
@@ -210,13 +210,13 @@ def resolve_cluster_residue_geometries_from_args(
     if not composition:
         return None
     try:
-        from mmml.interfaces.pycharmmInterface.packmol_cache import (
+        from karml.interfaces.pycharmmInterface.packmol_cache import (
             load_monomer_geometries,
             packmol_cache_key,
             packmol_cache_root,
             packmol_prep_settings_from_namespace,
         )
-        from mmml.interfaces.pycharmmInterface.packmol_placement import (
+        from karml.interfaces.pycharmmInterface.packmol_placement import (
             packmol_center_for_cold_start,
             resolve_packmol_cube_side_from_args,
             resolve_packmol_placement_mode,
@@ -276,10 +276,10 @@ def packmol_template_reference_from_ctx(
     n_atoms: int | None = None,
 ) -> np.ndarray | None:
     """Cluster reference from isolated CHARMM-minimized monomer templates."""
-    from mmml.interfaces.pycharmmInterface.mlpot.mc_density import (
+    from karml.interfaces.pycharmmInterface.mlpot.mc_density import (
         monomer_offsets_from_atoms_per,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
+    from karml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
 
     args = getattr(mlpot_ctx, "workflow_args", None)
     geometries = resolve_cluster_residue_geometries_from_args(args)
@@ -325,7 +325,7 @@ def resolve_cluster_residue_labels(mlpot_ctx: Any, n_monomers: int) -> list[str]
         composition = getattr(args, "composition", None)
         if composition:
             try:
-                from mmml.cli.run.md_pbc_suite.ase import _parse_composition
+                from karml.cli.run.md_pbc_suite.ase import _parse_composition
 
                 labels = [
                     str(res).upper()
@@ -348,7 +348,7 @@ def resolve_cluster_residue_labels(mlpot_ctx: Any, n_monomers: int) -> list[str]
                 per = []
             if len(per) == n:
                 try:
-                    from mmml.cli.run.md_pbc_suite.ase import (
+                    from karml.cli.run.md_pbc_suite.ase import (
                         _residue_labels_from_loaded_psf,
                     )
 
@@ -372,10 +372,10 @@ def same_residue_cluster_reference_from_ctx(
     n_atoms: int | None = None,
 ) -> np.ndarray | None:
     """Build cluster reference by copying each residue type from its first monomer."""
-    from mmml.interfaces.pycharmmInterface.mlpot.mc_density import (
+    from karml.interfaces.pycharmmInterface.mlpot.mc_density import (
         monomer_offsets_from_atoms_per,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
+    from karml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
 
     pos = get_charmm_positions_array()
     if pos is None:
@@ -402,7 +402,7 @@ def same_residue_cluster_reference_from_ctx(
 
 def prepare_jax_gpu_notebook(*, required: bool = True) -> bool:
     """Prep JAX GPU JIT toolchain (``ptxas``, cuDNN/cuSPARSE libs) for notebook kernels."""
-    from mmml.utils.jax_gpu_warmup import prepare_jax_gpu_notebook as _prepare
+    from karml.utils.jax_gpu_warmup import prepare_jax_gpu_notebook as _prepare
 
     return _prepare(required=required)
 
@@ -424,7 +424,7 @@ def reference_frame_geometry(
     Positions are in Angstrom; atomic numbers follow the NPZ frame order (use
     ``*_psf_order.npz`` when matching CHARMM PSF layout).
     """
-    from mmml.cli.run.md_handoff import load_handoff_from_npz
+    from karml.cli.run.md_handoff import load_handoff_from_npz
 
     handoff = load_handoff_from_npz(Path(path).expanduser().resolve(), frame=frame)
     return (
@@ -449,10 +449,10 @@ def prepare_vacuum_nbonds_for_mm() -> None:
     """Apply vacuum ``nbonds`` after cluster PSF build, before the first MM/hybrid energy.
 
     Call once per notebook kernel after ``build_ase_cluster`` when attaching a hybrid
-    MMML calculator. Do **not** call after ``pycharmm.MLpot`` is registered (unsafe
+    KARML calculator. Do **not** call after ``pycharmm.MLpot`` is registered (unsafe
     ``update_bnbnd`` / ``upinb`` on large systems).
     """
     ensure_charmm_session_ready()
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import setup_charmm_nbonds
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import setup_charmm_nbonds
 
     setup_charmm_nbonds()

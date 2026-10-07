@@ -1,14 +1,14 @@
-# MMML Units Summary
+# KARML Units Summary
 
-This document summarizes the units used across MMML components (train_joint, fix_and_split, DCMNet, PhysNet, external electric-field PhysNet, calculators) and the conversion factors applied.
+This document summarizes the units used across KARML components (train_joint, fix_and_split, DCMNet, PhysNet, external electric-field PhysNet, calculators) and the conversion factors applied.
 
-## Central constants (`mmml.data.units`)
+## Central constants (`karml.data.units`)
 
-MMML keeps user-facing MD and ASE-style calculator quantities in Å, eV, and eV/Å. Atomic-unit inputs are converted at dataset preparation or model-boundary time, not repeatedly inside production dynamics.
+KARML keeps user-facing MD and ASE-style calculator quantities in Å, eV, and eV/Å. Atomic-unit inputs are converted at dataset preparation or model-boundary time, not repeatedly inside production dynamics.
 
 ### Conversion Quick Reference
 
-| Quantity | Atomic / external unit | MMML unit | Factor |
+| Quantity | Atomic / external unit | KARML unit | Factor |
 |----------|-------------------------|-----------|-------:|
 | Length | Bohr | Å | `BOHR_TO_ANGSTROM = 0.529177` |
 | Length | Å | Bohr | `ANGSTROM_TO_BOHR = 1.88973` |
@@ -52,7 +52,7 @@ flowchart LR
 ### fix_and_split output
 Default: convert PySCF/atomic input → ASE-style training units. **Always read `units_manifest.json`** in the output directory.
 
-CLI flags (`mmml fix-and-split --help`, group “Unit conversion”):
+CLI flags (`karml fix-and-split --help`, group “Unit conversion”):
 - `--coords-in` / `--coords-out` (`auto`, `bohr`, `angstrom`, `same`)
 - `--energy-in` / `--energy-out` (`hartree`, `ev`, `same`)
 - `--force-in` / `--force-out` (`hartree-bohr`, `ev-angstrom`, `same`)
@@ -71,7 +71,7 @@ Typical defaults (when not using `--preserve-units`):
 To keep Hartree/Hartree/Bohr energies and forces but convert dipoles only, omit `--preserve-units` and set other outputs to `same`:
 
 ```bash
-mmml fix-and-split --efd data.npz -o ./splits \
+karml fix-and-split --efd data.npz -o ./splits \
   --coords-out same --energy-out same --force-out same \
   --dipole-in debye --dipole-out e-angstrom
 ```
@@ -98,7 +98,7 @@ flowchart TB
 - **esp**: Hartree/e
 - **vdw_surface**: Angstrom
 
-### physnet-train (`mmml physnet-train --conversion`)
+### physnet-train (`karml physnet-train --conversion`)
 
 The `--conversion` flag is **not** a general unit converter for training data. It only scales the **printed** train/valid energy and force MAE at the end of each epoch. Loss, gradients, checkpoints, and stored objectives use the raw NPZ values unchanged.
 
@@ -112,7 +112,7 @@ The `--conversion` flag is **not** a general unit converter for training data. I
 
 ```bash
 # Show energy/force MAE in kcal/mol while training on eV data
-mmml physnet-train --config train.yaml \
+karml physnet-train --config train.yaml \
   --conversion '{"energy": 23.060549, "forces": 23.060549}'
 ```
 
@@ -127,9 +127,9 @@ conversion:
 
 | From | To | Factor | How |
 |------|-----|--------|-----|
-| Debye | e·Å | `DEBYE_TO_EANGSTROM = 0.208194` | `mmml fix-and-split --dipole-in debye --dipole-out e-angstrom` (recommended) |
+| Debye | e·Å | `DEBYE_TO_EANGSTROM = 0.208194` | `karml fix-and-split --dipole-in debye --dipole-out e-angstrom` (recommended) |
 
-After conversion, a 0.3 D dipole becomes ~0.062 e·Å. Re-check `units_manifest.json` or NPZ `_mmml_units` before training.
+After conversion, a 0.3 D dipole becomes ~0.062 e·Å. Re-check `units_manifest.json` or NPZ `_karml_units` before training.
 
 ## Coulomb / ESP Formulas
 
@@ -174,7 +174,7 @@ flowchart LR
 - Uses `HARTREE_TO_EV` for energy
 - Coulomb term: `pair_coulomb = (q_src * q_dst) / (r_ij + 1e-10)` — **r_ij units**: displacements from e3x gather; if positions are in Angstrom, r_ij is in Angstrom. The factor `7.199822675975274` may need verification (1/(4πε₀) in atomic units = 1).
 
-### MMML Calculator
+### KARML Calculator
 - Hybrid Python/JAX sums use **eV / eV/Å / Å** throughout.
 - ML model outputs are assumed eV/eV/Å (legacy Hartree checkpoints auto-convert at load).
 - CHARMM MM terms are converted from kcal/mol to eV inside the calculator before summing.
@@ -197,7 +197,7 @@ flowchart TB
   SUM --> MLPOT
 ```
 
-Trainers consume the **train** column. `mmml validate` / `npz_schema.py`
+Trainers consume the **train** column. `karml validate` / `npz_schema.py`
 still describe the **ingest** column. See
 [Training NPZ contract](training-npz-contract.md).
 
@@ -205,7 +205,7 @@ still describe the **ingest** column. See
 
 | Stage | Coordinates | Energy | Forces | Dipole | Unit record |
 |-------|-------------|--------|--------|--------|-------------|
-| PySCF export | Å or Bohr | Hartree | Hartree/Bohr | Debye | `_mmml_units` in NPZ |
+| PySCF export | Å or Bohr | Hartree | Hartree/Bohr | Debye | `_karml_units` in NPZ |
 | `fix_and_split` default | Å | eV | eV/Å | e·Å | `units_manifest.json` v2 + split metadata |
 | PhysNet / DCMNet training | Å | eV | eV/Å | e·Å | `training_units` in checkpoint |
 | Hybrid inference | Å | eV | eV/Å | e·Å (Debye at ASE API) | `evaluate.json` `"units"` block |
@@ -213,40 +213,40 @@ still describe the **ingest** column. See
 
 ## Verification checklist
 
-1. Read `units_manifest.json` (schema v2) or NPZ `_mmml_units` before training or evaluate.
+1. Read `units_manifest.json` (schema v2) or NPZ `_karml_units` before training or evaluate.
 2. Bond lengths in `R` should be ~0.8–2.5 Å (not ~1.5–4.7 if mis-read as Bohr).
 3. Total energies: small organics ~−10³ eV, or ~−40 Ha — not the reverse.
-4. After `mmml md-system --evaluate-npz`, check `|delta_energy_eV|` vs reference is O(0.01–1) eV, not O(10³) eV.
+4. After `karml md-system --evaluate-npz`, check `|delta_energy_eV|` vs reference is O(0.01–1) eV, not O(10³) eV.
 5. `evaluate.npz`: `E_eV` is true eV; `E` is Hartree (`E_eV * EV_TO_HARTREE`).
 
 ## Migration: legacy `--preserve-units` Hartree splits
 
 If your splits were built with `--preserve-units` (Hartree/Ha/Bohr in `E`/`F`):
 
-1. **Recommended:** Re-run `mmml fix-and-split` without `--preserve-units` so `E`/`F` are eV/eV/Å.
+1. **Recommended:** Re-run `karml fix-and-split` without `--preserve-units` so `E`/`F` are eV/eV/Å.
 2. **Legacy loaders:** Manifest v1/v2 still records `energy_out: hartree`; training loaders warn unless data is re-split.
 3. **Legacy checkpoints:** If `training_units.energy` is Hartree (or missing for pre-harmonization runs), the hybrid calculator applies `HARTREE_TO_EV` once at the ML boundary with a warning.
-4. **Evaluate artifacts:** Use reference NPZ with manifest or `_mmml_units`; compare scripts auto-detect units when `--reference-energy-unit` is omitted.
+4. **Evaluate artifacts:** Use reference NPZ with manifest or `_karml_units`; compare scripts auto-detect units when `--reference-energy-unit` is omitted.
 
 ## Guarding against constant drift
 
 Every unit bug found in the 2026-08-01 audit had the same shape: a conversion
 factor written as a **module-local literal**, used on both the write and the
 read side, so it round-tripped perfectly and disagreed only with physics.
-`mmml/data/units.py` was correct throughout — the bugs were in the ~50 modules
+`karml/data/units.py` was correct throughout — the bugs were in the ~50 modules
 that keep their own copy.
 
 Three checks now cover that class:
 
 | Check | Where | What it asserts |
 |---|---|---|
-| Canonical constants vs CODATA | `tests/unit/test_units_conversions.py` | `mmml.data.units` matches values spelled out in the test |
+| Canonical constants vs CODATA | `tests/unit/test_units_conversions.py` | `karml.data.units` matches values spelled out in the test |
 | Duplicated constants vs canonical | `tests/unit/test_conversion_constant_drift.py` | any module-level constant reusing a canonical name agrees to 1e-4 |
 | Standalone conversions vs SI | `tests/unit/test_conversion_constant_drift.py` | ~25 factors with no canonical twin, each derived from SI/CODATA in the test |
 
 The 1e-4 tolerance is chosen so that rounded literals pass (the worst in the
 tree is 1.5e-5) while the historical `1.88873`-for-`1.8897261` transposition
-(5.3e-4) fails. **When adding a conversion, import it from `mmml.data.units`
+(5.3e-4) fails. **When adding a conversion, import it from `karml.data.units`
 if it exists there; if it does not, add an anchor entry for it.**
 
 ## Potential Sign/Unit Issues to Check

@@ -49,7 +49,7 @@ from typing import Any
 
 import jax.numpy as jnp
 
-from mmml.models.cgenff_mm import neutralize_per_monomer
+from karml.models.cgenff_mm import neutralize_per_monomer
 
 Array = jnp.ndarray
 
@@ -157,7 +157,7 @@ def mm_charge_mode_is_q0(mode: str | MMChargeMode) -> bool:
 
 def mm_charge_mode_is_dynamic_liquid(mode: str | MMChargeMode) -> bool:
     """True for ``latent_dynamic`` -- live, per-step aggregation over active
-    ML-dimer partners (see ``mmml_calculator.calculate_ml_contributions``),
+    ML-dimer partners (see ``karml_calculator.calculate_ml_contributions``),
     as opposed to ``latent``/``fixed_plus_latent``'s single AB-dimer forward
     (dimer-only) or ``latent_mean``'s frozen offline template.
     """
@@ -169,7 +169,7 @@ def mm_charge_mode_is_static_template(mode: str | MMChargeMode) -> bool:
 
     ``latent_mean`` needs neither a live ``q_ML`` forward nor the dimer-only
     gate: its charges were fixed offline (see
-    ``mmml.models.latent_charge_template``) and are injected once.
+    ``karml.models.latent_charge_template``) and are injected once.
     """
     return parse_mm_charge_mode(mode) is MMChargeMode.LATENT_MEAN
 

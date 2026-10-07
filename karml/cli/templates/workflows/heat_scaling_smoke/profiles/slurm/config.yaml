@@ -2,7 +2,7 @@ executor: slurm
 jobs: 2
 latency-wait: 60
 envvars:
-  - MMML_CKPT
+  - KARML_CKPT
 default-resources:
   - gpu=1
   - charmm_slot=1

@@ -1,6 +1,6 @@
 """Long-range electrostatic backend selection for hybrid ML/MM potentials.
 
-MMML's default JAX MM path uses minimum-image Coulomb truncated at the switched-MM
+KARML's default JAX MM path uses minimum-image Coulomb truncated at the switched-MM
 outer radius (~13 Å by default).  Optional backends can supply k-space corrections:
 
 * ``mic`` — truncated MIC Coulomb only (default)
@@ -9,7 +9,7 @@ outer radius (~13 Å by default).  Optional backends can supply k-space correcti
 * ``scafacos`` — ScaFaCoS ``libfcs`` (PME / P³M / P²NFFT / …)
 
 Selection mirrors ``nl_backend.py``: CLI/YAML may pass an explicit name; otherwise
-``MMML_LR_SOLVER`` or the implicit default selects ``mic``.  Set ``lr_solver: jax_pme``,
+``KARML_LR_SOLVER`` or the implicit default selects ``mic``.  Set ``lr_solver: jax_pme``,
 ``scafacos``, or ``nvalchemiops_pme`` to opt into k-space backends.  ``auto`` is a
 legacy alias for ``mic`` (it no longer auto-picks jax-pme).
 
@@ -38,13 +38,13 @@ def resolve_jax_pme_dispersion(enabled: bool | None = None) -> bool:
     """Whether jax-pme supplies the r^-6 LJ tail in hybrid MM (default on)."""
     if enabled is not None:
         return bool(enabled)
-    raw = os.environ.get("MMML_JAX_PME_DISPERSION", "1").strip().lower()
+    raw = os.environ.get("KARML_JAX_PME_DISPERSION", "1").strip().lower()
     return raw not in ("0", "false", "no", "off")
 
 
 def jax_pme_host_device_name() -> str:
     """Device for jax-pme work invoked from host ``pure_callback`` (default CPU)."""
-    return (os.environ.get("MMML_JAX_PME_DEVICE") or "cpu").strip().lower()
+    return (os.environ.get("KARML_JAX_PME_DEVICE") or "cpu").strip().lower()
 
 
 @contextmanager
@@ -165,7 +165,7 @@ def warmup_jax_pme_hybrid_host(
     """Pre-warm jax-pme hybrid shapes (cross-monomer fused or legacy intra loop)."""
     from jaxpme import prefactors as jpref
 
-    from mmml.interfaces.pycharmmInterface.jax_pme_cross_monomer import (
+    from karml.interfaces.pycharmmInterface.jax_pme_cross_monomer import (
         compute_jax_pme_cross_monomer_power_law,
         resolve_jax_pme_intra_mode,
     )
@@ -278,7 +278,7 @@ def warmup_jax_pme_hybrid_host(
                         prefactor=DEFAULT_JAX_PME_LJ_PREFACTOR,
                     )
                     counts["dispersion_intra"] += 1
-    from mmml.interfaces.pycharmmInterface.jax_pme_hybrid_coulomb import (
+    from karml.interfaces.pycharmmInterface.jax_pme_hybrid_coulomb import (
         _com_switch_value_and_grad,
     )
 
@@ -318,7 +318,7 @@ def have_nvalchemiops_pme() -> bool:
 
 def have_scafacos() -> bool:
     try:
-        from mmml.interfaces.scafacosInterface.scafacos_session import have_scafacos as _have
+        from karml.interfaces.scafacosInterface.scafacos_session import have_scafacos as _have
 
         return _have()
     except Exception:
@@ -326,8 +326,8 @@ def have_scafacos() -> bool:
 
 
 def resolve_lr_solver(name: str | None = None) -> LrSolverName:
-    """Resolve solver from argument, ``MMML_LR_SOLVER`` env, or ``mic`` (default)."""
-    raw = (name or os.environ.get("MMML_LR_SOLVER", "mic")).strip().lower()
+    """Resolve solver from argument, ``KARML_LR_SOLVER`` env, or ``mic`` (default)."""
+    raw = (name or os.environ.get("KARML_LR_SOLVER", "mic")).strip().lower()
     if raw in ("nvalchemiops", "nvalchemiops_pme", "nval_pme"):
         return "nvalchemiops_pme"
     if raw in ("native_ewald", "jit_ewald"):
@@ -395,7 +395,7 @@ def _cached_jax_pme_calculator(
 def jax_pme_mesh_spacing_A(sr_cutoff_A: float, box_length_A: float) -> float:
     """Real-space mesh spacing for jax-pme PME/P3M (capped for CI memory)."""
     smearing = float(sr_cutoff_A) / 5.0
-    mesh_max = int(os.environ.get("MMML_JAX_PME_MESH_MAX", "64") or "64")
+    mesh_max = int(os.environ.get("KARML_JAX_PME_MESH_MAX", "64") or "64")
     return max(smearing / 8.0, float(box_length_A) / max(mesh_max, 8))
 
 
@@ -625,7 +625,7 @@ def compute_jax_pme_coulomb(
 def _nvalchemiops_pme_accuracy(accuracy: float | None = None) -> float:
     if accuracy is not None:
         return float(accuracy)
-    raw = os.environ.get("MMML_NVALCHEMIOPS_PME_ACCURACY", "1e-6").strip()
+    raw = os.environ.get("KARML_NVALCHEMIOPS_PME_ACCURACY", "1e-6").strip()
     return float(raw)
 
 
@@ -637,9 +637,9 @@ def nvalchemiops_pme_device_name() -> str:
     run nested JAX+Warp on the same GPU as the parent XLA executable (deadlock);
     they use a spawn-isolated worker instead (see
     ``nvalchemiops_pme_train_isolate_enabled``).
-    Override with ``MMML_NVALCHEMIOPS_PME_DEVICE=cpu`` only for debugging.
+    Override with ``KARML_NVALCHEMIOPS_PME_DEVICE=cpu`` only for debugging.
     """
-    return (os.environ.get("MMML_NVALCHEMIOPS_PME_DEVICE") or "gpu").strip().lower()
+    return (os.environ.get("KARML_NVALCHEMIOPS_PME_DEVICE") or "gpu").strip().lower()
 
 
 def nvalchemiops_pme_train_isolate_mode() -> str:
@@ -653,14 +653,14 @@ def nvalchemiops_pme_train_isolate_mode() -> str:
       ``CUDA_ERROR_DEVICE_UNAVAILABLE`` (common once the parent has already
       initialized CUDA, including Exclusive_Process nodes).
     * ``spawn`` — separate process on
-      ``MMML_NVALCHEMIOPS_PME_WORKER_GPU`` (often fails if parent already
+      ``KARML_NVALCHEMIOPS_PME_WORKER_GPU`` (often fails if parent already
       touched CUDA).
     * ``off`` — in-process GPU PME while train stays on GPU (deadlocks).
 
-    Set ``MMML_NVALCHEMIOPS_PME_ISOLATE`` to ``cpu_train`` / ``spawn`` /
+    Set ``KARML_NVALCHEMIOPS_PME_ISOLATE`` to ``cpu_train`` / ``spawn`` /
     ``0``.
     """
-    raw = (os.environ.get("MMML_NVALCHEMIOPS_PME_ISOLATE") or "cpu_train").strip().lower()
+    raw = (os.environ.get("KARML_NVALCHEMIOPS_PME_ISOLATE") or "cpu_train").strip().lower()
     if raw in ("0", "false", "no", "off"):
         return "off"
     # Explicit spawn only — bare "1"/"true" keep the safe cpu_train default
@@ -720,9 +720,9 @@ def nvalchemiops_pme_worker_cuda_visible() -> str:
     A spawn child that inherits that env then fails with
     ``CUDA_ERROR_DEVICE_UNAVAILABLE``.  Default: use the **last** physical GPU
     when two or more are present.  Override with
-    ``MMML_NVALCHEMIOPS_PME_WORKER_GPU`` (e.g. ``1``).
+    ``KARML_NVALCHEMIOPS_PME_WORKER_GPU`` (e.g. ``1``).
     """
-    override = (os.environ.get("MMML_NVALCHEMIOPS_PME_WORKER_GPU") or "").strip()
+    override = (os.environ.get("KARML_NVALCHEMIOPS_PME_WORKER_GPU") or "").strip()
     if override:
         return override
     ids = _physical_nvidia_gpu_indices()
@@ -741,7 +741,7 @@ def _nvalchemiops_pme_worker_main(q_in, q_out, cuda_visible: str) -> None:
     """
     import traceback
 
-    # Must run before importing jax / mmml CUDA paths.
+    # Must run before importing jax / karml CUDA paths.
     os.environ["CUDA_VISIBLE_DEVICES"] = str(cuda_visible)
     os.environ.setdefault("XLA_PYTHON_CLIENT_PREALLOCATE", "false")
     os.environ.setdefault("XLA_PYTHON_CLIENT_MEM_FRACTION", "0.25")
@@ -755,7 +755,7 @@ def _nvalchemiops_pme_worker_main(q_in, q_out, cuda_visible: str) -> None:
         try:
             pos, chg, box, acc, cut = msg
             # Import inside the child so the parent XLA state is not shared.
-            from mmml.interfaces.pycharmmInterface.long_range_backend import (
+            from karml.interfaces.pycharmmInterface.long_range_backend import (
                 _nvalchemiops_pme_energy_forces_concrete,
             )
 
@@ -795,7 +795,7 @@ def _nvalchemiops_pme_ensure_worker():
     proc = ctx.Process(
         target=_nvalchemiops_pme_worker_main,
         args=(q_in, q_out, cuda_visible),
-        name="mmml-nvalchemiops-pme",
+        name="karml-nvalchemiops-pme",
         daemon=True,
     )
     proc.start()
@@ -866,9 +866,9 @@ def _nvalchemiops_pme_energy_forces_isolated(
         ):
             hint = (
                 "\nHint: the train process already owns a GPU; the PME worker "
-                f"needs its own. Set MMML_NVALCHEMIOPS_PME_WORKER_GPU to a free "
+                f"needs its own. Set KARML_NVALCHEMIOPS_PME_WORKER_GPU to a free "
                 f"physical index (tried {gpu!r}). On a 2-GPU node: "
-                "MMML_NVALCHEMIOPS_PME_WORKER_GPU=1. Or use --lr-solver ewald "
+                "KARML_NVALCHEMIOPS_PME_WORKER_GPU=1. Or use --lr-solver ewald "
                 "(same full-box contract, no spawn worker)."
             )
         raise RuntimeError(
@@ -968,7 +968,7 @@ def _nvalchemiops_pme_resolve_device():
         raise RuntimeError(
             "nvalchemiops PME requires a CUDA GPU (Warp NL FFI is not "
             "registered on Host). Train on a GPU node, or set "
-            "MMML_NVALCHEMIOPS_PME_DEVICE=cpu only for debugging (Warp "
+            "KARML_NVALCHEMIOPS_PME_DEVICE=cpu only for debugging (Warp "
             "neighbor lists will still fail without a Host FFI handler)."
         ) from exc
 
@@ -1080,7 +1080,7 @@ def _nvalchemiops_pme_energy_forces_concrete(
                 raise RuntimeError(
                     "nvalchemiops Warp neighbor-list FFI ran on Host instead of "
                     f"CUDA (device={device}). Ensure jaxlib CUDA is installed and "
-                    "MMML_NVALCHEMIOPS_PME_DEVICE is unset or 'gpu'. "
+                    "KARML_NVALCHEMIOPS_PME_DEVICE is unset or 'gpu'. "
                     f"Original error: {msg}"
                 ) from exc
             raise
@@ -1226,7 +1226,7 @@ def compute_nvalchemiops_pme_coulomb(
     """Full periodic Coulomb via nvalchemiops JAX PME.
 
     ``nvalchemiops`` returns electrostatic energies in e²/Å-like units for unit
-    charges and Å coordinates; MMML converts to CHARMM kcal/mol with
+    charges and Å coordinates; KARML converts to CHARMM kcal/mol with
     ``CHARMM_COULOMB_KCAL``.
     """
     energy, forces = _nvalchemiops_pme_energy_forces_concrete(
@@ -1257,7 +1257,7 @@ def compute_native_ewald_coulomb(
 
     Pure JAX (no external PME library, no CUDA requirement) -- the same
     operator ``lr_solver="ewald"`` trains against
-    (:func:`mmml.models.ewald_hybrid_coulomb.hybrid_ewald_coulomb_energy`), so
+    (:func:`karml.models.ewald_hybrid_coulomb.hybrid_ewald_coulomb_energy`), so
     train and MD stay consistent. Called eagerly from the CHARMM callback
     (outside any jax.jit trace), so forces come from a plain ``jax.grad`` --
     no pure_callback/custom_vjp bridging needed here.
@@ -1269,7 +1269,7 @@ def compute_native_ewald_coulomb(
     import jax
     import jax.numpy as jnp
 
-    from mmml.models.ewald_hybrid_coulomb import hybrid_ewald_coulomb_energy
+    from karml.models.ewald_hybrid_coulomb import hybrid_ewald_coulomb_energy
 
     pos = jnp.asarray(positions_A, dtype=jnp.float64)
     chg = jnp.asarray(charges_e, dtype=jnp.float64)
@@ -1430,7 +1430,7 @@ class ScaFaCoSLongRangeSolver:
         *,
         box_length_A: float,
     ) -> LongRangeCoulombResult:
-        from mmml.interfaces.scafacosInterface.scafacos_session import compute_scafacos_coulomb
+        from karml.interfaces.scafacosInterface.scafacos_session import compute_scafacos_coulomb
 
         result = compute_scafacos_coulomb(
             positions_A,

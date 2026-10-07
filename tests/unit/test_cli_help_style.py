@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 import io
 
-from mmml.cli.help_style import (
+from karml.cli.help_style import (
     group_parser_options,
     install_colored_argparse,
     print_cli_text,
@@ -11,7 +11,7 @@ from mmml.cli.help_style import (
 
 
 def _flat_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="mmml demo")
+    parser = argparse.ArgumentParser(prog="karml demo")
     parser.add_argument("residue")
     parser.add_argument("--config")
     parser.add_argument("--checkpoint")
@@ -42,7 +42,7 @@ def test_flat_parser_is_grouped_by_function():
 
 
 def test_explicit_argument_groups_are_preserved():
-    parser = argparse.ArgumentParser(prog="mmml explicit")
+    parser = argparse.ArgumentParser(prog="karml explicit")
     custom = parser.add_argument_group("Physics controls")
     custom.add_argument("--cutoff")
     for index in range(5):
@@ -55,24 +55,24 @@ def test_explicit_argument_groups_are_preserved():
 
 def test_cli_text_is_colored_only_when_enabled(monkeypatch):
     plain = io.StringIO()
-    monkeypatch.setenv("MMML_NO_RICH", "1")
-    print_cli_text("usage: mmml demo --config CONFIG\n", stream=plain)
+    monkeypatch.setenv("KARML_NO_RICH", "1")
+    print_cli_text("usage: karml demo --config CONFIG\n", stream=plain)
     assert "\x1b[" not in plain.getvalue()
 
     colored = io.StringIO()
-    monkeypatch.delenv("MMML_NO_RICH", raising=False)
-    monkeypatch.setenv("MMML_RICH", "1")
-    print_cli_text("usage: mmml demo --config CONFIG\n", stream=colored)
+    monkeypatch.delenv("KARML_NO_RICH", raising=False)
+    monkeypatch.setenv("KARML_RICH", "1")
+    print_cli_text("usage: karml demo --config CONFIG\n", stream=colored)
     assert "\x1b[" in colored.getvalue()
     assert "--config" in colored.getvalue()
 
     error = io.StringIO()
-    print_cli_text("mmml demo: error: bad option\n", stream=error)
+    print_cli_text("karml demo: error: bad option\n", stream=error)
     assert "\x1b[" in error.getvalue()
 
 
 def test_argparse_install_groups_help_without_changing_plain_content(monkeypatch):
-    monkeypatch.setenv("MMML_NO_RICH", "1")
+    monkeypatch.setenv("KARML_NO_RICH", "1")
     install_colored_argparse()
     text = _flat_parser().format_help()
     assert "Input & configuration:" in text

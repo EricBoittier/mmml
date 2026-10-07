@@ -1,12 +1,12 @@
 {
   "mcpServers": {
-    "mmml": {
-      "command": "/cluster/home/boittier/mmml/.venv/bin/python",
-      "args": ["-m", "mmml.mcp"],
-      "cwd": "/cluster/home/boittier/mmml",
+    "karml": {
+      "command": "/cluster/home/boittier/karml/.venv/bin/python",
+      "args": ["-m", "karml.mcp"],
+      "cwd": "/cluster/home/boittier/karml",
       "env": {
         "JAX_ENABLE_X64": "1",
-        "MMML_CKPT": "/cluster/home/boittier/mmml/examples/ckpts_json/DESdimers_params.json"
+        "KARML_CKPT": "/cluster/home/boittier/karml/examples/ckpts_json/DESdimers_params.json"
       }
     }
   }

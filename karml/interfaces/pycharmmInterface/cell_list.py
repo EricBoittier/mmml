@@ -273,7 +273,7 @@ def cell_list_pairs(
             "Truncating. Increase max_pairs for correctness."
         )
         if not suppress_warning:
-            from mmml.utils.rich_report import emit_panel
+            from karml.utils.rich_report import emit_panel
 
             emit_panel(
                 "MM Pair List Truncated",

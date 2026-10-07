@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Resolve MMML / CHARMM env, then run run_job.py with the remaining argv.
+# Resolve KARML / CHARMM env, then run run_job.py with the remaining argv.
 # Usage (from Snakemake):
 #   bash scripts/job_shell.sh --job make_boxes --output-dir ABS --status ABS ...
 set -euo pipefail
@@ -8,10 +8,10 @@ WORKFLOW_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 REPO_ROOT="$(cd "$WORKFLOW_ROOT/../.." && pwd)"
 cd "$REPO_ROOT"
 
-# shellcheck source=../../../scripts/resolve_mmml_env.sh
-source "$REPO_ROOT/scripts/resolve_mmml_env.sh"
-mmml_resolve_env "$REPO_ROOT"
-PY="${MMML_PYTHON}"
+# shellcheck source=../../../scripts/resolve_karml_env.sh
+source "$REPO_ROOT/scripts/resolve_karml_env.sh"
+karml_resolve_env "$REPO_ROOT"
+PY="${KARML_PYTHON}"
 
 export JAX_ENABLE_X64="${JAX_ENABLE_X64:-1}"
 
@@ -32,18 +32,18 @@ if [[ -n "${SLURM_JOB_ID:-}" ]]; then
         fi
         ;;
     esac
-    export MMML_MLPOT_DEVICE="${MMML_MLPOT_DEVICE:-gpu}"
-    export MMML_JAX_WARMUP_DEVICE="${MMML_JAX_WARMUP_DEVICE:-gpu}"
+    export KARML_MLPOT_DEVICE="${KARML_MLPOT_DEVICE:-gpu}"
+    export KARML_JAX_WARMUP_DEVICE="${KARML_JAX_WARMUP_DEVICE:-gpu}"
   fi
 fi
 
-_cfg_raw="${MMML_WORKFLOW_CONFIG:-$WORKFLOW_ROOT/config.yaml}"
+_cfg_raw="${KARML_WORKFLOW_CONFIG:-$WORKFLOW_ROOT/config.yaml}"
 if [[ "$_cfg_raw" = /* ]]; then
   CFG="$_cfg_raw"
 else
   CFG="$WORKFLOW_ROOT/$_cfg_raw"
 fi
-export MMML_WORKFLOW_CONFIG="$CFG"
+export KARML_WORKFLOW_CONFIG="$CFG"
 
 # Ensure a CHARMM build is visible for make-box / ADUMB (PyCHARMM).
 if [[ -z "${CHARMM_LIB_DIR:-}" || ! -d "${CHARMM_LIB_DIR:-}" ]]; then
@@ -62,7 +62,7 @@ if [[ -z "${CHARMM_LIB_DIR:-}" ]]; then
   for cand in \
     "$REPO_ROOT/setup/charmm/lib" \
     "$REPO_ROOT/setup/charmm" \
-    "$HOME/.cache/mmml-charmm-build/tier_56000000_nodomdec/lib"
+    "$HOME/.cache/karml-charmm-build/tier_56000000_nodomdec/lib"
   do
     if [[ -d "$cand" ]] && { [[ -e "$cand/libcharmm.so" ]] || [[ -e "$cand/lib/libcharmm.so" ]]; }; then
       if [[ -e "$cand/lib/libcharmm.so" && ! -e "$cand/libcharmm.so" ]]; then
@@ -75,7 +75,7 @@ if [[ -z "${CHARMM_LIB_DIR:-}" ]]; then
   done
 fi
 
-# Always prefer workflow config checkpoint over a stale shell MMML_CKPT
+# Always prefer workflow config checkpoint over a stale shell KARML_CKPT
 # (e.g. leftover examples/m/kl.json from an interactive session).
 _ckpt="$("$PY" -c "
 import sys
@@ -86,18 +86,18 @@ cfg = load_config(Path('${CFG}'))
 print(Path('${REPO_ROOT}') / checkpoint_path(cfg))
 " 2>/dev/null || true)"
 if [[ -n "${_ckpt}" && -e "${_ckpt}" ]]; then
-  export MMML_CKPT="$_ckpt"
-elif [[ -z "${MMML_CKPT:-}" || ! -e "${MMML_CKPT}" ]]; then
-  echo "WARNING: workflow checkpoint unresolved; MMML_CKPT=${MMML_CKPT:-unset}" >&2
+  export KARML_CKPT="$_ckpt"
+elif [[ -z "${KARML_CKPT:-}" || ! -e "${KARML_CKPT}" ]]; then
+  echo "WARNING: workflow checkpoint unresolved; KARML_CKPT=${KARML_CKPT:-unset}" >&2
 fi
 
 echo "=== nh3_ch3cl_reaction_path job_shell ===" >&2
 echo "REPO_ROOT=${REPO_ROOT}" >&2
 echo "PY=${PY}" >&2
-echo "MMML_CKPT=${MMML_CKPT:-<unset>}" >&2
+echo "KARML_CKPT=${KARML_CKPT:-<unset>}" >&2
 echo "CHARMM_LIB_DIR=${CHARMM_LIB_DIR:-<unset>}" >&2
 echo "JAX_PLATFORMS=${JAX_PLATFORMS:-<unset>}" >&2
-echo "MMML_WORKFLOW_CONFIG=${MMML_WORKFLOW_CONFIG}" >&2
+echo "KARML_WORKFLOW_CONFIG=${KARML_WORKFLOW_CONFIG}" >&2
 echo "argv: $*" >&2
 
 exec "$PY" "$WORKFLOW_ROOT/scripts/run_job.py" \

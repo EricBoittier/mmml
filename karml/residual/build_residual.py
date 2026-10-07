@@ -69,7 +69,7 @@ def build_residual_npz(
 if __name__ == "__main__":
     # end-to-end demo with the JAX backend
     import jax
-    from mmml.residual.electrostatics_jax import (
+    from karml.residual.electrostatics_jax import (
         elec_energy_and_forces, build_pairs, KE_KCAL_ANG,
     )
 

@@ -3,7 +3,7 @@ from pyxtal import pyxtal
 import numpy as np
 from ase import Atoms
 from pyxtal.molecule import pyxtal_molecule
-from mmml.chemcoordInterface.interface import ase_to_chemcord
+from karml.chemcoordInterface.interface import ase_to_chemcord
 
 def generate_from_crystal_syms(fn, n_repeats=1, dimensions=(1,2,3), space_group_numbers=list(range(1,171))):
     m = pyxtal_molecule(fn)

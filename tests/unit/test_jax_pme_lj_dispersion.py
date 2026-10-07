@@ -5,11 +5,11 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from mmml.interfaces.pycharmmInterface.jax_pme_hybrid_coulomb import (
+from karml.interfaces.pycharmmInterface.jax_pme_hybrid_coulomb import (
     hybrid_jax_pme_lj_dispersion_correction,
     intra_monomer_jax_pme_lj_dispersion,
 )
-from mmml.interfaces.pycharmmInterface.long_range_backend import (
+from karml.interfaces.pycharmmInterface.long_range_backend import (
     compute_jax_pme_lj_dispersion,
     per_atom_jax_pme_c6_sqrt,
     per_atom_jax_pme_c6_sqrt_for_atoms,
@@ -79,12 +79,12 @@ def test_jax_pme_lj_dispersion_two_atom_dimer():
 
 @pytest.mark.parametrize("method", ["ewald", "pme"])
 def test_jax_pme_lj_methods_agree_ewald_reference(method: str, monkeypatch):
-    from mmml.interfaces.pycharmmInterface.long_range_backend import (
+    from karml.interfaces.pycharmmInterface.long_range_backend import (
         _cached_jax_pme_calculator,
         _cached_jax_pme_power_law_evaluator,
     )
 
-    monkeypatch.setenv("MMML_JAX_PME_MESH_MAX", "64")
+    monkeypatch.setenv("KARML_JAX_PME_MESH_MAX", "64")
     _cached_jax_pme_calculator.cache_clear()
     _cached_jax_pme_power_law_evaluator.cache_clear()
     ep = 0.15
@@ -191,11 +191,11 @@ def test_zero_c6_skips_lj_jax_pme_calls(monkeypatch):
         raise AssertionError("LJ jax-pme should not be called for zero C6")
 
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.jax_pme_hybrid_coulomb.compute_jax_pme_lj_dispersion",
+        "karml.interfaces.pycharmmInterface.jax_pme_hybrid_coulomb.compute_jax_pme_lj_dispersion",
         _raise,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.jax_pme_hybrid_coulomb.intra_monomer_jax_pme_lj_dispersion",
+        "karml.interfaces.pycharmmInterface.jax_pme_hybrid_coulomb.intra_monomer_jax_pme_lj_dispersion",
         _raise,
     )
     pos = np.array([[0.0, 0.0, 0.0], [5.0, 0.0, 0.0]])
@@ -214,12 +214,12 @@ def test_zero_c6_skips_lj_jax_pme_calls(monkeypatch):
 
 
 def test_hybrid_warmup_counts_unique_intra_shapes(monkeypatch):
-    monkeypatch.setenv("MMML_JAX_PME_INTRA_MODE", "full_minus_intra")
+    monkeypatch.setenv("KARML_JAX_PME_INTRA_MODE", "full_minus_intra")
     calls: list[tuple[int, int]] = []
 
     def _fake(positions, coefficients, **kwargs):
         calls.append((int(kwargs["exponent"]), int(np.asarray(positions).shape[0])))
-        from mmml.interfaces.pycharmmInterface.long_range_backend import LongRangeInteractionResult
+        from karml.interfaces.pycharmmInterface.long_range_backend import LongRangeInteractionResult
 
         return LongRangeInteractionResult(
             energy_kcalmol=0.0,
@@ -227,7 +227,7 @@ def test_hybrid_warmup_counts_unique_intra_shapes(monkeypatch):
         )
 
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.long_range_backend.warmup_jax_pme_power_law_host",
+        "karml.interfaces.pycharmmInterface.long_range_backend.warmup_jax_pme_power_law_host",
         _fake,
     )
     pos = np.zeros((5, 3), dtype=np.float64)
@@ -255,7 +255,7 @@ def test_hybrid_warmup_counts_unique_intra_shapes(monkeypatch):
 
 
 def test_hybrid_warmup_com_switch_jit_when_pbc_cell(monkeypatch):
-    monkeypatch.setenv("MMML_JAX_PME_INTRA_MODE", "cross")
+    monkeypatch.setenv("KARML_JAX_PME_INTRA_MODE", "cross")
     com_calls: list[tuple[int, int]] = []
 
     def _fake_com_switch(pos, offsets, cell, **kwargs):
@@ -263,11 +263,11 @@ def test_hybrid_warmup_com_switch_jit_when_pbc_cell(monkeypatch):
         return 0.5, np.zeros_like(np.asarray(pos, dtype=np.float64))
 
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.jax_pme_cross_monomer.compute_jax_pme_cross_monomer_power_law",
+        "karml.interfaces.pycharmmInterface.jax_pme_cross_monomer.compute_jax_pme_cross_monomer_power_law",
         lambda *args, **kwargs: None,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.jax_pme_hybrid_coulomb._com_switch_value_and_grad",
+        "karml.interfaces.pycharmmInterface.jax_pme_hybrid_coulomb._com_switch_value_and_grad",
         _fake_com_switch,
     )
     pos = np.zeros((6, 3), dtype=np.float64)

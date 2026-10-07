@@ -1,5 +1,5 @@
 """
-Data loading utilities for MMML.
+Data loading utilities for KARML.
 
 Provides functions to load NPZ files, validate them, and prepare them
 for training with DCMNet, PhysNetJAX, or other models.
@@ -468,7 +468,7 @@ if __name__ == '__main__':
         stats = get_data_statistics(data)
         
         print("\nDataset Statistics:")
-        from mmml.utils.rich_report import print_colored_json
+        from karml.utils.rich_report import print_colored_json
 
         print_colored_json(stats)
     else:

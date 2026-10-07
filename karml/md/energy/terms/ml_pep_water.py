@@ -17,9 +17,9 @@ from __future__ import annotations
 
 from typing import Any, Sequence
 
-from mmml.md.energy.registry import EnergyContext, NeighborRequest, TermFns, register_term
-from mmml.md.energy.terms._common import resolve_displacement_fn, resolve_ml_model
-from mmml.md.system import MolecularSystem
+from karml.md.energy.registry import EnergyContext, NeighborRequest, TermFns, register_term
+from karml.md.energy.terms._common import resolve_displacement_fn, resolve_ml_model
+from karml.md.system import MolecularSystem
 
 __all__ = ["MLCoreGroupTerm"]
 
@@ -58,7 +58,7 @@ class MLCoreGroupTerm:
     def make(self, system: MolecularSystem, ctx: EnergyContext) -> TermFns:
         import jax.numpy as jnp
 
-        from mmml.interfaces.jaxmdInterface.hybrid_energy import (
+        from karml.interfaces.jaxmdInterface.hybrid_energy import (
             make_peptide_water_ml_energy_fn,
         )
 

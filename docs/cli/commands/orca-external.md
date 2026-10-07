@@ -1,4 +1,4 @@
-# `mmml orca-external`
+# `karml orca-external`
 
 Standalone ORCA external wrapper.
 
@@ -6,13 +6,13 @@ Standalone ORCA external wrapper.
 ## Usage
 
 ```bash
-mmml orca-external --help
+karml orca-external --help
 ```
 
 !!! note
     No `build_parser()` hook — see module docstring or run the command without arguments for usage.
 
-Implementation: `mmml.interfaces.orca_external.runner`
+Implementation: `karml.interfaces.orca_external.runner`
 
 
 

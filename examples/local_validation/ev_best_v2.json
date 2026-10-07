@@ -1,6 +1,6 @@
 {
-  "checkpoint": "/mmhome/boittier/home/mmml/artifacts/zbl_cgenff_1000step_20260714/from_step2000_lowlr/step-00005000",
-  "cache": "/mmhome/boittier/home/mmml/data/splits_des_ml_mm_v2/test_cache",
+  "checkpoint": "/mmhome/boittier/home/karml/artifacts/zbl_cgenff_1000step_20260714/from_step2000_lowlr/step-00005000",
+  "cache": "/mmhome/boittier/home/karml/data/splits_des_ml_mm_v2/test_cache",
   "n_structures": 35260,
   "metrics": {
     "energy_mae": 1.3153118701530193,

@@ -30,7 +30,7 @@ def _load(run_dir: Path) -> tuple[dict, dict]:
     mbar = summary.get("mbar")
     if not mbar:
         raise SystemExit(
-            f"{summary_path} has no 'mbar' block -- run `mmml umbrella-mbar "
+            f"{summary_path} has no 'mbar' block -- run `karml umbrella-mbar "
             f"--run-dir {run_dir}` first"
         )
     if "error" in mbar:

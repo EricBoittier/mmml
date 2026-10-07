@@ -5,10 +5,10 @@ Isolates water_water / inter-monomer VDW without TRIA. Includes O–O pair break
 
 Examples (CHARMM node)::
 
-    ./scripts/mmml-charmm-mpirun.sh python scripts/diagnose_tip3_nb_mismatch.py \\
+    ./scripts/karml-charmm-mpirun.sh python scripts/diagnose_tip3_nb_mismatch.py \\
       -o artifacts/tip3_nb_parity
 
-    ./scripts/mmml-charmm-mpirun.sh python scripts/diagnose_tip3_nb_mismatch.py \\
+    ./scripts/karml-charmm-mpirun.sh python scripts/diagnose_tip3_nb_mismatch.py \\
       -o artifacts/tip3_nb_parity --n-waters 10 --box-side-A 28 --perturb-seed 31
 """
 
@@ -58,15 +58,15 @@ def _parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = _parse_args()
-    os.environ.setdefault("MMML_LR_SOLVER", "mic")
+    os.environ.setdefault("KARML_LR_SOLVER", "mic")
 
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import ensure_pycharmm_loaded
-    from mmml.interfaces.pycharmmInterface.liquid_nb_parity import (
+    from karml.interfaces.pycharmmInterface.import_pycharmm import ensure_pycharmm_loaded
+    from karml.interfaces.pycharmmInterface.liquid_nb_parity import (
         collect_and_render_liquid_nb_parity,
         monomer_id_from_offsets,
         render_liquid_markdown_report,
     )
-    from mmml.interfaces.pycharmmInterface.tip3_liquid_box import (
+    from karml.interfaces.pycharmmInterface.tip3_liquid_box import (
         build_tip3_liquid_box_in_charmm,
         reload_tip3_liquid_box_in_charmm,
         tip3_liquid_box_coords_path,

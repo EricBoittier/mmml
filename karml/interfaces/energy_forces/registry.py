@@ -4,14 +4,14 @@ from __future__ import annotations
 
 from typing import Any
 
-from mmml.interfaces.energy_forces.adapters import AseCalculatorProvider, QCEvaluatorAdapter
-from mmml.interfaces.energy_forces.ml import build_ml_provider, capabilities_for_kind
-from mmml.interfaces.energy_forces.protocol import EnergyForcesProvider, ProviderKind
-from mmml.interfaces.energy_forces.spec import ProviderSpec
-from mmml.interfaces.qc_backends.molpro import build_molpro_backend
-from mmml.interfaces.qc_backends.orca_qm import build_orca_backend
-from mmml.interfaces.qc_backends.pyscf_backend import build_pyscf_backend
-from mmml.interfaces.qc_backends.xtb import build_xtb_backend
+from karml.interfaces.energy_forces.adapters import AseCalculatorProvider, QCEvaluatorAdapter
+from karml.interfaces.energy_forces.ml import build_ml_provider, capabilities_for_kind
+from karml.interfaces.energy_forces.protocol import EnergyForcesProvider, ProviderKind
+from karml.interfaces.energy_forces.spec import ProviderSpec
+from karml.interfaces.qc_backends.molpro import build_molpro_backend
+from karml.interfaces.qc_backends.orca_qm import build_orca_backend
+from karml.interfaces.qc_backends.pyscf_backend import build_pyscf_backend
+from karml.interfaces.qc_backends.xtb import build_xtb_backend
 
 _QC_BUILDERS = {
     "pyscf": build_pyscf_backend,
@@ -39,7 +39,7 @@ def build_provider(spec: ProviderSpec) -> EnergyForcesProvider:
         return build_ml_provider(options)
 
     if name in ("metatomic", "metatensor"):
-        from mmml.interfaces.calculators.metatomic import load_metatomic_calculator
+        from karml.interfaces.calculators.metatomic import load_metatomic_calculator
 
         checkpoint = options.pop("checkpoint", None)
         if checkpoint is None:

@@ -1,23 +1,23 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/EricBoittier/mmml/main/docs/images/mmml.svg" alt="MMML" width="380">
+  <img src="https://raw.githubusercontent.com/EricBoittier/karml/main/docs/images/karml.svg" alt="KARML" width="380">
 </p>
 
-<h1 align="center">mmml</h1>
+<h1 align="center">karml</h1>
 
-[![CI](https://github.com/EricBoittier/mmml/workflows/CI/badge.svg)](https://github.com/EricBoittier/mmml/actions?query=workflow%3ACI)
-[![codecov](https://codecov.io/gh/EricBoittier/mmml/branch/main/graph/badge.svg)](https://codecov.io/gh/EricBoittier/mmml/branch/main)
-[![Docs](https://readthedocs.org/projects/mmml/badge/?version=latest)](https://mmml.readthedocs.io/en/latest/)
+[![CI](https://github.com/EricBoittier/karml/workflows/CI/badge.svg)](https://github.com/EricBoittier/karml/actions?query=workflow%3ACI)
+[![codecov](https://codecov.io/gh/EricBoittier/karml/branch/main/graph/badge.svg)](https://codecov.io/gh/EricBoittier/karml/branch/main)
+[![Docs](https://readthedocs.org/projects/karml/badge/?version=latest)](https://karml.readthedocs.io/en/latest/)
 [![Python](https://img.shields.io/badge/python-3.13-blue.svg)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Status: Alpha](https://img.shields.io/badge/status-alpha-orange.svg)](#status)
 
-**Molecular Mechanics + Machine-Learned Force-Field Toolkit**
+**karml** (pronounced Karamell) — machine-learned potentials in molecular-mechanics MD.
 
-MMML combines CHARMM/OpenMM workflows with JAX-based neural models for electrostatics and force prediction, for building and running hybrid ML/MM condensed-phase simulations.
+karml combines CHARMM/OpenMM workflows with JAX-based neural models for electrostatics and force prediction, for building and running hybrid ML/MM condensed-phase simulations.
 
 ## Status
 
-MMML is in **alpha**. The core calculator, CLI, and `md-system` YAML workflow are usable today, but interfaces are still settling and may change without notice ahead of a first tagged release. Feedback and issues are welcome — see [Getting Help](#getting-help).
+KARML is in **alpha**. The core calculator, CLI, and `md-system` YAML workflow are usable today, but interfaces are still settling and may change without notice ahead of a first tagged release. Feedback and issues are welcome — see [Getting Help](#getting-help).
 
 ## Quick Installation
 
@@ -26,8 +26,8 @@ Requires **Python 3.13**. Prefer [`uv`](https://docs.astral.sh/uv/).
 ### Using `uv` (recommended)
 
 ```bash
-git clone https://github.com/EricBoittier/mmml.git
-cd mmml
+git clone https://github.com/EricBoittier/karml.git
+cd karml
 uv sync
 
 # Optional extras
@@ -43,21 +43,21 @@ For PyCHARMM / Packmol (native libs, not installed by `uv`):
 
 ```bash
 make install-native   # builds libcharmm + packmol under setup/charmm
-make doctor           # mmml doctor — env / CHARMM readiness
+make doctor           # karml doctor — env / CHARMM readiness
 ```
 
 Or from a fresh clone: `make install-full` (`uv sync` + native build).
 
 ### As a `uv` tool (CLI only, no clone needed)
 
-Installs the `mmml` command into its own isolated environment. Pick one GPU
+Installs the `karml` command into its own isolated environment. Pick one GPU
 extra; JAX's CUDA wheels bring their own CUDA/cuDNN, so only an NVIDIA driver
 is needed on the machine.
 
 ```bash
-uv tool install -p 3.13 "mmml[gpu] @ git+https://github.com/EricBoittier/mmml"         # CUDA 13 (SM 7.5+)
-uv tool install -p 3.13 "mmml[gpu-cuda12] @ git+https://github.com/EricBoittier/mmml"  # CUDA 12 (older GPUs/drivers)
-uv tool install -p 3.13 "mmml @ git+https://github.com/EricBoittier/mmml"              # CPU only
+uv tool install -p 3.13 "karml[gpu] @ git+https://github.com/EricBoittier/karml"         # CUDA 13 (SM 7.5+)
+uv tool install -p 3.13 "karml[gpu-cuda12] @ git+https://github.com/EricBoittier/karml"  # CUDA 12 (older GPUs/drivers)
+uv tool install -p 3.13 "karml @ git+https://github.com/EricBoittier/karml"              # CPU only
 # from a local checkout instead: uv tool install -p 3.13 ".[gpu]"
 ```
 
@@ -71,10 +71,10 @@ without it.
 ### Jupyter kernel (required for the example notebooks)
 
 Register the project venv as its own kernel **once**, and select it in the
-notebook (`Kernel → Change Kernel → mmml-venv`):
+notebook (`Kernel → Change Kernel → karml-venv`):
 
 ```bash
-.venv/bin/python -m ipykernel install --user --name mmml-venv --display-name "mmml venv"
+.venv/bin/python -m ipykernel install --user --name karml-venv --display-name "karml venv"
 ```
 
 Without this, Jupyter's default `python3` kernel may start a different
@@ -86,7 +86,7 @@ so it resolves against `PATH` and picks up an active conda environment instead o
 TypeError: 'type' object is not subscriptable
 ```
 
-on the first `import mmml...`, because that interpreter is too old to parse
+on the first `import karml...`, because that interpreter is too old to parse
 `tuple[float, ...]` annotations. It looks like broken code but is purely kernel
 selection. Check with `import sys; print(sys.executable)` — it must point inside
 `.venv`.
@@ -96,7 +96,7 @@ selection. Check with `import sys; print(sys.executable)` — it must point insi
 ```bash
 # Conda
 conda env create -f setup/environment.yml
-conda activate mmml
+conda activate karml
 
 # Or Makefile micromamba targets (preferred on clusters)
 make micromamba-create
@@ -112,33 +112,33 @@ Dockerfile and Compose live under [`devtools/docker/`](devtools/docker/):
 
 ```bash
 cd devtools/docker
-docker compose up -d mmml-cpu
-docker compose exec mmml-cpu bash
-# GPU: docker compose up -d mmml-gpu
+docker compose up -d karml-cpu
+docker compose exec karml-cpu bash
+# GPU: docker compose up -d karml-gpu
 ```
 
 ### CLI tab completion
 
 ```bash
 uv sync --extra cli
-eval "$(register-python-argcomplete mmml)"
-# or: eval "$(mmml completion bash)"
+eval "$(register-python-argcomplete karml)"
+# or: eval "$(karml completion bash)"
 ```
 
 ## CLI quick start
 
 ```bash
-mmml -h                 # compact top-level help
-mmml commands           # all subcommands by category
-mmml examples           # copy-paste invocations
-mmml configure          # interactive YAML / Snakemake wizard
-mmml env                # checkpoints + CHARMM paths
-mmml md-system --help   # condensed-phase MD flags
-mmml doctor             # environment health check
+karml -h                 # compact top-level help
+karml commands           # all subcommands by category
+karml examples           # copy-paste invocations
+karml configure          # interactive YAML / Snakemake wizard
+karml env                # checkpoints + CHARMM paths
+karml md-system --help   # condensed-phase MD flags
+karml doctor             # environment health check
 ```
 
 Condensed-phase campaigns: start from
-[`mmml/cli/run/md_system.example.yaml`](mmml/cli/run/md_system.example.yaml)
+[`karml/cli/run/md_system.example.yaml`](karml/cli/run/md_system.example.yaml)
 and the [`md-system` YAML config guide](docs/md-system-configs.md).
 
 CPU MD smokes (no CUDA; bundled DESdimers JSON checkpoint):
@@ -161,8 +161,8 @@ from pathlib import Path
 
 import ase
 import numpy as np
-from mmml.interfaces.pycharmmInterface.calculator_utils import unpack_factory_result
-from mmml.interfaces.pycharmmInterface.mmml_calculator import setup_calculator
+from karml.interfaces.pycharmmInterface.calculator_utils import unpack_factory_result
+from karml.interfaces.pycharmmInterface.karml_calculator import setup_calculator
 
 ATOMS_PER_MONOMER = 10
 N_MONOMERS = 2
@@ -195,13 +195,13 @@ For a geometry-aware version of the same path, run
 
 ## Documentation
 
-Published site: [Read the Docs](https://mmml.readthedocs.io/en/latest/).  
+Published site: [Read the Docs](https://karml.readthedocs.io/en/latest/).  
 Serve the current MkDocs tree locally: `uv sync --extra dev && make docs-serve` → http://127.0.0.1:8000.
 
 Highlights (in-repo):
 
 - [Getting started](docs/getting-started.md) — install, CLI, local docs
-- [CLI overview](docs/cli/index.md) — `mmml commands`, examples, tab completion
+- [CLI overview](docs/cli/index.md) — `karml commands`, examples, tab completion
 - [`md-system` YAML configs](docs/md-system-configs.md) — campaigns and condensed-phase builders
 - [Calculator capability matrix](docs/calculator-capabilities.md) — calculators, hybrid assembly, LR solvers
 - [PyCHARMM + MM/ML checklist](docs/md-cg-capabilities-checklist.md) — status, examples, diagrams
@@ -209,8 +209,8 @@ Highlights (in-repo):
 
 ## Getting Help
 
-- **Documentation**: [Read the Docs](https://mmml.readthedocs.io/en/latest/)
-- **Issues**: [GitHub Issues](https://github.com/EricBoittier/mmml/issues)
+- **Documentation**: [Read the Docs](https://karml.readthedocs.io/en/latest/)
+- **Issues**: [GitHub Issues](https://github.com/EricBoittier/karml/issues)
 
 ## License
 

@@ -1,6 +1,6 @@
 """Load PhysNet / SpookyNet / KerNN params+model for umbrella sampling.
 
-Supports the same artifact types as ``mmml neb`` / ASE calculators:
+Supports the same artifact types as ``karml neb`` / ASE calculators:
 JSON (e.g. ``examples/m/kl.json``), Orbax ``epoch-*`` trees, joint pickles,
 and KerNN JSON checkpoints (``model_type: kernnn``).
 """
@@ -35,7 +35,7 @@ def load_params_and_model(
     model
         Optional backend name (``physnet`` / ``kernnn``). Auto-detects KerNN JSON.
     """
-    from mmml.models.kernnn import (
+    from karml.models.kernnn import (
         KerNNApplyAdapter,
         is_kernnn_checkpoint,
         load_checkpoint,
@@ -59,8 +59,8 @@ def load_params_and_model(
         adapter = KerNNApplyAdapter(stats=stats, config=config, n_atoms=n)
         return params, adapter
 
-    from mmml.interfaces.calculators.checkpoint_loading import load_checkpoint_bundle
-    from mmml.utils.model_checkpoint import (
+    from karml.interfaces.calculators.checkpoint_loading import load_checkpoint_bundle
+    from karml.utils.model_checkpoint import (
         build_physnet_from_config,
         infer_trainable_zbl_config,
         normalize_physnet_config,

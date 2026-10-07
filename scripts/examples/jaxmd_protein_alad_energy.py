@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Evaluate alanine-dipeptide MM energy with jax-md or MMML JAX bonded loaders.
+"""Evaluate alanine-dipeptide MM energy with jax-md or KARML JAX bonded loaders.
 
 Examples (CPU recommended for smoke):
 
@@ -8,7 +8,7 @@ Examples (CPU recommended for smoke):
     --pdb /tmp/alad_charmm/alad.pdb \\
     --psf /tmp/alad_charmm/alad.psf \\
     --prm $CHARMM_HOME/toppar/par_all36m_prot.prm \\
-    --loader mmml-bonded
+    --loader karml-bonded
 
   # jax-md OPLS-AA loader (bonded + optional nonbonded):
   JAX_PLATFORMS=cpu uv run python scripts/examples/jaxmd_protein_alad_energy.py \\
@@ -37,7 +37,7 @@ def _parse_args() -> argparse.Namespace:
         "--psf",
         type=Path,
         default=None,
-        help="CHARMM PSF EXT (required for --loader mmml-bonded)",
+        help="CHARMM PSF EXT (required for --loader karml-bonded)",
     )
     parser.add_argument(
         "--rtf",
@@ -53,9 +53,9 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--loader",
-        choices=("mmml-bonded", "jaxmd-oplsaa"),
-        default="mmml-bonded",
-        help="mmml-bonded: cgenff_topology PSF loader; jaxmd-oplsaa: jax_md.mm_forcefields.oplsaa",
+        choices=("karml-bonded", "jaxmd-oplsaa"),
+        default="karml-bonded",
+        help="karml-bonded: cgenff_topology PSF loader; jaxmd-oplsaa: jax_md.mm_forcefields.oplsaa",
     )
     parser.add_argument(
         "--nonbonded",
@@ -77,12 +77,12 @@ def _positions_from_pdb(pdb_path: Path) -> np.ndarray:
     return np.asarray(ase_read(pdb_path).get_positions(), dtype=np.float64)
 
 
-def _mmml_bonded_energy(positions: np.ndarray, psf_path: Path, prm_path: Path | None) -> dict[str, float]:
-    from mmml.interfaces.pycharmmInterface.cgenff_bonded import (
+def _karml_bonded_energy(positions: np.ndarray, psf_path: Path, prm_path: Path | None) -> dict[str, float]:
+    from karml.interfaces.pycharmmInterface.cgenff_bonded import (
         bonded_energy_and_forces_from_system,
         bonded_energy_components_from_system,
     )
-    from mmml.interfaces.pycharmmInterface.cgenff_topology import load_cgenff_bonded_from_psf
+    from karml.interfaces.pycharmmInterface.cgenff_topology import load_cgenff_bonded_from_psf
 
     system = load_cgenff_bonded_from_psf(
         psf_path,
@@ -122,8 +122,8 @@ def _jaxmd_oplsaa_energy(
     if not include_nonbonded:
         from jax_md.mm_forcefields.io.charmm import parse_rtf
 
-        from mmml.interfaces.pycharmmInterface.cgenff_bonded import bonded_energy_components
-        from mmml.interfaces.pycharmmInterface.cgenff_topology import (
+        from karml.interfaces.pycharmmInterface.cgenff_bonded import bonded_energy_components
+        from karml.interfaces.pycharmmInterface.cgenff_topology import (
             urey_arrays_for_topology_angles,
         )
 
@@ -169,13 +169,13 @@ def main() -> int:
 
     prm_path = args.prm
     if prm_path is None and args.loader == "jaxmd-oplsaa":
-        from mmml.interfaces.pycharmmInterface.protein_charmm_build import protein_toppar_paths
+        from karml.interfaces.pycharmmInterface.protein_charmm_build import protein_toppar_paths
 
         prm_path = protein_toppar_paths().prm
     if args.loader == "jaxmd-oplsaa":
         rtf_path = args.rtf
         if rtf_path is None:
-            from mmml.interfaces.pycharmmInterface.protein_charmm_build import protein_toppar_paths
+            from karml.interfaces.pycharmmInterface.protein_charmm_build import protein_toppar_paths
 
             rtf_path = protein_toppar_paths().rtf
         if prm_path is None or not prm_path.is_file():
@@ -191,16 +191,16 @@ def main() -> int:
         )
     else:
         if args.psf is None or not args.psf.is_file():
-            print("--psf required for mmml-bonded", file=sys.stderr)
+            print("--psf required for karml-bonded", file=sys.stderr)
             return 2
-        terms = _mmml_bonded_energy(positions, args.psf, prm_path)
+        terms = _karml_bonded_energy(positions, args.psf, prm_path)
 
     for key in sorted(terms):
         print(f"  {key}: {terms[key]:.6f} kcal/mol")
     if "total" in terms:
         print(f"JAX total: {terms['total']:.6f} kcal/mol")
     elif "bonded_total" in terms:
-        print(f"MMML bonded total: {terms['bonded_total']:.6f} kcal/mol")
+        print(f"KARML bonded total: {terms['bonded_total']:.6f} kcal/mol")
     return 0
 
 

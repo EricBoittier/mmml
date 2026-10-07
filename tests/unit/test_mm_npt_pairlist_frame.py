@@ -19,8 +19,8 @@ import pytest
 
 os.environ.setdefault("JAX_PLATFORMS", "cpu")
 
-from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
-from mmml.interfaces.pycharmmInterface.mm_energy_forces import (
+from karml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
+from karml.interfaces.pycharmmInterface.mm_energy_forces import (
     mm_pair_fractional_to_cartesian,
     mm_pair_positions_for_update,
     mm_pair_update_positions,
@@ -88,14 +88,14 @@ def _fake_build_mm_factory(seen: dict):
 def _mm_energy_forces(ensemble: str) -> tuple[float, np.ndarray, bool]:
     from ase import Atoms
 
-    from mmml.interfaces.pycharmmInterface.mmml_calculator import setup_calculator
+    from karml.interfaces.pycharmmInterface.karml_calculator import setup_calculator
 
     pos = _positions()
     n_atoms = pos.shape[0]
     z = np.full((n_atoms,), 6, dtype=np.int32)
     seen: dict = {}
     with patch(
-        "mmml.interfaces.pycharmmInterface.mmml_calculator.build_mm_energy_forces_fn",
+        "karml.interfaces.pycharmmInterface.karml_calculator.build_mm_energy_forces_fn",
         side_effect=_fake_build_mm_factory(seen),
     ):
         factory = setup_calculator(
@@ -183,7 +183,7 @@ def test_jaxmd_pair_sites_use_updater_frame_helper() -> None:
 
     src = (
         Path(__file__).resolve().parents[2]
-        / "mmml/cli/run/jaxmd_runner.py"
+        / "karml/cli/run/jaxmd_runner.py"
     ).read_text(encoding="utf-8")
     assert src.count("refresh_mm_pairs(") >= 8
     assert "fractional_coordinates=is_npt" not in src
@@ -196,6 +196,6 @@ def test_jaxmd_pair_sites_use_updater_frame_helper() -> None:
     assert "_cart_nl_positions" not in src
     jaxmd_setup = (
         Path(__file__).resolve().parents[2]
-        / "mmml/cli/run/md_pbc_suite/jaxmd.py"
+        / "karml/cli/run/md_pbc_suite/jaxmd.py"
     ).read_text(encoding="utf-8")
     assert "ensemble=getattr(args, \"ensemble\"" in jaxmd_setup

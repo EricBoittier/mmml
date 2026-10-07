@@ -10,15 +10,15 @@ Computes:
 
 Usage:
     # Evaluate on single dataset
-    python -m mmml.cli.evaluate_model --checkpoint model/ --data test.npz
+    python -m karml.cli.evaluate_model --checkpoint model/ --data test.npz
     
     # Evaluate on train/valid/test splits
-    python -m mmml.cli.evaluate_model --checkpoint model/ \
+    python -m karml.cli.evaluate_model --checkpoint model/ \
         --train train.npz --valid valid.npz --test test.npz \
         --output-dir evaluation
     
     # With detailed analysis
-    python -m mmml.cli.evaluate_model --checkpoint model/ --data test.npz \
+    python -m karml.cli.evaluate_model --checkpoint model/ --data test.npz \
         --detailed --plots --output-dir results
 """
 
@@ -100,7 +100,7 @@ def evaluate_dataset(
         print(f"\n📊 Evaluating {len(data['E'])} structures...")
     
     # This is a placeholder - full implementation would use the calculator
-    # from mmml.cli.calculator import MMMLCalculator
+    # from karml.cli.calculator import KARMLCalculator
     
     results = {
         'n_structures': len(data['E']),
@@ -123,14 +123,14 @@ def main():
         epilog="""
 Examples:
   # Evaluate on single dataset
-  python -m mmml.cli.evaluate_model --checkpoint model/ --data test.npz
+  python -m karml.cli.evaluate_model --checkpoint model/ --data test.npz
   
   # Evaluate on multiple splits
-  python -m mmml.cli.evaluate_model --checkpoint model/ \\
+  python -m karml.cli.evaluate_model --checkpoint model/ \\
       --train train.npz --valid valid.npz --test test.npz
   
   # With plots
-  python -m mmml.cli.evaluate_model --checkpoint model/ --data test.npz \\
+  python -m karml.cli.evaluate_model --checkpoint model/ --data test.npz \\
       --plots --output-dir evaluation
         """
     )
@@ -173,7 +173,7 @@ Examples:
     
     print("\n🔧 This tool is under development")
     print("   Full evaluation functionality coming soon")
-    print("   Use mmml.cli.calculator for now to test individual structures")
+    print("   Use karml.cli.calculator for now to test individual structures")
     
     return 0
 

@@ -7,19 +7,19 @@
 # Cluster /opt FFTW installs are often static-only; linking .a into a shared
 # library fails with "recompile with -fPIC". Run this once per machine, then:
 #
-#   export MMML_FFTW_ROOT=$HOME/.local/fftw-3.3.10-pic
-#   export FFTW_ROOT=$MMML_FFTW_ROOT FFTWF_ROOT=$MMML_FFTW_ROOT
+#   export KARML_FFTW_ROOT=$HOME/.local/fftw-3.3.10-pic
+#   export FFTW_ROOT=$KARML_FFTW_ROOT FFTWF_ROOT=$KARML_FFTW_ROOT
 #   OPENMPI_ROOT=/opt/gcc-12.2.0/openmpi-4.1.4/build bash scripts/rebuild_charmm_mlpot.sh --clean
 #
 # Usage:
 #   bash scripts/build_fftw_pic.sh
-#   MMML_FFTW_ROOT=$HOME/fftw-pic bash scripts/build_fftw_pic.sh
+#   KARML_FFTW_ROOT=$HOME/fftw-pic bash scripts/build_fftw_pic.sh
 
 set -euo pipefail
 
 VERSION="${FFTW_VERSION:-3.3.10}"
-PREFIX="${MMML_FFTW_ROOT:-${HOME}/.local/fftw-${VERSION}-pic}"
-BUILD_DIR="${FFTW_BUILD_DIR:-${HOME}/.cache/mmml-fftw-build}"
+PREFIX="${KARML_FFTW_ROOT:-${HOME}/.local/fftw-${VERSION}-pic}"
+BUILD_DIR="${FFTW_BUILD_DIR:-${HOME}/.cache/karml-fftw-build}"
 SRC_DIR="${FFTW_SRC_DIR:-$BUILD_DIR/fftw-${VERSION}}"
 TARBALL="${FFTW_TARBALL:-fftw-${VERSION}.tar.gz}"
 TARBALL_PATH="$BUILD_DIR/$TARBALL"
@@ -30,7 +30,7 @@ echo "  staging=$BUILD_DIR"
 
 if [[ -f "$PREFIX/lib/libfftw3.so" && -f "$PREFIX/lib/libfftw3f.so" ]]; then
   echo "Already built: $PREFIX/lib/libfftw3.so"
-  echo "export MMML_FFTW_ROOT=$PREFIX"
+  echo "export KARML_FFTW_ROOT=$PREFIX"
   exit 0
 fi
 
@@ -92,7 +92,7 @@ fi
 
 echo ""
 echo "Done. Add to your rebuild env:"
-echo "  export MMML_FFTW_ROOT=$PREFIX"
+echo "  export KARML_FFTW_ROOT=$PREFIX"
 echo "  export FFTW_ROOT=$PREFIX"
 echo "  export FFTWF_ROOT=$PREFIX"
 echo "  export LD_LIBRARY_PATH=$PREFIX/lib:\$LD_LIBRARY_PATH"

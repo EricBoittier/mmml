@@ -93,7 +93,7 @@ mkdir -p artifacts/lj_scales/dense_dt_campaign/logs
 bash scripts/slurm/dense_dt_campaign/submit_train_lever2_on5.sh
 
 # Equivalent one-shot (same defaults as train_fixed_lj_scales_on5.yaml)
-uv run mmml physnet-train \
+uv run karml physnet-train \
   --config examples/hybrid_mm_charges/train_fixed_lj_scales_on5.yaml \
   --data artifacts/lj_scales/dataset_cgenff.npz \
   --valid-data "" \

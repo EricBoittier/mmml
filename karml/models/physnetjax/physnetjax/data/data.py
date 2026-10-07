@@ -4,7 +4,7 @@ import jax
 import numpy as np
 import pandas as pd
 
-from mmml.data.atomic_references import (
+from karml.data.atomic_references import (
     DEFAULT_CHARGE_STATE,
     DEFAULT_REFERENCE_LEVEL,
     get_atomic_reference_array,
@@ -12,7 +12,7 @@ from mmml.data.atomic_references import (
 from rich.console import Console
 from rich.table import Table
 
-from mmml.data.units import subtract_atom_refs
+from karml.data.units import subtract_atom_refs
 
 # Used by the ``esp_mask`` branch of ``prepare_multiple_datasets`` below, which
 # raised NameError for want of this import.
@@ -27,7 +27,7 @@ ATOM_ENERGIES_HARTREE = get_atomic_reference_array(
 
 # Embedded NPZ metadata (0-d or non-sample arrays) — skip in training loaders.
 NPZ_METADATA_KEYS = frozenset(
-    {"_mmml_units", "metadata", "units_manifest", "units_manifest_json"}
+    {"_karml_units", "metadata", "units_manifest", "units_manifest_json"}
 )
 
 

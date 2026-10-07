@@ -10,9 +10,9 @@ if ! command -v flock >/dev/null 2>&1; then
 fi
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-# shellcheck source=resolve_mmml_env.sh
-source "$ROOT/scripts/resolve_mmml_env.sh"
-MMML_PY="$(mmml_resolve_python "$ROOT")"
+# shellcheck source=resolve_karml_env.sh
+source "$ROOT/scripts/resolve_karml_env.sh"
+KARML_PY="$(karml_resolve_python "$ROOT")"
 N_ML=""
 PBC=0
 BOX_SIZE=""
@@ -24,7 +24,7 @@ Usage: $(basename "$0") --n-ml N_ML_ATOMS [--pbc] [--box-size L_ANGSTROM] [--dry
 
 Selects the smallest local CHARMM build tier (default/large/xlarge/xxlarge/xxxlarge), builds
 a tier-local api_func.F90 with the matching max_Npr, and installs:
-  \${CHARMM_BUILD_DIR:-\$HOME/.cache/mmml-charmm-build}/tier_\${MAX_NPR}_nodomdec/lib/libcharmm.so
+  \${CHARMM_BUILD_DIR:-\$HOME/.cache/karml-charmm-build}/tier_\${MAX_NPR}_nodomdec/lib/libcharmm.so
 
 Tier libs are built with rebuild_charmm_mlpot.sh --no-domdec (MPI MLpot, np=1).
 Pre-build all matrix tiers once:
@@ -62,7 +62,7 @@ if [[ -z "$N_ML" ]]; then
 fi
 
 read -r TIER TARGET TEMPLATE_F90 <<<"$(
-  "$MMML_PY" - "$N_ML" "$ROOT" "$PBC" "$BOX_SIZE" <<'PY'
+  "$KARML_PY" - "$N_ML" "$ROOT" "$PBC" "$BOX_SIZE" <<'PY'
 import sys
 from pathlib import Path
 
@@ -72,7 +72,7 @@ pbc = bool(int(sys.argv[3]))
 box_raw = sys.argv[4].strip() if len(sys.argv) > 4 else ""
 box = float(box_raw) if box_raw else None
 sys.path.insert(0, str(root))
-from mmml.interfaces.pycharmmInterface.mlpot.mlpot_limits import (
+from karml.interfaces.pycharmmInterface.mlpot.mlpot_limits import (
     charmm_mlpot_limits_from_source,
     select_npr_tier_for_build,
     tier_max_npr,
@@ -101,7 +101,7 @@ if [[ ! -f "$TEMPLATE_F90" ]]; then
   exit 1
 fi
 
-BUILD_ROOT="${CHARMM_BUILD_DIR:-$HOME/.cache/mmml-charmm-build}"
+BUILD_ROOT="${CHARMM_BUILD_DIR:-$HOME/.cache/karml-charmm-build}"
 TIER_DIR="${BUILD_ROOT}/tier_${TARGET}_nodomdec"
 LIB_DIR="${TIER_DIR}/lib"
 TIER_F90="${TIER_DIR}/api_func.F90"
@@ -117,7 +117,7 @@ _sync_tier_metadata_mtime() {
 
 _write_tier_f90() {
   cp -f "$TEMPLATE_F90" "$TIER_F90"
-  "$MMML_PY" - "$TIER_F90" "$TARGET" <<'PY'
+  "$KARML_PY" - "$TIER_F90" "$TARGET" <<'PY'
 import re
 import sys
 from pathlib import Path
@@ -165,11 +165,11 @@ fi
 
 _run_tier_build() {
   _write_tier_f90
-  CMAKE_BUILD_DIR="${CHARMM_CMAKE_BUILD_DIR:-${SLURM_TMPDIR:-/tmp}/mmml-charmm-cmake-${TARGET}-$$}"
+  CMAKE_BUILD_DIR="${CHARMM_CMAKE_BUILD_DIR:-${SLURM_TMPDIR:-/tmp}/karml-charmm-cmake-${TARGET}-$$}"
   echo "Building CHARMM MLpot tier ${TIER} (max_Npr=${TARGET}); cmake in ${CMAKE_BUILD_DIR}" >&2
   rm -rf "$CMAKE_BUILD_DIR" 2>/dev/null || true
   mkdir -p "$CMAKE_BUILD_DIR"
-  MMML_PATCH_SOURCE="$TIER_F90" \
+  KARML_PATCH_SOURCE="$TIER_F90" \
     CHARMM_BUILD_DIR="$CMAKE_BUILD_DIR" \
     "$ROOT/scripts/rebuild_charmm_mlpot.sh" --clean --no-domdec >&2
   mkdir -p "$LIB_DIR"

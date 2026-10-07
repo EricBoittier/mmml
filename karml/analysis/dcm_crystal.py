@@ -13,7 +13,7 @@ together::
 
 That is unusually testable for a structural paper: it is a statement about
 energy, not geometry, and
-:func:`mmml.analysis.lattice_energy.decompose_lattice_energy_by_element_pair`
+:func:`karml.analysis.lattice_energy.decompose_lattice_energy_by_element_pair`
 answers it directly by splitting the lattice energy over molecule pairs. A
 later plane-wave DFT study reached the same conclusion independently --
 D. Kurzydłowski, T. Chumak and J. Rogoża, *Crystals* **10**, 920 (2020),
@@ -38,13 +38,13 @@ from typing import Any
 
 import numpy as np
 
-from mmml.analysis.crystal_contacts import (
+from karml.analysis.crystal_contacts import (
     Contact,
     collapse_equivalent,
     element_pair_contacts,
     molecular_frames,
 )
-from mmml.analysis.lattice_energy import SublimationReference
+from karml.analysis.lattice_energy import SublimationReference
 
 __all__ = [
     "DcmPhase",
@@ -149,7 +149,7 @@ class DcmPhase:
         return True
 
     def cif_path(self):
-        from mmml.paths import default_dcm_crystal_cif
+        from karml.paths import default_dcm_crystal_cif
 
         return default_dcm_crystal_cif(self.key)
 
@@ -326,7 +326,7 @@ def halogen_contacts(
     ``angle_deg`` carries the larger of the two C-Cl...Cl angles, which is the
     one that distinguishes a halogen bond from a packing contact.
     """
-    from mmml.analysis.lattice_energy import lattice_shift_vectors, molecular_reach_A
+    from karml.analysis.lattice_energy import lattice_shift_vectors, molecular_reach_A
 
     mol_id, positions, cell = molecular_frames(atoms)
     z = np.asarray(atoms.get_atomic_numbers(), dtype=int)

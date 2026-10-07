@@ -5,9 +5,9 @@ jobs: 18
 latency-wait: 120
 retries: 1
 envvars:
-  - MMML_CKPT
+  - KARML_CKPT
   - JAX_ENABLE_X64
-  - MMML_WORKFLOW_CONFIG
+  - KARML_WORKFLOW_CONFIG
 default-resources:
   - gpu=1
   - gpu_fast=0

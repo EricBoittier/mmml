@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from mmml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
+from karml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
     DEFAULT_COMP_FORCE_SCALE,
     apply_selective_force_damp_recipe,
     build_high_force_selection,
@@ -58,7 +58,7 @@ def _mock_pycharmm_module(n_atoms: int = 4):
     return mod
 
 
-@patch("mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.coor_set_comparison_capi")
+@patch("karml.interfaces.pycharmmInterface.mlpot.comp_velocities.coor_set_comparison_capi")
 def test_set_comparison_array_roundtrip(mock_set_capi):
     mock_set_capi.return_value = 2
     values = np.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
@@ -66,7 +66,7 @@ def test_set_comparison_array_roundtrip(mock_set_capi):
     mock_set_capi.assert_called_once_with(values)
 
 
-@patch("mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.coor_get_comparison_capi")
+@patch("karml.interfaces.pycharmmInterface.mlpot.comp_velocities.coor_get_comparison_capi")
 def test_get_comparison_array_uses_capi(mock_get_capi):
     mock_get_capi.return_value = np.array([[1.0, 2.0, 3.0, 0.0]])
     out = get_comparison_array()
@@ -75,7 +75,7 @@ def test_get_comparison_array_uses_capi(mock_get_capi):
     assert out[0, 0] == pytest.approx(1.0)
 
 
-@patch("mmml.interfaces.pycharmmInterface.mlpot.comp_velocities._import_pycharmm")
+@patch("karml.interfaces.pycharmmInterface.mlpot.comp_velocities._import_pycharmm")
 def test_get_comparison_scalars_array(mock_import):
     pycharmm = _mock_pycharmm_module()
     pycharmm.psf.get_natom.return_value = 2
@@ -96,7 +96,7 @@ def test_coor_set_comparison_capi():
     fake_charmm.coor_set_comparison.return_value = 2
     fake_lib = types.SimpleNamespace(charmm=fake_charmm)
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities._charmm_lib",
+        "karml.interfaces.pycharmmInterface.mlpot.comp_velocities._charmm_lib",
         return_value=fake_lib,
     ):
         out = coor_set_comparison_capi(np.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]))
@@ -104,7 +104,7 @@ def test_coor_set_comparison_capi():
     fake_charmm.coor_set_comparison.assert_called_once()
 
 
-@patch("mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.coor_set_comparison_capi")
+@patch("karml.interfaces.pycharmmInterface.mlpot.comp_velocities.coor_set_comparison_capi")
 def test_sync_comparison_velocities_akma(mock_set_capi):
     sync_comparison_velocities_akma(np.array([[100.0, 0.0, 0.0], [0.0, 200.0, 0.0]]))
     mock_set_capi.assert_called_once()
@@ -115,7 +115,7 @@ def test_sync_comparison_velocities_akma(mock_set_capi):
 
 
 @patch(
-    "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.sync_comparison_velocities_from_main",
+    "karml.interfaces.pycharmmInterface.mlpot.comp_velocities.sync_comparison_velocities_from_main",
     return_value=True,
 )
 def test_mirror_comparison_velocities_for_dynamics_syncs_when_iasvel_zero(mock_sync):
@@ -125,19 +125,19 @@ def test_mirror_comparison_velocities_for_dynamics_syncs_when_iasvel_zero(mock_s
 
 
 @patch(
-    "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.comparison_matches_main_positions",
+    "karml.interfaces.pycharmmInterface.mlpot.comp_velocities.comparison_matches_main_positions",
     return_value=True,
 )
 @patch(
-    "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.sync_comparison_velocities_from_restart",
+    "karml.interfaces.pycharmmInterface.mlpot.comp_velocities.sync_comparison_velocities_from_restart",
     return_value=False,
 )
 @patch(
-    "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.sync_comparison_velocities_from_comparison",
+    "karml.interfaces.pycharmmInterface.mlpot.comp_velocities.sync_comparison_velocities_from_comparison",
     return_value=False,
 )
 @patch(
-    "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.sync_comparison_velocities_from_main",
+    "karml.interfaces.pycharmmInterface.mlpot.comp_velocities.sync_comparison_velocities_from_main",
     return_value=False,
 )
 def test_mirror_comparison_velocities_for_dynamics_raises_when_comp_is_positions(
@@ -149,15 +149,15 @@ def test_mirror_comparison_velocities_for_dynamics_raises_when_comp_is_positions
 
 
 @patch(
-    "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.comparison_matches_main_positions",
+    "karml.interfaces.pycharmmInterface.mlpot.comp_velocities.comparison_matches_main_positions",
     return_value=False,
 )
 @patch(
-    "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.sync_comparison_velocities_from_main",
+    "karml.interfaces.pycharmmInterface.mlpot.comp_velocities.sync_comparison_velocities_from_main",
     return_value=False,
 )
 @patch(
-    "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.sync_comparison_velocities_from_comparison",
+    "karml.interfaces.pycharmmInterface.mlpot.comp_velocities.sync_comparison_velocities_from_comparison",
     return_value=True,
 )
 def test_mirror_comparison_velocities_for_dynamics_uses_warm_comp(
@@ -169,15 +169,15 @@ def test_mirror_comparison_velocities_for_dynamics_uses_warm_comp(
 
 
 @patch(
-    "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.sync_comparison_velocities_from_main",
+    "karml.interfaces.pycharmmInterface.mlpot.comp_velocities.sync_comparison_velocities_from_main",
     return_value=False,
 )
 @patch(
-    "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.sync_comparison_velocities_from_comparison",
+    "karml.interfaces.pycharmmInterface.mlpot.comp_velocities.sync_comparison_velocities_from_comparison",
     return_value=False,
 )
 @patch(
-    "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.sync_comparison_velocities_from_restart",
+    "karml.interfaces.pycharmmInterface.mlpot.comp_velocities.sync_comparison_velocities_from_restart",
     return_value=True,
 )
 def test_mirror_comparison_velocities_for_dynamics_uses_restart(mock_restart, mock_comp, mock_main):
@@ -189,7 +189,7 @@ def test_mirror_comparison_velocities_for_dynamics_uses_restart(mock_restart, mo
 
 
 @patch(
-    "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.sync_comparison_velocities_from_main",
+    "karml.interfaces.pycharmmInterface.mlpot.comp_velocities.sync_comparison_velocities_from_main",
 )
 def test_mirror_comparison_velocities_for_dynamics_skips_when_iasvel_one(mock_sync):
     mirror_comparison_velocities_for_dynamics({"iasvel": 1, "start": False})
@@ -197,7 +197,7 @@ def test_mirror_comparison_velocities_for_dynamics_skips_when_iasvel_one(mock_sy
 
 
 @patch(
-    "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.sync_comparison_velocities_from_main",
+    "karml.interfaces.pycharmmInterface.mlpot.comp_velocities.sync_comparison_velocities_from_main",
 )
 def test_mirror_comparison_velocities_for_dynamics_skips_when_start_true(mock_sync):
     mirror_comparison_velocities_for_dynamics({"iasvel": 0, "start": True})
@@ -205,15 +205,15 @@ def test_mirror_comparison_velocities_for_dynamics_skips_when_start_true(mock_sy
 
 
 @patch(
-    "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.assert_comparison_holds_velocities_not_positions",
+    "karml.interfaces.pycharmmInterface.mlpot.comp_velocities.assert_comparison_holds_velocities_not_positions",
 )
 @patch(
-    "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.sync_charmm_velocities_akma",
+    "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.sync_charmm_velocities_akma",
 )
 def test_refresh_bussi_comp_velocity_handoff_syncs_and_validates(
     mock_sync_main, mock_assert
 ):
-    from mmml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
+    from karml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
         refresh_bussi_comp_velocity_handoff,
     )
 
@@ -226,12 +226,12 @@ def test_refresh_bussi_comp_velocity_handoff_syncs_and_validates(
 def test_assert_comparison_holds_velocities_not_positions_raises_when_comp_is_main(
     monkeypatch,
 ):
-    from mmml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
+    from karml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
         assert_comparison_holds_velocities_not_positions,
     )
 
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.comparison_matches_main_positions",
+        "karml.interfaces.pycharmmInterface.mlpot.comp_velocities.comparison_matches_main_positions",
         lambda **_: True,
     )
     with pytest.raises(RuntimeError, match="COMP holds main coordinates"):
@@ -251,10 +251,10 @@ def test_coor_get_comparison_capi():
     fake_charmm.coor_get_comparison.side_effect = _fill
     fake_lib = types.SimpleNamespace(charmm=fake_charmm)
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities._charmm_lib",
+        "karml.interfaces.pycharmmInterface.mlpot.comp_velocities._charmm_lib",
         return_value=fake_lib,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities._import_pycharmm",
+        "karml.interfaces.pycharmmInterface.mlpot.comp_velocities._import_pycharmm",
     ) as mock_import:
         mock_import.return_value.psf.get_natom.return_value = 2
         out = coor_get_comparison_capi()
@@ -264,17 +264,17 @@ def test_coor_get_comparison_capi():
 
 
 @patch(
-    "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.sync_comparison_velocities_akma",
+    "karml.interfaces.pycharmmInterface.mlpot.comp_velocities.sync_comparison_velocities_akma",
 )
 @patch(
-    "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.charmm_velocities_akma_for_thermostat",
+    "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.charmm_velocities_akma_for_thermostat",
 )
 @patch(
-    "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.velocities_are_cold",
+    "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.velocities_are_cold",
     return_value=False,
 )
 def test_sync_comparison_velocities_from_main_warm(mock_cold, mock_vel, mock_sync):
-    from mmml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
+    from karml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
         sync_comparison_velocities_from_main,
     )
 
@@ -286,11 +286,11 @@ def test_sync_comparison_velocities_from_main_warm(mock_cold, mock_vel, mock_syn
 
 
 @patch(
-    "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.charmm_velocities_akma_for_thermostat",
+    "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.charmm_velocities_akma_for_thermostat",
     return_value=None,
 )
 def test_sync_comparison_velocities_from_main_missing(mock_vel):
-    from mmml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
+    from karml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
         sync_comparison_velocities_from_main,
     )
 
@@ -298,15 +298,15 @@ def test_sync_comparison_velocities_from_main_missing(mock_vel):
 
 
 @patch(
-    "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.velocities_are_cold",
+    "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.velocities_are_cold",
     return_value=False,
 )
 @patch(
-    "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.comparison_matches_main_positions",
+    "karml.interfaces.pycharmmInterface.mlpot.comp_velocities.comparison_matches_main_positions",
     return_value=True,
 )
 @patch(
-    "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.coor_get_comparison_capi",
+    "karml.interfaces.pycharmmInterface.mlpot.comp_velocities.coor_get_comparison_capi",
 )
 def test_sync_comparison_velocities_from_comparison_rejects_positions(
     mock_get, mock_pos, mock_cold
@@ -316,17 +316,17 @@ def test_sync_comparison_velocities_from_comparison_rejects_positions(
 
 
 @patch(
-    "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.comparison_velocities_akma",
+    "karml.interfaces.pycharmmInterface.mlpot.comp_velocities.comparison_velocities_akma",
 )
 @patch(
-    "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities._import_pycharmm",
+    "karml.interfaces.pycharmmInterface.mlpot.comp_velocities._import_pycharmm",
 )
 def test_comparison_matches_main_positions_true(mock_import, mock_comp):
     mock_import.return_value.coor.get_positions.return_value = pd.DataFrame(
         {"x": [1.0], "y": [2.0], "z": [3.0]}
     )
     mock_comp.return_value = np.array([[1.0, 2.0, 3.0]])
-    from mmml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
+    from karml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
         comparison_matches_main_positions,
     )
 
@@ -334,15 +334,15 @@ def test_comparison_matches_main_positions_true(mock_import, mock_comp):
 
 
 @patch(
-    "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.comparison_matches_main_positions",
+    "karml.interfaces.pycharmmInterface.mlpot.comp_velocities.comparison_matches_main_positions",
     return_value=False,
 )
 @patch(
-    "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.velocities_are_cold",
+    "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.velocities_are_cold",
     return_value=False,
 )
 @patch(
-    "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.comparison_velocities_akma",
+    "karml.interfaces.pycharmmInterface.mlpot.comp_velocities.comparison_velocities_akma",
 )
 def test_sync_comparison_velocities_from_comparison_warm(mock_comp, mock_cold, mock_pos):
     mock_comp.return_value = np.array([[10.0, 0.0, 0.0], [0.0, 20.0, 0.0]])
@@ -351,19 +351,19 @@ def test_sync_comparison_velocities_from_comparison_warm(mock_comp, mock_cold, m
 
 
 @patch(
-    "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.comparison_matches_main_positions",
+    "karml.interfaces.pycharmmInterface.mlpot.comp_velocities.comparison_matches_main_positions",
     return_value=False,
 )
 @patch(
-    "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.velocities_are_cold",
+    "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.velocities_are_cold",
     return_value=False,
 )
 @patch(
-    "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.velocities_are_pathological",
+    "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.velocities_are_pathological",
     return_value=True,
 )
 @patch(
-    "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.comparison_velocities_akma",
+    "karml.interfaces.pycharmmInterface.mlpot.comp_velocities.comparison_velocities_akma",
 )
 def test_sync_comparison_velocities_from_comparison_rejects_pathological(
     mock_comp, mock_path, mock_cold, mock_pos
@@ -380,27 +380,27 @@ def test_sync_comparison_velocities_from_comparison_rejects_pathological(
 
 
 @patch(
-    "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.comparison_matches_main_positions",
+    "karml.interfaces.pycharmmInterface.mlpot.comp_velocities.comparison_matches_main_positions",
     return_value=False,
 )
 @patch(
-    "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.velocities_are_cold",
+    "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.velocities_are_cold",
     return_value=True,
 )
 @patch(
-    "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.comparison_velocities_akma",
+    "karml.interfaces.pycharmmInterface.mlpot.comp_velocities.comparison_velocities_akma",
 )
 def test_sync_comparison_velocities_from_comparison_cold(mock_comp, mock_cold, mock_pos):
     mock_comp.return_value = np.zeros((2, 3))
     assert sync_comparison_velocities_from_comparison() is False
 
 
-@patch("mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.sync_comparison_velocities_akma")
+@patch("karml.interfaces.pycharmmInterface.mlpot.comp_velocities.sync_comparison_velocities_akma")
 @patch(
-    "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.read_restart_velocities",
+    "karml.interfaces.pycharmmInterface.mlpot.dynamics_validation.read_restart_velocities",
 )
 @patch(
-    "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.velocities_are_cold",
+    "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.velocities_are_cold",
     return_value=False,
 )
 def test_sync_comparison_velocities_from_restart_warm(mock_cold, mock_read, mock_sync, tmp_path):
@@ -414,7 +414,7 @@ def test_sync_comparison_velocities_from_restart_warm(mock_cold, mock_read, mock
 
 
 @patch(
-    "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.read_restart_velocities",
+    "karml.interfaces.pycharmmInterface.mlpot.dynamics_validation.read_restart_velocities",
     return_value=None,
 )
 def test_sync_comparison_velocities_from_restart_missing(mock_read):
@@ -422,8 +422,8 @@ def test_sync_comparison_velocities_from_restart_missing(mock_read):
     assert sync_comparison_velocities_from_restart("/no/such/file.res") is False
 
 
-@patch("mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.coor_set_comparison_capi")
-@patch("mmml.interfaces.pycharmmInterface.mlpot.comp_velocities._import_pycharmm")
+@patch("karml.interfaces.pycharmmInterface.mlpot.comp_velocities.coor_set_comparison_capi")
+@patch("karml.interfaces.pycharmmInterface.mlpot.comp_velocities._import_pycharmm")
 def test_clear_comparison_coordinates_zeros_comp(mock_import, mock_set_capi):
     mock_import.return_value.psf.get_natom.return_value = 3
     clear_comparison_coordinates()
@@ -433,7 +433,7 @@ def test_clear_comparison_coordinates_zeros_comp(mock_import, mock_set_capi):
     assert np.all(zeros == 0.0)
 
 
-@patch("mmml.interfaces.pycharmmInterface.mlpot.comp_velocities._import_pycharmm")
+@patch("karml.interfaces.pycharmmInterface.mlpot.comp_velocities._import_pycharmm")
 def test_run_charmm_script_uppercases_keywords(mock_import):
     pycharmm = MagicMock()
     mock_import.return_value = pycharmm
@@ -443,8 +443,8 @@ def test_run_charmm_script_uppercases_keywords(mock_import):
     )
 
 
-@patch("mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.clear_comparison_coordinates")
-@patch("mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.run_charmm_script")
+@patch("karml.interfaces.pycharmmInterface.mlpot.comp_velocities.clear_comparison_coordinates")
+@patch("karml.interfaces.pycharmmInterface.mlpot.comp_velocities.run_charmm_script")
 def test_zero_comparison_scalars(mock_script, mock_clear):
     zero_comparison_scalars()
     assert mock_script.call_count == 4
@@ -458,8 +458,8 @@ def test_zero_comparison_scalars(mock_script, mock_clear):
     mock_clear.assert_called_once()
 
 
-@patch("mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.run_charmm_script")
-@patch("mmml.interfaces.pycharmmInterface.mlpot.comp_velocities._import_pycharmm")
+@patch("karml.interfaces.pycharmmInterface.mlpot.comp_velocities.run_charmm_script")
+@patch("karml.interfaces.pycharmmInterface.mlpot.comp_velocities._import_pycharmm")
 def test_build_high_force_selection(mock_import, mock_script):
     pycharmm = _mock_pycharmm_module()
     mock_import.return_value = pycharmm
@@ -477,8 +477,8 @@ def test_build_high_force_selection(mock_import, mock_script):
     mock_script.assert_not_called()
 
 
-@patch("mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.run_charmm_script")
-@patch("mmml.interfaces.pycharmmInterface.mlpot.comp_velocities._import_pycharmm")
+@patch("karml.interfaces.pycharmmInterface.mlpot.comp_velocities.run_charmm_script")
+@patch("karml.interfaces.pycharmmInterface.mlpot.comp_velocities._import_pycharmm")
 def test_build_high_force_selection_excludes_hydrogen(mock_import, mock_script):
     pycharmm = _mock_pycharmm_module()
     mock_import.return_value = pycharmm
@@ -495,8 +495,8 @@ def test_build_high_force_selection_excludes_hydrogen(mock_import, mock_script):
     heavy_only.store.assert_called_once_with(name="highf")
 
 
-@patch("mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.run_charmm_script")
-@patch("mmml.interfaces.pycharmmInterface.mlpot.comp_velocities._import_pycharmm")
+@patch("karml.interfaces.pycharmmInterface.mlpot.comp_velocities.run_charmm_script")
+@patch("karml.interfaces.pycharmmInterface.mlpot.comp_velocities._import_pycharmm")
 def test_build_high_force_selection_hydrogen_only(mock_import, mock_script):
     pycharmm = _mock_pycharmm_module()
     mock_import.return_value = pycharmm
@@ -512,10 +512,10 @@ def test_build_high_force_selection_hydrogen_only(mock_import, mock_script):
     h_only.store.assert_called_once_with(name="highf")
 
 
-@patch("mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.unstore_selection")
-@patch("mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.build_high_force_selection")
-@patch("mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.zero_comparison_scalars")
-@patch("mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.run_charmm_script")
+@patch("karml.interfaces.pycharmmInterface.mlpot.comp_velocities.unstore_selection")
+@patch("karml.interfaces.pycharmmInterface.mlpot.comp_velocities.build_high_force_selection")
+@patch("karml.interfaces.pycharmmInterface.mlpot.comp_velocities.zero_comparison_scalars")
+@patch("karml.interfaces.pycharmmInterface.mlpot.comp_velocities.run_charmm_script")
 def test_apply_selective_force_damp_recipe_highf_only(
     mock_script,
     mock_zero,
@@ -536,10 +536,10 @@ def test_apply_selective_force_damp_recipe_highf_only(
     mock_unstore.assert_called_once_with("highf")
 
 
-@patch("mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.unstore_selection")
-@patch("mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.build_high_force_selection")
-@patch("mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.zero_comparison_scalars")
-@patch("mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.run_charmm_script")
+@patch("karml.interfaces.pycharmmInterface.mlpot.comp_velocities.unstore_selection")
+@patch("karml.interfaces.pycharmmInterface.mlpot.comp_velocities.build_high_force_selection")
+@patch("karml.interfaces.pycharmmInterface.mlpot.comp_velocities.zero_comparison_scalars")
+@patch("karml.interfaces.pycharmmInterface.mlpot.comp_velocities.run_charmm_script")
 def test_apply_selective_force_damp_recipe_empty_highf(
     mock_script,
     mock_zero,
@@ -554,9 +554,9 @@ def test_apply_selective_force_damp_recipe_empty_highf(
     mock_unstore.assert_called_once_with("highf")
 
 
-@patch("mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.apply_selective_force_damp_recipe")
-@patch("mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.zero_comparison_scalars")
-@patch("mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.run_charmm_script")
+@patch("karml.interfaces.pycharmmInterface.mlpot.comp_velocities.apply_selective_force_damp_recipe")
+@patch("karml.interfaces.pycharmmInterface.mlpot.comp_velocities.zero_comparison_scalars")
+@patch("karml.interfaces.pycharmmInterface.mlpot.comp_velocities.run_charmm_script")
 def test_prepare_comp_for_iasvel0_default_recipe(mock_script, mock_zero, mock_recipe):
     mock_recipe.return_value = 3
     n = prepare_comp_for_iasvel0(min_force_kcalmol_A=1.0, force_scale=DEFAULT_COMP_FORCE_SCALE)
@@ -566,9 +566,9 @@ def test_prepare_comp_for_iasvel0_default_recipe(mock_script, mock_zero, mock_re
     mock_zero.assert_not_called()
 
 
-@patch("mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.apply_selective_force_damp_recipe")
-@patch("mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.zero_comparison_scalars")
-@patch("mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.run_charmm_script")
+@patch("karml.interfaces.pycharmmInterface.mlpot.comp_velocities.apply_selective_force_damp_recipe")
+@patch("karml.interfaces.pycharmmInterface.mlpot.comp_velocities.zero_comparison_scalars")
+@patch("karml.interfaces.pycharmmInterface.mlpot.comp_velocities.run_charmm_script")
 def test_prepare_comp_for_iasvel0_zero_only(mock_script, mock_zero, mock_recipe):
     n = prepare_comp_for_iasvel0(zero_only=True)
     assert n == 0
@@ -582,7 +582,7 @@ def test_prepare_comp_for_iasvel0_zero_only(mock_script, mock_zero, mock_recipe)
     mock_recipe.assert_not_called()
 
 
-@patch("mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.prepare_comp_for_iasvel0")
+@patch("karml.interfaces.pycharmmInterface.mlpot.comp_velocities.prepare_comp_for_iasvel0")
 def test_prepare_comp_for_heat_targets_hydrogen(mock_prepare):
     mock_prepare.return_value = 4
     n = prepare_comp_for_heat(min_force_kcalmol_A=2.0, force_scale=0.02)
@@ -595,13 +595,13 @@ def test_prepare_comp_for_heat_targets_hydrogen(mock_prepare):
     )
 
 
-@patch("mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.clear_comparison_coordinates")
+@patch("karml.interfaces.pycharmmInterface.mlpot.comp_velocities.clear_comparison_coordinates")
 def test_clear_comp_for_production(mock_clear_coords):
     clear_comp_for_production()
     mock_clear_coords.assert_called_once()
 
 
-@patch("mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.clear_comparison_coordinates")
+@patch("karml.interfaces.pycharmmInterface.mlpot.comp_velocities.clear_comparison_coordinates")
 def test_clear_comp_for_production_honors_quiet(mock_clear_coords):
     clear_comp_for_production(quiet=True)
     mock_clear_coords.assert_called_once()

@@ -8,12 +8,12 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
     CharmmTrajectoryFiles,
     _apply_npt_cpt_kwargs,
     build_cpt_equilibration_dynamics,
 )
-from mmml.interfaces.pycharmmInterface.mlpot.pressure_tensor import (
+from karml.interfaces.pycharmmInterface.mlpot.pressure_tensor import (
     NptPressureTensor,
     apply_npt_pressure_log_kwargs,
     apply_npt_pressure_reference,
@@ -121,7 +121,7 @@ def test_maybe_configure_stage_pressure_tensor_io(tmp_path):
 def test_maybe_report_skips_when_disabled():
     args = argparse.Namespace(skip_npt_pressure_report=True, quiet=True)
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pressure_tensor.report_instantaneous_pressure_tensor"
+        "karml.interfaces.pycharmmInterface.mlpot.pressure_tensor.report_instantaneous_pressure_tensor"
     ) as report:
         maybe_report_instantaneous_pressure_tensor(
             stage="equi",
@@ -151,7 +151,7 @@ def test_report_instantaneous_pressure_tensor_uses_energy_getters(capsys):
     fake_pycharmm = MagicMock()
     fake_pycharmm.lingo = mock_lingo
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.refresh_mlpot_energy_and_grms"
+        "karml.interfaces.pycharmmInterface.mlpot.cli_common.refresh_mlpot_energy_and_grms"
     ) as refresh, patch.dict(
         sys.modules,
         {"pycharmm": fake_pycharmm, "pycharmm.lingo": mock_lingo},
@@ -188,7 +188,7 @@ def test_apply_npt_cpt_kwargs_with_tensor():
 
 
 def test_pbc_ensemble_nvt_pins_zero_piston_mass():
-    from mmml.interfaces.pycharmmInterface.mlpot.pressure_tensor import (
+    from karml.interfaces.pycharmmInterface.mlpot.pressure_tensor import (
         npt_cpt_builder_options,
     )
 
@@ -197,7 +197,7 @@ def test_pbc_ensemble_nvt_pins_zero_piston_mass():
     nvt = npt_cpt_builder_options(argparse.Namespace(pbc_ensemble="nvt", **base))
     assert nvt["pmass"] == 0
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.compute_cpt_piston_masses",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics.compute_cpt_piston_masses",
         return_value=(500, 5000),
     ):
         kw = build_cpt_equilibration_dynamics(**nvt)

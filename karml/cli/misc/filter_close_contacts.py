@@ -29,7 +29,7 @@ dataset remains available for comparison.
 
 Usage
 -----
-    uv run python -m mmml.cli.misc.filter_close_contacts \\
+    uv run python -m karml.cli.misc.filter_close_contacts \\
         --in  artifacts/lj_scales_des/des_dimers_cgenff_top50.npz \\
         --out artifacts/lj_scales_des/des_dimers_cgenff_top50_min15.npz \\
         --min-contact 1.5

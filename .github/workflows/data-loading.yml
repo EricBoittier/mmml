@@ -20,7 +20,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v6
-      - uses: ./.github/actions/setup-mmml
+      - uses: ./.github/actions/setup-karml
         with:
           # Core + dev: h5py is a core dep. No jax-pme, no CHARMM, no datasets.
           sync-args: "--extra dev"

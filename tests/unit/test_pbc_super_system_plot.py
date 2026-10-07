@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from mmml.utils.pbc_super_system_plot import (
+from karml.utils.pbc_super_system_plot import (
     charmm_super_system_atoms,
     four_waters_cubic_cell,
 )

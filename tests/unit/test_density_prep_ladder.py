@@ -40,7 +40,7 @@ def _args(**overrides) -> argparse.Namespace:
 
 
 def test_resilient_defaults_bump_mini_and_enable_ladder():
-    from mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
+    from karml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
         apply_density_prep_resilient_defaults,
         density_prep_ladder_enabled,
     )
@@ -58,7 +58,7 @@ def test_resilient_defaults_bump_mini_and_enable_ladder():
 
 
 def test_resilient_defaults_respect_explicit_zero_mini_lattice_abnr():
-    from mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
+    from karml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
         apply_density_prep_resilient_defaults,
     )
 
@@ -69,7 +69,7 @@ def test_resilient_defaults_respect_explicit_zero_mini_lattice_abnr():
 
 
 def test_resilient_defaults_respect_explicit_zero_mini_box_equil():
-    from mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
+    from karml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
         apply_density_prep_resilient_defaults,
     )
 
@@ -79,7 +79,7 @@ def test_resilient_defaults_respect_explicit_zero_mini_box_equil():
 
 
 def test_resilient_defaults_skip_lattice_on_explicit_box_size():
-    from mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
+    from karml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
         apply_density_prep_resilient_defaults,
     )
 
@@ -91,7 +91,7 @@ def test_resilient_defaults_skip_lattice_on_explicit_box_size():
 
 
 def test_resilient_defaults_respect_explicit_box_and_ladder_off():
-    from mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
+    from karml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
         apply_density_prep_resilient_defaults,
         density_prep_ladder_enabled,
     )
@@ -112,7 +112,7 @@ def test_resilient_defaults_respect_explicit_box_and_ladder_off():
 
 
 def test_maybe_run_density_prep_ladder_force_bypasses_disabled_flag():
-    from mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
+    from karml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
         maybe_run_density_prep_ladder_for_mlpot,
     )
 
@@ -127,10 +127,10 @@ def test_maybe_run_density_prep_ladder_force_bypasses_disabled_flag():
     )
 
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.refresh_mlpot_energy_and_grms",
+        "karml.interfaces.pycharmmInterface.mlpot.cli_common.refresh_mlpot_energy_and_grms",
         return_value=1232.0,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder.run_density_prep_ladder",
+        "karml.interfaces.pycharmmInterface.mlpot.density_prep_ladder.run_density_prep_ladder",
         return_value=(42.0, 30.0, MagicMock()),
     ) as run_ladder:
         grms, ran = maybe_run_density_prep_ladder_for_mlpot(
@@ -149,7 +149,7 @@ def test_maybe_run_density_prep_ladder_force_bypasses_disabled_flag():
 
 
 def test_condensed_phase_defaults_from_certified_box():
-    from mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
+    from karml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
         apply_condensed_phase_md_defaults,
         density_prep_ladder_enabled,
         liquid_prep_enabled,
@@ -191,7 +191,7 @@ def test_build_crystal_handoff_skips_liquid_prep_mc_density(
     tmp_path: Path,
 ) -> None:
     """build-crystal PSF+box.json must not auto-enable liquid MC density equalize."""
-    from mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
+    from karml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
         apply_condensed_phase_md_defaults,
         is_build_crystal_handoff,
         liquid_prep_enabled,
@@ -215,7 +215,7 @@ def test_build_crystal_handoff_honors_explicit_liquid_prep(
     tmp_path: Path,
 ) -> None:
     """Explicit --liquid-prep on a crystal handoff must still apply resilient defaults."""
-    from mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
+    from karml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
         apply_condensed_phase_md_defaults,
         density_prep_ladder_enabled,
         liquid_prep_enabled,
@@ -240,7 +240,7 @@ def test_build_crystal_handoff_honors_explicit_liquid_prep(
 def test_build_crystal_handoff_honors_resilient_density_prep_mode(
     tmp_path: Path,
 ) -> None:
-    from mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
+    from karml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
         apply_condensed_phase_md_defaults,
         liquid_prep_enabled,
     )
@@ -257,7 +257,7 @@ def test_build_crystal_handoff_honors_resilient_density_prep_mode(
 
 
 def test_resolve_density_prep_lattice_steps_zero_stays_disabled():
-    from mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
+    from karml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
         resolve_density_prep_lattice_abnr_steps,
     )
 
@@ -277,7 +277,7 @@ def test_resolve_density_prep_lattice_steps_zero_stays_disabled():
 
 
 def test_ladder_skipped_when_grms_ok():
-    from mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
+    from karml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
         run_density_prep_ladder,
     )
 
@@ -307,7 +307,7 @@ def test_ladder_skipped_when_grms_ok():
 
 
 def test_ladder_skips_lattice_abnr_with_mlpot_registered(monkeypatch):
-    from mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
+    from karml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
         run_density_prep_ladder,
     )
 
@@ -329,47 +329,47 @@ def test_ladder_skips_lattice_abnr_with_mlpot_registered(monkeypatch):
         return 44.0
 
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.box_lattice_abnr.run_charmm_lattice_abnr",
+        "karml.interfaces.pycharmmInterface.mlpot.box_lattice_abnr.run_charmm_lattice_abnr",
         _mock_lattice,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         lambda: pos.copy(),
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder._step_monomer_repack",
+        "karml.interfaces.pycharmmInterface.mlpot.density_prep_ladder._step_monomer_repack",
         lambda *_a, **_kw: pos.copy(),
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder._sync_pbc_after_box_change",
+        "karml.interfaces.pycharmmInterface.mlpot.density_prep_ladder._sync_pbc_after_box_change",
         lambda **_kw: 44.0,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder._step_mc_density",
+        "karml.interfaces.pycharmmInterface.mlpot.density_prep_ladder._step_mc_density",
         lambda *_a, **_kw: (pos.copy(), 44.0),
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.refresh_mlpot_energy_and_grms",
+        "karml.interfaces.pycharmmInterface.mlpot.cli_common.refresh_mlpot_energy_and_grms",
         lambda *_a, **_kw: 29.6,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.measure_hybrid_charmm_grms",
+        "karml.interfaces.pycharmmInterface.mlpot.cli_common.measure_hybrid_charmm_grms",
         lambda *_a, **_kw: _Diag(),
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._mlpot_covers_all_atoms",
+        "karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._mlpot_covers_all_atoms",
         lambda *_a: True,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._run_mlpot_recovery_mini",
+        "karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._run_mlpot_recovery_mini",
         lambda *_a, **_kw: None,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint_diagnostics.print_geometry_checkpoint_diff",
+        "karml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint_diagnostics.print_geometry_checkpoint_diff",
         lambda *_a, **_kw: None,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.recovery_progress.RecoveryProgressStore.for_prep_ladder",
+        "karml.interfaces.pycharmmInterface.mlpot.recovery_progress.RecoveryProgressStore.for_prep_ladder",
         lambda *_a, **_kw: None,
     )
 
@@ -405,7 +405,7 @@ def test_ladder_skips_lattice_abnr_with_mlpot_registered(monkeypatch):
 
 
 def test_liquid_prep_shorthand_enables_defaults():
-    from mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
+    from karml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
         apply_density_prep_resilient_defaults,
         density_prep_ladder_enabled,
         liquid_prep_enabled,
@@ -420,7 +420,7 @@ def test_liquid_prep_shorthand_enables_defaults():
 
 def test_resilient_defaults_lattice_when_density_resize_allowed():
     """Opt-in: lattice ABNR may change L even with a density target."""
-    from mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
+    from karml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
         apply_density_prep_resilient_defaults,
     )
 
@@ -437,7 +437,7 @@ def test_resilient_defaults_lattice_when_density_resize_allowed():
 
 
 def test_sync_pbc_after_box_change_skips_prepare_charmm_pbc_with_mlpot(monkeypatch):
-    from mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
+    from karml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
         _sync_pbc_after_box_change,
     )
 
@@ -475,31 +475,31 @@ def test_sync_pbc_after_box_change_skips_prepare_charmm_pbc_with_mlpot(monkeypat
         return True
 
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.prepare_charmm_pbc",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.prepare_charmm_pbc",
         _fake_prepare,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.charmm_crystal_is_active",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.charmm_crystal_is_active",
         _fake_crystal_active,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.sync_charmm_crystal_after_mm_pretreat",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.sync_charmm_crystal_after_mm_pretreat",
         _fake_sync_crystal,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.light_resync_mlpot_state",
+        "karml.interfaces.pycharmmInterface.mlpot.cli_common.light_resync_mlpot_state",
         _fake_light_resync,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.sync_workflow_pbc_box_side_after_mm_pretreat",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.sync_workflow_pbc_box_side_after_mm_pretreat",
         _fake_sync_workflow,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.run_workflow.sync_mlpot_pbc_cell_from_charmm",
+        "karml.interfaces.pycharmmInterface.mlpot.run_workflow.sync_mlpot_pbc_cell_from_charmm",
         _fake_sync_mic,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
         _fake_sync_pos,
     )
 
@@ -518,7 +518,7 @@ def test_sync_pbc_after_box_change_skips_prepare_charmm_pbc_with_mlpot(monkeypat
 
 
 def test_geometry_prep_regressed_detects_large_spike():
-    from mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
+    from karml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
         _geometry_prep_regressed,
     )
 
@@ -528,7 +528,7 @@ def test_geometry_prep_regressed_detects_large_spike():
 
 
 def test_run_geometry_packing_recovery_rolls_back_repack_grms_regression(monkeypatch):
-    from mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
+    from karml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
         run_geometry_packing_recovery,
     )
 
@@ -549,35 +549,35 @@ def test_run_geometry_packing_recovery_rolls_back_repack_grms_regression(monkeyp
         pyCModel = object()
 
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         lambda: pos.copy(),
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder._step_monomer_repack",
+        "karml.interfaces.pycharmmInterface.mlpot.density_prep_ladder._step_monomer_repack",
         lambda *_a, **_kw: pos + 5.0,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder._sync_pbc_after_box_change",
+        "karml.interfaces.pycharmmInterface.mlpot.density_prep_ladder._sync_pbc_after_box_change",
         lambda **_kw: 29.0,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
         lambda arr: sync_log.append(np.asarray(arr, dtype=float).copy()),
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.refresh_mlpot_energy_and_grms",
+        "karml.interfaces.pycharmmInterface.mlpot.cli_common.refresh_mlpot_energy_and_grms",
         lambda *_a, **_kw: float(next(refresh_values)),
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.measure_hybrid_charmm_grms",
+        "karml.interfaces.pycharmmInterface.mlpot.cli_common.measure_hybrid_charmm_grms",
         lambda *_a, **_kw: _Diag(),
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize.minimize_hybrid_calculator_before_sd",
+        "karml.interfaces.pycharmmInterface.mlpot.calculator_minimize.minimize_hybrid_calculator_before_sd",
         lambda *_a, **_kw: (574.0, True),
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize.minimize_hybrid_calculator_fire_before_sd",
+        "karml.interfaces.pycharmmInterface.mlpot.calculator_minimize.minimize_hybrid_calculator_fire_before_sd",
         lambda *_a, **_kw: (574.0, True),
     )
 
@@ -599,7 +599,7 @@ def test_run_geometry_packing_recovery_rolls_back_repack_grms_regression(monkeyp
 
 
 def test_run_geometry_packing_recovery_skips_bfgs_when_grms_already_low(monkeypatch):
-    from mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
+    from karml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
         run_geometry_packing_recovery,
     )
 
@@ -618,19 +618,19 @@ def test_run_geometry_packing_recovery_skips_bfgs_when_grms_already_low(monkeypa
     bfgs_calls: list[str] = []
 
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         lambda: pos.copy(),
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder._step_monomer_repack",
+        "karml.interfaces.pycharmmInterface.mlpot.density_prep_ladder._step_monomer_repack",
         lambda *_a, **_kw: pos,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.refresh_mlpot_energy_and_grms",
+        "karml.interfaces.pycharmmInterface.mlpot.cli_common.refresh_mlpot_energy_and_grms",
         lambda *_a, **_kw: 1.5,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.measure_hybrid_charmm_grms",
+        "karml.interfaces.pycharmmInterface.mlpot.cli_common.measure_hybrid_charmm_grms",
         lambda *_a, **_kw: _Diag(),
     )
 
@@ -642,11 +642,11 @@ def test_run_geometry_packing_recovery_skips_bfgs_when_grms_already_low(monkeypa
         return (1.4, True)
 
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize.minimize_hybrid_calculator_fire_before_sd",
+        "karml.interfaces.pycharmmInterface.mlpot.calculator_minimize.minimize_hybrid_calculator_fire_before_sd",
         _fire,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize.minimize_hybrid_calculator_before_sd",
+        "karml.interfaces.pycharmmInterface.mlpot.calculator_minimize.minimize_hybrid_calculator_before_sd",
         _bfgs,
     )
 
@@ -667,7 +667,7 @@ def test_run_geometry_packing_recovery_skips_bfgs_when_grms_already_low(monkeypa
 
 
 def test_build_pycharmm_command_forwards_safe_grms_flags():
-    from mmml.cli.run.md_system import build_pycharmm_command
+    from karml.cli.run.md_system import build_pycharmm_command
     from tests.unit.test_md_system_pycharmm_cmd import _pycharmm_args
 
     cmd = build_pycharmm_command(
@@ -686,7 +686,7 @@ def test_build_pycharmm_command_forwards_safe_grms_flags():
 
 
 def test_build_pycharmm_command_forwards_liquid_prep():
-    from mmml.cli.run.md_system import build_pycharmm_command
+    from karml.cli.run.md_system import build_pycharmm_command
     from tests.unit.test_md_system_pycharmm_cmd import _pycharmm_args
 
     cmd = build_pycharmm_command(_pycharmm_args(liquid_prep=True))
@@ -695,7 +695,7 @@ def test_build_pycharmm_command_forwards_liquid_prep():
 
 
 def test_build_pycharmm_command_forwards_density_prep_flags():
-    from mmml.cli.run.md_system import build_pycharmm_command
+    from karml.cli.run.md_system import build_pycharmm_command
     from tests.unit.test_md_system_pycharmm_cmd import _pycharmm_args
 
     cmd = build_pycharmm_command(
@@ -717,7 +717,7 @@ def test_build_pycharmm_command_forwards_density_prep_flags():
 
 def test_run_pre_mlpot_geometry_gate_runs_ladder_on_initial_overlap(monkeypatch):
     """Initial overlap (e.g. after mini lattice ABNR) must not abort before repack."""
-    from mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
+    from karml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
         run_pre_mlpot_geometry_gate,
     )
 
@@ -748,23 +748,23 @@ def test_run_pre_mlpot_geometry_gate_runs_ladder_on_initial_overlap(monkeypatch)
         return repacked.copy()
 
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder.assert_pre_mlpot_intermonomer_geometry",
+        "karml.interfaces.pycharmmInterface.mlpot.density_prep_ladder.assert_pre_mlpot_intermonomer_geometry",
         _fake_assert,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder._step_monomer_repack",
+        "karml.interfaces.pycharmmInterface.mlpot.density_prep_ladder._step_monomer_repack",
         _fake_repack,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder._sync_pbc_after_box_change",
+        "karml.interfaces.pycharmmInterface.mlpot.density_prep_ladder._sync_pbc_after_box_change",
         lambda **_kw: 20.0,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
         lambda _arr: None,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.recovery_progress.RecoveryProgressStore.for_prep_ladder",
+        "karml.interfaces.pycharmmInterface.mlpot.recovery_progress.RecoveryProgressStore.for_prep_ladder",
         lambda *_a, **_kw: None,
     )
 
@@ -791,7 +791,7 @@ def test_run_pre_mlpot_geometry_gate_runs_ladder_on_initial_overlap(monkeypatch)
 
 def test_run_pre_mlpot_geometry_gate_skips_repack_when_initial_clean(monkeypatch):
     """Clean post-MM geometry should not pay for a full Packmol monomer repack."""
-    from mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
+    from karml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
         run_pre_mlpot_geometry_gate,
     )
 
@@ -812,23 +812,23 @@ def test_run_pre_mlpot_geometry_gate_skips_repack_when_initial_clean(monkeypatch
         return pos.copy()
 
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder.assert_pre_mlpot_intermonomer_geometry",
+        "karml.interfaces.pycharmmInterface.mlpot.density_prep_ladder.assert_pre_mlpot_intermonomer_geometry",
         lambda *_a, **_kw: 2.5,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder._step_monomer_repack",
+        "karml.interfaces.pycharmmInterface.mlpot.density_prep_ladder._step_monomer_repack",
         _fake_repack,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder._sync_pbc_after_box_change",
+        "karml.interfaces.pycharmmInterface.mlpot.density_prep_ladder._sync_pbc_after_box_change",
         lambda **_kw: 20.0,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
         lambda _arr: None,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.recovery_progress.RecoveryProgressStore.for_prep_ladder",
+        "karml.interfaces.pycharmmInterface.mlpot.recovery_progress.RecoveryProgressStore.for_prep_ladder",
         lambda *_a, **_kw: None,
     )
 
@@ -852,7 +852,7 @@ def test_run_pre_mlpot_geometry_gate_skips_repack_when_initial_clean(monkeypatch
 
 
 def test_lattice_abnr_prep_passes_only_lattice_full():
-    from mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
+    from karml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
         _LATTICE_ABNR_PREP_PASSES,
     )
 
@@ -863,10 +863,10 @@ def test_lattice_abnr_prep_passes_only_lattice_full():
 
 
 def test_overlap_last_chance_separates_to_ml_safe_pair_floors(monkeypatch):
-    from mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
+    from karml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
         run_pre_mlpot_geometry_gate,
     )
-    from mmml.utils.intermonomer_geometry import DEFAULT_PRE_MLPOT_HEAVY_HEAVY_MIN_A
+    from karml.utils.intermonomer_geometry import DEFAULT_PRE_MLPOT_HEAVY_HEAVY_MIN_A
 
     args = _args(
         liquid_prep=True,
@@ -885,7 +885,7 @@ def test_overlap_last_chance_separates_to_ml_safe_pair_floors(monkeypatch):
         return 1.6
 
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder.assert_pre_mlpot_intermonomer_geometry",
+        "karml.interfaces.pycharmmInterface.mlpot.density_prep_ladder.assert_pre_mlpot_intermonomer_geometry",
         _fake_assert,
     )
 
@@ -898,23 +898,23 @@ def test_overlap_last_chance_separates_to_ml_safe_pair_floors(monkeypatch):
         return _pos
 
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder._step_monomer_repack",
+        "karml.interfaces.pycharmmInterface.mlpot.density_prep_ladder._step_monomer_repack",
         _fake_repack,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder._open_intermonomer_contacts_to_distance",
+        "karml.interfaces.pycharmmInterface.mlpot.density_prep_ladder._open_intermonomer_contacts_to_distance",
         _fake_open,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder._sync_pbc_after_box_change",
+        "karml.interfaces.pycharmmInterface.mlpot.density_prep_ladder._sync_pbc_after_box_change",
         lambda **_kw: 20.0,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
         lambda _arr: None,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.recovery_progress.RecoveryProgressStore.for_prep_ladder",
+        "karml.interfaces.pycharmmInterface.mlpot.recovery_progress.RecoveryProgressStore.for_prep_ladder",
         lambda *_a, **_kw: None,
     )
 
@@ -937,7 +937,7 @@ def test_overlap_last_chance_separates_to_ml_safe_pair_floors(monkeypatch):
 
 
 def test_dynamics_open_runs_when_prep_passes_but_contact_tight(monkeypatch):
-    from mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
+    from karml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
         run_pre_mlpot_geometry_gate,
     )
 
@@ -950,11 +950,11 @@ def test_dynamics_open_runs_when_prep_passes_but_contact_tight(monkeypatch):
     open_targets: list[float] = []
 
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder.assert_pre_mlpot_intermonomer_geometry",
+        "karml.interfaces.pycharmmInterface.mlpot.density_prep_ladder.assert_pre_mlpot_intermonomer_geometry",
         lambda *_a, **_kw: 1.06,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder._step_monomer_repack",
+        "karml.interfaces.pycharmmInterface.mlpot.density_prep_ladder._step_monomer_repack",
         lambda pos, **_kw: pos.copy(),
     )
 
@@ -963,19 +963,19 @@ def test_dynamics_open_runs_when_prep_passes_but_contact_tight(monkeypatch):
         return _pos
 
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder._open_intermonomer_contacts_to_distance",
+        "karml.interfaces.pycharmmInterface.mlpot.density_prep_ladder._open_intermonomer_contacts_to_distance",
         _fake_open,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder._sync_pbc_after_box_change",
+        "karml.interfaces.pycharmmInterface.mlpot.density_prep_ladder._sync_pbc_after_box_change",
         lambda **_kw: 20.0,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
         lambda _arr: None,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.recovery_progress.RecoveryProgressStore.for_prep_ladder",
+        "karml.interfaces.pycharmmInterface.mlpot.recovery_progress.RecoveryProgressStore.for_prep_ladder",
         lambda *_a, **_kw: None,
     )
 

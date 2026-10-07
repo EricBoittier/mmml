@@ -1,6 +1,6 @@
-"""Entry point: python -m mmml.mcp"""
+"""Entry point: python -m karml.mcp"""
 
-from mmml.mcp.server import main
+from karml.mcp.server import main
 
 if __name__ == "__main__":
     main()

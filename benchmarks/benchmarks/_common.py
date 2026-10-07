@@ -1,4 +1,4 @@
-"""Fixtures and helpers shared by the mmml asv benchmarks.
+"""Fixtures and helpers shared by the karml asv benchmarks.
 
 Three rules the benchmark modules follow, all enforced or supported from here:
 
@@ -11,7 +11,7 @@ Three rules the benchmark modules follow, all enforced or supported from here:
    call :func:`block` measures Python overhead, not the kernel.
 3. **Precision is a process-global.** ``jax_enable_x64`` cannot be flipped per
    benchmark without leaking into whatever runs next in the same worker, so it is
-   fixed here from the environment (``MMML_BENCH_X64``, default on to match the
+   fixed here from the environment (``KARML_BENCH_X64``, default on to match the
    production MD path in ``examples/md_cpu/_env.sh``). Numbers are only
    comparable between runs that used the same setting — :func:`precision_tag`
    reports it and ``bench_meta`` records it alongside every result set.
@@ -47,9 +47,9 @@ def _truthy(value: str | None, *, default: bool) -> bool:
     return value.strip().lower() not in {"0", "false", "no", "off", ""}
 
 
-#: float64 unless ``MMML_BENCH_X64`` says otherwise. Set *before* JAX is imported
+#: float64 unless ``KARML_BENCH_X64`` says otherwise. Set *before* JAX is imported
 #: anywhere, so JAX picks it up from its own environment variable.
-X64 = _truthy(os.environ.get("MMML_BENCH_X64"), default=True)
+X64 = _truthy(os.environ.get("KARML_BENCH_X64"), default=True)
 os.environ.setdefault("JAX_ENABLE_X64", "1" if X64 else "0")
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -108,8 +108,8 @@ def device_tag() -> str:
 
 
 def default_checkpoint() -> Path:
-    """The bundled ACO/DESdimers PhysNet JSON checkpoint (``MMML_CKPT`` overrides)."""
-    env = os.environ.get("MMML_BENCH_CKPT") or os.environ.get("MMML_CKPT")
+    """The bundled ACO/DESdimers PhysNet JSON checkpoint (``KARML_CKPT`` overrides)."""
+    env = os.environ.get("KARML_BENCH_CKPT") or os.environ.get("KARML_CKPT")
     path = Path(env) if env else REPO_ROOT / "examples" / "ckpts_json" / "DESdimers_params.json"
     if not path.exists():
         raise skip(f"checkpoint not found: {path}")
@@ -121,7 +121,7 @@ def default_checkpoint() -> Path:
 #
 # Plain NumPy on purpose: these build the *input* to the code under test, so
 # they must be fast, deterministic, and free of anything that could itself show
-# up in a timing. Sizes are chosen to bracket the systems mmml actually runs —
+# up in a timing. Sizes are chosen to bracket the systems karml actually runs —
 # an ACO dimer (20 atoms) through a ~7000-atom solvent box.
 # --------------------------------------------------------------------------
 
@@ -205,9 +205,9 @@ def aco_cluster(n_monomers: int = 2, *, spacing: float = 5.0) -> dict:
     try:
         from ase.io import read as ase_read
 
-        from mmml.paths import default_aco_template_pdb
+        from karml.paths import default_aco_template_pdb
     except Exception as exc:  # pragma: no cover - environment-dependent
-        raise skip(f"ASE / mmml.paths unavailable: {exc}") from exc
+        raise skip(f"ASE / karml.paths unavailable: {exc}") from exc
 
     monomer = ase_read(str(default_aco_template_pdb()))
     z_mono = np.asarray(monomer.get_atomic_numbers(), dtype=np.int32)
@@ -231,7 +231,7 @@ def aco_cluster(n_monomers: int = 2, *, spacing: float = 5.0) -> dict:
 
 
 def synthetic_ff_params(z: np.ndarray, mol_id: np.ndarray, *, seed: int = 1):
-    """A neutral :class:`~mmml.md.system.FFParams` with plausible CHARMM-scale values.
+    """A neutral :class:`~karml.md.system.FFParams` with plausible CHARMM-scale values.
 
     Real CGenFF parameters need a PSF and a CHARMM build, which is not available
     on every machine that can run these benchmarks. The MM kernels are
@@ -240,7 +240,7 @@ def synthetic_ff_params(z: np.ndarray, mol_id: np.ndarray, *, seed: int = 1):
     dependency. Charges are neutralised per molecule so the Ewald benchmarks are
     not measuring a charged-cell artefact.
     """
-    from mmml.md.system import FFParams
+    from karml.md.system import FFParams
 
     rng = np.random.default_rng(seed)
     n = int(z.shape[0])
@@ -260,8 +260,8 @@ def synthetic_ff_params(z: np.ndarray, mol_id: np.ndarray, *, seed: int = 1):
 
 
 def synthetic_system(n_molecules: int, *, seed: int = 0):
-    """A periodic :class:`~mmml.md.system.MolecularSystem` of TIP3-shaped waters."""
-    from mmml.md.system import MolecularSystem
+    """A periodic :class:`~karml.md.system.MolecularSystem` of TIP3-shaped waters."""
+    from karml.md.system import MolecularSystem
 
     box = water_box(n_molecules, seed=seed)
     ff = synthetic_ff_params(box["Z"], box["mol_id"], seed=seed + 1)
@@ -279,10 +279,10 @@ def padded_pair_list(system, cutoff_A: float, *, headroom: float = 1.15):
     """Build the intermolecular pair list once and pad it to a fixed capacity.
 
     The jitted MM energy takes fixed-shape pair arrays, so this mirrors what
-    ``mmml.md.neighbors.make_intermolecular_neighbor_fn`` hands the driver —
+    ``karml.md.neighbors.make_intermolecular_neighbor_fn`` hands the driver —
     without paying the rebuild inside the timed region.
     """
-    from mmml.interfaces.jaxmdInterface.hybrid_energy import get_intermolecular_pairs
+    from karml.interfaces.jaxmdInterface.hybrid_energy import get_intermolecular_pairs
 
     excluded = frozenset()
     if system.ff_params is not None:

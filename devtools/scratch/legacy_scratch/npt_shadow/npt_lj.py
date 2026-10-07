@@ -10,9 +10,9 @@ os.environ["JAX_ENABLE_X64"] = "1"
 warnings.simplefilter("ignore")
 from pathlib import Path
 
-from mmml.md import EnsembleSpec, RunConfig, SystemSpec, assemble_and_run
-from mmml.md.energy import EnergyContext
-from mmml.md.system import FFParams, MolecularSystem
+from karml.md import EnsembleSpec, RunConfig, SystemSpec, assemble_and_run
+from karml.md.energy import EnergyContext
+from karml.md.system import FFParams, MolecularSystem
 
 SP = Path(__file__).parent
 
@@ -56,8 +56,8 @@ cfg = RunConfig(
     backend="jaxmd", output_dir=SP,
 )
 
-from mmml.md.drivers import JaxmdDriver
-from mmml.md.assemble import build_hybrid_energy, _auto_neighbor_fn
+from karml.md.drivers import JaxmdDriver
+from karml.md.assemble import build_hybrid_energy, _auto_neighbor_fn
 
 energy = build_hybrid_energy(system, cfg.terms, ctx)
 nfn = _auto_neighbor_fn(system, energy, cfg)

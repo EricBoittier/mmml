@@ -1,6 +1,6 @@
-"""Unit tests for the GUI job runner (mmml.gui.api.runner).
+"""Unit tests for the GUI job runner (karml.gui.api.runner).
 
-These exercise the JobManager lifecycle without launching a real ``mmml``
+These exercise the JobManager lifecycle without launching a real ``karml``
 process -- they whitelist the test interpreter so the tests stay fast and
 hermetic. No pytest-asyncio dependency: each test drives its own event loop via
 ``asyncio.run``.
@@ -14,13 +14,13 @@ from pathlib import Path
 
 import pytest
 
-from mmml.gui.api.runner import Job, JobManager
+from karml.gui.api.runner import Job, JobManager
 
 
 def _make_manager(tmp_path: Path) -> JobManager:
     mgr = JobManager(default_cwd=tmp_path)
-    # Allow launching the test interpreter directly (alongside the real ``mmml``).
-    mgr.ALLOWED_COMMANDS = frozenset({Path(sys.executable).name, "mmml"})
+    # Allow launching the test interpreter directly (alongside the real ``karml``).
+    mgr.ALLOWED_COMMANDS = frozenset({Path(sys.executable).name, "karml"})
     return mgr
 
 

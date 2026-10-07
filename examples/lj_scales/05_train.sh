@@ -32,7 +32,7 @@ echo "  joint=${LJ_JOINT} tag=${LJ_TAG}"
 echo "  epochs=${LJ_EPOCHS} n_train=${LJ_NTRAIN} n_valid=${LJ_NVALID}"
 echo "  ckpt_dir=${LJ_CKPT_DIR} tag=${LJ_TAG}"
 
-uv run mmml physnet-train \
+uv run karml physnet-train \
   --config examples/hybrid_mm_charges/train_fixed_lj_scales.yaml \
   --data "${LJ_ENRICHED}" \
   --valid-data "" \

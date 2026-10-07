@@ -52,7 +52,7 @@ for entry in ${SOLVENTS}; do
   echo "=== ${name} (RESI ${resi}, rho=${density} kg/m3, L=${side} A) ==="
   (
     cd "${work}"
-    cmd=(uv run mmml make-box
+    cmd=(uv run karml make-box
          --pdb "${SOLUTE_PDB}"
          --res "mensh_${name}"
          --solvent "${resi}")

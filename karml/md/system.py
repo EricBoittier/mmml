@@ -9,8 +9,8 @@ Decision A (§10): CHARMM force-field state — charges, LJ tables, exclusions,
 e14 / vdw14 — is resolved **once by the builder** and carried on
 ``MolecularSystem.ff_params``. Energy terms read it; none re-derive it at
 runtime. This scaffolding is intentionally logic-free: the real builders that
-populate these dataclasses migrate here from ``mmml.interfaces.pycharmmInterface``
-and ``mmml.cli.run.md_pbc_suite`` in later steps.
+populate these dataclasses migrate here from ``karml.interfaces.pycharmmInterface``
+and ``karml.cli.run.md_pbc_suite`` in later steps.
 """
 
 from __future__ import annotations
@@ -56,7 +56,7 @@ class FFParams:
     def from_nonbonded_system_data(cls, nbdata: Any) -> "FFParams":
         """Build from a ``NonbondedSystemData`` (or any object exposing its fields).
 
-        Duck-typed so ``mmml.md.system`` needs no jax/CHARMM import. CHARMM's
+        Duck-typed so ``karml.md.system`` needs no jax/CHARMM import. CHARMM's
         ``rmin`` field is the per-atom *Rmin/2* half-value → ``rmin_half``; the
         exclusion and 1-4 ``frozenset``s become sorted ``(*, 2)`` index arrays.
         """

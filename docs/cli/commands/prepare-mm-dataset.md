@@ -1,4 +1,4 @@
-# `mmml prepare-mm-dataset`
+# `karml prepare-mm-dataset`
 
 Assign CGenFF types/charges to a dimer NPZ (hybrid ML/MM).
 
@@ -6,13 +6,13 @@ Assign CGenFF types/charges to a dimer NPZ (hybrid ML/MM).
 ## Usage
 
 ```bash
-mmml prepare-mm-dataset --help
+karml prepare-mm-dataset --help
 ```
 
 ## Options
 
 ```text
-usage: mmml prepare-mm-dataset [-h] [--config CONFIG] [-i DATA] [-o OUTPUT]
+usage: karml prepare-mm-dataset [-h] [--config CONFIG] [-i DATA] [-o OUTPUT]
                                [--prm-path PRM_PATH] [--rtf-path RTF_PATH]
                                [--num-workers NUM_WORKERS]
                                [--max-structures MAX_STRUCTURES]

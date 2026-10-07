@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-2D methanol-dimer scan to visualize cutoff behavior in MMML.
+2D methanol-dimer scan to visualize cutoff behavior in KARML.
 
 Scans COM distance (d) and alchemical lambda (λ), then reports:
-  - Total energy and MMML components (internal, ML 2-body, MM)
+  - Total energy and KARML components (internal, ML 2-body, MM)
   - Force forms along distance via -dE/dd for each component
 
 Outputs CSV/JSON and plots in output_dir.
@@ -21,9 +21,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from mmml.cli.base import resolve_checkpoint_paths
-from mmml.interfaces.pycharmmInterface.import_pycharmm import coor
-from mmml.interfaces.pycharmmInterface.mmml_calculator import CutoffParameters, setup_calculator
+from karml.cli.base import resolve_checkpoint_paths
+from karml.interfaces.pycharmmInterface.import_pycharmm import coor
+from karml.interfaces.pycharmmInterface.karml_calculator import CutoffParameters, setup_calculator
 
 import pycharmm.param as param
 import pycharmm.psf as psf
@@ -93,7 +93,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="2D dimer scan: distance x lambda with cutoff component analysis.")
     parser.add_argument("--checkpoint", type=Path, default=None)
     parser.add_argument("--output-dir", type=Path, default=Path("artifacts/meoh_dimer_2d_cutoff_scan"))
-    parser.add_argument("--template-pdb", type=Path, default=Path("mmml/generate/sample/pdb/meoh.pdb"))
+    parser.add_argument("--template-pdb", type=Path, default=Path("karml/generate/sample/pdb/meoh.pdb"))
     parser.add_argument("--dmin", type=float, default=2.6)
     parser.add_argument("--dmax", type=float, default=8.0)
     parser.add_argument("--n-dist", type=int, default=36)
@@ -186,7 +186,7 @@ def main() -> int:
             coor.set_positions(pd.DataFrame(r, columns=["x", "y", "z"]))
 
             atoms = ase.Atoms(numbers=z, positions=r)
-            mmml_calc, _, _ = factory(
+            karml_calc, _, _ = factory(
                 atomic_numbers=z,
                 atomic_positions=r,
                 n_monomers=2,
@@ -200,10 +200,10 @@ def main() -> int:
                 force_conversion_factor=1.0,
                 verbose=True,
             )
-            atoms.calc = mmml_calc
+            atoms.calc = karml_calc
 
             et = float(atoms.get_potential_energy())
-            res = mmml_calc.results
+            res = karml_calc.results
             ei = _to_float_sum(res.get("model_internal_E", 0.0))
             eml = _to_float_sum(res.get("model_ml_2b_E", 0.0))
             emm = _to_float_sum(res.get("model_mm_E", 0.0))

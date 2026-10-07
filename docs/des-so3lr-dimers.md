@@ -7,17 +7,17 @@ Where the DES dimer data lives, what chemistry is in it, and exactly which
 
 Everything on this page is measured, not estimated: a streaming pass over the
 full 370,956-frame file
-([`scripts/scan_des_chemical_space.py`](https://github.com/EricBoittier/mmml/blob/main/scripts/scan_des_chemical_space.py))
+([`scripts/scan_des_chemical_space.py`](https://github.com/EricBoittier/karml/blob/main/scripts/scan_des_chemical_space.py))
 ran the production assignment
-([`mmml/data/cgenff_dataset.py`](https://github.com/EricBoittier/mmml/blob/main/mmml/data/cgenff_dataset.py))
+([`karml/data/cgenff_dataset.py`](https://github.com/EricBoittier/karml/blob/main/karml/data/cgenff_dataset.py))
 on a 1-in-20 sample, and the figures and tables are generated from that scan by
-[`scripts/gen_docs_des_chemspace_figures.py`](https://github.com/EricBoittier/mmml/blob/main/scripts/gen_docs_des_chemspace_figures.py).
+[`scripts/gen_docs_des_chemspace_figures.py`](https://github.com/EricBoittier/karml/blob/main/scripts/gen_docs_des_chemspace_figures.py).
 
 !!! note "Related"
     [Preparing hybrid ML/MM datasets](hybrid-mm-dataset-preparation.md) ·
     [Trainable hybrid MM LJ scales](hybrid-mm-lj-scales.md) ·
     [Hybrid MM charges](hybrid-mm-charges.md) ·
-    [DES dimer pair scans workflow](https://github.com/EricBoittier/mmml/tree/main/workflows/des_dimer_pair_scans)
+    [DES dimer pair scans workflow](https://github.com/EricBoittier/karml/tree/main/workflows/des_dimer_pair_scans)
 
 ---
 
@@ -32,7 +32,7 @@ on `pcstudix`, and none of it is in the repo.
 | `~/qcell/qcell_xyz/qcell_dimers.xyz` | 748 MB | Same frames as extxyz — the convenient form for streaming/surveying |
 | `~/qcell/.h5_cache/qcell_dimers_66998dd44fdb879b` | — | Orbax cache written by `prepare_h5_datasets` |
 | `~/trainDES/train.py` | — | The PhysNet run that consumed it (`train_size=270_000`, `natoms=34`, `charge_filter=0.0`) |
-| [`examples/ckpts_json/DESdimers_params.json`](https://github.com/EricBoittier/mmml/blob/main/examples/ckpts_json/DESdimers_params.json) | 696 KB | The resulting checkpoint — **in the repo**, and the reference model for [`workflows/des_dimer_pair_scans`](https://github.com/EricBoittier/mmml/tree/main/workflows/des_dimer_pair_scans) |
+| [`examples/ckpts_json/DESdimers_params.json`](https://github.com/EricBoittier/karml/blob/main/examples/ckpts_json/DESdimers_params.json) | 696 KB | The resulting checkpoint — **in the repo**, and the reference model for [`workflows/des_dimer_pair_scans`](https://github.com/EricBoittier/karml/tree/main/workflows/des_dimer_pair_scans) |
 
 Sibling sets in the same directory (`qcell_ions_water.h5`, `qcell_sugars.h5`,
 `qcell_nucleic_acids.h5`, `qcell_lipids.h5.swp`) are *not* dimers and are out of
@@ -113,9 +113,9 @@ merges additional CHARMM stream files listed in `DEF_EXTRA_TOPPAR`:
 | Added | Residues | Coverage | New LJ types |
 |---|---|---:|---:|
 | *(CGenFF alone)* | — | 32.9% | 90 |
-| [`toppar_water_ions.str`](https://github.com/EricBoittier/mmml/blob/main/mmml/data/charmm/toppar_water_ions.str) | `CLA` `SOD` `POT` `LIT` `CAL` `MG` | 35.8% | 96 |
-| [`toppar_dum_noble_gases.str`](https://github.com/EricBoittier/mmml/blob/main/mmml/data/charmm/toppar_dum_noble_gases.str) | `HE1` `NE1` | 37.8% | 98 |
-| [`toppar_noble_gases_literature.str`](https://github.com/EricBoittier/mmml/blob/main/mmml/data/charmm/toppar_noble_gases_literature.str) | `AR1` `KR1` `XE1` | **40.9%** | **101** |
+| [`toppar_water_ions.str`](https://github.com/EricBoittier/karml/blob/main/karml/data/charmm/toppar_water_ions.str) | `CLA` `SOD` `POT` `LIT` `CAL` `MG` | 35.8% | 96 |
+| [`toppar_dum_noble_gases.str`](https://github.com/EricBoittier/karml/blob/main/karml/data/charmm/toppar_dum_noble_gases.str) | `HE1` `NE1` | 37.8% | 98 |
+| [`toppar_noble_gases_literature.str`](https://github.com/EricBoittier/karml/blob/main/karml/data/charmm/toppar_noble_gases_literature.str) | `AR1` `KR1` `XE1` | **40.9%** | **101** |
 
 All measured on the identical 18,548-frame sample — a 24% relative increase in
 usable data. The merge is strictly additive: an atom type or `RESI` CGenFF
@@ -259,7 +259,7 @@ well-sampled residues here, not tail entries. The metal cations are weaker:
 sit deep in the tail and are unfittable.
 
 The 12-species panel in
-[`workflows/des_dimer_pair_scans/config.yaml`](https://github.com/EricBoittier/mmml/blob/main/workflows/des_dimer_pair_scans/config.yaml)
+[`workflows/des_dimer_pair_scans/config.yaml`](https://github.com/EricBoittier/karml/blob/main/workflows/des_dimer_pair_scans/config.yaml)
 (TIP3, DCM, ACO, ETOH, MEOH, ETHA, BENZ, BUTA, IBUT, PENT, NEOP, HEXA) is a
 hand-picked subset of this list — every one of those except `IBUT` and `NEOP` is
 confirmed present in the data above. That workflow's 78 pairs are a small corner
@@ -276,7 +276,7 @@ qcell_dimers.h5
    │  scripts/des_h5_to_npz.py --pad 34        (12a)  units already eV / eV·Å
    ▼
 des_dimers_raw.npz
-   │  mmml prepare-mm-dataset                  (12b)  types, charges, res_name
+   │  karml prepare-mm-dataset                  (12b)  types, charges, res_name
    ▼
 des_dimers_cgenff_all.npz
    │  scripts/filter_mm_dataset_by_residue.py  (12c)  --top 50
@@ -347,7 +347,7 @@ frame yield falls faster than the residue count.
    removed from the hybrid energy and there is nothing to differentiate.
 
 !!! warning "Dormant landmine in the SMILES fallback"
-    `DES_SMILES_TO_RESI` in `mmml/data/cgenff_dataset.py` maps `[Ne]`, `[Ar]`,
+    `DES_SMILES_TO_RESI` in `karml/data/cgenff_dataset.py` maps `[Ne]`, `[Ar]`,
     `[Kr]`, `[Xe]`, `[Ca+2]`, `[Li+]` and `[F-]` onto **`TIP3`**, and `C#N` onto
     `DMAM`. Those are placeholders, not chemistry. They are currently **inert** —
     `assign_frame_cgenff` calls `match_cgenff_template` without

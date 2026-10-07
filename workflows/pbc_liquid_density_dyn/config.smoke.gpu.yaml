@@ -2,7 +2,7 @@
 # Full matrix uses bulk_density_fractions in config.yaml (N≈186–308).
 #
 # Run (on gpu node):
-#   MMML_WORKFLOW_CONFIG=config.smoke.gpu.yaml \
+#   KARML_WORKFLOW_CONFIG=config.smoke.gpu.yaml \
 #     bash scripts/job_shell.sh dcm_32_t300_l25
 
 solvents: [DCM]
@@ -11,7 +11,7 @@ bulk_density_fractions: []
 cluster_sizes: [32]
 temperatures: [300.0]
 box_sizes: [25.0]
-checkpoint: ${MMML_CKPT}
+checkpoint: ${KARML_CKPT}
 output_root: artifacts/pbc_liquid_density_dyn_smoke
 seed_base: 4242
 
@@ -79,5 +79,5 @@ ml_batch_size: 2048
 warmup_mlpot_jax: true
 warmup_do_mm: false
 
-mpirun_wrapper: ../../scripts/mmml-charmm-mpirun.sh
-MMML_MPI_NP: 1
+mpirun_wrapper: ../../scripts/karml-charmm-mpirun.sh
+KARML_MPI_NP: 1

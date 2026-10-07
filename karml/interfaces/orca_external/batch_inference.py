@@ -1,4 +1,4 @@
-"""Batched MMML inference for ORCA external-tool requests."""
+"""Batched KARML inference for ORCA external-tool requests."""
 
 from __future__ import annotations
 
@@ -11,14 +11,14 @@ import numpy as np
 from ase import Atoms
 from ase.calculators.calculator import Calculator
 
-from mmml.cli.misc.fix_and_split import (
+from karml.cli.misc.fix_and_split import (
     convert_energy_ev_to_hartree,
     convert_forces_ev_angstrom_to_hartree_bohr,
 )
-from mmml.interfaces.calculators.simple_inference import SimpleInferenceCalculator
+from karml.interfaces.calculators.simple_inference import SimpleInferenceCalculator
 
 
-def _mmml_forces_to_orca_gradient(forces_ev_angstrom: np.ndarray) -> np.ndarray:
+def _karml_forces_to_orca_gradient(forces_ev_angstrom: np.ndarray) -> np.ndarray:
     gradient_ev_angstrom = -np.asarray(forces_ev_angstrom, dtype=float)
     return convert_forces_ev_angstrom_to_hartree_bohr(gradient_ev_angstrom).reshape(-1)
 
@@ -37,7 +37,7 @@ def _evaluate_structure_single(
     )
     gradient: list[float] = []
     if do_gradient:
-        gradient = _mmml_forces_to_orca_gradient(atoms.get_forces()).tolist()
+        gradient = _karml_forces_to_orca_gradient(atoms.get_forces()).tolist()
     return float(energy_hartree), gradient
 
 
@@ -52,7 +52,7 @@ class OrcaStructureJob:
 def can_batch_calculator(calculator: Calculator) -> bool:
     """Return True when ``calculator`` supports multi-structure GPU batching."""
     return isinstance(calculator, SimpleInferenceCalculator) or hasattr(
-        calculator, "_mmml_physnet_model"
+        calculator, "_karml_physnet_model"
     )
 
 
@@ -205,7 +205,7 @@ def _results_from_batch_output(
             mol_forces = np.asarray(mol_forces, dtype=float).reshape(n_atoms, 3)
             if not np.isfinite(mol_forces).all():
                 raise ValueError(f"Non-finite forces for batch item {batch_idx}")
-            gradient = _mmml_forces_to_orca_gradient(mol_forces).tolist()
+            gradient = _karml_forces_to_orca_gradient(mol_forces).tolist()
             if len(gradient) != 3 * n_atoms:
                 raise ValueError(
                     f"Gradient length {len(gradient)} != {3 * n_atoms} for {n_atoms} atoms"
@@ -243,8 +243,8 @@ def _evaluate_physnet_ef_batch(
     calculator: Calculator,
     jobs: list[OrcaStructureJob],
 ) -> list[tuple[float, list[float]]]:
-    model = calculator._mmml_physnet_model
-    params = calculator._mmml_physnet_params
+    model = calculator._karml_physnet_model
+    params = calculator._karml_physnet_params
     natoms = int(model.natoms)
     atom_counts = _validate_atom_counts(jobs, natoms)
     flat_z, flat_r, _, _, batch_segments, _, flat_atom_mask, batch_size = _build_padded_batch(
@@ -257,7 +257,7 @@ def _evaluate_physnet_ef_batch(
         natoms=natoms,
     )
 
-    is_spooky = bool(getattr(calculator, "_mmml_physnet_is_spooky", False))
+    is_spooky = bool(getattr(calculator, "_karml_physnet_is_spooky", False))
     apply_kwargs: dict[str, Any] = {
         "atomic_numbers": jnp.array(flat_z),
         "positions": jnp.array(flat_r),
@@ -269,8 +269,8 @@ def _evaluate_physnet_ef_batch(
         "atom_mask": jnp.array(flat_atom_mask),
     }
     if is_spooky:
-        apply_kwargs["charges"] = jnp.full((batch_size * natoms, 1), calculator._mmml_spooky_charge)
-        apply_kwargs["spins"] = jnp.full((batch_size * natoms, 1), calculator._mmml_spooky_multiplicity)
+        apply_kwargs["charges"] = jnp.full((batch_size * natoms, 1), calculator._karml_spooky_charge)
+        apply_kwargs["spins"] = jnp.full((batch_size * natoms, 1), calculator._karml_spooky_multiplicity)
 
     output = model.apply(params, **apply_kwargs)
     return _results_from_batch_output(output, jobs, atom_counts, natoms=natoms)

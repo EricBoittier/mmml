@@ -10,7 +10,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from mmml.cli.misc.pet_physnet_distill import main as distill_main
+from karml.cli.misc.pet_physnet_distill import main as distill_main
 
 
 def main() -> int:

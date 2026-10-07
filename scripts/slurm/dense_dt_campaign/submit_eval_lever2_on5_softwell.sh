@@ -4,7 +4,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 cd "$ROOT"
 mkdir -p artifacts/lj_scales/dense_dt_campaign/logs
 
-EXPORT_LIST="LJ_DEVICE=gpu,JAX_PLATFORMS=cuda,MMML_MLPOT_DEVICE=gpu"
+EXPORT_LIST="LJ_DEVICE=gpu,JAX_PLATFORMS=cuda,KARML_MLPOT_DEVICE=gpu"
 EXPORT_LIST+=",DDC_ON5D_TAG=${DDC_ON5SW_TAG:-hybrid_mm_lever2_on5_softwell}"
 EXPORT_LIST+=",UV_NO_SYNC=1,PYTHONUNBUFFERED=1,PATH=${PATH},HOME=${HOME},USER=${USER:-$LOGNAME}"
 if [[ -n "${DDC_ON5SW_RUN_DIR:-}" ]]; then

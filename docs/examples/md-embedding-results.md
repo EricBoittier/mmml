@@ -18,7 +18,7 @@ JAX_PLATFORMS=cpu uv run python scripts/collect_md_embedding_docs_results.py
 | Train frames | 12500 |
 | Valid frames | 1249 |
 | Best valid loss | 102.65313720703125 |
-| Checkpoint JSON | `/home/ericb/mmml/artifacts/md_embedding/aaa_docs/aaa_smoke_params.json` |
+| Checkpoint JSON | `/home/ericb/karml/artifacts/md_embedding/aaa_docs/aaa_smoke_params.json` |
 
 ![Training loss](../images/examples/md-embedding/training_loss.png)
 

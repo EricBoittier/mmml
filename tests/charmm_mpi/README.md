@@ -15,7 +15,7 @@ Fast unit tests (mocked) run in the **build** CI job. Live PyCHARMM tests run in
 ## Related unit tests (outside this directory)
 
 - `tests/unit/test_charmm_mpi.py` — `charmm_mpi` module
-- `tests/unit/test_mpi_check.py` — `mmml mpi-check`
+- `tests/unit/test_mpi_check.py` — `karml mpi-check`
 - `tests/unit/test_mlpot_spatial_mpi_integration.py` — Tier 2 callback path
 
 ## Local commands
@@ -25,10 +25,10 @@ Fast unit tests (mocked) run in the **build** CI job. Live PyCHARMM tests run in
 pytest tests/charmm_mpi/ -m "not pycharmm" -q
 
 # Full suite on CHARMM node
-mmml mpi-check --tier2 --tier3
-MMML_MPI_NP=1 ./scripts/mmml-charmm-mpirun.sh pytest tests/charmm_mpi/ -q
+karml mpi-check --tier2 --tier3
+KARML_MPI_NP=1 ./scripts/karml-charmm-mpirun.sh pytest tests/charmm_mpi/ -q
 ```
 
-`mmml mpi-check --tier3` is informational: it can exit 0 while reporting Tier 3 production as blocked. Use `mmml mpi-check --tier3 --strict` when a script should fail until PyCHARMM exposes local/ghost atom metadata.
+`karml mpi-check --tier3` is informational: it can exit 0 while reporting Tier 3 production as blocked. Use `karml mpi-check --tier3 --strict` when a script should fail until PyCHARMM exposes local/ghost atom metadata.
 
 See [`docs/pycharmm-mpi.md`](../../docs/pycharmm-mpi.md).

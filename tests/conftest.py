@@ -1,4 +1,4 @@
-"""Shared pytest hooks and environment probes for MMML test selection."""
+"""Shared pytest hooks and environment probes for KARML test selection."""
 
 from __future__ import annotations
 
@@ -55,7 +55,7 @@ _sanitize_jax_platforms_env()
 
 
 def _block_pycharmm_imports_when_disabled() -> None:
-    """Make ``import pycharmm`` fail outright under ``MMML_DISABLE_CHARMM=1``.
+    """Make ``import pycharmm`` fail outright under ``KARML_DISABLE_CHARMM=1``.
 
     ``make test-ci`` exists to reproduce the CI ``build`` job -- which has no
     libcharmm -- on a machine that does have one. Hiding the library from
@@ -70,7 +70,7 @@ def _block_pycharmm_imports_when_disabled() -> None:
     """
     import sys
 
-    if (os.environ.get("MMML_DISABLE_CHARMM") or "").strip().lower() not in (
+    if (os.environ.get("KARML_DISABLE_CHARMM") or "").strip().lower() not in (
         "1",
         "true",
         "yes",
@@ -84,7 +84,7 @@ def _block_pycharmm_imports_when_disabled() -> None:
         def find_spec(self, fullname, path=None, target=None):
             if fullname == "pycharmm" or fullname.startswith("pycharmm."):
                 raise ImportError(
-                    f"{fullname} is blocked by MMML_DISABLE_CHARMM=1 "
+                    f"{fullname} is blocked by KARML_DISABLE_CHARMM=1 "
                     "(see tests/conftest.py)"
                 )
             return None
@@ -110,17 +110,17 @@ def pytest_configure(config: pytest.Config) -> None:
     """Avoid blocking ``dlopen(libcharmm)`` while collecting tests.
 
     MPI-linked CHARMM can hang for minutes (or forever) when pytest imports
-    ``mmml_calculator`` / ``hybrid_mlpot`` in a plain serial shell.  Live
-    PyCHARMM jobs use ``mmml-charmm-mpirun.sh`` or import CHARMM inside the
-    test body after bootstrap.  Override with ``MMML_WARMUP_MLPOT_JAX_ONLY=0``.
+    ``karml_calculator`` / ``hybrid_mlpot`` in a plain serial shell.  Live
+    PyCHARMM jobs use ``karml-charmm-mpirun.sh`` or import CHARMM inside the
+    test body after bootstrap.  Override with ``KARML_WARMUP_MLPOT_JAX_ONLY=0``.
     """
-    if os.environ.get("MMML_WARMUP_MLPOT_JAX_ONLY", "").strip().lower() in (
+    if os.environ.get("KARML_WARMUP_MLPOT_JAX_ONLY", "").strip().lower() in (
         "0",
         "false",
         "no",
     ):
         return
-    os.environ.setdefault("MMML_WARMUP_MLPOT_JAX_ONLY", "1")
+    os.environ.setdefault("KARML_WARMUP_MLPOT_JAX_ONLY", "1")
 
 # Committed inputs copied into each isolated PyCHARMM workdir when present.
 _PYCHARMM_SEED_PDBS = (
@@ -143,8 +143,8 @@ _PYCHARMM_PATH_PREFIXES = (
     "functionality/mlpot/test_mlpot_dynamics_smoke.py",
     "functionality/mlpot/test_live_optimizers_dynamics.py",
     "functionality/mlpot/test_comp_velocities_integration.py",
-    "functionality/mmml_tests/test_mmml_calc.py",
-    "functionality/mmml_tests/test_ase_jaxmd_pbc_consistency.py",
+    "functionality/karml_tests/test_karml_calc.py",
+    "functionality/karml_tests/test_ase_jaxmd_pbc_consistency.py",
     "misc/test_charmm.py",
     "integration/test_dcm_charmm_regression.py",
 )
@@ -154,8 +154,8 @@ _GPU_PATH_PREFIXES = (
     "functionality/mlpot/test_mlpot_energy_matches_ase.py",
     "functionality/mlpot/test_mlpot_dynamics_smoke.py",
     "functionality/mlpot/test_live_optimizers_dynamics.py",
-    "functionality/mmml_tests/test_mmml_calc.py",
-    "functionality/mmml_tests/test_ase_jaxmd_pbc_consistency.py",
+    "functionality/karml_tests/test_karml_calc.py",
+    "functionality/karml_tests/test_ase_jaxmd_pbc_consistency.py",
     "functionality/pycharmmETC/test_physnetjax_calc.py",
     "functionality/pycharmmETC/test_spookynetjax_calc.py",
     "misc/test_orbax_json_checkpoint.py",
@@ -178,7 +178,7 @@ _CHARMM_SERIAL_PATH_PREFIXES: tuple[str, ...] = (
 def charmm_rebuild_psf_unsafe_under_mpirun() -> bool:
     """True when a second in-process PSF/CGENFF read is unsafe (MPI-linked libcharmm)."""
     try:
-        from mmml.interfaces.pycharmmInterface.charmm_mpi import (
+        from karml.interfaces.pycharmmInterface.charmm_mpi import (
             _under_mpirun,
             charmm_lib_links_mpi,
         )
@@ -202,7 +202,7 @@ def _matches_any(rel: str, prefixes: tuple[str, ...]) -> bool:
 
 def can_import_pycharmm() -> bool:
     try:
-        from mmml.interfaces.pycharmmInterface.charmm_mpi import charmm_lib_available
+        from karml.interfaces.pycharmmInterface.charmm_mpi import charmm_lib_available
 
         return charmm_lib_available()
     except Exception:
@@ -211,8 +211,8 @@ def can_import_pycharmm() -> bool:
 
 def charmm_env_configured() -> bool:
     try:
-        from mmml.interfaces.pycharmmInterface.charmm_mpi import charmm_lib_available
-        from mmml.interfaces.pycharmmInterface.charmm_paths import resolve_charmm_paths
+        from karml.interfaces.pycharmmInterface.charmm_mpi import charmm_lib_available
+        from karml.interfaces.pycharmmInterface.charmm_paths import resolve_charmm_paths
 
         home, lib = resolve_charmm_paths()
         if not home or not lib:
@@ -241,7 +241,7 @@ def bonded_block_hangs_under_mpi_mpirun() -> bool:
     ``apply_charmm_mm_block`` are fine.
     """
     try:
-        from mmml.interfaces.pycharmmInterface.charmm_mpi import (
+        from karml.interfaces.pycharmmInterface.charmm_mpi import (
             selective_bonded_block_unsafe_under_mpi,
         )
 
@@ -283,8 +283,8 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
 
     if any(item.get_closest_marker("pycharmm") is not None for item in items):
         try:
-            from mmml.interfaces.pycharmmInterface.charmm_mpi import _under_mpirun
-            from mmml.interfaces.pycharmmInterface.import_pycharmm import (
+            from karml.interfaces.pycharmmInterface.charmm_mpi import _under_mpirun
+            from karml.interfaces.pycharmmInterface.import_pycharmm import (
                 ensure_pycharmm_loaded,
             )
 
@@ -294,8 +294,8 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
             pass
 
 
-# Raised by the ``MMML_DISABLE_CHARMM`` meta-path blocker installed above.
-_BLOCKED_IMPORT_SIGNATURE = "blocked by MMML_DISABLE_CHARMM"
+# Raised by the ``KARML_DISABLE_CHARMM`` meta-path blocker installed above.
+_BLOCKED_IMPORT_SIGNATURE = "blocked by KARML_DISABLE_CHARMM"
 
 # Substrings that identify a failure caused purely by ``libcharmm`` being
 # absent (unbuilt), rather than a genuine defect in the code under test.
@@ -305,7 +305,7 @@ _CHARMM_UNAVAILABLE_SIGNATURES = (
     "Failed to load CHARMM shared library",
     "No module named 'pycharmm.",
     "'pycharmm' is not a package",
-    # The MMML_DISABLE_CHARMM blocker above. Without this the flag turns the
+    # The KARML_DISABLE_CHARMM blocker above. Without this the flag turns the
     # ~50 tests that reach production code importing pycharmm into failures
     # instead of the skips CI produces, which is the opposite of what a
     # CI-reproduction switch is for.
@@ -337,13 +337,13 @@ def pytest_runtest_call(item: pytest.Item):
     if excinfo is None:
         return
     exc = excinfo[1]
-    # c52a1's loader wraps the dlopen OSError in RuntimeError (and MMML's
+    # c52a1's loader wraps the dlopen OSError in RuntimeError (and KARML's
     # CharmmLibraryLoadError is both). Treat that the same as a bare OSError
     # when the library is simply absent.
     if not isinstance(exc, (OSError, ImportError, RuntimeError)):
         return
     message = _charmm_unavailable_message(exc)
-    # The MMML_DISABLE_CHARMM blocker is a deliberate harness decision, so it
+    # The KARML_DISABLE_CHARMM blocker is a deliberate harness decision, so it
     # always yields a skip -- unlike the signatures below it does not describe
     # the machine's real CHARMM state, and a test that clears the flag for its
     # own discovery assertions must not turn the blocker into a failure.
@@ -368,7 +368,7 @@ def _jax_enable_x64_for_pycharmm_tests(request: pytest.FixtureRequest) -> None:
 
 @pytest.fixture(autouse=True)
 def _charmm_default_levels_for_pycharmm_tests(request: pytest.FixtureRequest) -> None:
-    """Live PyCHARMM tests load CHARMM outside ``import_pycharmm`` when ``MMML_WARMUP_MLPOT_JAX_ONLY=1``.
+    """Live PyCHARMM tests load CHARMM outside ``import_pycharmm`` when ``KARML_WARMUP_MLPOT_JAX_ONLY=1``.
 
     Unit-test collection skips ``apply_charmm_verbosity(bomlev=-2)``; ensure relaxed
     BOMLEV before the first ``read`` / ``nbonds`` in each live test body.
@@ -376,12 +376,12 @@ def _charmm_default_levels_for_pycharmm_tests(request: pytest.FixtureRequest) ->
     if request.node.get_closest_marker("pycharmm") is None:
         return
     try:
-        from mmml.interfaces.pycharmmInterface.import_pycharmm import (
+        from karml.interfaces.pycharmmInterface.import_pycharmm import (
             ensure_pycharmm_loaded,
         )
 
         ensure_pycharmm_loaded()
-        from mmml.interfaces.pycharmmInterface.mlpot.setup import apply_charmm_verbosity
+        from karml.interfaces.pycharmmInterface.mlpot.setup import apply_charmm_verbosity
 
         apply_charmm_verbosity(prnlev=5, warnlev=5, bomlev=-2)
     except Exception:
@@ -403,7 +403,7 @@ def build_synthetic_water_box(n_waters: int = 8, box_len: float = 18.0, seed: in
     """
     import numpy as np
 
-    from mmml.md.system import FFParams, MolecularSystem
+    from karml.md.system import FFParams, MolecularSystem
 
     rng = np.random.default_rng(seed)
     geom = np.array([[0.0, 0.0, 0.0], [0.757, 0.586, 0.0], [-0.757, 0.586, 0.0]])
@@ -459,7 +459,7 @@ def synthetic_water_box():
 # ``os._exit`` is deliberately confined to the failure path: for a clean run we
 # let normal shutdown proceed so OpenMPI can finalize (``os._exit(0)`` skips
 # MPI_Finalize, after which PRRTE often returns 1 for a successful job). This is
-# the same trade-off ``mmml.cli.__main__._hard_exit`` makes.
+# the same trade-off ``karml.cli.__main__._hard_exit`` makes.
 #
 # It runs in ``pytest_unconfigure`` rather than ``pytest_sessionfinish`` so that
 # the JUnit writer and pytest-cov have already emitted their reports -- killing
@@ -502,7 +502,7 @@ def pytest_unconfigure(config) -> None:  # noqa: ARG001
         return
     if not _pycharmm_was_loaded():
         return  # no Fortran finalizer to outrun; let pytest exit normally
-    if (os.environ.get("MMML_NO_FORCE_PYTEST_EXIT") or "").strip().lower() in (
+    if (os.environ.get("KARML_NO_FORCE_PYTEST_EXIT") or "").strip().lower() in (
         "1",
         "true",
         "yes",

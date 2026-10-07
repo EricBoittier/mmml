@@ -22,7 +22,7 @@ import pytest
 
 jax = pytest.importorskip("jax")
 
-from mmml.models.dcmnet.dcmnet.data import (  # noqa: E402
+from karml.models.dcmnet.dcmnet.data import (  # noqa: E402
     assert_dataset_size,
     cut_vdw,
     get_choices,

@@ -9,7 +9,7 @@ from unittest import mock
 import numpy as np
 import pytest
 
-from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
     assert_stage_dynamics_completed,
     classify_chunk_outcome,
     count_dcd_frames,
@@ -21,7 +21,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
     restart_has_nonfinite_coordinates,
     _restart_coordinate_values,
 )
-from mmml.utils.dcd_writer import concat_dcd_files, save_trajectory_dcd
+from karml.utils.dcd_writer import concat_dcd_files, save_trajectory_dcd
 
 
 def test_expected_dcd_frame_count():
@@ -31,7 +31,7 @@ def test_expected_dcd_frame_count():
 
 
 def test_harmonize_nsavc_frequency():
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         harmonize_nsavc_frequency,
     )
 
@@ -42,7 +42,7 @@ def test_harmonize_nsavc_frequency():
 
 
 def test_nsavc_for_chunk_preserving_interval():
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         nsavc_for_chunk_preserving_interval,
     )
 
@@ -56,7 +56,7 @@ def test_nsavc_for_chunk_preserving_interval():
 
 
 def test_install_target_dcd_metadata_from_interval_ps():
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         install_target_dcd_metadata,
         resolve_target_dcd_nsavc,
     )
@@ -68,7 +68,7 @@ def test_install_target_dcd_metadata_from_interval_ps():
 
 
 def test_expected_overlap_chunk_dcd_frame_count_benz30_equi_case():
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         expected_overlap_chunk_dcd_frame_count,
     )
 
@@ -82,7 +82,7 @@ def test_expected_overlap_chunk_dcd_frame_count_benz30_equi_case():
 
 
 def test_expected_overlap_chunk_dcd_frame_count_heat_segment_case():
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         expected_overlap_chunk_dcd_frame_count,
     )
 
@@ -193,7 +193,7 @@ def test_assert_stage_dynamics_completed_fails_short_integrated_step(tmp_path):
 
 
 def test_assert_stage_dynamics_completed_accepts_overlap_chunk_dcds(tmp_path):
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         assert_stage_dynamics_completed,
     )
 
@@ -227,8 +227,8 @@ def test_assert_stage_dynamics_completed_accepts_overlap_chunk_dcds(tmp_path):
 
 
 def test_scan_dcd_frame_count_truncated_header(tmp_path):
-    from mmml.utils.dcd_reader import scan_dcd_frame_count
-    from mmml.utils.dcd_writer import save_trajectory_dcd
+    from karml.utils.dcd_reader import scan_dcd_frame_count
+    from karml.utils.dcd_writer import save_trajectory_dcd
 
     import numpy as np
 
@@ -254,10 +254,10 @@ def test_scan_dcd_frame_count_truncated_header(tmp_path):
 
 
 def test_count_readable_dcd_frames_truncated(tmp_path):
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         count_readable_dcd_frames,
     )
-    from mmml.utils.dcd_writer import save_trajectory_dcd
+    from karml.utils.dcd_writer import save_trajectory_dcd
 
     import numpy as np
 
@@ -300,38 +300,38 @@ def test_run_dynamics_clears_comparison_coords_when_iasvel_zero_no_start():
     import sys
     from unittest.mock import MagicMock, patch
 
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import run_dynamics
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import run_dynamics
 
     fake_pycharmm = MagicMock()
     dyn = MagicMock()
     fake_pycharmm.DynamicsScript.return_value = dyn
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._resolve_dynamics_init_velocities",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._resolve_dynamics_init_velocities",
         return_value={
             "vx": np.array([1.0]),
             "vy": np.array([0.0]),
             "vz": np.array([0.0]),
         },
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.mirror_comparison_velocities_for_dynamics",
+        "karml.interfaces.pycharmmInterface.mlpot.comp_velocities.mirror_comparison_velocities_for_dynamics",
     ) as mirror_comp, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.sync_charmm_velocities_akma",
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.sync_charmm_velocities_akma",
     ) as sync_vel, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.maybe_assign_velocities_via_ase_if_cold",
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.maybe_assign_velocities_via_ase_if_cold",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._release_charmm_dynamics_api_buffers",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._release_charmm_dynamics_api_buffers",
     ) as release_bufs, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_c_api_available",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_c_api_available",
         return_value=True,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._finalize_init_velocities_handoff",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._finalize_init_velocities_handoff",
         return_value={
             "vx": np.array([1.0]),
             "vy": np.array([0.0]),
             "vz": np.array([0.0]),
         },
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_via_c_api",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_via_c_api",
         return_value=dyn,
     ) as run_c_api, patch.dict(
         # pycharmm.lib as well as the parent: run_dynamics finishes with
@@ -350,7 +350,7 @@ def test_release_charmm_dynamics_api_buffers_calls_del_routines():
     import sys
     from unittest.mock import MagicMock, patch
 
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _release_charmm_dynamics_api_buffers,
     )
 
@@ -373,7 +373,7 @@ def test_release_charmm_dynamics_api_buffers_calls_del_routines():
 
 
 def test_build_nve_dynamics_restart_uses_iasvel_zero():
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import build_nve_dynamics
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import build_nve_dynamics
 
     kw = build_nve_dynamics(restart=True, temp=300.0)
     assert kw["iasvel"] == 0
@@ -472,7 +472,7 @@ def test_read_restart_last_step_prefers_jhstrt_over_segment_nstep(tmp_path):
 
 
 def test_valid_restart_file_rejects_coordinate_files(tmp_path):
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import _valid_restart_file
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import _valid_restart_file
 
     crd = tmp_path / "03_bmm.crd"
     crd.write_text("title\n  2\n", encoding="utf-8")
@@ -489,7 +489,7 @@ def test_valid_restart_file_rejects_coordinate_files(tmp_path):
 
 
 def test_integrated_step_from_restart_segment_local_scratch(tmp_path):
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         CharmmTrajectoryFiles,
         _integrated_step_from_restart,
     )
@@ -515,7 +515,7 @@ def test_integrated_step_from_restart_segment_local_scratch(tmp_path):
 
 
 def test_integrated_step_from_restart_stale_nstep_field(tmp_path):
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         CharmmTrajectoryFiles,
         _integrated_step_from_restart,
     )
@@ -540,7 +540,7 @@ def test_integrated_step_from_restart_stale_nstep_field(tmp_path):
 
 
 def test_patch_restart_global_step_updates_jhstrt(tmp_path):
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         patch_restart_global_step,
         read_restart_last_step,
     )
@@ -559,7 +559,7 @@ def test_patch_restart_global_step_updates_jhstrt(tmp_path):
 
 def test_patch_restart_global_step_preserves_fortran_restart_format(tmp_path):
     """Post-rescue READYN needs fixed-width I10 lines, not space-joined tokens."""
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         patch_restart_global_step,
         read_restart_last_step,
     )
@@ -614,7 +614,7 @@ def test_read_restart_coordinates_from_fixture():
 
 
 def test_read_crd_coordinates_from_pycharmm_ext_fixture():
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         read_crd_coordinates,
     )
 
@@ -719,7 +719,7 @@ def test_restart_has_nonfinite_coordinates_false_for_finite_restart(tmp_path):
 
 
 def test_restart_coordinates_are_unsafe_detects_flyoff(tmp_path):
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         restart_coordinates_are_unsafe,
     )
 
@@ -738,7 +738,7 @@ def test_restart_coordinates_are_unsafe_detects_flyoff(tmp_path):
 def test_validate_charmm_dynamics_quarantines_stale_unsafe_restart_when_memory_ok(
     tmp_path,
 ):
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         validate_charmm_dynamics_state_after_chunk,
     )
 
@@ -752,25 +752,25 @@ def test_validate_charmm_dynamics_quarantines_stale_unsafe_restart_when_memory_o
         )
     )
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.charmm_dynamics_state_is_finite",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics_validation.charmm_dynamics_state_is_finite",
         return_value=True,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.charmm_coordinates_are_finite",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics_validation.charmm_coordinates_are_finite",
         return_value=True,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.charmm_dynamics_energy_is_finite",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics_validation.charmm_dynamics_energy_is_finite",
         return_value=True,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.charmm_coordinates_are_nontrivial",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics_validation.charmm_coordinates_are_nontrivial",
         return_value=True,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.charmm_coordinates_are_bounded",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics_validation.charmm_coordinates_are_bounded",
         return_value=True,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.charmm_dynamics_energy_is_plausible",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics_validation.charmm_dynamics_energy_is_plausible",
         return_value=True,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.charmm_dynamics_grms_is_plausible",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics_validation.charmm_dynamics_grms_is_plausible",
         return_value=True,
     ):
         validate_charmm_dynamics_state_after_chunk(
@@ -782,27 +782,27 @@ def test_validate_charmm_dynamics_quarantines_stale_unsafe_restart_when_memory_o
 
 
 def test_validate_charmm_dynamics_rejects_high_finite_grms():
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         validate_charmm_dynamics_state_after_chunk,
     )
 
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.charmm_coordinates_are_finite",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics_validation.charmm_coordinates_are_finite",
         return_value=True,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.charmm_dynamics_energy_is_finite",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics_validation.charmm_dynamics_energy_is_finite",
         return_value=True,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.charmm_coordinates_are_nontrivial",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics_validation.charmm_coordinates_are_nontrivial",
         return_value=True,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.charmm_coordinates_are_bounded",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics_validation.charmm_coordinates_are_bounded",
         return_value=True,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.charmm_dynamics_energy_is_plausible",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics_validation.charmm_dynamics_energy_is_plausible",
         return_value=True,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.charmm_dynamics_grms_is_plausible",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics_validation.charmm_dynamics_grms_is_plausible",
         return_value=False,
     ):
         with pytest.raises(RuntimeError, match="CHARMM GRMS exceeds"):
@@ -813,27 +813,27 @@ def test_validate_charmm_dynamics_rejects_high_finite_grms():
 
 
 def test_validate_charmm_dynamics_can_skip_stale_grms_for_post_mini_sync():
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         validate_charmm_dynamics_state_after_chunk,
     )
 
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.charmm_coordinates_are_finite",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics_validation.charmm_coordinates_are_finite",
         return_value=True,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.charmm_dynamics_energy_is_finite",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics_validation.charmm_dynamics_energy_is_finite",
         return_value=True,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.charmm_coordinates_are_nontrivial",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics_validation.charmm_coordinates_are_nontrivial",
         return_value=True,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.charmm_coordinates_are_bounded",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics_validation.charmm_coordinates_are_bounded",
         return_value=True,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.charmm_dynamics_energy_is_plausible",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics_validation.charmm_dynamics_energy_is_plausible",
         return_value=True,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.charmm_dynamics_grms_is_plausible",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics_validation.charmm_dynamics_grms_is_plausible",
         return_value=False,
     ):
         validate_charmm_dynamics_state_after_chunk(
@@ -978,7 +978,7 @@ def test_assert_stage_dynamics_completed_fails_nonfinite_restart(tmp_path):
 
 
 def test_resolve_integrated_restart_step_stale_subchunk_header(tmp_path):
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         resolve_integrated_restart_step,
     )
 
@@ -994,7 +994,7 @@ def test_resolve_integrated_restart_step_stale_subchunk_header(tmp_path):
 
 
 def test_assert_stage_dynamics_completed_accepts_stale_restart_after_rescue(tmp_path):
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         assert_stage_dynamics_completed,
     )
 
@@ -1019,7 +1019,7 @@ def test_assert_stage_dynamics_completed_accepts_stale_restart_after_rescue(tmp_
 def test_assert_stage_dynamics_completed_accepts_empty_dcd_when_restart_complete(
     tmp_path, capsys
 ):
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         assert_stage_dynamics_completed,
     )
 
@@ -1046,7 +1046,7 @@ def test_assert_stage_dynamics_completed_accepts_empty_dcd_when_restart_complete
 
 
 def test_rewrite_dynamics_restart_validated_detects_nan(tmp_path, monkeypatch):
-    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+    from karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
         rewrite_dynamics_restart_validated,
     )
 
@@ -1071,14 +1071,14 @@ def test_rewrite_dynamics_restart_validated_detects_nan(tmp_path, monkeypatch):
         Path(path).write_text(bad.read_text(encoding="utf-8"), encoding="utf-8")
 
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.rewrite_dynamics_restart_from_current_state",
+        "karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.rewrite_dynamics_restart_from_current_state",
         fake_rewrite,
     )
     assert rewrite_dynamics_restart_validated(bad) is False
 
 
 def test_rewrite_dynamics_restart_validated_detects_missing(tmp_path, monkeypatch):
-    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+    from karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
         rewrite_dynamics_restart_validated,
     )
 
@@ -1089,14 +1089,14 @@ def test_rewrite_dynamics_restart_validated_detects_missing(tmp_path, monkeypatc
         Path(path).write_text("uninitialized restart file text", encoding="utf-8")
 
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.rewrite_dynamics_restart_from_current_state",
+        "karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.rewrite_dynamics_restart_from_current_state",
         fake_rewrite,
     )
     assert rewrite_dynamics_restart_validated(bad) is False
 
 
 def test_restore_post_rescue_coordinates_prefers_memory(monkeypatch):
-    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+    from karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
         restore_post_rescue_coordinates,
     )
 
@@ -1107,7 +1107,7 @@ def test_restore_post_rescue_coordinates_prefers_memory(monkeypatch):
         synced.append(np.asarray(arr, dtype=float).copy())
 
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
         fake_sync,
     )
     source = restore_post_rescue_coordinates(rescued_positions=pos)
@@ -1118,7 +1118,7 @@ def test_restore_post_rescue_coordinates_prefers_memory(monkeypatch):
 def test_refresh_segment_restart_after_overlap_rescue_recovers_from_memory(
     tmp_path, monkeypatch, capsys
 ):
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _refresh_segment_restart_after_overlap_rescue,
     )
 
@@ -1131,15 +1131,15 @@ def test_refresh_segment_restart_after_overlap_rescue_recovers_from_memory(
         return validated_calls["n"] > 1
 
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.rewrite_dynamics_restart_validated",
+        "karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.rewrite_dynamics_restart_validated",
         fake_validated,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         lambda: rescued.copy(),
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._assign_post_rescue_velocities_and_crystal",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._assign_post_rescue_velocities_and_crystal",
         lambda *_a, **_kw: None,
     )
     restored: list[np.ndarray] = []
@@ -1149,7 +1149,7 @@ def test_refresh_segment_restart_after_overlap_rescue_recovers_from_memory(
         return "in-memory rescue positions"
 
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.restore_post_rescue_coordinates",
+        "karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.restore_post_rescue_coordinates",
         fake_restore,
     )
 
@@ -1166,7 +1166,7 @@ def test_refresh_segment_restart_after_overlap_rescue_recovers_from_memory(
 
 
 def test_rewrite_dynamics_restart_validated_patches_negative_step(tmp_path, monkeypatch):
-    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+    from karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
         rewrite_dynamics_restart_validated,
     )
 
@@ -1182,7 +1182,7 @@ def test_rewrite_dynamics_restart_validated_patches_negative_step(tmp_path, monk
         )
 
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.rewrite_dynamics_restart_from_current_state",
+        "karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.rewrite_dynamics_restart_from_current_state",
         fake_rewrite,
     )
 
@@ -1195,7 +1195,7 @@ def test_rewrite_dynamics_restart_validated_patches_negative_step(tmp_path, monk
 
 
 def test_integrated_step_from_restart_negative_aborted_step(tmp_path):
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         CharmmTrajectoryFiles,
         _integrated_step_from_restart,
     )
@@ -1238,7 +1238,7 @@ def test_integrated_step_from_restart_negative_aborted_step(tmp_path):
 
 
 def test_patch_restart_readyn_handoff_harmonizes_nsavv_on_wridyn_stub(tmp_path):
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         patch_restart_readyn_handoff,
         read_restart_last_step,
         read_restart_nsavc,
@@ -1271,7 +1271,7 @@ def test_patch_restart_readyn_handoff_harmonizes_nsavv_on_wridyn_stub(tmp_path):
 
 
 def test_patch_restart_readyn_handoff_preserves_prod_header_layout(tmp_path):
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         patch_restart_readyn_handoff,
         read_restart_last_step,
         read_restart_nsavc,
@@ -1304,11 +1304,11 @@ def test_patch_restart_readyn_handoff_preserves_prod_header_layout(tmp_path):
 
 
 def test_harmonize_overlap_readyn_restart_patches_valid_wridyn(tmp_path):
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _harmonize_overlap_chunk_frequencies,
         _harmonize_overlap_readyn_restart_before_readyn,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         read_restart_nsavv,
     )
 
@@ -1341,11 +1341,11 @@ def test_harmonize_overlap_readyn_restart_patches_valid_wridyn(tmp_path):
 
 def test_rewrite_overlap_readyn_restart_harmonizes_nsavv(tmp_path, monkeypatch):
     """Fallback rewrite path when scratch restart is not WRIDYN-valid."""
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _harmonize_overlap_chunk_frequencies,
         _rewrite_overlap_readyn_restart_from_memory,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         read_restart_nsavv,
     )
 
@@ -1369,11 +1369,11 @@ def test_rewrite_overlap_readyn_restart_harmonizes_nsavv(tmp_path, monkeypatch):
         return True
 
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._valid_restart_file",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._valid_restart_file",
         lambda _path: None,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.rewrite_dynamics_restart_validated",
+        "karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.rewrite_dynamics_restart_validated",
         fake_rewrite,
     )
 
@@ -1403,7 +1403,7 @@ def test_rewrite_overlap_readyn_restart_harmonizes_nsavv(tmp_path, monkeypatch):
 
 
 def test_assert_stage_dynamics_completed_rejects_empty_dcd_after_full_integration(tmp_path):
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         assert_stage_dynamics_completed,
     )
 
@@ -1435,7 +1435,7 @@ def test_restart_patchers_keep_rest_header_ldyna_issue_219(tmp_path, step, patch
     the running integrator, turning the step-displacement array into
     ``disp - positions`` and giving KE ~1e9 on the first post-handoff step.
     """
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         patch_restart_global_step,
         patch_restart_readyn_handoff,
         read_restart_last_step,
@@ -1463,7 +1463,7 @@ def test_restart_patchers_keep_rest_header_ldyna_issue_219(tmp_path, step, patch
 
 
 def test_expected_overlap_stage_dcd_frame_count_uses_global_cadence():
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         expected_overlap_stage_dcd_frame_count,
     )
 
@@ -1501,7 +1501,7 @@ def test_assert_stage_warns_when_chunk_frames_below_global_cadence(tmp_path, cap
 
 def test_read_restart_positions_uses_xold_of_leapfrog_restart():
     """NVE (leap-frog) restarts: positions are XOLD; X, Y, Z holds the ~1e-3 A step displacement."""
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         _restart_section_values,
         read_restart_positions,
     )
@@ -1515,7 +1515,7 @@ def test_read_restart_positions_uses_xold_of_leapfrog_restart():
 
 
 def test_read_restart_positions_coordinate_only_restart(tmp_path):
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import read_restart_positions
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import read_restart_positions
 
     pos = np.array([[1.25, -2.5, 3.75], [-7.5, 11.25, -13.5]])
     body = "".join("".join(f"{v:22.15E}".replace("E", "D") for v in row) + "\n" for row in pos)

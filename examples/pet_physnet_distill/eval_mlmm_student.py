@@ -31,7 +31,7 @@ def _predict(model, params, R, Z, N, batch_size: int) -> tuple[np.ndarray, np.nd
     """Energies (eV) and forces (eV/Å) in input order; pads the last batch."""
     import jax
 
-    from mmml.models.physnetjax.physnetjax.data.batches import prepare_batches_jit
+    from karml.models.physnetjax.physnetjax.data.batches import prepare_batches_jit
 
     n, pad = R.shape[0], R.shape[1]
     extra = (-n) % batch_size
@@ -87,8 +87,8 @@ def main() -> int:
     p.add_argument("--ml-switch-width", type=float, default=1.5)
     args = p.parse_args()
 
-    from mmml.cli.misc.physnet_evaluate import _load_physnet_checkpoint
-    from mmml.interfaces.pycharmmInterface.calculator_utils import ml_switch_scale
+    from karml.cli.misc.physnet_evaluate import _load_physnet_checkpoint
+    from karml.interfaces.pycharmmInterface.calculator_utils import ml_switch_scale
 
     d = np.load(args.data, allow_pickle=True)
     R, Z, N = d["R"], d["Z"], d["N"].reshape(-1)

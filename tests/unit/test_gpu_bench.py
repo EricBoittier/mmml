@@ -266,12 +266,12 @@ def test_run_asv_reraises_other_failures(monkeypatch, tmp_path: Path):
 
 def test_prepare_bench_env_sets_gpu_defaults(monkeypatch, tmp_path: Path):
     for key in (
-        "MMML_BENCH_X64",
+        "KARML_BENCH_X64",
         "JAX_ENABLE_X64",
         "OMP_NUM_THREADS",
         "JAX_PLATFORMS",
-        "MMML_CKPT",
-        "MMML_BENCH_CKPT",
+        "KARML_CKPT",
+        "KARML_BENCH_CKPT",
     ):
         monkeypatch.delenv(key, raising=False)
     ckpt = tmp_path / "examples" / "ckpts_json" / "DESdimers_params.json"
@@ -279,9 +279,9 @@ def test_prepare_bench_env_sets_gpu_defaults(monkeypatch, tmp_path: Path):
     ckpt.write_text("{}")
     env = prepare_bench_env(tmp_path, allow_cpu=False)
     assert env["JAX_PLATFORMS"] == "cuda"
-    assert env["MMML_BENCH_X64"] == "1"
+    assert env["KARML_BENCH_X64"] == "1"
     assert env["OMP_NUM_THREADS"] == "1"
-    assert env["MMML_CKPT"].endswith("DESdimers_params.json")
+    assert env["KARML_CKPT"].endswith("DESdimers_params.json")
 
 
 def test_prepare_bench_env_respects_allow_cpu(monkeypatch, tmp_path: Path):
@@ -290,25 +290,25 @@ def test_prepare_bench_env_respects_allow_cpu(monkeypatch, tmp_path: Path):
     assert "JAX_PLATFORMS" not in env or env.get("JAX_PLATFORMS") != "cuda"
 
 
-def test_prepare_bench_env_does_not_leak_mmml_ckpt(monkeypatch, tmp_path: Path):
-    monkeypatch.delenv("MMML_CKPT", raising=False)
-    monkeypatch.delenv("MMML_CHECKPOINT", raising=False)
-    monkeypatch.delenv("MMML_BENCH_CKPT", raising=False)
+def test_prepare_bench_env_does_not_leak_karml_ckpt(monkeypatch, tmp_path: Path):
+    monkeypatch.delenv("KARML_CKPT", raising=False)
+    monkeypatch.delenv("KARML_CHECKPOINT", raising=False)
+    monkeypatch.delenv("KARML_BENCH_CKPT", raising=False)
     prepare_bench_env(tmp_path, allow_cpu=True)
-    assert "MMML_CKPT" not in os.environ
+    assert "KARML_CKPT" not in os.environ
 
 
-def test_prepare_bench_env_keeps_bench_ckpt_off_mmml_ckpt(monkeypatch, tmp_path: Path):
-    monkeypatch.delenv("MMML_CKPT", raising=False)
-    monkeypatch.setenv("MMML_BENCH_CKPT", "/bench/only.json")
+def test_prepare_bench_env_keeps_bench_ckpt_off_karml_ckpt(monkeypatch, tmp_path: Path):
+    monkeypatch.delenv("KARML_CKPT", raising=False)
+    monkeypatch.setenv("KARML_BENCH_CKPT", "/bench/only.json")
     env = prepare_bench_env(tmp_path, allow_cpu=True)
-    assert env["MMML_BENCH_CKPT"] == "/bench/only.json"
-    assert "MMML_CKPT" not in env
+    assert env["KARML_BENCH_CKPT"] == "/bench/only.json"
+    assert "KARML_CKPT" not in env
 
-    monkeypatch.setenv("MMML_CKPT", "/general/ckpt.json")
+    monkeypatch.setenv("KARML_CKPT", "/general/ckpt.json")
     env_both = prepare_bench_env(tmp_path, allow_cpu=True)
-    assert env_both["MMML_CKPT"] == "/general/ckpt.json"
-    assert env_both["MMML_BENCH_CKPT"] == "/bench/only.json"
+    assert env_both["KARML_CKPT"] == "/general/ckpt.json"
+    assert env_both["KARML_BENCH_CKPT"] == "/bench/only.json"
 
 
 def test_latest_asv_result_files_skips_metadata(tmp_path: Path):
@@ -549,7 +549,7 @@ def test_run_gpu_benchmark_checks_only_skips_timing(monkeypatch, tmp_path: Path)
 def test_physnet_probe_uses_checkpoint_model_and_resolves_epoch(tmp_path, monkeypatch, layout):
     from benchmarks import gpu_bench_lib
     from benchmarks.benchmarks import _common, bench_ml_physnet
-    from mmml.cli import base
+    from karml.cli import base
 
     if layout == "json":
         checkpoint = tmp_path / "different_architecture.json"

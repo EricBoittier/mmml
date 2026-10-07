@@ -3,7 +3,7 @@
 This is the seam both front-ends (``md-system --backend jaxmd`` and the
 ``cg_jaxmd`` example) call instead of their bespoke inline setup: it resolves the
 builder, composes the selected energy terms into a :class:`HybridEnergy`, and
-hands the result to a :class:`~mmml.md.drivers.JaxmdDriver`. Heavy imports (jax,
+hands the result to a :class:`~karml.md.drivers.JaxmdDriver`. Heavy imports (jax,
 CHARMM, jax-md) stay lazy so importing this module is cheap.
 """
 
@@ -11,8 +11,8 @@ from __future__ import annotations
 
 from typing import Any, Callable, Mapping, Sequence
 
-from mmml.md.config import RunConfig
-from mmml.md.system import MolecularSystem, SystemSpec
+from karml.md.config import RunConfig
+from karml.md.system import MolecularSystem, SystemSpec
 
 __all__ = [
     "get_builder",
@@ -24,7 +24,7 @@ __all__ = [
 
 
 def _builder_registry() -> dict[str, type]:
-    from mmml.md.builders import (
+    from karml.md.builders import (
         PackmolSystemBuilder,
         PeptideWaterSystemBuilder,
         PsfSystemBuilder,
@@ -74,8 +74,8 @@ def build_hybrid_energy(
     ``term_kwargs`` maps a term name to constructor kwargs (e.g. SMD anchors,
     dihedral restraints, an ML model override).
     """
-    import mmml.md.energy.terms  # noqa: F401  (importing registers the built-ins)
-    from mmml.md.energy import EnergyContext, HybridEnergy, get_term
+    import karml.md.energy.terms  # noqa: F401  (importing registers the built-ins)
+    from karml.md.energy import EnergyContext, HybridEnergy, get_term
 
     ctx = ctx if ctx is not None else EnergyContext()
     term_kwargs = dict(term_kwargs or {})
@@ -101,7 +101,7 @@ def _auto_neighbor_fn(
     if not inter:
         return None
 
-    from mmml.md.neighbors import make_intermolecular_neighbor_fn
+    from karml.md.neighbors import make_intermolecular_neighbor_fn
 
     cutoff = max(r.cutoff_A for r in inter)
     cap = next((r.capacity_hint for r in inter if r.capacity_hint), None)
@@ -148,7 +148,7 @@ def assemble_and_run(
 
     # Rigid-body sampling is a Sampler peer of the MD driver, selected by config.
     if config.sampler == "rigid" and driver is None:
-        from mmml.md.samplers import RigidBodySampler
+        from karml.md.samplers import RigidBodySampler
 
         if neighbor_fn is None:
             neighbor_fn = _auto_neighbor_fn(system, energy, config)
@@ -157,7 +157,7 @@ def assemble_and_run(
         )
 
     if driver is None:
-        from mmml.md.drivers import JaxmdDriver
+        from karml.md.drivers import JaxmdDriver
 
         # Auto-wire the intermolecular neighbor list when a term needs one and
         # the caller did not supply a neighbor_fn (e.g. mm_nonbonded).

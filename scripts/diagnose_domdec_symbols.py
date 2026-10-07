@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Diagnose CHARMM DOMDEC symbol names in libcharmm.so.
 
-Usage (on the cluster, with the mmml venv active):
+Usage (on the cluster, with the karml venv active):
     python scripts/diagnose_domdec_symbols.py
 
 What it does:
@@ -256,7 +256,7 @@ def main() -> None:
 if __name__ == "__main__":
     # Bootstrap: import pycharmm first so libcharmm.so is loaded into the process
     try:
-        import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+        import karml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
     except Exception:
         pass
     main()

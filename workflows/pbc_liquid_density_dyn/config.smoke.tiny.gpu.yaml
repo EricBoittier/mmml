@@ -1,6 +1,6 @@
 # Tiny GPU smoke: DCM:8 in 18 Å cube, short heat/equi/prod.
 #
-#   MMML_WORKFLOW_CONFIG=config.smoke.tiny.gpu.yaml \
+#   KARML_WORKFLOW_CONFIG=config.smoke.tiny.gpu.yaml \
 #     bash scripts/snakemake_slurm.sh
 
 solvents: [DCM]
@@ -9,7 +9,7 @@ bulk_density_fractions: []
 cluster_sizes: [8]
 temperatures: [300.0]
 box_sizes: [20.0]
-checkpoint: ${MMML_CKPT}
+checkpoint: ${KARML_CKPT}
 output_root: artifacts/pbc_liquid_density_dyn_smoke_tiny
 seed_base: 4242
 
@@ -74,8 +74,8 @@ ml_batch_size: 512
 
 warmup_mlpot_jax: false
 
-mpirun_wrapper: ../../scripts/mmml-charmm-mpirun.sh
-MMML_MPI_NP: 1
+mpirun_wrapper: ../../scripts/karml-charmm-mpirun.sh
+KARML_MPI_NP: 1
 
 slurm:
   partition: gpu

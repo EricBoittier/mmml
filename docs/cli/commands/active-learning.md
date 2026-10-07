@@ -1,4 +1,4 @@
-# `mmml active-learning`
+# `karml active-learning`
 
 Sample structures for re-labeling.
 
@@ -6,13 +6,13 @@ Sample structures for re-labeling.
 ## Usage
 
 ```bash
-mmml active-learning --help
+karml active-learning --help
 ```
 
 ## Options
 
 ```text
-usage: mmml active-learning [-h] -i TRAJ [TRAJ ...] [-o OUTPUT] [--max-temp K]
+usage: karml active-learning [-h] -i TRAJ [TRAJ ...] [-o OUTPUT] [--max-temp K]
                             [--stride STRIDE] [--max-frames N]
                             [--no-temp-filter]
 
@@ -37,10 +37,10 @@ Other options:
   --no-temp-filter      Do not filter by temperature (keep all frames)
 
 CLI to extract frames from MD trajectories for active learning. Filters frames
-by temperature (e.g. T < 300 K) and saves to NPZ format compatible with mmml
-pyscf-evaluate for extending the training set. Usage: mmml active-learning -i
-out/physnet_md/physnet_ase.traj -o md_sampled.npz mmml active-learning -i
-traj1.traj traj2.traj -o md_sampled.npz --max-temp 300 mmml active-learning -i
+by temperature (e.g. T < 300 K) and saves to NPZ format compatible with karml
+pyscf-evaluate for extending the training set. Usage: karml active-learning -i
+out/physnet_md/physnet_ase.traj -o md_sampled.npz karml active-learning -i
+traj1.traj traj2.traj -o md_sampled.npz --max-temp 300 karml active-learning -i
 "out/*.traj" -o md_sampled.npz --stride 5
 ```
 

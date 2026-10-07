@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domdec_info import (
+from karml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domdec_info import (
     DomdecApiSurvey,
     survey_domdec_api,
 )
@@ -43,7 +43,7 @@ class Tier3DomdecReport:
                 "pycharmm_domdec_script": self.survey.pycharmm_domdec_script,
                 "pycharmm_local_atom_api": self.survey.pycharmm_local_atom_api,
                 "pycharmm_ghost_atom_api": self.survey.pycharmm_ghost_atom_api,
-                "mmml_disable_domdec_for_mlpot": self.survey.mmml_disable_domdec_for_mlpot,
+                "karml_disable_domdec_for_mlpot": self.survey.karml_disable_domdec_for_mlpot,
                 "recommended_phase2_grid": self.survey.recommended_phase2_grid,
                 "halo_width_formula": self.survey.halo_width_formula,
                 "open_questions": list(self.survey.open_questions),
@@ -71,9 +71,9 @@ def validate_tier3_domdec_env(*, strict: bool = False) -> Tier3DomdecReport:
             "and global energy reduction (see survey open_questions)"
         )
 
-    if survey.mmml_disable_domdec_for_mlpot:
+    if survey.karml_disable_domdec_for_mlpot:
         report.warnings.append(
-            "MMML can send ``domdec off`` via MMML_FORCE_DOMDEC_OFF for MLpot stability; use Tier 2 spatial MPI instead"
+            "KARML can send ``domdec off`` via KARML_FORCE_DOMDEC_OFF for MLpot stability; use Tier 2 spatial MPI instead"
         )
 
     if survey.pycharmm_domdec_script:
@@ -97,7 +97,7 @@ def validate_tier3_domdec_env(*, strict: bool = False) -> Tier3DomdecReport:
 def render_tier3_report(report: Tier3DomdecReport) -> str:
     check_state = "survey completed" if report.ok else "survey failed or strict blocker"
     lines = [
-        "MMML Tier 3 DOMDEC + MLpot survey",
+        "KARML Tier 3 DOMDEC + MLpot survey",
         "================================",
         f"Production status: {'BLOCKED' if report.blocked else 'OK'}",
         f"Check status: {check_state} (ok={report.ok})",
@@ -113,7 +113,7 @@ def render_tier3_report(report: Tier3DomdecReport) -> str:
                 f"  domdec script control: {s.pycharmm_domdec_script}",
                 f"  per-rank local atom API: {s.pycharmm_local_atom_api}",
                 f"  ghost atom API: {s.pycharmm_ghost_atom_api}",
-                f"  MMML domdec-off command available for MLpot guard: {s.mmml_disable_domdec_for_mlpot}",
+                f"  KARML domdec-off command available for MLpot guard: {s.karml_disable_domdec_for_mlpot}",
                 f"  Phase 2 fallback grid: {s.recommended_phase2_grid}",
                 f"  Halo width: {s.halo_width_formula}",
             ]
@@ -128,7 +128,7 @@ def render_tier3_report(report: Tier3DomdecReport) -> str:
         [
             "",
             "Until Tier 3 DOMDEC+MLpot is production-ready, use Tier 2:",
-            "  MMML_MLPOT_SPATIAL_MPI=1 --ml-spatial-mpi --ml-gpu-count 1",
+            "  KARML_MLPOT_SPATIAL_MPI=1 --ml-spatial-mpi --ml-gpu-count 1",
         ]
     )
     return "\n".join(lines)

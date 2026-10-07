@@ -12,10 +12,10 @@ import pytest
 
 os.environ.setdefault("JAX_PLATFORMS", "cpu")
 
-from mmml.interfaces.calculators.ase_fragment_hybrid import numpy_ml_switch_scale_and_deriv
-from mmml.interfaces.pycharmmInterface.calculator_utils import ml_switch_scale
-from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
-from mmml.interfaces.pycharmmInterface.mlpot.mlpot_sparse_dimer_policy import (
+from karml.interfaces.calculators.ase_fragment_hybrid import numpy_ml_switch_scale_and_deriv
+from karml.interfaces.pycharmmInterface.calculator_utils import ml_switch_scale
+from karml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
+from karml.interfaces.pycharmmInterface.mlpot.mlpot_sparse_dimer_policy import (
     sparse_dimer_active_radius,
 )
 
@@ -67,7 +67,7 @@ def _two_monomer_coords(sep: float, *, box: float, wrap: bool, n_mono: int = 5):
 
 
 def _eval_two_monomer(sep: float, *, sparse: bool, wrap: bool, box: float = 20.0):
-    from mmml.interfaces.pycharmmInterface.mmml_calculator import setup_calculator
+    from karml.interfaces.pycharmmInterface.karml_calculator import setup_calculator
 
     n_mono, n_monomers = 5, 2
     n_atoms = n_mono * n_monomers
@@ -86,7 +86,7 @@ def _eval_two_monomer(sep: float, *, sparse: bool, wrap: bool, box: float = 20.0
 
     cp = CutoffParameters(mm_switch_on=MM_ON, ml_switch_width=WIDTH)
     with patch(
-        "mmml.interfaces.pycharmmInterface.mmml_calculator.build_mm_energy_forces_fn",
+        "karml.interfaces.pycharmmInterface.karml_calculator.build_mm_energy_forces_fn",
         side_effect=fake_build_mm,
     ):
         factory = setup_calculator(

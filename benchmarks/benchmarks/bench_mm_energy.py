@@ -28,7 +28,7 @@ CUTNB, CTONNB, CTOFNB = 12.0, 10.0, 12.0
 
 
 def _settings(**overrides):
-    from mmml.interfaces.pycharmmInterface.mm_system_energy import CharmmNbondSettings
+    from karml.interfaces.pycharmmInterface.mm_system_energy import CharmmNbondSettings
 
     kwargs = dict(cutnb=CUTNB, ctonnb=CTONNB, ctofnb=CTOFNB)
     kwargs.update(overrides)
@@ -44,10 +44,10 @@ class _MMNonbondedBase:
     def _build(self, n_waters: int, *, lr_solver: str = "mic"):
         jax = require_jax()
         try:
-            from mmml.md.energy import EnergyContext
-            from mmml.md.energy.terms import MMNonbondedTerm
+            from karml.md.energy import EnergyContext
+            from karml.md.energy.terms import MMNonbondedTerm
         except Exception as exc:  # pragma: no cover - environment-dependent
-            raise skip(f"mmml.md.energy unavailable: {exc}") from exc
+            raise skip(f"karml.md.energy unavailable: {exc}") from exc
 
         import jax.numpy as jnp
 
@@ -135,7 +135,7 @@ class MMNonbondedHostReference:
     def setup(self, n_waters):
         require_jax()
         try:
-            from mmml.interfaces.pycharmmInterface.mm_system_energy import (
+            from karml.interfaces.pycharmmInterface.mm_system_energy import (
                 NonbondedSystemData,
                 nonbonded_energy_and_forces,
             )
@@ -183,7 +183,7 @@ class EwaldReciprocal:
     def setup(self, n_waters):
         jax = require_jax()
         try:
-            from mmml.models.ewald_hybrid_coulomb import (
+            from karml.models.ewald_hybrid_coulomb import (
                 ewald_static_params_from_box_length,
                 hybrid_ewald_coulomb_energy_with_cell,
             )

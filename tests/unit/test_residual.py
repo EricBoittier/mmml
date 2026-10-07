@@ -1,4 +1,4 @@
-"""Unit tests for mmml.residual: pure-JAX explicit electrostatics + residual NPZ builder."""
+"""Unit tests for karml.residual: pure-JAX explicit electrostatics + residual NPZ builder."""
 
 from __future__ import annotations
 
@@ -8,14 +8,14 @@ import pytest
 jax = pytest.importorskip("jax")
 jnp = jax.numpy
 
-from mmml.residual.electrostatics_jax import (
+from karml.residual.electrostatics_jax import (
     KE_KCAL_ANG,
     _switch,
     build_pairs,
     elec_energy,
     elec_energy_and_forces,
 )
-from mmml.residual.build_residual import build_residual_npz
+from karml.residual.build_residual import build_residual_npz
 
 
 def test_build_pairs_all_i_lt_j_no_exclusions():

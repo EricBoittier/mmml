@@ -22,11 +22,11 @@ from typing import Callable, Sequence
 import jax.numpy as jnp
 from jax import Array
 
-from mmml.interfaces.pycharmmInterface.cgenff_bonded import (
+from karml.interfaces.pycharmmInterface.cgenff_bonded import (
     KCAL_MOL_TO_EV,
     build_bonded_energy_fn,
 )
-from mmml.interfaces.pycharmmInterface.cgenff_topology import (
+from karml.interfaces.pycharmmInterface.cgenff_topology import (
     CgenffBondedSystem,
     filter_bonded_topology_for_mm,
     load_cgenff_bonded_from_charmm_files,

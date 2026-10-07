@@ -2,7 +2,7 @@
 
 ![ACEM methyl: O–C–CC–HC1 atoms, rigid vs relaxed profiles on identical axes](images/plots/acem-methyl-scan.png)
 
-`mmml ic-scan` scans **bonds**, **angles**, or **dihedrals** by 0-based ASE
+`karml ic-scan` scans **bonds**, **angles**, or **dihedrals** by 0-based ASE
 index. Default `geometry_mode: rigid` rotates a fragment and evaluates. That
 is why the ACEM methyl above is not 3-fold until you relax: the CGenFF XYZ has
 unequal H–C–C angles, so 120° does not permute equivalent hydrogens.
@@ -13,7 +13,7 @@ grid (`values:`), the moving fragment (`mask:`), and inactive-DoF
 `reference:` values.
 
 ```bash
-mmml ic-scan --config CONFIG.yaml --output artifacts/ic_scan/out --overwrite
+karml ic-scan --config CONFIG.yaml --output artifacts/ic_scan/out --overwrite
 ```
 
 `--prepare-only` writes geometries without energies (incompatible with
@@ -113,7 +113,7 @@ scans:
 ```
 
 ```bash
-mmml ic-scan \
+karml ic-scan \
   --config examples/ic_scan/acem_dihedrals_relaxed.yaml \
   --output artifacts/ic_scan/acem_xtb_relaxed \
   --overwrite
@@ -152,7 +152,7 @@ fails — fix atom order / mask. 1D plots go to `energy_*.png`; 2D is
 `data.csv` + `trajectory.traj`.
 
 ```bash
-mmml ic-scan --config examples/ic_scan/nma_omega_methyl_2d.yaml \
+karml ic-scan --config examples/ic_scan/nma_omega_methyl_2d.yaml \
   --prepare-only --output ic_scan/omega_methyl_2d --overwrite
 ase gui ic_scan/omega_methyl_2d/trajectory.traj
 ```
@@ -198,7 +198,7 @@ dofs:
 | `energy_*.png` | 1D plots when `evaluate: energy` |
 
 ```python
-from mmml.ic_scan import IcScanConfig, run_ic_scan
+from karml.ic_scan import IcScanConfig, run_ic_scan
 
 config = IcScanConfig.from_dict(yaml.safe_load(path.read_text()))
 result = run_ic_scan(config)

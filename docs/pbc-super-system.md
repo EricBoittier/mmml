@@ -2,7 +2,7 @@
 
 How **PyCHARMM** treats periodicity with explicit **IMAGE** translations (a lattice
 “super system”), how the **JAX CGenFF clone** and **jax-md MIC** path differ, and
-where **PME / FMM** and **domain decomposition** fit in MMML.
+where **PME / FMM** and **domain decomposition** fit in KARML.
 
 Figures regenerate with:
 
@@ -10,7 +10,7 @@ Figures regenerate with:
 uv run python scripts/plot_pbc_super_system.py
 ```
 
-Related: [Tri-alanine water box](trialanine-water-box.md), [CHARMM CGenFF JAX clone](cgenff-jax-clone.md), [Long-range solver tutorial](long-range-solver-tutorial.md), [Spatial ML MPI](mlpot-spatial-mpi.md), and the source note `mmml/interfaces/pycharmmInterface/mlpot/NONBOND_LISTS.md`.
+Related: [Tri-alanine water box](trialanine-water-box.md), [CHARMM CGenFF JAX clone](cgenff-jax-clone.md), [Long-range solver tutorial](long-range-solver-tutorial.md), [Spatial ML MPI](mlpot-spatial-mpi.md), and the source note `karml/interfaces/pycharmmInterface/mlpot/NONBOND_LISTS.md`.
 
 ---
 
@@ -22,7 +22,7 @@ shows in a trajectory viewer, and the geometry the JAX clone reads from NumPy.
 
 ![Four waters in a cubic unit cell](images/pbc/primary_cell.png)
 
-In MMML box builders (`prepare_charmm_pbc`, tri-alanine water, `make-box`) this is
+In KARML box builders (`prepare_charmm_pbc`, tri-alanine water, `make-box`) this is
 followed by `image byres` and switched `NBONDS` with `cutnb` / `cutim` sized for
 the box (see [trialanine-water-box.md](trialanine-water-box.md)).
 
@@ -78,7 +78,7 @@ flowchart LR
   NB --> EL
 ```
 
-**MMML PyCHARMM path:** `pbc_env.prepare_charmm_pbc` → `crystal build` →
+**KARML PyCHARMM path:** `pbc_env.prepare_charmm_pbc` → `crystal build` →
 `image byres` → `apply_pbc_nbonds`. After `READ PARAM APPEND` (CGENFF reload),
 call `restore_charmm_cubic_crystal_lattice` before the next `UPINB` — IMAGE tables
 are cleared by parameter I/O.
@@ -99,7 +99,7 @@ across periodic boundaries). No separate image atom array is allocated in Python
 | Coordinates | N primary | N primary |
 | Periodic partners | explicit image sites in list | implicit via `find_mic` / lattice shift |
 | Energy bookkeeping | split primary vs image ENER keys | single `vdw` / `elec` pair sum |
-| Typical use in MMML | live PyCHARMM `ENER FORCE` | `mm_system_energy_and_forces`, switched MLpot MM |
+| Typical use in KARML | live PyCHARMM `ENER FORCE` | `mm_system_energy_and_forces`, switched MLpot MM |
 
 For **truncated** Coulomb (`lr_solver=mic`, default), JAX and CHARMM should agree
 on **total** nonbonded energy when cutoffs and exclusion lists match; per-term
@@ -117,7 +117,7 @@ sometimes dispersion) beyond the pair cutoff without a naive O(N²) sum?”
 
 ![MIC pair sphere vs PME grid vs FMM tree](images/pbc/lr_methods_schematic.png)
 
-| Method | Near field | Far field | MMML entry points |
+| Method | Near field | Far field | KARML entry points |
 |--------|------------|-----------|-------------------|
 | **MIC** (truncated) | all pairs &lt; `cutnb`, switched | none (cutoff) | `lr_solver=mic`, CGenFF JAX clone |
 | **PME / Ewald** | short-range pair sum | reciprocal grid | `lr_solver=jax_pme`, CHARMM `ewald`, ScaFaCoS |
@@ -148,7 +148,7 @@ duplicate monomer data needed for ML dimer pairs or CHARMM pair lists at boundar
 | **DOMDEC / spatial MPI** | **ghost atoms/monomers** in neighbor domains | parallel force evaluation |
 | **MIC (single rank)** | nothing | single-process JAX/MM |
 
-MMML **spatial MPI** (`mlpot-spatial-mpi.md`) uses a Python grid today; CHARMM
+KARML **spatial MPI** (`mlpot-spatial-mpi.md`) uses a Python grid today; CHARMM
 **DOMDEC** metadata is not yet wired into MLpot (Phase 3). That is orthogonal to
 whether Coulomb uses MIC or PME on each rank.
 
@@ -169,7 +169,7 @@ flowchart TB
 
 ---
 
-## 6. Practical map in MMML
+## 6. Practical map in KARML
 
 | Task | Periodic model | Doc / code |
 |------|----------------|------------|
@@ -185,15 +185,15 @@ flowchart TB
 
 The teaching cell uses four gas-phase waters in a 14 Å cube (not a production
 solvent box). Script: `scripts/plot_pbc_super_system.py`; library:
-`mmml/utils/pbc_super_system_plot.py`.
+`karml/utils/pbc_super_system_plot.py`.
 
 Orthographic projection matches other MkDocs structure figures
-(`mmml/utils/ase_structure_plot.py`): fixed rotation, Jmol-style colors, dashed
+(`karml/utils/ase_structure_plot.py`): fixed rotation, Jmol-style colors, dashed
 unit-cell outlines.
 
 ```python
 from pathlib import Path
-from mmml.utils.pbc_super_system_plot import generate_pbc_doc_figures
+from karml.utils.pbc_super_system_plot import generate_pbc_doc_figures
 
 generate_pbc_doc_figures(Path("docs/images/pbc"))
 ```

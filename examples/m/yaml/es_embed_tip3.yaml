@@ -2,7 +2,7 @@
 # MM Coulomb uses neutralized ML charges (Q⁰) instead of fixed CGenFF only.
 # kl.json has charges=True. q0 is refused with jax_pme — use mic/ewald LR.
 #
-#   uv run mmml md-system --config examples/m/yaml/es_embed_tip3.yaml --run-all
+#   uv run karml md-system --config examples/m/yaml/es_embed_tip3.yaml --run-all
 
 defaults:
   composition: "AMM1:1,CH3CL:1,TIP3:12"

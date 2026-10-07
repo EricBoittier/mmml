@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
 
 # CHARMM ``IUPTEN`` unit for piston-tensor time series (avoid 1–3 = DCD/restart).
 DEFAULT_PRESSURE_TENSOR_LOG_UNIT = 29
@@ -213,7 +213,7 @@ def read_instantaneous_scalar_pressure_atm(
     """
     if refresh_energy:
         if mlpot_ctx is not None:
-            from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+            from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
                 refresh_mlpot_energy_and_grms,
             )
 
@@ -223,7 +223,7 @@ def read_instantaneous_scalar_pressure_atm(
                 silent_charmm=quiet,
             )
         else:
-            from mmml.interfaces.pycharmmInterface.import_pycharmm import safe_energy_show
+            from karml.interfaces.pycharmmInterface.import_pycharmm import safe_energy_show
 
             safe_energy_show()
 
@@ -246,7 +246,7 @@ def report_instantaneous_pressure_tensor(
     """
     del temp  # bath T kept for API compat; virial tensor is T-independent here
     if mlpot_ctx is not None:
-        from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+        from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
             refresh_mlpot_energy_and_grms,
         )
 
@@ -256,7 +256,7 @@ def report_instantaneous_pressure_tensor(
             silent_charmm=quiet,
         )
     else:
-        from mmml.interfaces.pycharmmInterface.import_pycharmm import safe_energy_show
+        from karml.interfaces.pycharmmInterface.import_pycharmm import safe_energy_show
 
         safe_energy_show()
 

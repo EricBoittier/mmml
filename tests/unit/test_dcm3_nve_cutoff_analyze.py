@@ -248,7 +248,7 @@ def test_prepare_geometry_shell_uses_mpirun_wrapper_for_script() -> None:
         / "prepare_geometry_shell.sh"
     )
     text = sh.read_text(encoding="utf-8")
-    assert "mmml_resolve_env" in text
+    assert "karml_resolve_env" in text
     assert 'exec "$MPIRUN" "$WORKFLOW_ROOT/scripts/prepare_geometry.py"' in text
     assert '"$MPIRUN" "$PY"' not in text
 

@@ -52,11 +52,11 @@ def _optimize_and_predict():
         from ase.build import molecule
         from ase.optimize import LBFGS
 
-        from mmml.models.mbd.calculator import load_mbd_model, predict_mbd_from_atoms
-        from mmml.models.multipoles.electrostatics import (
+        from karml.models.mbd.calculator import load_mbd_model, predict_mbd_from_atoms
+        from karml.models.multipoles.electrostatics import (
             LearnedMolecularMultipoleElectrostatics,
         )
-        from mmml.models.spookynet_calc import SpookyNetCalculator
+        from karml.models.spookynet_calc import SpookyNetCalculator
     except Exception as exc:  # pragma: no cover - environment dependent
         print(f"SKIP real-molecule gallery: {exc}")
         return None
@@ -104,12 +104,12 @@ def _optimize_and_predict():
 def _render(records):
     import matplotlib.pyplot as plt
 
-    from mmml.utils.plotting.multipoles import (
+    from karml.utils.plotting.multipoles import (
         plot_field_slice,
         plot_mbd_surfaces,
         plot_multipole_surfaces,
     )
-    from mmml.utils.plotting.styles import apply_plot_style
+    from karml.utils.plotting.styles import apply_plot_style
 
     apply_plot_style("icml")
     n = len(records)

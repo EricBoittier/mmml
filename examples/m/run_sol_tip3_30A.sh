@@ -36,11 +36,11 @@ if [[ ! -f "${psf}" ]]; then
   echo "      overflows CHARMM and aborts with ABNORMAL TERMINATION LEVEL 0)"
   exit 1
 fi
-if [[ -z "${MMML_CGENFF_EXTRA_RTF:-}" ]]; then
-  echo "WARN: MMML_CGENFF_EXTRA_RTF unset — source examples/m/_env.sh for CH3CL"
+if [[ -z "${KARML_CGENFF_EXTRA_RTF:-}" ]]; then
+  echo "WARN: KARML_CGENFF_EXTRA_RTF unset — source examples/m/_env.sh for CH3CL"
 fi
 
 echo "=== md-system sol_tip3_30A (jaxmd unified) ==="
-uv run mmml md-system --config examples/m/yaml/sol_tip3_30A_md.yaml
+uv run karml md-system --config examples/m/yaml/sol_tip3_30A_md.yaml
 
 echo "PASS: solvated TIP3 30 Å -> ${ARTIFACTS_DIR}/sol_tip3_30A"

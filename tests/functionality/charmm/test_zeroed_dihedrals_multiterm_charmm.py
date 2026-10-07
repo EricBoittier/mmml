@@ -10,7 +10,7 @@ ethanol, the n=1 and n=2 terms of ``CG331-CG321-OG311-HGP1`` survive
 Registration therefore also deletes the PSF dihedral/improper/CMAP terms of ML
 atoms. These tests pin down:
 
-* the CHARMM APPEND behaviour itself (documented, not a bug in mmml);
+* the CHARMM APPEND behaviour itself (documented, not a bug in karml);
 * the fixed registration path: ML bonded terms are exactly zero, also with
   the all-ML ``SKIPE`` of bonded terms lifted;
 * deleting ML torsions leaves VDW/ELEC unchanged (exclusions and 1-4 pairs are
@@ -64,15 +64,15 @@ import warnings
 
 import pandas as pd
 
-import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+import karml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
 import pycharmm
 import pycharmm.coor as coor
 import pycharmm.energy as energy
 import pycharmm.generate as gen
 import pycharmm.read as read
 
-from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
-from mmml.interfaces.pycharmmInterface.nbonds_config import read_cgenff_toppar
+from karml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
+from karml.interfaces.pycharmmInterface.nbonds_config import read_cgenff_toppar
 
 case = sys.argv[1]
 spec = json.loads(sys.argv[2])
@@ -126,8 +126,8 @@ def ener():
 
 ml = pycharmm.SelectAtoms(selection=tuple(i < n_ml_atoms for i in range(natom)))
 
-from mmml.interfaces.pycharmmInterface.mlpot import block_terms
-from mmml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap import (
+from karml.interfaces.pycharmmInterface.mlpot import block_terms
+from karml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap import (
     apply_zeroed_cgenff_params,
 )
 
@@ -155,7 +155,7 @@ elif case.startswith("registration"):
     pycharmm.lingo.charmm_script("SKIPE NONE")
     out["after_noskip"] = ener()
     if case == "registration_restore":
-        from mmml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap import (
+        from karml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap import (
             apply_full_cgenff_params,
         )
 
@@ -183,8 +183,8 @@ def _run_case(case: str, *, nmol: int, n_ml_mol: int, n_aco: int = 0) -> dict:
     env["PYTHONPATH"] = os.pathsep.join(
         p for p in (str(_REPO_ROOT), env.get("PYTHONPATH", "")) if p
     )
-    env.setdefault("MMML_NO_CHARMM_MPI", "1")
-    env.setdefault("MMML_NO_MPI_RERUN", "1")
+    env.setdefault("KARML_NO_CHARMM_MPI", "1")
+    env.setdefault("KARML_NO_MPI_RERUN", "1")
     proc = subprocess.run(
         [sys.executable, "-c", _WORKER, case, json.dumps(spec)],
         cwd=str(_REPO_ROOT),

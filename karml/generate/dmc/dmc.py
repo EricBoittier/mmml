@@ -3,14 +3,14 @@
 
 Originally adapted from the TensorFlow-based implementation by Silvan Kaeser.
 This version evaluates walker energies with the PhysNetJax model (batched via
-``jax.vmap``) to stay consistent with the rest of the MMML tooling.
+``jax.vmap``) to stay consistent with the rest of the KARML tooling.
 
 CLI::
 
-    mmml dmc \\
+    karml dmc \\
       --natm 20 --nwalker 512 --stepsize 5e-4 --nstep 5000 --eqstep 1000 \\
       --alpha 1200.0 --checkpoint path/to/epoch-NNNNNN \\
-      --input mmml/generate/dmc/examples/acetone_dmc.extxyz
+      --input karml/generate/dmc/examples/acetone_dmc.extxyz
 """
 
 from __future__ import annotations
@@ -45,7 +45,7 @@ _ATOMIC_Z: dict[str, int] = {"H": 1, "C": 6, "N": 7, "O": 8, "Cl": 17}
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="mmml dmc",
+        prog="karml dmc",
         description=(
             "Diffusion Monte Carlo with PhysNetJax energies "
             "(batched walker evaluation via jax.vmap)."
@@ -54,13 +54,13 @@ def build_parser() -> argparse.ArgumentParser:
         fromfile_prefix_chars="@",
         epilog=(
             "Example (acetone dimer smoke):\n"
-            "  mmml dmc --natm 20 --nwalker 64 --stepsize 5e-4 --nstep 200 "
+            "  karml dmc --natm 20 --nwalker 64 --stepsize 5e-4 --nstep 200 "
             "--eqstep 50 --alpha 1200.0 \\\n"
-            "    --checkpoint \"$MMML_CKPT\" \\\n"
-            "    --input mmml/generate/dmc/examples/acetone_dmc.extxyz \\\n"
+            "    --checkpoint \"$KARML_CKPT\" \\\n"
+            "    --input karml/generate/dmc/examples/acetone_dmc.extxyz \\\n"
             "    --output-dir runs/dmc_acetone_smoke\n"
             "\n"
-            "Docs: docs/dmc.md  |  mmml dmc --help"
+            "Docs: docs/dmc.md  |  karml dmc --help"
         ),
     )
     parser.add_argument(
@@ -190,13 +190,13 @@ def _minimise_structure_with_model(
 
     atoms_min = atoms.copy()
     if backend == "kernnn":
-        from mmml.models.kernnn import KerNNCalculator
+        from karml.models.kernnn import KerNNCalculator
 
         if kernnn_checkpoint is None:
             raise ValueError("KerNN minimize requires kernnn_checkpoint")
         calc = KerNNCalculator(kernnn_checkpoint)
     else:
-        from mmml.models.physnetjax.physnetjax.calc.helper_mlp import get_ase_calc
+        from karml.models.physnetjax.physnetjax.calc.helper_mlp import get_ase_calc
 
         calc = get_ase_calc(params, model, atoms_min)
     atoms_min.calc = calc
@@ -249,7 +249,7 @@ def run_dmc(args: argparse.Namespace) -> int:
     from ase.io.trajectory import Trajectory
     from e3x import ops as e3x_ops
 
-    from mmml.cli.base import load_model_parameters, resolve_checkpoint_paths
+    from karml.cli.base import load_model_parameters, resolve_checkpoint_paths
 
     input_path = Path(args.input)
     if not input_path.exists():
@@ -328,7 +328,7 @@ def run_dmc(args: argparse.Namespace) -> int:
         pair_dst_jnp = jnp.asarray(pair_dst, dtype=jnp.int32)
         pair_src_jnp = jnp.asarray(pair_src, dtype=jnp.int32)
 
-        from mmml.models.kernnn import (
+        from karml.models.kernnn import (
             KerNNApplyAdapter,
             is_kernnn_checkpoint,
             load_checkpoint,
@@ -633,7 +633,7 @@ def run_dmc(args: argparse.Namespace) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
-    """CLI entry point for ``mmml dmc``."""
+    """CLI entry point for ``karml dmc``."""
     try:
         import ase  # noqa: F401
     except ModuleNotFoundError as exc:  # pragma: no cover

@@ -9,8 +9,8 @@ by using the normal of the surface at the point of contact
 
 """
 
-from mmml.interfaces.chemcoordInterface.interface import patch_chemcoord_for_pandas3
-from mmml.generate.sample import sample_cc
+from karml.interfaces.chemcoordInterface.interface import patch_chemcoord_for_pandas3
+from karml.generate.sample import sample_cc
 
 patch_chemcoord_for_pandas3()
 import chemcoord as cc

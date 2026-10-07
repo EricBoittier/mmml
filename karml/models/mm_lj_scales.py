@@ -68,11 +68,11 @@ MM_LJ_EPSILON_SCALE_BOUNDS = (0.25, 4.0)
 def cgenff_type_names_from_prm(prm_path: str | Path | None = None) -> list[str]:
     """Type names in the same order as ``cgenff_master_sigmas`` / epsilons.
 
-    Uses :func:`mmml.data.cgenff_dataset.load_reference` so the list includes
+    Uses :func:`karml.data.cgenff_dataset.load_reference` so the list includes
     additive stream types (e.g. ``toppar_water_ions.str``) that extend the
     master LJ tables beyond the bare CGenFF ``.prm``.
     """
-    from mmml.data.cgenff_dataset import DEF_PRM_PATH, DEF_RTF_PATH, load_reference
+    from karml.data.cgenff_dataset import DEF_PRM_PATH, DEF_RTF_PATH, load_reference
 
     prm = str(prm_path) if prm_path is not None else str(DEF_PRM_PATH)
     ref = load_reference(prm, str(DEF_RTF_PATH))
@@ -159,7 +159,7 @@ def clip_mm_lj_scale_params(
     """Project the LJ-scale leaves of ``params`` back into their bounds.
 
     Applied after every optimizer step (see
-    :func:`mmml.models.physnetjax.physnetjax.training.trainstep.train_step`), so
+    :func:`karml.models.physnetjax.physnetjax.training.trainstep.train_step`), so
     the scales cannot wander to the values that make ``E_MM`` diverge or NaN --
     see :data:`MM_LJ_SIGMA_SCALE_BOUNDS`.
 
@@ -527,7 +527,7 @@ def resolve_md_charge_scale(
 ) -> float:
     """Uniform MM charge scale from the same sidecar as the LJ scales (default 1).
 
-    ``mmml tune-mm-nonbonded fit --sidecar`` writes ``mm_charge_scale`` next to
+    ``karml tune-mm-nonbonded fit --sidecar`` writes ``mm_charge_scale`` next to
     the LJ-scale block. Search order is :func:`lj_scales_sidecar_candidates`;
     the first sidecar carrying learnable LJ scales wins, so LJ and charge
     scales always come from one file.

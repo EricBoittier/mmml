@@ -40,7 +40,7 @@ Form::
   saturates at a finite height an energetic atom can tunnel through.
 
 Units are **eV / eV per Angstrom** (the canonical hybrid-inference units, see
-``mmml/data/units.py``).  Callers working in kcal/mol must convert.
+``karml/data/units.py``).  Callers working in kcal/mol must convert.
 """
 
 from __future__ import annotations

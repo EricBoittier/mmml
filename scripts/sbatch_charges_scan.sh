@@ -5,9 +5,9 @@
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=16G
 #SBATCH --time=00:30:00
-#SBATCH --output=/mmhome/boittier/home/mmml/slurm_logs/charges_scan_%j.out
+#SBATCH --output=/mmhome/boittier/home/karml/slurm_logs/charges_scan_%j.out
 
-cd /mmhome/boittier/home/mmml
+cd /mmhome/boittier/home/karml
 source .venv/bin/activate
 
 python scripts/scan_charges_vs_distance.py \

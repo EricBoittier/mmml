@@ -15,12 +15,12 @@ import pytest
 import numpy as np
 from ase import Atoms
 
-from mmml.analysis.dimer_molecules import make_oriented_scan_geometries
-from mmml.interfaces.calculators.checkpoint_loading import create_calculator_from_checkpoint
-from mmml.interfaces.pycharmmInterface.mlpot.cli_common import resolve_checkpoint
-from mmml.models.spookynet_calc import SpookyNetCalculator, resolve_spooky_checkpoint
-from mmml.models.mbd.calculator import QCMLMBDCalculator, resolve_mbd_checkpoint
-from mmml.models.multipoles.electrostatics import (
+from karml.analysis.dimer_molecules import make_oriented_scan_geometries
+from karml.interfaces.calculators.checkpoint_loading import create_calculator_from_checkpoint
+from karml.interfaces.pycharmmInterface.mlpot.cli_common import resolve_checkpoint
+from karml.models.spookynet_calc import SpookyNetCalculator, resolve_spooky_checkpoint
+from karml.models.mbd.calculator import QCMLMBDCalculator, resolve_mbd_checkpoint
+from karml.models.multipoles.electrostatics import (
     LearnedMolecularMultipoleElectrostatics,
     resolve_multipoles_checkpoint,
 )
@@ -168,7 +168,7 @@ def test_pycharmm_cgenff_dimer_regression():
         import pycharmm.psf as psf
         import pycharmm.read as read
         import pandas as pd
-        from mmml.interfaces.pycharmmInterface.import_pycharmm import (
+        from karml.interfaces.pycharmmInterface.import_pycharmm import (
             CGENFF_PRM,
             CGENFF_RTF,
             reset_block,
@@ -177,7 +177,7 @@ def test_pycharmm_cgenff_dimer_regression():
     except ImportError:
         pytest.skip("pyCHARMM not installed or importable")
 
-    from mmml.data.cgenff_dataset import load_reference, reorder_to_cgenff_template
+    from karml.data.cgenff_dataset import load_reference, reorder_to_cgenff_template
 
     pycharmm_quiet()
     reset_block()

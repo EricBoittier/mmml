@@ -27,7 +27,7 @@ from functools import lru_cache
 
 import numpy as np
 
-from mmml.interfaces.pycharmmInterface.long_range_backend import (
+from karml.interfaces.pycharmmInterface.long_range_backend import (
     CHARMM_COULOMB_KCAL,
     box_length_from_cell,
     compute_jax_pme_coulomb,
@@ -64,7 +64,7 @@ _PROFILE_REGISTERED = False
 
 
 def _profile_enabled() -> bool:
-    raw = os.environ.get("MMML_JAX_PME_PROFILE", "").strip().lower()
+    raw = os.environ.get("KARML_JAX_PME_PROFILE", "").strip().lower()
     return raw in ("1", "true", "yes", "on", "per_call")
 
 
@@ -81,7 +81,7 @@ def _record_profile(label: str, start: float | None) -> None:
         _PROFILE_REGISTERED = True
     elapsed_ms = (time.perf_counter() - start) * 1000.0
     _PROFILE_STATS.setdefault(label, []).append(elapsed_ms)
-    if os.environ.get("MMML_JAX_PME_PROFILE", "").strip().lower() == "per_call":
+    if os.environ.get("KARML_JAX_PME_PROFILE", "").strip().lower() == "per_call":
         print(f"jax-pme profile: {label}={elapsed_ms:.3f} ms", file=sys.stderr, flush=True)
 
 
@@ -174,8 +174,8 @@ def _mm_switch_scales(
     mm_r_min: float | None,
 ) -> np.ndarray:
     """COM switching factors per monomer pair (same logic as ``mm_energy_forces``)."""
-    from mmml.interfaces.pycharmmInterface.calculator_utils import _sharpstep
-    from mmml.interfaces.pycharmmInterface.cutoffs import GAMMA_OFF, GAMMA_ON
+    from karml.interfaces.pycharmmInterface.calculator_utils import _sharpstep
+    from karml.interfaces.pycharmmInterface.cutoffs import GAMMA_OFF, GAMMA_ON
 
     n_monomers = int(len(monomer_offsets) - 1)
     coms = np.stack(
@@ -277,13 +277,13 @@ def _mean_switch_scale_jax(
     import jax
     import jax.numpy as jnp
 
-    from mmml.interfaces.pycharmmInterface.calculator_utils import (
+    from karml.interfaces.pycharmmInterface.calculator_utils import (
         _sharpstep,
         dimer_pair_index_arrays,
         monomer_coms_segment,
         monomer_id_np_from_offsets,
     )
-    from mmml.interfaces.pycharmmInterface.cutoffs import GAMMA_OFF, GAMMA_ON
+    from karml.interfaces.pycharmmInterface.cutoffs import GAMMA_OFF, GAMMA_ON
 
     offsets = np.asarray(monomer_offsets, dtype=np.int64).reshape(-1)
     n_monomers = int(len(offsets) - 1)
@@ -414,7 +414,7 @@ def _com_switch_value_and_grad(
         complementary_handoff=complementary_handoff,
         mm_r_min=mm_r_min,
     )
-    from mmml.interfaces.pycharmmInterface.ml_dtypes import resolve_ml_compute_dtype
+    from karml.interfaces.pycharmmInterface.ml_dtypes import resolve_ml_compute_dtype
     dtype = resolve_ml_compute_dtype()
     pos_j = jnp.asarray(positions_A, dtype=dtype)
     cell_j = jnp.asarray(pbc_cell, dtype=dtype)
@@ -553,7 +553,7 @@ def intra_monomer_jax_pme_lj_dispersion(
     sr_cutoff_A: float,
 ) -> HybridJaxPmeCorrectionResult:
     """Sum jax-pme r⁻⁶ dispersion over each monomer slice."""
-    from mmml.interfaces.pycharmmInterface.long_range_backend import (
+    from karml.interfaces.pycharmmInterface.long_range_backend import (
         DEFAULT_JAX_PME_LJ_PREFACTOR,
     )
 
@@ -623,7 +623,7 @@ def _cross_monomer_power_law_correction(
     profile_label: str,
 ) -> HybridJaxPmeCorrectionResult:
     """Fused cross-monomer jax-pme (one prepare; structure-factor or masked kernel)."""
-    from mmml.interfaces.pycharmmInterface.jax_pme_cross_monomer import (
+    from karml.interfaces.pycharmmInterface.jax_pme_cross_monomer import (
         compute_jax_pme_cross_monomer_power_law,
     )
 
@@ -719,7 +719,7 @@ def hybrid_jax_pme_coulomb_correction(
         )
         return _zero_correction(pos, switch_scale=switch_scale)
 
-    from mmml.interfaces.pycharmmInterface.jax_pme_cross_monomer import (
+    from karml.interfaces.pycharmmInterface.jax_pme_cross_monomer import (
         resolve_jax_pme_intra_mode,
     )
     from jaxpme import prefactors as jpref
@@ -846,10 +846,10 @@ def hybrid_jax_pme_lj_dispersion_correction(
         )
         return _zero_correction(pos, switch_scale=switch_scale)
 
-    from mmml.interfaces.pycharmmInterface.jax_pme_cross_monomer import (
+    from karml.interfaces.pycharmmInterface.jax_pme_cross_monomer import (
         resolve_jax_pme_intra_mode,
     )
-    from mmml.interfaces.pycharmmInterface.long_range_backend import (
+    from karml.interfaces.pycharmmInterface.long_range_backend import (
         DEFAULT_JAX_PME_LJ_PREFACTOR,
     )
 
@@ -939,7 +939,7 @@ def hybrid_jax_pme_mm_lr_correction(
     include_dispersion: bool | None = None,
 ) -> HybridJaxPmeMmResult:
     """Combined hybrid Coulomb + r⁻⁶ dispersion (each full − intra, same COM scale)."""
-    from mmml.interfaces.pycharmmInterface.long_range_backend import (
+    from karml.interfaces.pycharmmInterface.long_range_backend import (
         resolve_jax_pme_dispersion,
     )
 

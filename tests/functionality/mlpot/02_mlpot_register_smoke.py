@@ -42,7 +42,7 @@ def main() -> int:
     n_atoms = len(z)
     print(f"Cluster: {n_atoms} atoms, checkpoint: {ckpt}")
 
-    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+    import karml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
     import pycharmm
     import pycharmm.coor as coor
     import pycharmm.energy as energy
@@ -53,7 +53,7 @@ def main() -> int:
     model.natoms = n_atoms
     atoms = ase.Atoms(numbers=z, positions=r)
 
-    from mmml.models.physnetjax.physnetjax.calc.helper_mlp import get_pyc
+    from karml.models.physnetjax.physnetjax.calc.helper_mlp import get_pyc
 
     pyCModel = get_pyc(params, model, atoms)
     ml_sel = all_atom_selection()

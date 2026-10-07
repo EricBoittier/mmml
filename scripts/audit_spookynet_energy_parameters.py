@@ -109,7 +109,7 @@ def main() -> None:
     report = {f"{path.parent.name}/{path.stem}": audit(path) for path in args.checkpoint}
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, indent=2))
-    from mmml.utils.rich_report import print_colored_json
+    from karml.utils.rich_report import print_colored_json
 
     print_colored_json(report)
 

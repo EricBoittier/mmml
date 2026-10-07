@@ -13,30 +13,30 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from mmml.interfaces.pycharmmInterface.calculator_utils import unpack_factory_result
-from mmml.interfaces.pycharmmInterface.cutoffs import (
+from karml.interfaces.pycharmmInterface.calculator_utils import unpack_factory_result
+from karml.interfaces.pycharmmInterface.cutoffs import (
     CutoffParameters,
     cutoff_parameters_from_args,
 )
-from mmml.interfaces.pycharmmInterface.ml_dtypes import as_ml_array, resolve_ml_compute_dtype
-from mmml.interfaces.pycharmmInterface.mmml_calculator import ev2kcalmol, setup_calculator
-from mmml.interfaces.pycharmmInterface.mlpot.mlpot_batch_policy import (
+from karml.interfaces.pycharmmInterface.ml_dtypes import as_ml_array, resolve_ml_compute_dtype
+from karml.interfaces.pycharmmInterface.karml_calculator import ev2kcalmol, setup_calculator
+from karml.interfaces.pycharmmInterface.mlpot.mlpot_batch_policy import (
     resolve_ml_batch_size,
     resolve_mlpot_mm_skin_A,
 )
-from mmml.interfaces.pycharmmInterface.mlpot.callback_failstop import (
+from karml.interfaces.pycharmmInterface.mlpot.callback_failstop import (
     failstop_calculate_charmm,
 )
-from mmml.interfaces.pycharmmInterface.mlpot.setup import physnet_ml_atomic_numbers
-from mmml.interfaces.pycharmmInterface.mlpot.mlpot_gpu_policy import resolve_ml_gpu_count
-from mmml.interfaces.pycharmmInterface.jax_device_policy import (
+from karml.interfaces.pycharmmInterface.mlpot.setup import physnet_ml_atomic_numbers
+from karml.interfaces.pycharmmInterface.mlpot.mlpot_gpu_policy import resolve_ml_gpu_count
+from karml.interfaces.pycharmmInterface.jax_device_policy import (
     jax_cpu_until_mlpot_registered,
     mlpot_jax_device_context,
 )
-from mmml.utils.jax_gpu_warmup import ensure_xla_gpu_warmed
+from karml.utils.jax_gpu_warmup import ensure_xla_gpu_warmed
 
 if TYPE_CHECKING:
-    from mmml.interfaces.pycharmmInterface.mlpot.metatomic_mlpot import MetatomicMlpotModel
+    from karml.interfaces.pycharmmInterface.mlpot.metatomic_mlpot import MetatomicMlpotModel
 
 __all__ = [
     "resolve_ml_batch_size",
@@ -69,10 +69,10 @@ class _CallbackPairListUnavailable(RuntimeError):
     """
 
 
-ALLOW_MISSING_CALLBACK_PAIRS_ENV = "MMML_MLPOT_ALLOW_MISSING_CALLBACK_PAIRS"
+ALLOW_MISSING_CALLBACK_PAIRS_ENV = "KARML_MLPOT_ALLOW_MISSING_CALLBACK_PAIRS"
 """Test-only: ``1`` restores the old zero-energy return on missing pair lists."""
 
-ALLOW_PERIODIC_COULOMB_FAILURE_ENV = "MMML_MLPOT_ALLOW_PERIODIC_COULOMB_FAILURE"
+ALLOW_PERIODIC_COULOMB_FAILURE_ENV = "KARML_MLPOT_ALLOW_PERIODIC_COULOMB_FAILURE"
 """Test-only: ``1`` continues with an ML-only USER term if periodic Coulomb fails."""
 
 
@@ -91,7 +91,7 @@ def resolve_mm_pair_source(
     Default is ``charmm_callback`` (Fortran ``idxu/idxv`` primary pairs). All-ML
     ``jax_mic`` hybrids (vacuum or PBC) zero CHARMM ELEC/VDW via energy policy, so
     the Fortran primary list is empty — those runs default to JAX neighbor rebuild.
-    Set ``MMML_MM_PAIR_SOURCE=jax`` or ``--mm-pair-source jax`` to force Vesin/cell-list.
+    Set ``KARML_MM_PAIR_SOURCE=jax`` or ``--mm-pair-source jax`` to force Vesin/cell-list.
     """
     if all_ml_pbc_jax_mic is not None:
         all_ml_jax_mic = bool(all_ml_pbc_jax_mic) or bool(all_ml_jax_mic)
@@ -104,14 +104,14 @@ def resolve_mm_pair_source(
             if norm == "jax":
                 return "jax"
             raise ValueError(f"mm_pair_source must be jax or charmm_callback; got {src!r}")
-    raw = os.environ.get("MMML_MM_PAIR_SOURCE", "").strip().lower()
+    raw = os.environ.get("KARML_MM_PAIR_SOURCE", "").strip().lower()
     if raw == "jax":
         return "jax"
     if raw in ("charmm_callback", "callback", "charmm"):
         return "charmm_callback"
     if raw:
         raise ValueError(
-            f"MMML_MM_PAIR_SOURCE must be jax or charmm_callback; got {raw!r}"
+            f"KARML_MM_PAIR_SOURCE must be jax or charmm_callback; got {raw!r}"
         )
     if all_ml_jax_mic:
         return "jax"
@@ -159,7 +159,7 @@ def _print_setup_calculator_factory_summary(
     cell: Union[float, bool],
 ) -> None:
     """Log hybrid factory defaults after ``setup_calculator`` returns."""
-    from mmml.utils.rich_report import emit_factory_summary
+    from karml.utils.rich_report import emit_factory_summary
 
     cp = cutoff_params
     comp = getattr(cp, "complementary_handoff", True)
@@ -398,7 +398,7 @@ class DecomposedMlpotCalculator:
         do_mm = self.do_mm
         do_ml = self.do_ml
         do_ml_dimer = self.do_ml_dimer
-        from mmml.interfaces.pycharmmInterface.mlpot.ml_chunk_budget import (
+        from karml.interfaces.pycharmmInterface.mlpot.ml_chunk_budget import (
             MlChunkBudget,
             ml_chunk_budget_enabled,
         )
@@ -618,9 +618,9 @@ class DecomposedMlpotCalculator:
 
         Empty (all-pairs selection in-graph) unless the factory attached a
         :class:`CentroidDimerNeighborList` (``setup_calculator(ml_dimer_centroid_nl=...)``,
-        env ``MMML_ML_DIMER_CENTROID_NL``) and this step uses the sparse batch.
+        env ``KARML_ML_DIMER_CENTROID_NL``) and this step uses the sparse batch.
         """
-        from mmml.interfaces.pycharmmInterface.mlpot.dimer_centroid_nl import (
+        from karml.interfaces.pycharmmInterface.mlpot.dimer_centroid_nl import (
             CentroidDimerNeighborList,
         )
 
@@ -630,7 +630,7 @@ class DecomposedMlpotCalculator:
         if not isinstance(nl, CentroidDimerNeighborList):
             return {}
         cand = nl.update(pos, box=_box_numpy_for_update(box))
-        from mmml.interfaces.pycharmmInterface.mlpot.ml_profile import (
+        from karml.interfaces.pycharmmInterface.mlpot.ml_profile import (
             get_mlpot_profile_stats,
             mlpot_profiling_enabled,
         )
@@ -669,7 +669,7 @@ class DecomposedMlpotCalculator:
         self._note_mm_pair_capacity(mm_pair_idx)
         get_stats = getattr(update_fn, "get_stats", None)
         if get_stats is not None:
-            from mmml.interfaces.pycharmmInterface.mlpot.ml_profile import (
+            from karml.interfaces.pycharmmInterface.mlpot.ml_profile import (
                 get_mlpot_profile_stats,
                 mlpot_profiling_enabled,
             )
@@ -690,7 +690,7 @@ class DecomposedMlpotCalculator:
         pos: np.ndarray,
         box: jnp.ndarray | None,
     ) -> tuple[jnp.ndarray, jnp.ndarray, bool]:
-        from mmml.interfaces.pycharmmInterface.nl_reference import (
+        from karml.interfaces.pycharmmInterface.nl_reference import (
             apply_mm_pair_filters,
             callback_mlmm_pairs_to_half_set,
             callback_pairs_to_padded_arrays,
@@ -768,7 +768,7 @@ class DecomposedMlpotCalculator:
             return e_raw, forces_ev
         # Cap overflow drops interacting dimers; chunk growth cannot recover them.
         budget.raise_if_saturated(n_active)
-        from mmml.interfaces.pycharmmInterface.mlpot.ml_profile import (
+        from karml.interfaces.pycharmmInterface.mlpot.ml_profile import (
             get_mlpot_profile_stats,
             mlpot_profiling_enabled,
         )
@@ -815,7 +815,7 @@ class DecomposedMlpotCalculator:
         if not (self._cell or self._requires_callback_pbc_box()):
             self._set_live_callback_box(None)
             return None
-        from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+        from karml.interfaces.pycharmmInterface.mlpot.pbc_env import (
             cubic_box_matrix_from_side,
             resolve_mlpot_mic_box_side_A,
         )
@@ -868,8 +868,8 @@ class DecomposedMlpotCalculator:
         L = float(box_side_A) if box_side_A is not None else (float(self._cell) if self._cell else 0.0)
         if L <= 0.0 or not self._atoms_per_monomer:
             return pos
-        from mmml.interfaces.pycharmmInterface.mlpot.mc_density import monomer_offsets_from_atoms_per
-        from mmml.utils.geometry_checks import wrap_monomers_primary_cell
+        from karml.interfaces.pycharmmInterface.mlpot.mc_density import monomer_offsets_from_atoms_per
+        from karml.utils.geometry_checks import wrap_monomers_primary_cell
 
         offsets = monomer_offsets_from_atoms_per(list(self._atoms_per_monomer))
         whole = np.asarray(pos[:n], dtype=np.float64)
@@ -907,7 +907,7 @@ class DecomposedMlpotCalculator:
         sparse chunk budget. For engines that need the callback's Hamiltonian off
         CHARMM (JAX-MD, ASE, strain finite differences). Cubic cells only.
         """
-        from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import cubic_box_matrix_from_side
+        from karml.interfaces.pycharmmInterface.mlpot.pbc_env import cubic_box_matrix_from_side
 
         if self.do_mm and self._mm_pair_source == "charmm_callback":
             raise RuntimeError("evaluate_hybrid_ev needs mm_pair_source='jax' (CHARMM pair lists exist only inside ENER)")
@@ -976,7 +976,7 @@ class DecomposedMlpotCalculator:
         idxvp,
     ) -> float:
         n = int(Natom)
-        from mmml.interfaces.pycharmmInterface.mlpot.callback_buffers import (
+        from karml.interfaces.pycharmmInterface.mlpot.callback_buffers import (
             stack_charmm_xyz,
         )
 
@@ -990,7 +990,7 @@ class DecomposedMlpotCalculator:
         ml_idx = self._resolve_ml_callback_slice(n)
         n_ml = int(ml_idx.size)
         pos = pos_full[ml_idx]
-        from mmml.interfaces.pycharmmInterface.mlpot.ml_profile import (
+        from karml.interfaces.pycharmmInterface.mlpot.ml_profile import (
             get_mlpot_profile_stats,
             mlpot_profiling_enabled,
         )
@@ -998,12 +998,12 @@ class DecomposedMlpotCalculator:
         if mlpot_profiling_enabled():
             get_mlpot_profile_stats().record_charmm_gap()
         t0 = time.perf_counter()
-        from mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge import (
+        from karml.interfaces.pycharmmInterface.mlpot.mpi_bridge import (
             broadcast_mlpot_result,
             mpi_rank_size,
             mlpot_runs_on_this_rank,
         )
-        from mmml.interfaces.pycharmmInterface.mlpot.spatial_mpi_policy import (
+        from karml.interfaces.pycharmmInterface.mlpot.spatial_mpi_policy import (
             spatial_mpi_enabled,
         )
 
@@ -1050,7 +1050,7 @@ class DecomposedMlpotCalculator:
                     if parent is not None:
                         parent._last_callback_error = msg
                         parent._last_ml_forces = self.last_ml_forces
-                    from mmml.interfaces.pycharmmInterface.mlpot.callback_failstop import (
+                    from karml.interfaces.pycharmmInterface.mlpot.callback_failstop import (
                         mlpot_dynamics_armed,
                     )
 
@@ -1080,7 +1080,7 @@ class DecomposedMlpotCalculator:
                 mono_jax = jnp.zeros((0,), dtype=jnp.int32)
                 dimer_jax = jnp.zeros((0,), dtype=jnp.int32)
                 if use_spatial:
-                    from mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.batch_builder import (
+                    from karml.interfaces.pycharmmInterface.mlpot.mpi_spatial.batch_builder import (
                         build_domdec_spatial_batch_indices,
                         make_domdec_aligned_grid,
                     )
@@ -1113,7 +1113,7 @@ class DecomposedMlpotCalculator:
                 fwd_kwargs = self._resolve_ml_dimer_candidates(
                     pos, box, use_spatial=use_spatial
                 )
-                from mmml.interfaces.pycharmmInterface.mlpot.strain_virial import (
+                from karml.interfaces.pycharmmInterface.mlpot.strain_virial import (
                     strain_virial_enabled,
                 )
 
@@ -1147,13 +1147,13 @@ class DecomposedMlpotCalculator:
                 t_host = time.perf_counter()
                 e_host = jax.device_get(e_raw)
                 forces_host = jax.device_get(forces_ev)
-                from mmml.interfaces.pycharmmInterface.mlpot.finite_guards import (
+                from karml.interfaces.pycharmmInterface.mlpot.finite_guards import (
                     require_host_finite,
                 )
 
                 require_host_finite(e_host, forces_host, name="ML USER")
                 if want_virial:
-                    from mmml.interfaces.pycharmmInterface.mlpot.strain_virial import (
+                    from karml.interfaces.pycharmmInterface.mlpot.strain_virial import (
                         push_virial_to_charmm,
                         virial_correction_kcal,
                     )
@@ -1200,7 +1200,7 @@ class DecomposedMlpotCalculator:
                 if parent is not None:
                     parent._last_ml_forces = self.last_ml_forces
                 try:
-                    from mmml.interfaces.pycharmmInterface.charmm_mpi import (
+                    from karml.interfaces.pycharmmInterface.charmm_mpi import (
                         charmm_lib_links_mpi,
                         recover_mpi_for_charmm_after_jax,
                     )
@@ -1227,10 +1227,10 @@ class DecomposedMlpotCalculator:
             get_mlpot_profile_stats().record_ml(time.perf_counter() - t0)
         periodic_cfg = getattr(self, "_periodic_mm_config", None)
         if periodic_cfg is not None and run_ml and self._cell:
-            from mmml.interfaces.pycharmmInterface.mlpot.periodic_mm_external import (
+            from karml.interfaces.pycharmmInterface.mlpot.periodic_mm_external import (
                 add_periodic_coulomb_to_callback,
             )
-            from mmml.interfaces.pycharmmInterface.nl_reference import (
+            from karml.interfaces.pycharmmInterface.nl_reference import (
                 monomer_id_from_offsets,
             )
 
@@ -1264,14 +1264,14 @@ class DecomposedMlpotCalculator:
                     file=sys.stderr,
                     flush=True,
                 )
-        from mmml.interfaces.pycharmmInterface.mlpot.callback_buffers import (
+        from karml.interfaces.pycharmmInterface.mlpot.callback_buffers import (
             subtract_forces_from_charmm_grad,
         )
 
         subtract_forces_from_charmm_grad(dx, dy, dz, forces, n)
         if run_ml and use_mm_pairs:
             hybrid_before_route = float(e_kcal)
-            from mmml.interfaces.pycharmmInterface.mlpot.charmm_eterm_routing import (
+            from karml.interfaces.pycharmmInterface.mlpot.charmm_eterm_routing import (
                 decompose_and_route_mlpot_mm_from_callback,
             )
 
@@ -1414,12 +1414,12 @@ class DecomposedMlpotModel:
     def _jax_pme_lr_active(self) -> bool:
         if not self._do_mm:
             return False
-        from mmml.interfaces.pycharmmInterface.long_range_backend import pick_lr_solver
+        from karml.interfaces.pycharmmInterface.long_range_backend import pick_lr_solver
 
         return pick_lr_solver(self._lr_solver) == "jax_pme"
 
     def _jax_pme_mesh_active(self) -> bool:
-        from mmml.interfaces.pycharmmInterface.long_range_backend import jax_pme_mesh_method
+        from karml.interfaces.pycharmmInterface.long_range_backend import jax_pme_mesh_method
 
         return self._jax_pme_lr_active() and jax_pme_mesh_method(self._jax_pme_method)
 
@@ -1439,10 +1439,10 @@ class DecomposedMlpotModel:
             return
         if self._pending_factory is None or self._pending_factory_z is None:
             raise RuntimeError("DecomposedMlpotModel: JAX factory was not initialized")
-        from mmml.interfaces.pycharmmInterface.jax_compile_threads import (
+        from karml.interfaces.pycharmmInterface.jax_compile_threads import (
             jax_compile_threads_context,
         )
-        from mmml.interfaces.pycharmmInterface.jax_device_policy import (
+        from karml.interfaces.pycharmmInterface.jax_device_policy import (
             jax_cpu_backend_available,
             jax_cpu_until_mlpot_registered,
             mlpot_device_context_fell_back_to_cpu,
@@ -1516,7 +1516,7 @@ class DecomposedMlpotModel:
             self._pending_factory = None
             self._pending_factory_z = None
         if cpu_only and self._defer_jax_until_after_sd:
-            from mmml.interfaces.pycharmmInterface.charmm_mpi import (
+            from karml.interfaces.pycharmmInterface.charmm_mpi import (
                 recover_mpi_for_charmm_after_jax,
             )
 
@@ -1524,7 +1524,7 @@ class DecomposedMlpotModel:
                 phase="after deferred MLpot JAX CPU finalize",
             )
         elif (not cpu_only) and self._defer_jax_until_after_sd:
-            from mmml.interfaces.pycharmmInterface.charmm_mpi import (
+            from karml.interfaces.pycharmmInterface.charmm_mpi import (
                 charmm_lib_links_mpi,
                 recover_mpi_for_charmm_after_jax,
             )
@@ -1600,16 +1600,16 @@ class DecomposedMlpotModel:
                 real._spherical_forward_fn = None
                 real._forward_cache_key = None
         try:
-            from mmml.interfaces.pycharmmInterface.charmm_mpi import (
+            from karml.interfaces.pycharmmInterface.charmm_mpi import (
                 charmm_lib_links_mpi,
                 recover_mpi_for_charmm_after_jax,
             )
-            from mmml.interfaces.pycharmmInterface.jax_device_policy import (
+            from karml.interfaces.pycharmmInterface.jax_device_policy import (
                 mlpot_jax_device_name,
             )
 
             if charmm_lib_links_mpi() and mlpot_jax_device_name() == "gpu":
-                from mmml.utils.jax_gpu_warmup import sync_jax_gpu_before_charmm
+                from karml.utils.jax_gpu_warmup import sync_jax_gpu_before_charmm
 
                 sync_jax_gpu_before_charmm(phase="after MLpot JAX GPU promote")
             if charmm_lib_links_mpi():
@@ -1705,7 +1705,7 @@ def build_decomposed_mlpot_model(
     defer_jax_until_after_sd: bool = False,
 ) -> DecomposedMlpotModel | MetatomicMlpotModel:
     """CHARMM MLpot factory: metatomic ASE adapter or JAX PhysNet/KerNN hybrid."""
-    from mmml.interfaces.pycharmmInterface.mlpot.metatomic_mlpot import (
+    from karml.interfaces.pycharmmInterface.mlpot.metatomic_mlpot import (
         maybe_build_metatomic_mlpot_model,
     )
 
@@ -1742,7 +1742,7 @@ def _load_hybrid_mm_scales(scales_file, checkpoint, verbose):
     """Load optional LJ and charge scales with explicit-file errors preserved."""
     ep_scale = sig_scale = None
     mm_charge_scale = 1.0
-    from mmml.models.mm_lj_scales import resolve_md_lj_scales
+    from karml.models.mm_lj_scales import resolve_md_lj_scales
 
     try:
         ep_scale, sig_scale = resolve_md_lj_scales(
@@ -1760,7 +1760,7 @@ def _load_hybrid_mm_scales(scales_file, checkpoint, verbose):
             f"from hybrid_mm.json / --mm-lj-scales-file",
             flush=True,
         )
-    from mmml.models.mm_lj_scales import resolve_md_charge_scale
+    from karml.models.mm_lj_scales import resolve_md_charge_scale
 
     try:
         mm_charge_scale = resolve_md_charge_scale(
@@ -1798,8 +1798,8 @@ def _build_jax_decomposed_mlpot_model(
     defer_jax_until_mlpot_registered: bool = False,
     defer_jax_until_after_sd: bool = False,
 ) -> DecomposedMlpotModel:
-    from mmml.models.kernnn import is_kernnn_checkpoint
-    from mmml.interfaces.pycharmmInterface.mlpot.metatomic_mlpot import (
+    from karml.models.kernnn import is_kernnn_checkpoint
+    from karml.interfaces.pycharmmInterface.mlpot.metatomic_mlpot import (
         _jax_mm_spoof_requested,
     )
 
@@ -1814,7 +1814,7 @@ def _build_jax_decomposed_mlpot_model(
     else:
         ckpt = Path(checkpoint).expanduser().resolve()
         if not _kernnn:
-            from mmml.interfaces.energy_forces.ml import assert_hybrid_ml_compatible
+            from karml.interfaces.energy_forces.ml import assert_hybrid_ml_compatible
 
             assert_hybrid_ml_compatible(ckpt)
     if args is not None and ml_compute_dtype is None:
@@ -1822,7 +1822,7 @@ def _build_jax_decomposed_mlpot_model(
     cutoff_params = (
         cutoff_parameters_from_args(args) if args is not None else CutoffParameters()
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.spatial_mpi_policy import (
+    from karml.interfaces.pycharmmInterface.mlpot.spatial_mpi_policy import (
         spatial_mpi_enabled,
     )
 
@@ -1835,7 +1835,7 @@ def _build_jax_decomposed_mlpot_model(
     max_atoms = max(per) * 2
     batch_size = resolve_ml_batch_size(int(n_monomers), ml_batch_size)
     gpu_count = resolve_ml_gpu_count(ml_gpu_count)
-    from mmml.interfaces.pycharmmInterface.mlpot.mlpot_sparse_dimer_policy import (
+    from karml.interfaces.pycharmmInterface.mlpot.mlpot_sparse_dimer_policy import (
         resolve_max_active_dimers,
     )
 
@@ -1848,7 +1848,7 @@ def _build_jax_decomposed_mlpot_model(
             side = float(cell)
             if side > 0.0:
                 _box_volume = side**3
-                from mmml.interfaces.pycharmmInterface.mlpot.mlpot_sparse_dimer_policy import (
+                from karml.interfaces.pycharmmInterface.mlpot.mlpot_sparse_dimer_policy import (
                     sparse_dimer_active_radius,
                 )
 
@@ -1858,9 +1858,9 @@ def _build_jax_decomposed_mlpot_model(
                     if raw_margin is not None:
                         margin = float(raw_margin)
                     else:
-                        margin = float(os.environ.get("MMML_ML_DIMER_ACTIVE_MARGIN") or 0.0)
+                        margin = float(os.environ.get("KARML_ML_DIMER_ACTIVE_MARGIN") or 0.0)
                 else:
-                    margin = float(os.environ.get("MMML_ML_DIMER_ACTIVE_MARGIN") or 0.0)
+                    margin = float(os.environ.get("KARML_ML_DIMER_ACTIVE_MARGIN") or 0.0)
                 _active_radius = sparse_dimer_active_radius(
                     float(cutoff_params.mm_switch_on),
                     float(cutoff_params.ml_switch_width),
@@ -1883,7 +1883,7 @@ def _build_jax_decomposed_mlpot_model(
     periodic_mode = False
     mm_nonbond_mode = "jax_mic"
     if args is not None:
-        from mmml.interfaces.pycharmmInterface.mlpot.periodic_mm import (
+        from karml.interfaces.pycharmmInterface.mlpot.periodic_mm import (
             build_periodic_mm_config,
             periodic_mm_status_line,
             resolve_mm_nonbond_mode,
@@ -1894,7 +1894,7 @@ def _build_jax_decomposed_mlpot_model(
         periodic_mode = resolve_mm_nonbond_mode(args) == "periodic_external"
         mm_nonbond_mode = resolve_mm_nonbond_mode(args)
     if max_pairs is None and not free_space and cell and not periodic_mode:
-        from mmml.interfaces.pycharmmInterface.cell_list import estimate_max_pairs
+        from karml.interfaces.pycharmmInterface.cell_list import estimate_max_pairs
 
         cutoff_a = float(cutoff_params.mm_switch_on) + float(cutoff_params.mm_switch_width)
         n_atoms = int(sum(per))
@@ -1909,7 +1909,7 @@ def _build_jax_decomposed_mlpot_model(
             safety_factor=safety,
             box_side_A=float(cell),
         )
-    from mmml.interfaces.pycharmmInterface.jax_device_policy import mlpot_local_gpu_count
+    from karml.interfaces.pycharmmInterface.jax_device_policy import mlpot_local_gpu_count
 
     local_gpus = mlpot_local_gpu_count()
     if local_gpus > 1 and gpu_count <= 1 and verbose:
@@ -1954,7 +1954,7 @@ def _build_jax_decomposed_mlpot_model(
     # a once-per-session operation -- re-deploying is a guarded no-op, and a
     # different sidecar raises rather than silently zeroing the VDW.
     if periodic_mode and include_mm and args is not None:
-        from mmml.models.mm_lj_scales import find_learnable_lj_scales_sidecar
+        from karml.models.mm_lj_scales import find_learnable_lj_scales_sidecar
 
         scales_file = getattr(args, "mm_lj_scales_file", None)
         periodic_external_scales = find_learnable_lj_scales_sidecar(
@@ -1962,16 +1962,16 @@ def _build_jax_decomposed_mlpot_model(
             checkpoint=None if _spoof else ckpt,
         )
         if periodic_external_scales is not None:
-            from mmml.interfaces.pycharmmInterface.mlpot.scaled_cgenff_prm import (
+            from karml.interfaces.pycharmmInterface.mlpot.scaled_cgenff_prm import (
                 deploy_scaled_lj_into_charmm,
             )
 
             deploy_scaled_lj_into_charmm(periodic_external_scales, verbose=verbose)
-            from mmml.models.mm_lj_scales import load_md_charge_scale
+            from karml.models.mm_lj_scales import load_md_charge_scale
 
             if load_md_charge_scale(periodic_external_scales) != 1.0:
                 print(
-                    f"mmml WARNING: {periodic_external_scales} sets mm_charge_scale, but "
+                    f"karml WARNING: {periodic_external_scales} sets mm_charge_scale, but "
                     "periodic_external takes ELEC from CHARMM with PSF charges -- the "
                     "charge scale is NOT applied (use mm_nonbond_mode=jax_mic).",
                     file=sys.stderr,
@@ -2001,7 +2001,7 @@ def _build_jax_decomposed_mlpot_model(
     jax_pme_dispersion = getattr(args, "jax_pme_dispersion", None) if args is not None else None
     mlpot_pbc = not free_space and bool(cell)
     if args is not None:
-        from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+        from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
             resolve_jax_pme_sr_cutoff_for_mlpot,
             resolve_lr_solver_for_mlpot,
             resolve_mlpot_use_pbc,
@@ -2022,7 +2022,7 @@ def _build_jax_decomposed_mlpot_model(
             verbose=verbose,
         )
     elif mlpot_pbc:
-        from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+        from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
             resolve_jax_pme_sr_cutoff_for_mlpot,
             resolve_lr_solver_for_mlpot,
             warn_if_mic_pbc_without_lr,
@@ -2041,7 +2041,7 @@ def _build_jax_decomposed_mlpot_model(
             verbose=verbose,
         )
     if verbose and do_mm and lr_solver:
-        from mmml.interfaces.pycharmmInterface.long_range_backend import describe_lr_solver
+        from karml.interfaces.pycharmmInterface.long_range_backend import describe_lr_solver
 
         disp_text = (
             "env/default"
@@ -2077,7 +2077,7 @@ def _build_jax_decomposed_mlpot_model(
             "(Fortran idxu/idxv primary pairs for parity diagnostics)",
             flush=True,
         )
-    from mmml.interfaces.pycharmmInterface.jax_device_policy import mlpot_jax_device_name
+    from karml.interfaces.pycharmmInterface.jax_device_policy import mlpot_jax_device_name
 
     # Only pin setup_calculator onto CPU when we intentionally defer GPU work.
     # Default GPU runs used to always pass defer_xla_gpu_warmup=True, which
@@ -2098,7 +2098,7 @@ def _build_jax_decomposed_mlpot_model(
         # feed the JAX switched-MM pair loop only. Applying nothing while the
         # user believes trained LJ is active is a silent-wrong-results failure,
         # so say so loudly for an explicit request and warn for auto-discovery.
-        from mmml.models.mm_lj_scales import find_learnable_lj_scales_sidecar
+        from karml.models.mm_lj_scales import find_learnable_lj_scales_sidecar
 
         found = None
         try:
@@ -2126,7 +2126,7 @@ def _build_jax_decomposed_mlpot_model(
             )
         if found is not None:
             print(
-                f"mmml WARNING: {found} carries trained MM LJ scales but JAX MM "
+                f"karml WARNING: {found} carries trained MM LJ scales but JAX MM "
                 f"is off ({mode_note}) — they are NOT applied. Use --include-mm "
                 "to deploy them through the selected LJ backend. See "
                 "docs/hybrid-mm-lj-scales.md.",
@@ -2134,7 +2134,7 @@ def _build_jax_decomposed_mlpot_model(
                 flush=True,
             )
     # Native ewald doMM: optional switched LJ beside untapered Coulomb (#139).
-    from mmml.interfaces.pycharmmInterface.long_range_backend import pick_lr_solver
+    from karml.interfaces.pycharmmInterface.long_range_backend import pick_lr_solver
 
     _ewald_include_lj = False
     if do_mm and pick_lr_solver(lr_solver) == "ewald":
@@ -2247,7 +2247,7 @@ def _build_jax_decomposed_mlpot_model(
             mm_pair_capacity_hint=max_pairs,
         )
     r0 = np.zeros((len(z), 3), dtype=np.float64)
-    from mmml.interfaces.pycharmmInterface.jax_device_policy import mlpot_jax_device_context
+    from karml.interfaces.pycharmmInterface.jax_device_policy import mlpot_jax_device_context
 
     with mlpot_jax_device_context():
         _, spherical_fn, get_update_fn = unpack_factory_result(
@@ -2305,8 +2305,8 @@ def _resolve_mlpot_warmup_box_pairs(
     mm_pair_mask = None
     use_mm_pairs = False
     if use_pbc and box_A is not None:
-        from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import cubic_box_matrix_from_side
-        from mmml.interfaces.pycharmmInterface.ml_dtypes import (
+        from karml.interfaces.pycharmmInterface.mlpot.pbc_env import cubic_box_matrix_from_side
+        from karml.interfaces.pycharmmInterface.ml_dtypes import (
             as_ml_array,
             resolve_ml_compute_dtype,
         )
@@ -2348,8 +2348,8 @@ def _warmup_mlpot_callback_forward(
     wrapping ``spherical_fn``. Do not also call ``warmup_hybrid_spherical_cutoff``
     here — that duplicates XLA compilation of the same hybrid graph.
     """
-    from mmml.interfaces.pycharmmInterface.jax_device_policy import mlpot_jax_device_context
-    from mmml.utils.jax_gpu_warmup import block_jax_values, run_jax_warmup_passes
+    from karml.interfaces.pycharmmInterface.jax_device_policy import mlpot_jax_device_context
+    from karml.utils.jax_gpu_warmup import block_jax_values, run_jax_warmup_passes
 
     z = np.asarray(physnet_ml_atomic_numbers(model._atomic_numbers), dtype=int)
     pos = np.asarray(positions, dtype=np.float64)
@@ -2438,13 +2438,13 @@ def materialize_deferred_mlpot_jax_before_sd(
     :func:`assert_mpi_launcher_for_mlpot_sd` (``upinb`` / MPI pool risk).
     """
     del probe_charmm_ener, force_ener_probe, sync_lists
-    from mmml.interfaces.pycharmmInterface.charmm_mpi import (
+    from karml.interfaces.pycharmmInterface.charmm_mpi import (
         assert_mpi_launcher_for_mlpot_sd,
         charmm_lib_links_mpi,
         recover_mpi_for_charmm_after_jax,
         _under_mpirun,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+    from karml.interfaces.pycharmmInterface.mlpot.setup import (
         get_charmm_positions_array,
         mlpot_skip_charmm_ener_force_before_first_sd,
         prime_charmm_hybrid_energy_before_mlpot_sd,
@@ -2473,7 +2473,7 @@ def materialize_deferred_mlpot_jax_before_sd(
     assert_mpi_launcher_for_mlpot_sd(context="Pre-MLpot SD materialize")
     if charmm_lib_links_mpi() and not _under_mpirun() and verbose:
         print(
-            "WARN: serial python with MPI-linked CHARMM (MMML_ALLOW_SERIAL_MPI_CHARMM=1?)",
+            "WARN: serial python with MPI-linked CHARMM (KARML_ALLOW_SERIAL_MPI_CHARMM=1?)",
             flush=True,
         )
 
@@ -2508,7 +2508,7 @@ def materialize_deferred_mlpot_jax_before_sd(
         elif not isinstance(calc, DecomposedMlpotCalculator):
             return False
 
-        from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+        from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
             mlpot_spherical_forces_ev_angstrom,
         )
 
@@ -2609,7 +2609,7 @@ def maybe_warmup_deferred_decomposed_mlpot(
     """Promote and JIT-compile deferred JAX after MLpot SD (MPI-linked CHARMM)."""
     if int(n_monomers) <= 1:
         return
-    from mmml.interfaces.pycharmmInterface.charmm_mpi import (
+    from karml.interfaces.pycharmmInterface.charmm_mpi import (
         defer_jax_warmup_until_after_mlpot_sd,
     )
 
@@ -2636,8 +2636,8 @@ def warmup_decomposed_mlpot(
     a separate ``warmup_hybrid_spherical_cutoff`` pass that would duplicate XLA
     work (slice/mul/scatter/PhysNet/jax-pme compiled twice).
     """
-    from mmml.interfaces.pycharmmInterface.mlpot.metatomic_mlpot import MetatomicMlpotModel
-    from mmml.utils.jax_gpu_warmup import (
+    from karml.interfaces.pycharmmInterface.mlpot.metatomic_mlpot import MetatomicMlpotModel
+    from karml.utils.jax_gpu_warmup import (
         ensure_xla_gpu_warmed,
         maybe_sanitize_process_env_for_ptxas,
     )
@@ -2709,15 +2709,15 @@ def warmup_decomposed_mlpot(
         mm_pair_mask=mm_pair_mask,
         use_mm_pairs=use_mm_pairs,
     )
-    from mmml.interfaces.pycharmmInterface.charmm_mpi import recover_mpi_for_charmm_after_jax
+    from karml.interfaces.pycharmmInterface.charmm_mpi import recover_mpi_for_charmm_after_jax
 
     recover_mpi_for_charmm_after_jax(phase="after decomposed MLpot JAX warmup")
-    from mmml.utils.jax_gpu_warmup import maybe_log_jax_compile_timers
+    from karml.utils.jax_gpu_warmup import maybe_log_jax_compile_timers
 
     maybe_log_jax_compile_timers()
     if verbose:
         # MM warmup may have silenced CHARMM; restore visibility before MLpot registration.
-        from mmml.interfaces.pycharmmInterface.import_pycharmm import pycharmm_verbose
+        from karml.interfaces.pycharmmInterface.import_pycharmm import pycharmm_verbose
 
         pycharmm_verbose()
         print("Decomposed MLpot JAX warmup complete", flush=True)

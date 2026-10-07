@@ -1,4 +1,4 @@
-# `mmml dmc`
+# `karml dmc`
 
 Diffusion Monte Carlo with PhysNetJax (batched walkers).
 
@@ -8,14 +8,14 @@ in parallel with `jax.vmap` (chunked by `--max-batch`).
 
 ## Example (acetone dimer)
 
-Bundled geometry: `mmml/generate/dmc/examples/acetone_dmc.extxyz` (20 atoms).
+Bundled geometry: `karml/generate/dmc/examples/acetone_dmc.extxyz` (20 atoms).
 
 Smoke run (short equilibration, few production steps):
 
 ```bash
-mmml env   # resolve $MMML_CKPT if you use the bundled checkpoint
+karml env   # resolve $KARML_CKPT if you use the bundled checkpoint
 
-mmml dmc \
+karml dmc \
   --natm 20 \
   --nwalker 64 \
   --stepsize 5e-4 \
@@ -24,15 +24,15 @@ mmml dmc \
   --alpha 1200.0 \
   --max-batch 64 \
   --seed 0 \
-  --checkpoint "$MMML_CKPT" \
-  --input mmml/generate/dmc/examples/acetone_dmc.extxyz \
+  --checkpoint "$KARML_CKPT" \
+  --input karml/generate/dmc/examples/acetone_dmc.extxyz \
   --output-dir runs/dmc_acetone_smoke
 ```
 
 Production-style settings (more walkers / longer averaging):
 
 ```bash
-mmml dmc \
+karml dmc \
   --natm 20 \
   --nwalker 512 \
   --stepsize 5e-4 \
@@ -41,8 +41,8 @@ mmml dmc \
   --alpha 1200.0 \
   --max-batch 512 \
   --seed 0 \
-  --checkpoint "$MMML_CKPT" \
-  --input mmml/generate/dmc/examples/acetone_dmc.extxyz \
+  --checkpoint "$KARML_CKPT" \
+  --input karml/generate/dmc/examples/acetone_dmc.extxyz \
   --output-dir runs/dmc_acetone
 ```
 
@@ -59,13 +59,13 @@ memory tips.
 ## Usage
 
 ```bash
-mmml dmc --help
+karml dmc --help
 ```
 
 ## Options
 
 ```text
-usage: mmml dmc [-h] --natm NATM --nwalker NWALKER --stepsize STEPSIZE
+usage: karml dmc [-h] --natm NATM --nwalker NWALKER --stepsize STEPSIZE
                 --nstep NSTEP --eqstep EQSTEP --alpha ALPHA [--fbohr {0,1}]
                 --checkpoint CHECKPOINT [--model {physnet,kernnn}]
                 [--max-batch MAX_BATCH] [--minimize-fmax MINIMIZE_FMAX]
@@ -120,10 +120,10 @@ Other options:
                         Gaussian noise (Å) applied to the minimised geometry for
                         x0 (default: 0.02).
 
-Example (acetone dimer smoke): mmml dmc --natm 20 --nwalker 64 --stepsize 5e-4
---nstep 200 --eqstep 50 --alpha 1200.0 \ --checkpoint "$MMML_CKPT" \ --input
-mmml/generate/dmc/examples/acetone_dmc.extxyz \ --output-dir
-runs/dmc_acetone_smoke Docs: docs/dmc.md | mmml dmc --help
+Example (acetone dimer smoke): karml dmc --natm 20 --nwalker 64 --stepsize 5e-4
+--nstep 200 --eqstep 50 --alpha 1200.0 \ --checkpoint "$KARML_CKPT" \ --input
+karml/generate/dmc/examples/acetone_dmc.extxyz \ --output-dir
+runs/dmc_acetone_smoke Docs: docs/dmc.md | karml dmc --help
 ```
 
 

@@ -1,7 +1,7 @@
-# GOAT conformer search with MMML external potential
+# GOAT conformer search with KARML external potential
 
 Global optimization using ORCA [GOAT](https://www.faccts.de/docs/orca/6.0/manual/contents/typical/GOAT.html)
-with MMML as the energy/gradient engine (`mmml orca-server` + `mmml orca-client`).
+with KARML as the energy/gradient engine (`karml orca-server` + `karml orca-client`).
 
 GOAT runs many geometry optimizations (~O(100 × Natoms) by default). Use a **fast ML
 checkpoint** and parallelize with `!PAL` / `%GOAT NWORKERS`. The settings below are a
@@ -12,20 +12,20 @@ production ensembles.
 
 Same as `examples/orca/water_opt/`:
 
-1. `mmml orca-server` running with `--warmup`
-2. `examples/orca/mmml-orca-client` executable (`chmod +x`) — set `ProgExt` to its **absolute** path (same as `water_opt.inp`)
+1. `karml orca-server` running with `--warmup`
+2. `examples/orca/karml-orca-client` executable (`chmod +x`) — set `ProgExt` to its **absolute** path (same as `water_opt.inp`)
 3. ORCA 6.x
 
 ```bash
-export MMML_CHECKPOINT=~/mmml/mmml/models/physnetjax/defaults/hf_json/test-f41c04c0-62e3-4785-9018-351ffdc161c4_epoch-251_portable.json
+export KARML_CHECKPOINT=~/karml/karml/models/physnetjax/defaults/hf_json/test-f41c04c0-62e3-4785-9018-351ffdc161c4_epoch-251_portable.json
 
-mmml orca-server --checkpoint "$MMML_CHECKPOINT" --warmup -b 127.0.0.1:8888
+karml orca-server --checkpoint "$KARML_CHECKPOINT" --warmup -b 127.0.0.1:8888
 ```
 
 ## Run
 
 ```bash
-cd ~/mmml/examples/orca/goat_ethanol
+cd ~/karml/examples/orca/goat_ethanol
 orca ethanol_goat.inp
 ```
 
@@ -46,7 +46,7 @@ Pass criteria for a smoke run:
 ## Input notes
 
 - `! ExtOpt GOAT PAL4` — required external PES + parallel workers (same pattern as [OET GOAT](https://www.faccts.de/docs/orca/6.1/tutorials/workflows/extopt.html))
-- `%method ProgExt` + `Ext_Params "-b host:port"` — MMML client (identical to `water_opt.inp`)
+- `%method ProgExt` + `Ext_Params "-b host:port"` — KARML client (identical to `water_opt.inp`)
 - `%pal nprocs 4` + `%goat NWORKERS 4` — one worker per core
 - `%goat MAXITER 32` — reduced from default 128 for smoke runs
 - `%geom EnforceStrictConvergence false` — GOAT sets strict convergence by default; ML potentials can be noisy at `TolE` floors

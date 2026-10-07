@@ -5,7 +5,7 @@ from unittest import mock
 
 import pytest
 
-from mmml.interfaces.pycharmmInterface import packmol_placement
+from karml.interfaces.pycharmmInterface import packmol_placement
 
 
 SAMPLE_SUCCESS_LOG = """
@@ -54,7 +54,7 @@ def test_execute_packmol_script_captures_output(tmp_path, monkeypatch):
         stderr="",
     )
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.packmol_placement.subprocess.run",
+        "karml.interfaces.pycharmmInterface.packmol_placement.subprocess.run",
         return_value=proc,
     ) as run_mock:
         result = packmol_placement.execute_packmol_script("seed 1\n", inp)
@@ -91,7 +91,7 @@ def test_execute_packmol_script_falls_back_to_cli_flag(tmp_path, monkeypatch):
         stderr="",
     )
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.packmol_placement.subprocess.run",
+        "karml.interfaces.pycharmmInterface.packmol_placement.subprocess.run",
         side_effect=[stdin_fail, cli_ok],
     ) as run_mock:
         result = packmol_placement.execute_packmol_script("seed 1\n", inp)
@@ -136,7 +136,7 @@ def test_execute_packmol_script_raises_without_printing(tmp_path, monkeypatch, c
         stderr="",
     )
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.packmol_placement.subprocess.run",
+        "karml.interfaces.pycharmmInterface.packmol_placement.subprocess.run",
         return_value=proc,
     ):
         with pytest.raises(RuntimeError, match="input error|ERROR:"):

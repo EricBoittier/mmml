@@ -1,4 +1,4 @@
-# `mmml compare-npz`
+# `karml compare-npz`
 
 Reference vs model NPZ plots.
 
@@ -6,13 +6,13 @@ Reference vs model NPZ plots.
 ## Usage
 
 ```bash
-mmml compare-npz --help
+karml compare-npz --help
 ```
 
 ## Options
 
 ```text
-usage: mmml compare-npz [-h] [--reference REFERENCE] [--predictions PREDICTIONS]
+usage: karml compare-npz [-h] [--reference REFERENCE] [--predictions PREDICTIONS]
                         [--checkpoint CHECKPOINT] [--data DATA] [-o OUTPUT_DIR]
                         [--max-frames MAX_FRAMES] [--stride STRIDE]
                         [--cutoff CUTOFF] [--use-dcmnet-dipole]
@@ -54,9 +54,9 @@ Other options:
   --use-dcmnet-dipole   Use DCMNet dipole from joint checkpoint
 
 Compare reference (PySCF/QM) and model NPZ trajectories with metrics and plots.
-Modes ----- 1. Two NPZ files (reference labels vs model predictions): mmml
+Modes ----- 1. Two NPZ files (reference labels vs model predictions): karml
 compare-npz --reference ref.npz --predictions pred.npz -o out/ 2. Checkpoint
-inference against labeled NPZ (same file holds R,Z,E,F,...): mmml compare-npz
+inference against labeled NPZ (same file holds R,Z,E,F,...): karml compare-npz
 --checkpoint params.json --data test.npz -o out/ --max-frames 200 Issue #12:
 per-atom / per-element force analysis and richer validation plots.
 ```

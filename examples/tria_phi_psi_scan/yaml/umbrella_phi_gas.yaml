@@ -4,7 +4,7 @@
 # Targets / k are in degrees / eV/deg² (periodic shortest-arc bias).
 #
 #   # after gas scan → export seeds (see README)
-#   uv run mmml umbrella-sample --config examples/tria_phi_psi_scan/yaml/umbrella_phi_gas.yaml
+#   uv run karml umbrella-sample --config examples/tria_phi_psi_scan/yaml/umbrella_phi_gas.yaml
 
 engine: packed_ml
 checkpoint: examples/sppoky-epoch-0010_params.json

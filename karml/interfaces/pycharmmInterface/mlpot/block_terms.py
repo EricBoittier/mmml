@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 from typing import Any
 
-_ML_BLOCK_NAME = "mmml_ml"
+_ML_BLOCK_NAME = "karml_ml"
 
 # CHARMM COEFF keywords: BOND ANGL DIHEdral ELEC VDW (no IMPR on this line).
 # Global coefficient 0.0 also zeros improper dihedrals and any other unnamed terms.
@@ -23,7 +23,7 @@ def _mlpot_internal_block_coeff_line(mm_internal_scale: float) -> str:
 
 
 def _import_pycharmm():
-    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+    import karml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
     import pycharmm
 
     return pycharmm
@@ -42,11 +42,11 @@ def mlpot_use_block_registration(*, explicit: bool | None = None) -> bool:
 
     Default (unset env / ``explicit=None``): **False** — zero MM on ML atoms via
     PSF edits (:func:`zero_mlpot_psf_mm_terms`) instead of ``eval_charmm_script``.
-    Opt in with ``MMML_MLPOT_USE_BLOCK=1`` or ``--mlpot-use-block``.
+    Opt in with ``KARML_MLPOT_USE_BLOCK=1`` or ``--mlpot-use-block``.
     """
     if explicit is not None:
         return bool(explicit)
-    return _truthy("MMML_MLPOT_USE_BLOCK")
+    return _truthy("KARML_MLPOT_USE_BLOCK")
 
 
 def zero_mlpot_psf_mm_terms(
@@ -64,22 +64,22 @@ def zero_mlpot_psf_mm_terms(
     - Hybrid ML+MM: the zeroed file is keyed by atom type and would also zero
       MM molecules of the same types (#225). ML atoms are moved to copies of
       their types with zero bond/angle force constants instead
-      (:mod:`~mmml.interfaces.pycharmmInterface.mlpot.ml_type_copies`); MM
+      (:mod:`~karml.interfaces.pycharmmInterface.mlpot.ml_type_copies`); MM
       parameters are untouched.
     - Zeros partial charges on ML atoms (ELEC off; MLpot supplies ML electrostatics).
     - Deletes PSF dihedrals/impropers/CMAP that touch ML atoms
       (:func:`delete_ml_torsion_terms`). Bonds and angles stay in the PSF (no
       ``delete_connectivity``), so nonbond exclusions are unchanged.
 
-    BLOCK (``MMML_MLPOT_USE_BLOCK=1``) is still needed for ML–MM cross VDW
+    BLOCK (``KARML_MLPOT_USE_BLOCK=1``) is still needed for ML–MM cross VDW
     when not using periodic CHARMM VDW.
     """
     if float(mm_internal_scale) > 0.0:
         raise ValueError(
             f"mm_internal_scale={mm_internal_scale} requires BLOCK registration "
-            "(set MMML_MLPOT_USE_BLOCK=1 or --mlpot-use-block)"
+            "(set KARML_MLPOT_USE_BLOCK=1 or --mlpot-use-block)"
         )
-    from mmml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap import (
+    from karml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap import (
         apply_zeroed_cgenff_params,
         assert_psf_bonds_present,
     )
@@ -120,7 +120,7 @@ def zero_mlpot_psf_mm_terms(
         pycharmm.lingo.charmm_script("SKIPE " + " ".join(ALL_ML_SKIPE_BONDED))
         summary += f"; SKIPE {' '.join(ALL_ML_SKIPE_BONDED)}"
     else:
-        from mmml.interfaces.pycharmmInterface.mlpot.ml_type_copies import (
+        from karml.interfaces.pycharmmInterface.mlpot.ml_type_copies import (
             apply_ml_type_copies,
         )
 
@@ -146,7 +146,7 @@ def zero_mlpot_psf_mm_terms(
 
     assert_psf_bonds_present(context="MLpot registration (after zeroed CGENFF)")
 
-    from mmml.utils.rich_report import emit_charmm_block
+    from karml.utils.rich_report import emit_charmm_block
 
     emit_charmm_block(summary, verbose=verbose)
     if verbose:
@@ -216,7 +216,7 @@ def delete_ml_torsion_terms(
     pycharmm.psf.delete_cmaps(ml_selection, ml_selection)
     after = _psf_torsion_counts(pycharmm)
 
-    from mmml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap import (
+    from karml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap import (
         mark_ml_torsions_deleted,
     )
 
@@ -268,7 +268,7 @@ class SelectiveBondedBlockUnsupportedUnderMPI(RuntimeError):
 
 
 def _assert_selective_block_safe(*, context: str = "") -> None:
-    from mmml.interfaces.pycharmmInterface.charmm_mpi import (
+    from karml.interfaces.pycharmmInterface.charmm_mpi import (
         selective_bonded_block_unsafe_under_mpi,
     )
 
@@ -291,8 +291,8 @@ def _run_block_script(
     """Apply a BLOCK script quietly and optionally emit a one-line Python summary."""
     if selective:
         _assert_selective_block_safe(context=context or summary)
-    from mmml.interfaces.pycharmmInterface.charmm_levels import run_charmm_script_quiet
-    from mmml.utils.rich_report import emit_charmm_block
+    from karml.interfaces.pycharmmInterface.charmm_levels import run_charmm_script_quiet
+    from karml.utils.rich_report import emit_charmm_block
 
     run_charmm_script_quiet(script)
     emit_charmm_block(summary, verbose=verbose)
@@ -300,8 +300,8 @@ def _run_block_script(
 
 def apply_charmm_mm_block(*, verbose: bool = False) -> None:
     """Full CGENFF parameters + BLOCK COEFF 1.0 (MM / pre-MLpot cluster minimize)."""
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import reset_block
-    from mmml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap import (
+    from karml.interfaces.pycharmmInterface.import_pycharmm import reset_block
+    from karml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap import (
         apply_full_cgenff_params,
     )
 
@@ -321,13 +321,13 @@ def apply_bonded_mm_only_block(
     :func:`apply_full_cgenff_params` before BLOCK.  That issues ``READ PARAM APPEND``
     on ``bonded_par_all36_cgenff.prm`` after ``crystal free`` when PBC is active.
     On solvated periodic systems that step can take a long time (appearing hung at
-    ``MMML: crystal free before CGENFF READ PARAM APPEND``).  It is skipped when
+    ``KARML: crystal free before CGENFF READ PARAM APPEND``).  It is skipped when
     bonded params are already restored unless ``force_restore_params=True``.
     Under ``mpirun`` with MPI-linked libcharmm, selective BLOCK itself may hang —
     see :func:`_assert_selective_block_safe`.
     """
     if restore_params:
-        from mmml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap import (
+        from karml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap import (
             apply_full_cgenff_params,
         )
 
@@ -353,7 +353,7 @@ def apply_bonded_vdw_recovery_block(*, verbose: bool = False) -> None:
     ``NBXMOD 5`` is not restored afterward — :func:`restore_workflow_nbonds` is a
     no-op so CHARMM does not rebuild ML exclusion lists (``upinb`` segfault).
     """
-    from mmml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap import (
+    from karml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap import (
         apply_full_cgenff_params,
     )
 

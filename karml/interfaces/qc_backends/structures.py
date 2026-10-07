@@ -15,7 +15,7 @@ def load_structures_npz(
     max_frames: int | None = None,
     stride: int = 1,
 ) -> tuple[list[Atoms], dict[str, np.ndarray]]:
-    """Load ASE frames and raw NPZ arrays from an MMML-style NPZ file."""
+    """Load ASE frames and raw NPZ arrays from an KARML-style NPZ file."""
     data = np.load(path, allow_pickle=True)
     arrays = {k: np.asarray(data[k]) for k in data.files}
 

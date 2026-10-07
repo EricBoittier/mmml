@@ -6,8 +6,8 @@ Runs real model inference (orbax checkpoint + EF forward), reports energy / forc
 dipole errors in kcal/mol (and eV where noted), optional parity plots.
 
 Usage:
-    mmml physnet-evaluate --checkpoint out/ckpts/run --data splits/test.npz -o eval_out/
-    mmml physnet-evaluate --checkpoint out/ckpts/run --data splits/test.npz \\
+    karml physnet-evaluate --checkpoint out/ckpts/run --data splits/test.npz -o eval_out/
+    karml physnet-evaluate --checkpoint out/ckpts/run --data splits/test.npz \\
         --natoms 64 --batch-size 32 --plots --num-samples 500
 """
 
@@ -111,8 +111,8 @@ def _load_physnet_checkpoint(checkpoint: Path, natoms: int, *, use_ema: bool = T
     """Load (checkpoint_path, params, model) from Orbax or portable/legacy JSON."""
     import json
 
-    from mmml.models.physnetjax.physnetjax.models.model import PhysNet as StandardEF
-    from mmml.utils.model_checkpoint import (
+    from karml.models.physnetjax.physnetjax.models.model import PhysNet as StandardEF
+    from karml.utils.model_checkpoint import (
         assert_flax_variables_for_apply,
         json_to_params,
         normalize_flax_params_for_apply,
@@ -144,7 +144,7 @@ def _load_physnet_checkpoint(checkpoint: Path, natoms: int, *, use_ema: bool = T
                 f"{json_path} has weights only (no config). "
                 "Combine with args.model.json into a portable JSON, or use an Orbax epoch-* checkpoint."
             )
-        from mmml.utils.model_checkpoint import build_physnet_from_config
+        from karml.utils.model_checkpoint import build_physnet_from_config
 
         model = build_physnet_from_config(config, model_cls=StandardEF, max_padded_atoms=natoms)
         model.max_padded_atoms = natoms
@@ -155,14 +155,14 @@ def _load_physnet_checkpoint(checkpoint: Path, natoms: int, *, use_ema: bool = T
         return json_path, params, model
 
     ckpt = checkpoint.resolve()
-    from mmml.models.physnetjax.physnetjax.restart.restart import get_last, get_params_model
+    from karml.models.physnetjax.physnetjax.restart.restart import get_last, get_params_model
 
     restart_path = get_last(str(ckpt))
     params, model = get_params_model(str(restart_path), natoms=natoms, prefer_ema=use_ema)
     if model is None:
         raise ValueError(
             f"Orbax checkpoint {restart_path} has no model_attributes. "
-            "Export with mmml orbax-to-json or re-train with checkpoint saving enabled."
+            "Export with karml orbax-to-json or re-train with checkpoint saving enabled."
         )
     params = normalize_flax_params_for_apply(params, backend="jax")
     assert_flax_variables_for_apply(params, context=str(restart_path))
@@ -180,7 +180,7 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         required=True,
         help="PhysNet checkpoint root (directory containing epoch-* orbax runs), "
-        "same as mmml physnet-md --checkpoint",
+        "same as karml physnet-md --checkpoint",
     )
     parser.add_argument(
         "--data",
@@ -285,9 +285,9 @@ def main() -> int:
             print("Error: no samples to evaluate.", file=sys.stderr)
             return 1
 
-        from mmml.models.physnetjax.physnetjax.data.data import prepare_datasets
-        from mmml.models.physnetjax.physnetjax.data.batches import prepare_batches_jit
-        from mmml.models.physnetjax.physnetjax.analysis.analysis import plot_stats
+        from karml.models.physnetjax.physnetjax.data.data import prepare_datasets
+        from karml.models.physnetjax.physnetjax.data.batches import prepare_batches_jit
+        from karml.models.physnetjax.physnetjax.analysis.analysis import plot_stats
 
         try:
             restart_path, params, model = _load_physnet_checkpoint(

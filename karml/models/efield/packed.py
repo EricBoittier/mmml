@@ -25,7 +25,7 @@ import jax.numpy as jnp
 import numpy as np
 import optax
 
-from mmml.models.efield.model_functions import predicted_polarizability_bohr3
+from karml.models.efield.model_functions import predicted_polarizability_bohr3
 
 
 @dataclass(frozen=True)

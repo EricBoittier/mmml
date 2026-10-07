@@ -18,7 +18,7 @@ import cmap
 import matplotlib.pyplot as plt
 import numpy as np
 
-from mmml.utils.plotting.styles import apply_plot_style
+from karml.utils.plotting.styles import apply_plot_style
 
 STYLE_NAME = "icml"
 OUT_DIR = Path(__file__).resolve().parents[1] / "docs" / "plot-style-gallery-assets"

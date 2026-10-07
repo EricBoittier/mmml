@@ -16,10 +16,10 @@ from pathlib import Path
 import numpy as np
 from ase import Atoms
 
-from mmml.interfaces.calculators.checkpoint_loading import create_calculator_from_checkpoint
+from karml.interfaces.calculators.checkpoint_loading import create_calculator_from_checkpoint
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-CKPT = REPO_ROOT / "mmml/models/physnetjax/defaults/hf_json/test-b4064dca-8cbd-471c-9871-08887107a1d8_epoch-550_portable.json"
+CKPT = REPO_ROOT / "karml/models/physnetjax/defaults/hf_json/test-b4064dca-8cbd-471c-9871-08887107a1d8_epoch-550_portable.json"
 OUT_DIR = REPO_ROOT / "artifacts" / "robustness_report" / "scans"
 
 EQ_BOND_A = 0.9572

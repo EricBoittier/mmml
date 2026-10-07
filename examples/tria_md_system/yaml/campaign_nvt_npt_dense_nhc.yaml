@@ -4,10 +4,10 @@
 #
 # NPT is already ``npt_nose_hoover`` (NHC thermostat + barostat) in both YAMLs.
 #
-#   export MMML_CKPT=examples/sppoky-epoch-0010_params.json
-#   uv run mmml md-system \
+#   export KARML_CKPT=examples/sppoky-epoch-0010_params.json
+#   uv run karml md-system \
 #     --config examples/tria_md_system/yaml/campaign_nvt_npt_dense_nhc.yaml \
-#     --checkpoint "$MMML_CKPT" \
+#     --checkpoint "$KARML_CKPT" \
 #     --run-all
 #
 # Pass: finite E each leg; NVT banner shows thermostat=nhc; NPT/NVE skip FIRE.

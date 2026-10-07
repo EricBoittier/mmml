@@ -1,11 +1,11 @@
 # Bulk-density ramp: compress sparse N=52 DCM handoff toward liquid bulk (1.33 g/cm³).
 #
 # Prerequisite (sparse melt with done.txt):
-#   MMML_WORKFLOW_CONFIG=config.prep_sweep.yaml \
+#   KARML_WORKFLOW_CONFIG=config.prep_sweep.yaml \
 #     bash scripts/job_shell.sh resilient_dcm_52_t50_l38_ht_bussi_sw_baseline
 #
 # Single compress leg:
-#   MMML_WORKFLOW_CONFIG=config.bulk_ramp.yaml \
+#   KARML_WORKFLOW_CONFIG=config.bulk_ramp.yaml \
 #     bash scripts/job_shell.sh resilient_dcm_52_t50_l38_ht_bussi_sw_compress_025
 #
 # Full ramp matrix (Slurm):
@@ -20,7 +20,7 @@ cluster_sizes: [52]
 temperatures: [50.0]
 box_sizes: [38.0]
 
-checkpoint: ${MMML_CKPT}
+checkpoint: ${KARML_CKPT}
 output_root: artifacts/dcm_density_setup_compare
 seed_base: 4242
 

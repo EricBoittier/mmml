@@ -11,14 +11,14 @@
 # CHARMM bonded terms stay on via the PSF; USER owns ML monomers + MM Ewald
 # Coulomb. periodic_charmm_vdw: false keeps LJ off.
 #
-#   export MMML_CKPT=/path/to/latent_or_charges_params.json
-#   mmml md-system --config examples/hybrid_mm_charges/md_latent_ewald_dimer.yaml --run-all
+#   export KARML_CKPT=/path/to/latent_or_charges_params.json
+#   karml md-system --config examples/hybrid_mm_charges/md_latent_ewald_dimer.yaml --run-all
 #
 # Do not use n_monomers != 2 or lr_solver: jax_pme with Mode B.
 
 defaults:
   composition: "DCM:2"
-  checkpoint: ${MMML_CKPT}
+  checkpoint: ${KARML_CKPT}
   box_size: 20.0
   dt_fs: 0.5
   temperature: 300.0

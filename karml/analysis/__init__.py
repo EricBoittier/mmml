@@ -1,6 +1,6 @@
 """Analysis helpers for comparing reference and model NPZ trajectories."""
 
-from mmml.analysis.npz_comparison import (
+from karml.analysis.npz_comparison import (
     align_npz_arrays,
     compare_npz_arrays,
     compute_element_force_metrics,
@@ -9,7 +9,7 @@ from mmml.analysis.npz_comparison import (
     compute_scalar_metrics,
     write_comparison_report,
 )
-from mmml.analysis.dimer_scans import (
+from karml.analysis.dimer_scans import (
     DimerGeometry,
     assign_mol_id,
     build_rigid_dimer,
@@ -23,7 +23,7 @@ from mmml.analysis.dimer_scans import (
     molecule_pair_labels,
     normalized_vector,
 )
-from mmml.analysis.dimer_molecules import (
+from karml.analysis.dimer_molecules import (
     MOLECULES,
     ORIENTED_MONOMERS,
     PAIR_SCAN_CONFIG,
@@ -31,7 +31,7 @@ from mmml.analysis.dimer_molecules import (
     orient_molecule,
     rotation_matrix_align_to_z,
 )
-from mmml.analysis.interaction_pes import (
+from karml.analysis.interaction_pes import (
     SCHEMA_VERSION,
     dump_interaction_pes_json,
     load_interaction_pes_json,

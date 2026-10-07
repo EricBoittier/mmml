@@ -9,7 +9,7 @@ from unittest.mock import patch
 import numpy as np
 import pytest
 
-from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
     recommend_echeck_kcal,
     resolve_charmm_use_pbc,
     resolve_echeck_for_cluster,
@@ -19,11 +19,11 @@ from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
     resolve_mlpot_use_pbc,
     resolve_use_pbc,
 )
-from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
     CharmmTrajectoryFiles,
     build_hoover_heat_dynamics,
 )
-from mmml.interfaces.pycharmmInterface.mlpot.staged_workflow import (
+from karml.interfaces.pycharmmInterface.mlpot.staged_workflow import (
     _artifact_paths,
     _build_stage_dynamics_kw,
     _configure_heat_dynamics_start,
@@ -36,7 +36,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.staged_workflow import (
     _should_skip_pre_dyn_fmax_gate,
     should_auto_resume_failed_staged_run,
 )
-from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import DynamicsOverlapConfig
+from karml.interfaces.pycharmmInterface.mlpot.overlap_guard import DynamicsOverlapConfig
 
 
 def test_should_auto_resume_failed_staged_run_from_stage_summary(tmp_path: Path):
@@ -98,12 +98,12 @@ def test_publish_staged_handoff_records_mini_only_state(tmp_path: Path):
     handoff = object()
 
     with patch(
-        "mmml.cli.run.md_handoff.handoff_from_charmm",
+        "karml.cli.run.md_handoff.handoff_from_charmm",
         return_value=handoff,
     ) as handoff_from_charmm, patch(
-        "mmml.cli.run.md_handoff.set_handoff_out",
+        "karml.cli.run.md_handoff.set_handoff_out",
     ) as set_handoff_out, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.read_restart_last_step",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics_validation.read_restart_last_step",
         return_value=7,
     ):
         _publish_staged_handoff(
@@ -216,7 +216,7 @@ def test_resolve_flat_bottom_selection_respects_explicit_value():
 def test_cubic_box_length_from_geometry():
     import numpy as np
 
-    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+    from karml.interfaces.pycharmmInterface.mlpot.pbc_env import (
         cubic_box_length_from_geometry,
     )
 
@@ -235,7 +235,7 @@ def test_prior_restart_for_equi_falls_back_to_heat_without_nve(tmp_path: Path):
 
 
 def test_prior_restart_for_equi_prefers_final_heat_segment(tmp_path: Path):
-    from mmml.interfaces.pycharmmInterface.mlpot.artifact_paths import (
+    from karml.interfaces.pycharmmInterface.mlpot.artifact_paths import (
         stage_segment_restart,
     )
 
@@ -255,12 +255,12 @@ def test_seed_charmm_coords_from_dynamics_restart_loads_heat(tmp_path: Path):
     heat.write_text("heat\n", encoding="utf-8")
     pos = np.zeros((9, 3), dtype=np.float64)
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.read_restart_positions",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics_validation.read_restart_positions",
         return_value=pos,
     ) as read_coords, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
     ) as sync, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.clear_comparison_coordinates",
+        "karml.interfaces.pycharmmInterface.mlpot.comp_velocities.clear_comparison_coordinates",
     ):
         assert _seed_charmm_coords_from_dynamics_restart(heat, quiet=True) is True
     read_coords.assert_called_once()
@@ -289,9 +289,9 @@ def test_seed_nve_restart_uses_xold_positions_not_step_displacement(tmp_path: Pa
         encoding="ascii",
     )
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
     ) as sync, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.clear_comparison_coordinates",
+        "karml.interfaces.pycharmmInterface.mlpot.comp_velocities.clear_comparison_coordinates",
     ):
         assert _seed_charmm_coords_from_dynamics_restart(res, quiet=True) is True
     seeded = np.asarray(sync.call_args[0][0], dtype=np.float64)
@@ -304,7 +304,7 @@ def test_seed_charmm_coords_from_dynamics_restart_skips_handoff_seed(tmp_path: P
     seed = tmp_path / "continue_seed.res"
     seed.write_text("seed\n", encoding="utf-8")
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.read_restart_positions",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics_validation.read_restart_positions",
     ) as read_coords:
         assert _seed_charmm_coords_from_dynamics_restart(seed, quiet=True) is False
     read_coords.assert_not_called()
@@ -351,7 +351,7 @@ def test_should_skip_pre_dyn_fmax_gate_for_equi_from_heat():
 
 
 def test_is_dynamics_stage_restart_path():
-    from mmml.interfaces.pycharmmInterface.mlpot.staged_workflow import (
+    from karml.interfaces.pycharmmInterface.mlpot.staged_workflow import (
         _is_dynamics_stage_restart_path,
     )
 
@@ -441,7 +441,7 @@ def test_recommend_echeck_kcal_dcm9():
 
 
 def test_resolve_heat_firstt_finalt_defaults():
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
         resolve_heat_firstt_finalt,
     )
 
@@ -451,7 +451,7 @@ def test_resolve_heat_firstt_finalt_defaults():
 
 
 def test_resolve_heat_firstt_finalt_dcm9_soft():
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
         resolve_heat_firstt_finalt,
     )
 
@@ -463,7 +463,7 @@ def test_resolve_heat_firstt_finalt_dcm9_soft():
 
 
 def test_resolve_heat_firstt_finalt_hold_mode():
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
         resolve_heat_firstt_finalt,
     )
 
@@ -472,7 +472,7 @@ def test_resolve_heat_firstt_finalt_hold_mode():
 
 
 def test_default_stages_for_thermalize_setups():
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
         _default_stages_for_setup,
     )
 
@@ -481,7 +481,7 @@ def test_default_stages_for_thermalize_setups():
 
 
 def test_resolve_stage_ps_handles_explicit_none():
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import resolve_stage_ps
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import resolve_stage_ps
 
     args = argparse.Namespace(
         ps=1.0,
@@ -577,7 +577,7 @@ def test_build_stage_dynamics_kw_prod_restart_avoids_cold_start():
     )
     dyn_print = {"nprint": 100, "iprfrq": 500, "isvfrq": 500}
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.compute_cpt_piston_masses",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics.compute_cpt_piston_masses",
         return_value=(80, 800),
     ):
         cold = _build_stage_dynamics_kw(
@@ -642,7 +642,7 @@ def test_build_stage_dynamics_kw_heat_hoover_pbc_disables_ihtfrq_ramp():
     )
     dyn_print = {"nprint": 100, "iprfrq": 500, "isvfrq": 500}
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.compute_cpt_piston_masses",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics.compute_cpt_piston_masses",
         return_value=(80, 800),
     ):
         kw = _build_stage_dynamics_kw(
@@ -705,7 +705,7 @@ def test_build_stage_dynamics_kw_heat_no_echeck_heat_disables_echeck():
 
 
 def test_resolve_heat_thermostat_coerces_scale_after_pretreat():
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
         resolve_charmm_mm_pretreat_for_staged,
         resolve_heat_thermostat,
     )
@@ -728,7 +728,7 @@ def test_resolve_heat_thermostat_coerces_scale_after_pretreat():
 
 
 def test_resolve_charmm_mm_pretreat_for_staged_skips_handoff():
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
         resolve_charmm_mm_pretreat_for_staged,
     )
 
@@ -746,7 +746,7 @@ def test_resolve_charmm_mm_pretreat_for_staged_skips_handoff():
 
 
 def test_resolve_charmm_mm_pretreat_for_staged_skips_liquid_prep():
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
         resolve_charmm_mm_pretreat_for_staged,
     )
 
@@ -785,7 +785,7 @@ def test_build_stage_dynamics_kw_heat_scale_pbc_avoids_cpt():
 
 def test_build_hoover_heat_tmass_floor_for_small_psf_mass():
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.compute_cpt_piston_masses",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics.compute_cpt_piston_masses",
         return_value=(8, 80),
     ):
         kw = build_hoover_heat_dynamics(
@@ -799,7 +799,7 @@ def test_build_hoover_heat_tmass_floor_for_small_psf_mass():
 
 
 def test_resolve_heat_hoover_tmass_explicit_and_clamped_default():
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import resolve_heat_hoover_tmass
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import resolve_heat_hoover_tmass
 
     args = argparse.Namespace(heat_hoover_tmass=600)
     assert resolve_heat_hoover_tmass(args, psf_tmass=80) == 600
@@ -863,7 +863,7 @@ def test_configure_heat_dynamics_start_hoover_memory_handoff_no_comp_velocities(
     }
 
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.assign_velocities_at_temperature"
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics.assign_velocities_at_temperature"
     ) as assign:
         _configure_heat_dynamics_start(
             kw,
@@ -1008,7 +1008,7 @@ def test_configure_nve_explicit_c_api_requires_saved_velocities(tmp_path, monkey
     restart.write_text("restart fixture", encoding="ascii")
     io = CharmmTrajectoryFiles(restart_write=tmp_path / "nve.res")
     kw = {"restart": False, "start": True, "iasvel": 1, "firstt": 30.0}
-    monkeypatch.setenv("MMML_NVE_C_API_HANDOFF", "1")
+    monkeypatch.setenv("KARML_NVE_C_API_HANDOFF", "1")
 
     _configure_nve_dynamics_start(
         kw,
@@ -1083,7 +1083,7 @@ def test_configure_heat_dynamics_start_hoover_restart_file_single_dyna(tmp_path)
     }
 
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.assign_velocities_at_temperature"
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics.assign_velocities_at_temperature"
     ) as assign:
         _configure_heat_dynamics_start(
             kw,
@@ -1117,7 +1117,7 @@ def test_configure_heat_dynamics_start_in_place_resume_uses_dyna_restart(tmp_pat
     }
 
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.assign_velocities_at_temperature"
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics.assign_velocities_at_temperature"
     ) as assign:
         _configure_heat_dynamics_start(
             kw,
@@ -1139,7 +1139,7 @@ def test_configure_heat_dynamics_start_in_place_resume_uses_dyna_restart(tmp_pat
 
 
 def test_reset_stage_restart_preserves_in_place_read(tmp_path):
-    from mmml.interfaces.pycharmmInterface.mlpot.staged_workflow import (
+    from karml.interfaces.pycharmmInterface.mlpot.staged_workflow import (
         _reset_stage_restart,
     )
 
@@ -1156,8 +1156,8 @@ def test_reset_stage_restart_preserves_memory_handoff_seed(tmp_path):
     """Seeded restart_write must survive _reset_stage_restart (EQUI/HEAT handoff)."""
     from unittest.mock import patch
 
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
-    from mmml.interfaces.pycharmmInterface.mlpot.staged_workflow import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
+    from karml.interfaces.pycharmmInterface.mlpot.staged_workflow import (
         _reset_stage_restart,
         _seed_restart_for_memory_handoff,
     )
@@ -1166,7 +1166,7 @@ def test_reset_stage_restart_preserves_memory_handoff_seed(tmp_path):
     io = CharmmTrajectoryFiles(restart_write=res)
     kw: dict = {}
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.staged_workflow.rewrite_dynamics_restart_from_current_state"
+        "karml.interfaces.pycharmmInterface.mlpot.staged_workflow.rewrite_dynamics_restart_from_current_state"
     ):
         _seed_restart_for_memory_handoff(io, kw, stage="equi")
     res.write_text("seeded restart\n", encoding="ascii")
@@ -1193,7 +1193,7 @@ def test_charmm_trajectory_files_open_for_run_mkdirs_restart_parent(tmp_path):
 
 
 def test_resolve_max_grms_before_dyn_scales_large_pbc_cluster():
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
         resolve_max_grms_before_dyn,
     )
 
@@ -1203,7 +1203,7 @@ def test_resolve_max_grms_before_dyn_scales_large_pbc_cluster():
 
 
 def test_resolve_max_grms_before_dyn_no_scale_uses_base():
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
         resolve_max_grms_before_dyn,
     )
 
@@ -1216,8 +1216,8 @@ def test_heat_multiseg_memory_handoff_reset_then_seed(tmp_path):
     """Multi-segment HEAT resets scratch before seeding fly-off checkpoint."""
     from unittest.mock import patch
 
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
-    from mmml.interfaces.pycharmmInterface.mlpot.staged_workflow import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
+    from karml.interfaces.pycharmmInterface.mlpot.staged_workflow import (
         _reset_stage_restart,
         _seed_restart_for_memory_handoff,
     )
@@ -1229,7 +1229,7 @@ def test_heat_multiseg_memory_handoff_reset_then_seed(tmp_path):
     _reset_stage_restart(res, restart_read=None)
     assert not res.is_file()
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.staged_workflow.rewrite_dynamics_restart_from_current_state"
+        "karml.interfaces.pycharmmInterface.mlpot.staged_workflow.rewrite_dynamics_restart_from_current_state"
     ):
         _seed_restart_for_memory_handoff(io, kw, stage="heat")
     res.write_text("seeded restart\n", encoding="ascii")
@@ -1254,20 +1254,20 @@ def test_configure_equi_dynamics_start_from_heat_restart_file(tmp_path):
 
     with (
         patch(
-            "mmml.interfaces.pycharmmInterface.mlpot.staged_workflow.ensure_charmm_crystal_for_cpt"
+            "karml.interfaces.pycharmmInterface.mlpot.staged_workflow.ensure_charmm_crystal_for_cpt"
         ) as crystal,
         patch(
-            "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.read_restart_coordinates",
+            "karml.interfaces.pycharmmInterface.mlpot.dynamics_validation.read_restart_coordinates",
             return_value=__import__("numpy").zeros((10, 3)),
         ),
         patch(
-            "mmml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
+            "karml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
         ),
         patch(
-            "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.clear_comparison_coordinates",
+            "karml.interfaces.pycharmmInterface.mlpot.comp_velocities.clear_comparison_coordinates",
         ),
     ):
-        from mmml.interfaces.pycharmmInterface.mlpot.staged_workflow import (
+        from karml.interfaces.pycharmmInterface.mlpot.staged_workflow import (
             _configure_equi_dynamics_start,
         )
 
@@ -1305,15 +1305,15 @@ def test_configure_equi_dynamics_start_survives_overlap_chunk_prep(tmp_path):
         "start": False,
         "iasvel": 0,
     }
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _apply_overlap_chunk_dynamics_kw,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.staged_workflow import (
+    from karml.interfaces.pycharmmInterface.mlpot.staged_workflow import (
         _configure_equi_dynamics_start,
     )
 
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.staged_workflow.ensure_charmm_crystal_for_cpt"
+        "karml.interfaces.pycharmmInterface.mlpot.staged_workflow.ensure_charmm_crystal_for_cpt"
     ):
         _configure_equi_dynamics_start(
             kw,
@@ -1345,7 +1345,7 @@ def test_configure_equi_dynamics_start_skips_in_place_resume(tmp_path):
         "start": False,
     }
 
-    from mmml.interfaces.pycharmmInterface.mlpot.staged_workflow import (
+    from karml.interfaces.pycharmmInterface.mlpot.staged_workflow import (
         _configure_equi_dynamics_start,
     )
 
@@ -1371,7 +1371,7 @@ def test_configure_equi_dynamics_start_skips_when_memory_handoff_already_configu
         "iasvel": 1,
     }
 
-    from mmml.interfaces.pycharmmInterface.mlpot.staged_workflow import (
+    from karml.interfaces.pycharmmInterface.mlpot.staged_workflow import (
         _configure_equi_dynamics_start,
     )
 
@@ -1404,11 +1404,11 @@ def test_configure_npt_dynamics_start_memory_handoff_no_readyn():
     }
 
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.assign_velocities_at_temperature"
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics.assign_velocities_at_temperature"
     ) as assign, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.staged_workflow.ensure_charmm_crystal_for_cpt"
+        "karml.interfaces.pycharmmInterface.mlpot.staged_workflow.ensure_charmm_crystal_for_cpt"
     ) as crystal:
-        from mmml.interfaces.pycharmmInterface.mlpot.staged_workflow import (
+        from karml.interfaces.pycharmmInterface.mlpot.staged_workflow import (
             _configure_npt_dynamics_start,
         )
 
@@ -1441,10 +1441,10 @@ def test_equi_after_heat_overlap_memory_handoff_configures_npt_start(
     """CPT EQUI after HEAT must re-init barostat when overlap chunk 0 skips READYN."""
     from unittest.mock import MagicMock, patch
 
-    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+    from karml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
         DynamicsOverlapConfig,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.staged_workflow import (
+    from karml.interfaces.pycharmmInterface.mlpot.staged_workflow import (
         _maybe_configure_cpt_in_memory_overlap_start,
     )
 
@@ -1468,19 +1468,19 @@ def test_equi_after_heat_overlap_memory_handoff_configures_npt_start(
         use_pbc=True,
     )
     args = argparse.Namespace(dynamics_overlap_memory_handoff=False, quiet=True)
-    monkeypatch.delenv("MMML_NO_OVERLAP_MEMORY_HANDOFF", raising=False)
+    monkeypatch.delenv("KARML_NO_OVERLAP_MEMORY_HANDOFF", raising=False)
 
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.assign_velocities_at_temperature"
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics.assign_velocities_at_temperature"
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.staged_workflow.ensure_charmm_crystal_for_cpt"
+        "karml.interfaces.pycharmmInterface.mlpot.staged_workflow.ensure_charmm_crystal_for_cpt"
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.staged_workflow.rewrite_dynamics_restart_from_current_state"
+        "karml.interfaces.pycharmmInterface.mlpot.staged_workflow.rewrite_dynamics_restart_from_current_state"
     ), patch(
-        "mmml.interfaces.pycharmmInterface.charmm_mpi.charmm_lib_links_mpi",
+        "karml.interfaces.pycharmmInterface.charmm_mpi.charmm_lib_links_mpi",
         return_value=True,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.charmm_mpi._under_mpirun",
+        "karml.interfaces.pycharmmInterface.charmm_mpi._under_mpirun",
         return_value=True,
     ):
         seed = _maybe_configure_cpt_in_memory_overlap_start(
@@ -1508,10 +1508,10 @@ def test_equi_after_heat_overlap_memory_handoff_configures_npt_start(
 def test_maybe_configure_cpt_skips_single_chunk_overlap(tmp_path, monkeypatch):
     from unittest.mock import MagicMock, patch
 
-    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+    from karml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
         DynamicsOverlapConfig,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.staged_workflow import (
+    from karml.interfaces.pycharmmInterface.mlpot.staged_workflow import (
         _maybe_configure_cpt_in_memory_overlap_start,
     )
 
@@ -1529,7 +1529,7 @@ def test_maybe_configure_cpt_skips_single_chunk_overlap(tmp_path, monkeypatch):
     args = argparse.Namespace(dynamics_overlap_memory_handoff=True, quiet=True)
 
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.staged_workflow._configure_npt_dynamics_start"
+        "karml.interfaces.pycharmmInterface.mlpot.staged_workflow._configure_npt_dynamics_start"
     ) as configure_npt:
         result = _maybe_configure_cpt_in_memory_overlap_start(
             stage="equi",
@@ -1552,8 +1552,8 @@ def test_maybe_configure_cpt_skips_single_chunk_overlap(tmp_path, monkeypatch):
 
 
 def test_mlpot_profile_propagation(monkeypatch):
-    from mmml.cli.run.md_system import parse_md_system_args, build_pycharmm_command
-    from mmml.interfaces.pycharmmInterface.mlpot.staged_workflow import run_staged_workflow
+    from karml.cli.run.md_system import parse_md_system_args, build_pycharmm_command
+    from karml.interfaces.pycharmmInterface.mlpot.staged_workflow import run_staged_workflow
     import os
 
     # 1. Test parser registers the flag
@@ -1565,14 +1565,14 @@ def test_mlpot_profile_propagation(monkeypatch):
     assert "--mlpot-profile" in cmd
 
     # 3. Test that run_staged_workflow sets the env vars
-    monkeypatch.delenv("MMML_MLPOT_PROFILE", raising=False)
-    monkeypatch.delenv("MMML_JAX_COMPILE_TIMERS", raising=False)
+    monkeypatch.delenv("KARML_MLPOT_PROFILE", raising=False)
+    monkeypatch.delenv("KARML_JAX_COMPILE_TIMERS", raising=False)
 
-    with patch("mmml.interfaces.pycharmmInterface.mlpot.staged_workflow._load_or_build_cluster", side_effect=ValueError("abort")):
+    with patch("karml.interfaces.pycharmmInterface.mlpot.staged_workflow._load_or_build_cluster", side_effect=ValueError("abort")):
         try:
             run_staged_workflow(args)
         except ValueError:
             pass
 
-    assert os.environ.get("MMML_MLPOT_PROFILE") == "1"
-    assert os.environ.get("MMML_JAX_COMPILE_TIMERS") == "1"
+    assert os.environ.get("KARML_MLPOT_PROFILE") == "1"
+    assert os.environ.get("KARML_JAX_COMPILE_TIMERS") == "1"

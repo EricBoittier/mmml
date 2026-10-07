@@ -1,7 +1,7 @@
 """Neighbor-list refresh cadence shared by the JAX-MD drivers.
 
 ``jaxmd_runner`` grew ensemble-aware NL cadence first (see
-``ENSEMBLE_JAXMD_UPDATE_INTERVAL`` there); λ-dynamics and the ``mmml.md`` driver
+``ENSEMBLE_JAXMD_UPDATE_INTERVAL`` there); λ-dynamics and the ``karml.md`` driver
 hardcoded their own intervals. This module holds the canonical policy so all
 three agree, without the lighter drivers having to import ``jaxmd_runner``
 (which pulls in rich, HDF5 reporters and the pycharmm interface).

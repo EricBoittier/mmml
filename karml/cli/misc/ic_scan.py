@@ -7,7 +7,7 @@ import json
 import os
 from pathlib import Path
 
-from mmml.ic_scan import IcScanConfig, run_ic_scan
+from karml.ic_scan import IcScanConfig, run_ic_scan
 
 
 SUPPORTED_CALCULATORS = (
@@ -53,7 +53,7 @@ def _resolve_path_fields(data: dict, config_path: Path) -> None:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="mmml ic-scan",
+        prog="karml ic-scan",
         description=(
             "Prepare and optionally evaluate bond/angle/dihedral scans from a "
             "config that defines DoFs, grids, and 1D or N-D scan combinations."

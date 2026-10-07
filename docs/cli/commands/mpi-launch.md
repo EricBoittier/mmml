@@ -1,4 +1,4 @@
-# `mmml mpi-launch`
+# `karml mpi-launch`
 
 Launch OpenMPI with an explicit JAX execution policy.
 
@@ -6,13 +6,13 @@ Launch OpenMPI with an explicit JAX execution policy.
 ## Usage
 
 ```bash
-mmml mpi-launch --help
+karml mpi-launch --help
 ```
 
 ## Options
 
 ```text
-usage: mmml mpi-launch [-h] [--mpi-ranks MPI_RANKS]
+usage: karml mpi-launch [-h] [--mpi-ranks MPI_RANKS]
                        [--jax-mode {cpu-threaded,gpu-single,gpu-per-rank,rank0,spatial}]
                        [--jax-cpu-threads JAX_CPU_THREADS]
                        [--charmm-omp-threads CHARMM_OMP_THREADS]

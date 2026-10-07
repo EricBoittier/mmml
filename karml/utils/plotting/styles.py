@@ -50,7 +50,7 @@ __all__ = [
 
 @dataclass(frozen=True)
 class PlotStyle:
-    """Named matplotlib styling bundle for MMML training plots."""
+    """Named matplotlib styling bundle for KARML training plots."""
 
     name: str
     description: str

@@ -1,4 +1,4 @@
-"""PhysNet / SpookyNet forward and force evaluation (``mmml.models.physnetjax``).
+"""PhysNet / SpookyNet forward and force evaluation (``karml.models.physnetjax``).
 
 The architecture defaults mirror the bundled ``DESdimers_params.json``
 checkpoint (features=32, max_degree=1, 2 message-passing iterations, 16 radial
@@ -88,7 +88,7 @@ class _PhysNetBase:
     def _build(self, n_atoms: int, **arch_overrides):
         jax = require_jax()
         try:
-            from mmml.models.physnetjax.physnetjax.models.model import PhysNet
+            from karml.models.physnetjax.physnetjax.models.model import PhysNet
         except Exception as exc:  # pragma: no cover - environment-dependent
             raise skip(f"physnetjax unavailable: {exc}") from exc
 
@@ -258,7 +258,7 @@ class SpookyNetSystemSize:
     def setup(self, n_atoms):
         jax = require_jax()
         try:
-            from mmml.models.physnetjax.physnetjax.models.spooky_model import SpookyPhysNet
+            from karml.models.physnetjax.physnetjax.models.spooky_model import SpookyPhysNet
         except Exception as exc:  # pragma: no cover - environment-dependent
             raise skip(f"spooky_model unavailable: {exc}") from exc
 
@@ -294,7 +294,7 @@ class ZBLRepulsionKernel:
     def setup(self, n_pairs):
         jax = require_jax()
         try:
-            from mmml.models.physnetjax.physnetjax.models.zbl import ZBLRepulsion
+            from karml.models.physnetjax.physnetjax.models.zbl import ZBLRepulsion
         except Exception as exc:  # pragma: no cover - environment-dependent
             raise skip(f"zbl module unavailable: {exc}") from exc
 

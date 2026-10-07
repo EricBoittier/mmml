@@ -4,7 +4,7 @@
 The point of the exercise: a Packmol box is built *at* a target density, so its
 density is an input, not a measurement. Only an NpT run at 1 atm lets the box
 find its own volume, and only then does the density test the potential. This
-reads the ``density_g_cm3`` series ``mmml md-system`` records for NpT runs and
+reads the ``density_g_cm3`` series ``karml md-system`` records for NpT runs and
 reports the equilibrated value with an honest error bar.
 
 Three things this refuses to do quietly:

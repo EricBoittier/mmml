@@ -19,15 +19,15 @@ import orbax.checkpoint as ocp
 
 os.environ.setdefault(
     "MPLCONFIGDIR",
-    str(Path(tempfile.gettempdir()) / "mmml-matplotlib"),
+    str(Path(tempfile.gettempdir()) / "karml-matplotlib"),
 )
 import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-from mmml.data.orbax_shards import partition_shards
-from mmml.models.multipoles import (
+from karml.data.orbax_shards import partition_shards
+from karml.models.multipoles import (
     E3xDegreeMultipoleModel,
     E3xMultipoleModel,
     irrep_blocks_to_traceless,
@@ -611,7 +611,7 @@ def main() -> None:
         include_cartesian=not args.skip_cartesian,
         include_plots=not args.skip_plots,
     )
-    from mmml.utils.rich_report import print_colored_json
+    from karml.utils.rich_report import print_colored_json
 
     print_colored_json(metrics, sort_keys=True)
     print(f"Wrote report to {args.output_dir}")

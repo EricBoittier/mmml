@@ -2,7 +2,7 @@
 Convert Molpro XML output to standardized NPZ format.
 
 This module bridges the Molpro XML parser (parse_molpro) with the
-standardized NPZ format used across all MMML models.
+standardized NPZ format used across all KARML models.
 """
 
 import sys
@@ -14,7 +14,7 @@ from datetime import datetime
 from tqdm import tqdm
 
 # Import the excellent Molpro parser
-from mmml.interfaces.parse_molpro.read_molden import read_molpro_xml, MolproData
+from karml.interfaces.parse_molpro.read_molden import read_molpro_xml, MolproData
 
 from .npz_schema import NPZSchema
 
@@ -40,7 +40,7 @@ class MolproConverter:
     Convert Molpro XML files to standardized NPZ format.
     
     Handles single files or batches of XML files, extracts all available
-    properties, and creates NPZ files following the MMML schema.
+    properties, and creates NPZ files following the KARML schema.
     
     Parameters
     ----------

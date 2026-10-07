@@ -5,7 +5,7 @@ Compare Multiple Training Runs
 Plot metrics from multiple training runs on the same axes for direct comparison.
 
 Usage:
-    python -m mmml.cli.compare_training_runs \
+    python -m karml.cli.compare_training_runs \
         --runs run1/ run2/ run3/ \
         --labels "Run 1" "Run 2" "Run 3" \
         --output comparison.png \
@@ -271,7 +271,7 @@ def main():
         epilog="""
 Examples:
   # Compare two glycol runs
-  python -m mmml.cli.compare_training_runs \\
+  python -m karml.cli.compare_training_runs \\
       --runs checkpoints/run1/ checkpoints/run2/ \\
       --labels "Run 1" "Run 2" \\
       --output comparison.png --log-loss

@@ -1,4 +1,4 @@
-"""Tests for MMML CLI registry, parser coverage, and configure presets."""
+"""Tests for KARML CLI registry, parser coverage, and configure presets."""
 
 from __future__ import annotations
 
@@ -6,10 +6,10 @@ from pathlib import Path
 
 import pytest
 
-from mmml.cli import __main__ as cli_main
-from mmml.cli.configure_presets import PRESET_BY_KEY, apply_preset
-from mmml.cli.parser_utils import get_subcommand_parser, parser_available, parsers_with_flags
-from mmml.cli.registry import COMMAND_REGISTRY, _DISPATCH_COMMANDS, format_audit_report
+from karml.cli import __main__ as cli_main
+from karml.cli.configure_presets import PRESET_BY_KEY, apply_preset
+from karml.cli.parser_utils import get_subcommand_parser, parser_available, parsers_with_flags
+from karml.cli.registry import COMMAND_REGISTRY, _DISPATCH_COMMANDS, format_audit_report
 
 
 def test_dispatch_matches_registry():
@@ -85,7 +85,7 @@ def test_help_parsers_do_not_import_training_stacks():
 
     script = """
 import sys
-from mmml.cli.parser_utils import get_subcommand_parser
+from karml.cli.parser_utils import get_subcommand_parser
 
 for cmd in (
     "efield-train",
@@ -98,11 +98,11 @@ for cmd in (
     assert parser is not None, cmd
 
 banned = (
-    "mmml.models.efield.training",
-    "mmml.models.efield.evaluate",
-    "mmml.models.kernnn.training",
-    "mmml.models.kernnn.evaluate",
-    "mmml.interfaces.pyscf4gpuInterface.calcs",
+    "karml.models.efield.training",
+    "karml.models.efield.evaluate",
+    "karml.models.kernnn.training",
+    "karml.models.kernnn.evaluate",
+    "karml.interfaces.pyscf4gpuInterface.calcs",
 )
 loaded = [name for name in banned if name in sys.modules]
 assert not loaded, loaded

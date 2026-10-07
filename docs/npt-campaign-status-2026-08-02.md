@@ -52,7 +52,7 @@ pair virial, which the backward pass cannot see. The in-situ self-check caught i
 (+397 eV against a true −33 eV) and it was replaced with a central difference of
 the real energy.
 
-`MMML_NPT_VIRIAL_SELFCHECK=1` checks both cotangents and the absolute energy
+`KARML_NPT_VIRIAL_SELFCHECK=1` checks both cotangents and the absolute energy
 against the real system at NpT initialisation. It is diagnostic only.
 
 ## Worth adopting independently

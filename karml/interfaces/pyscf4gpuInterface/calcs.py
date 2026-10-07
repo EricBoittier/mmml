@@ -9,9 +9,9 @@ from gpu4pyscf.dft import rks
 from gpu4pyscf.properties import ir, shielding, polarizability
 
 
-from mmml.interfaces.pyscf4gpuInterface.cli_parser import build_parser
-from mmml.interfaces.pyscf4gpuInterface.enums import *
-from mmml.interfaces.pyscf4gpuInterface.helperfunctions import *
+from karml.interfaces.pyscf4gpuInterface.cli_parser import build_parser
+from karml.interfaces.pyscf4gpuInterface.enums import *
+from karml.interfaces.pyscf4gpuInterface.helperfunctions import *
 
 
 def _RZ_to_atom(R, Z):
@@ -106,7 +106,7 @@ def compute_dft(args, calcs, extra=None):
     )
 
     print(mol)
-    from mmml.interfaces.pyscf4gpuInterface.helperfunctions import print_basis
+    from karml.interfaces.pyscf4gpuInterface.helperfunctions import print_basis
     print_basis(mol)
 
     opt_callback = None
@@ -248,7 +248,7 @@ def compute_dft(args, calcs, extra=None):
         print("-"*100)
         print("Computing IR under external electric field (E-field scan)")
         print("-"*100)
-        from mmml.interfaces.pyscf4gpuInterface.efield import (
+        from karml.interfaces.pyscf4gpuInterface.efield import (
             efield_ir_scan,
             efield_response_finite_difference,
             parse_efield_points,
@@ -277,7 +277,7 @@ def compute_dft(args, calcs, extra=None):
         print("-" * 100)
         print("Computing SCF in uniform E-field (energy, dipole, forces — no Hessian/IR)")
         print("-" * 100)
-        from mmml.interfaces.pyscf4gpuInterface.efield import (
+        from karml.interfaces.pyscf4gpuInterface.efield import (
             efield_response_finite_difference,
             efield_scf_scan,
             parse_efield_points,
@@ -418,7 +418,7 @@ def compute_dft_single(
         field-polarized state.
     efield_include_nuclear_energy
         If True (default, with ``efield``), add nuclear-field energy to ``energy`` after SCF
-        (:func:`mmml.interfaces.pyscf4gpuInterface.efield.nuclear_field_energy_correction_hartree`).
+        (:func:`karml.interfaces.pyscf4gpuInterface.efield.nuclear_field_energy_correction_hartree`).
     """
     atom = _RZ_to_atom(R, Z)
     mol = pyscf.M(
@@ -435,7 +435,7 @@ def compute_dft_single(
 
     # SCF in uniform electric field (modified core Hamiltonian)
     if efield is not None:
-        from mmml.interfaces.pyscf4gpuInterface.efield import run_scf_uniform_efield
+        from karml.interfaces.pyscf4gpuInterface.efield import run_scf_uniform_efield
 
         mf, e_tot = run_scf_uniform_efield(
             efield,
@@ -881,7 +881,7 @@ def compute_mp2(
 
     if gradient:
         if gradient_fd:
-            from mmml.interfaces.pyscf4gpuInterface.finite_difference import (
+            from karml.interfaces.pyscf4gpuInterface.finite_difference import (
                 central_difference_gradient,
             )
 
@@ -1067,7 +1067,7 @@ def build_ml_dict(data: dict) -> dict:
 
     ml = {k: v for k, v in ml.items() if v is not None}
     if ml:
-        from mmml.data.units import attach_units_to_npz_payload
+        from karml.data.units import attach_units_to_npz_payload
 
         return attach_units_to_npz_payload(ml)
     return ml

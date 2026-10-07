@@ -14,7 +14,7 @@ uv run python scripts/plot_mlpot_settings.py
 
 Output directory: `docs/images/mlpot-settings/`.
 
-CLI flags: [`mmml/interfaces/pycharmmInterface/cutoffs.py`](https://github.com/EricBoittier/mmml/blob/main/mmml/interfaces/pycharmmInterface/cutoffs.py) (`--mm-switch-on`, `--mm-switch-width`, `--ml-switch-width`). Dynamics: [`CHARMM_SETTINGS.md`](https://github.com/EricBoittier/mmml/blob/main/mmml/interfaces/pycharmmInterface/mlpot/CHARMM_SETTINGS.md).
+CLI flags: [`karml/interfaces/pycharmmInterface/cutoffs.py`](https://github.com/EricBoittier/karml/blob/main/karml/interfaces/pycharmmInterface/cutoffs.py) (`--mm-switch-on`, `--mm-switch-width`, `--ml-switch-width`). Dynamics: [`CHARMM_SETTINGS.md`](https://github.com/EricBoittier/karml/blob/main/karml/interfaces/pycharmmInterface/mlpot/CHARMM_SETTINGS.md).
 
 ## What The Three Numbers Mean
 
@@ -58,7 +58,7 @@ Use:
 
 Start with `r_min = 5.5–6.5 Å` for DCM testing, then tune from scan plots. This restraint is independent of `--flat-bottom-radius`: the flat-bottom sphere keeps the cluster/droplet contained, while the COM lower wall prevents two monomers from collapsing into each other.
 
-The COM wall is evaluated in the **JAX/MMML callback** (`calculator_utils.apply_com_lower_wall`), not as a CHARMM bonded/MMFP term. It applies to pairwise monomer COM distances (MIC-aware under PBC).
+The COM wall is evaluated in the **JAX/KARML callback** (`calculator_utils.apply_com_lower_wall`), not as a CHARMM bonded/MMFP term. It applies to pairwise monomer COM distances (MIC-aware under PBC).
 
 ## Current Equations
 
@@ -157,7 +157,7 @@ Example:
 ```bash
 ./scripts/run_dcm9_stability.sh
 # or
-mmml md-system ... --n-heat-segments 4 --ps-heat 20 \
+karml md-system ... --n-heat-segments 4 --ps-heat 20 \
   --heat-firstt 0 --heat-finalt 240
 # cutoffs default to --mm-switch-on 8 --mm-switch-width 5 --ml-switch-width 1.5
 ```
@@ -166,17 +166,17 @@ mmml md-system ... --n-heat-segments 4 --ps-heat 20 \
 
 PhysNet checkpoints are stored in **float32**. The hybrid calculator evaluates ML/MM interior math in a single JAX dtype (default **float32**). CHARMM I/O and returned total energies/forces stay **float64**.
 
-Precedence: `--ml-compute-dtype` → `MMML_ML_DTYPE` → `JAX_ENABLE_X64=1` → float32.
+Precedence: `--ml-compute-dtype` → `KARML_ML_DTYPE` → `JAX_ENABLE_X64=1` → float32.
 
 To run ML interior in float64 (experimental; model not re-validated in f64):
 
 ```bash
 export JAX_ENABLE_X64=1
-mmml md-system ... --ml-compute-dtype float64
-# or: export MMML_ML_DTYPE=float64  (with JAX_ENABLE_X64=1)
+karml md-system ... --ml-compute-dtype float64
+# or: export KARML_ML_DTYPE=float64  (with JAX_ENABLE_X64=1)
 ```
 
-`JAX_ENABLE_X64` must be set **before** Python starts (e.g. in the shell or `scripts/mmml-charmm-mpirun.sh`). f32 checkpoints are promoted to f64 on load when f64 is requested.
+`JAX_ENABLE_X64` must be set **before** Python starts (e.g. in the shell or `scripts/karml-charmm-mpirun.sh`). f32 checkpoints are promoted to f64 on load when f64 is requested.
 
 If you saw smoother heating with “XLA” enabled, that was likely **`JAX_ENABLE_X64=1`**, not `XLA_FLAGS` compiler options alone — explicit `dtype=jnp.float32` in the ML path previously blocked x64 until this centralization.
 
@@ -202,7 +202,7 @@ monomer COM distance is inside the active ML radius. Production behavior is:
 
 - Active ML dimers use `r < mm_switch_on` by default. `ml_switch_width` is the
   inner handoff width, not extra support beyond `mm_switch_on`; the optional
-  `MMML_ML_DIMER_ACTIVE_MARGIN` / `ml_dimer_active_margin` adds an explicit
+  `KARML_ML_DIMER_ACTIVE_MARGIN` / `ml_dimer_active_margin` adds an explicit
   margin only when you ask for one.
 - PBC runs with a known box size derive the sparse cap from the expected
   in-range pair count at that density, multiplied by a 1.4 safety margin and
@@ -210,7 +210,7 @@ monomer COM distance is inside the active ML radius. Production behavior is:
   clusters use all `n(n-1)/2` unique dimers so they cannot silently drop a pair.
 - The cap is a static JAX shape. If a step has more active dimers than the cap,
   `SparseDimerCapOverflow` fails closed instead of truncating the force field.
-  Raise `--ml-max-active-dimers` or `MMML_MLPOT_MAX_ACTIVE_DIMERS`, then restart
+  Raise `--ml-max-active-dimers` or `KARML_MLPOT_MAX_ACTIVE_DIMERS`, then restart
   and revalidate the equilibrated geometry.
 
 For large PBC boxes, the callback also keeps a host Verlet list over monomer
@@ -222,9 +222,9 @@ a centroid moves more than skin/2 or the box changes. Useful controls:
 
 | Knob | Meaning |
 |------|---------|
-| `MMML_ML_DIMER_CENTROID_NL=0` | Disable the centroid candidate list; keep all-pairs sparse selection. |
-| `MMML_ML_DIMER_CENTROID_NL_SKIN_A` | Override the centroid-list skin. Larger skins rebuild less often but carry more candidates. |
-| `MMML_MLPOT_CHUNK_BUDGET=0` | Evaluate every padded PhysNet chunk; useful for A/B timing or parity checks. |
+| `KARML_ML_DIMER_CENTROID_NL=0` | Disable the centroid candidate list; keep all-pairs sparse selection. |
+| `KARML_ML_DIMER_CENTROID_NL_SKIN_A` | Override the centroid-list skin. Larger skins rebuild less often but carry more candidates. |
+| `KARML_MLPOT_CHUNK_BUDGET=0` | Evaluate every padded PhysNet chunk; useful for A/B timing or parity checks. |
 
 The MM atom-pair list has a separate inner COM filter, `mm_r_min`. That filter
 uses whole-molecule centroids under PBC before deciding which JAX/MM atom pairs
@@ -234,7 +234,7 @@ to keep. With complementary handoff, keep `mm_r_min` below `mm_switch_on`; using
 To measure what is happening in a live run, enable profiling:
 
 ```bash
-export MMML_MLPOT_PROFILE=1
+export KARML_MLPOT_PROFILE=1
 ```
 
 PyCHARMM workflows write `mlpot_profile.json` in the output directory every 500
@@ -257,7 +257,7 @@ restart, stage summary and `next_run` advice as if nothing had happened.
 
 Every registered callback is now wrapped by
 `mlpot.callback_failstop.fail_closed_callback`. On any exception it prints
-`MMML MLPOT CALLBACK FAILURE` with the full traceback (also to the original
+`KARML MLPOT CALLBACK FAILURE` with the full traceback (also to the original
 stderr if CHARMM output is silenced at that moment), flushes Python, C and
 Fortran output, and ends the process with **exit code 86** via `os._exit`.
 Nothing runs after that: no restart, DCD, `stage_summary.json`, job manifest,
@@ -278,7 +278,7 @@ command parser from inside the energy routine and ends in `STOPCH`, whose
 Fortran `STOP` exits with status 0, so a failed run would look like success.
 
 Job wrappers must propagate the exit status. A script that ends with
-`echo "exit $?" >> run.log` exits 0 whatever `mmml` returned; use
+`echo "exit $?" >> run.log` exits 0 whatever `karml` returned; use
 `rc=$?; echo "exit $rc" >> run.log; exit $rc`.
 
 The decomposed PhysNet hybrid still masks a non-finite ML energy or force to 0
@@ -290,6 +290,6 @@ Test-only switches (never set them in production):
 
 | Variable | Effect |
 |----------|--------|
-| `MMML_MLPOT_CALLBACK_FAIL_EXIT_CODE` | exit code other than 86 (1–255) |
-| `MMML_MLPOT_ALLOW_MISSING_CALLBACK_PAIRS=1` | old zero-energy return for an empty ML/MM pair list |
-| `MMML_MLPOT_ALLOW_PERIODIC_COULOMB_FAILURE=1` | old ML-only continuation when periodic Coulomb fails |
+| `KARML_MLPOT_CALLBACK_FAIL_EXIT_CODE` | exit code other than 86 (1–255) |
+| `KARML_MLPOT_ALLOW_MISSING_CALLBACK_PAIRS=1` | old zero-energy return for an empty ML/MM pair list |
+| `KARML_MLPOT_ALLOW_PERIODIC_COULOMB_FAILURE=1` | old ML-only continuation when periodic Coulomb fails |

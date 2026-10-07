@@ -8,7 +8,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from mmml.interfaces.pycharmmInterface.mlpot.box_pressure_opt import (
+from karml.interfaces.pycharmmInterface.mlpot.box_pressure_opt import (
     BoxPressureOptConfig,
     build_cpt_box_refine_dynamics_kw,
     pressure_objective,
@@ -170,7 +170,7 @@ def test_cpt_plan_includes_pref():
 
 
 def test_write_box_json_roundtrip(tmp_path: Path):
-    from mmml.interfaces.pycharmmInterface.mlpot.box_pressure_opt import (
+    from karml.interfaces.pycharmmInterface.mlpot.box_pressure_opt import (
         BoxPressureOptResult,
     )
 
@@ -193,7 +193,7 @@ def test_write_box_json_roundtrip(tmp_path: Path):
 
 
 def test_from_box_json_offline_smoke(tmp_path: Path):
-    from mmml.interfaces.pycharmmInterface.mlpot.box_pressure_opt import (
+    from karml.interfaces.pycharmmInterface.mlpot.box_pressure_opt import (
         run_box_pressure_opt_from_box_json,
     )
 
@@ -233,8 +233,8 @@ def test_from_box_json_offline_smoke(tmp_path: Path):
 
 
 def test_from_box_json_use_charmm_dispatches(monkeypatch, tmp_path: Path):
-    from mmml.interfaces.pycharmmInterface.mlpot import box_pressure_opt as bpo
-    from mmml.interfaces.pycharmmInterface.mlpot.box_pressure_opt import (
+    from karml.interfaces.pycharmmInterface.mlpot import box_pressure_opt as bpo
+    from karml.interfaces.pycharmmInterface.mlpot.box_pressure_opt import (
         BoxPressureOptResult,
         run_box_pressure_opt_from_box_json,
     )
@@ -283,12 +283,12 @@ def test_from_box_json_use_charmm_dispatches(monkeypatch, tmp_path: Path):
 
 
 def test_make_charmm_cpt_refine_returns_mean_L(monkeypatch):
-    from mmml.interfaces.pycharmmInterface.mlpot.box_pressure_opt import (
+    from karml.interfaces.pycharmmInterface.mlpot.box_pressure_opt import (
         make_charmm_cpt_box_refine_fn,
     )
-    import mmml.interfaces.pycharmmInterface.mlpot.dynamics as dyn
-    import mmml.interfaces.pycharmmInterface.mlpot.pbc_env as pbc
-    import mmml.interfaces.pycharmmInterface.mlpot.setup as setup
+    import karml.interfaces.pycharmmInterface.mlpot.dynamics as dyn
+    import karml.interfaces.pycharmmInterface.mlpot.pbc_env as pbc
+    import karml.interfaces.pycharmmInterface.mlpot.setup as setup
 
     sides = [30.0, 29.8, 29.9, 30.1, 30.0]
     calls = {"dyn": 0, "idx": 0}

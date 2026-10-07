@@ -126,7 +126,7 @@ def _savgol_smooth(y: np.ndarray, window: int, poly: int = 3) -> np.ndarray:
 def compute_dipole_periodogram(
     dipoles: np.ndarray, frame_dt_fs: float
 ) -> tuple[np.ndarray, np.ndarray]:
-    from mmml.spectra.spectra_md import dipole_fluctuation_ir_spectrum
+    from karml.spectra.spectra_md import dipole_fluctuation_ir_spectrum
 
     return dipole_fluctuation_ir_spectrum(dipoles, frame_dt_fs)
 
@@ -138,7 +138,7 @@ def compute_acf_spectrum(
     qcf: str,
     window: str = "hann",
 ) -> tuple[np.ndarray, np.ndarray]:
-    from mmml.spectra.spectra_md import autocorrelation, correlation_to_spectrum
+    from karml.spectra.spectra_md import autocorrelation, correlation_to_spectrum
 
     mu = np.asarray(dipoles, dtype=np.float64)
     mu = mu - mu.mean(axis=0, keepdims=True)
@@ -243,7 +243,7 @@ def predict_dipoles_physnet_jit(
     import jax
     import jax.numpy as jnp
 
-    from mmml.cli.misc.physnet_evaluate import _load_physnet_checkpoint
+    from karml.cli.misc.physnet_evaluate import _load_physnet_checkpoint
 
     n_atoms = len(frames[0])
     _, params, model = _load_physnet_checkpoint(dipole_ckpt, n_atoms)

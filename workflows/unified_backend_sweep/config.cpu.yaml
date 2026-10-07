@@ -1,6 +1,6 @@
 # CPU-only override for pc-studix's `short` partition (node01-14).
 #
-# This cluster's mmml .venv has no CUDA jaxlib installed, so jax already runs
+# This cluster's karml .venv has no CUDA jaxlib installed, so jax already runs
 # on CPU even when jobs are submitted to the `gpu` partition (confirmed via
 # "An NVIDIA GPU may be present on this machine, but a CUDA-enabled jaxlib is
 # not installed. Falling back to cpu." in stdout.log). Submitting to a CPU

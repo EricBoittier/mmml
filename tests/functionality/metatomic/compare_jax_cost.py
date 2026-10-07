@@ -5,7 +5,7 @@ Times energy+forces after a warmup on the same geometries. Does not run MD.
 
 Example::
 
-    JAX_PLATFORMS=cpu MMML_METATOMIC_DEVICE=cpu \\
+    JAX_PLATFORMS=cpu KARML_METATOMIC_DEVICE=cpu \\
       uv run python tests/functionality/metatomic/compare_jax_cost.py \\
       --out /opt/cursor/artifacts/metatomic_vs_physnet_cost.json
 """
@@ -24,7 +24,7 @@ import numpy as np
 from ase import Atoms
 from ase.build import molecule
 
-from mmml.interfaces.calculators.ase_fragment_hybrid import (
+from karml.interfaces.calculators.ase_fragment_hybrid import (
     evaluate_fragment_hybrid,
     evaluate_whole_system,
 )
@@ -32,8 +32,8 @@ from mmml.interfaces.calculators.ase_fragment_hybrid import (
 REPO = Path(__file__).resolve().parents[3]
 PHYSNET_CKPT = REPO / "examples/ckpts_json/DESdimers_params.json"
 SPOOKY_CKPT = REPO / "examples/ckpts_json/spooky_epoch-0004-chunk-000040-step-00584747.json"
-ACO_PDB = REPO / "mmml/generate/sample/pdb/aco_monomer.pdb"
-DEFAULT_METATOMIC = Path("/tmp/mmml-metatomic-models")
+ACO_PDB = REPO / "karml/generate/sample/pdb/aco_monomer.pdb"
+DEFAULT_METATOMIC = Path("/tmp/karml-metatomic-models")
 
 
 def _cpu_model() -> str:
@@ -120,8 +120,8 @@ def summarize_eval(energy_ev: float, forces: np.ndarray) -> dict:
 
 
 def load_physnet_ase(n_atoms: int, ckpt: Path):
-    from mmml.cli.base import load_physnet_params_and_ef_model
-    from mmml.models.physnetjax.physnetjax.calc.helper_mlp import get_ase_calc
+    from karml.cli.base import load_physnet_params_and_ef_model
+    from karml.models.physnetjax.physnetjax.calc.helper_mlp import get_ase_calc
 
     params, model = load_physnet_params_and_ef_model(ckpt, natoms=int(n_atoms))
     template = Atoms(numbers=[1] * int(n_atoms), positions=np.zeros((int(n_atoms), 3)))
@@ -151,9 +151,9 @@ def load_physnet_ase(n_atoms: int, ckpt: Path):
 
 
 def load_metatomic(path: Path):
-    from mmml.interfaces.calculators.metatomic import load_metatomic_calculator
+    from karml.interfaces.calculators.metatomic import load_metatomic_calculator
 
-    calc = load_metatomic_calculator(path, device=os.environ.get("MMML_METATOMIC_DEVICE", "cpu"))
+    calc = load_metatomic_calculator(path, device=os.environ.get("KARML_METATOMIC_DEVICE", "cpu"))
     n_params = None
     try:
         import torch
@@ -231,7 +231,7 @@ def host_info() -> dict:
         "platform": platform.platform(),
         "python": platform.python_version(),
         "JAX_PLATFORMS": os.environ.get("JAX_PLATFORMS", ""),
-        "MMML_METATOMIC_DEVICE": os.environ.get("MMML_METATOMIC_DEVICE", "cpu"),
+        "KARML_METATOMIC_DEVICE": os.environ.get("KARML_METATOMIC_DEVICE", "cpu"),
         "CUDA_VISIBLE_DEVICES": os.environ.get("CUDA_VISIBLE_DEVICES", ""),
         "gpu": False,
     }
@@ -276,7 +276,7 @@ def main() -> int:
         "notes": [
             "CPU-only; no CHARMM / no MD.",
             "whole = one energy+forces eval on the dimer (ASE cache reset + 1e-4 A jitter each sample).",
-            "fragments = MMML ML/MM USER: E(A)+E(B)+s*(E(AB)-E(A)-E(B)) = 3 sequential model evals.",
+            "fragments = KARML ML/MM USER: E(A)+E(B)+s*(E(AB)-E(A)-E(B)) = 3 sequential model evals.",
             "Production PhysNet MLpot batches those fragments in one jitted apply; this script uses sequential ASE evals for both backends so the model-forward cost is comparable.",
             "PET-MAD/PET-MOLS are universal PET TorchScript models; DESdimers PhysNet is a tiny MPNN (features=32, L=1, 2 iterations, 16 RBF, 6 A cutoff, ZBL).",
             "SpookyNet JSON is bundled but is not a drop-in PhysNet load (embedding 88x64 vs PhysNet 119x32); skipped unless --include-spooky.",

@@ -1,4 +1,4 @@
-# `mmml downstream`
+# `karml downstream`
 
 Downstream analysis utilities.
 
@@ -6,13 +6,13 @@ Downstream analysis utilities.
 ## Usage
 
 ```bash
-mmml downstream --help
+karml downstream --help
 ```
 
 ## Options
 
 ```text
-usage: mmml downstream [-h] --dataset DATASET --checkpoint-dcm CHECKPOINT_DCM
+usage: karml downstream [-h] --dataset DATASET --checkpoint-dcm CHECKPOINT_DCM
                        --checkpoint-noneq CHECKPOINT_NONEQ
                        [--sample-index SAMPLE_INDEX] [--mode {check,quick,full}]
                        [--output-dir OUTPUT_DIR] [--temperature TEMPERATURE]
@@ -21,7 +21,7 @@ usage: mmml downstream [-h] --dataset DATASET --checkpoint-dcm CHECKPOINT_DCM
                        [--opt-fmax OPT_FMAX] [--opt-steps OPT_STEPS] [--raman]
                        [--raman-delta RAMAN_DELTA] [--raman-field RAMAN_FIELD]
 
-Run harmonic / MD downstream analyses on an MMML dataset
+Run harmonic / MD downstream analyses on an KARML dataset
 
 Input & configuration:
   --dataset DATASET     Path to dataset NPZ file

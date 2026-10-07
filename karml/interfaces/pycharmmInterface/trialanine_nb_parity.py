@@ -264,7 +264,7 @@ def _single_pair_nb_energies(
     cell: np.ndarray,
     settings: Any,
 ) -> tuple[float, float]:
-    from mmml.interfaces.pycharmmInterface.mm_system_energy import (
+    from karml.interfaces.pycharmmInterface.mm_system_energy import (
         single_pair_mic_nonbonded_energies,
     )
 
@@ -286,7 +286,7 @@ def _single_pair_analytic_dedr(
     import jax
     import jax.numpy as jnp
 
-    from mmml.interfaces.pycharmmInterface.mm_system_energy import (
+    from karml.interfaces.pycharmmInterface.mm_system_energy import (
         single_pair_mic_nonbonded_energies,
     )
 
@@ -327,7 +327,7 @@ def audit_switch_derivatives(
     dr: float = 1e-4,
 ) -> tuple[PairSwitchAudit, ...]:
     """Compare JAX autodiff dE/dr vs central difference for top |VDW| pairs."""
-    from mmml.interfaces.pycharmmInterface.jax_x64_config import ensure_jax_x64
+    from karml.interfaces.pycharmmInterface.jax_x64_config import ensure_jax_x64
 
     ensure_jax_x64(context="audit_switch_derivatives")
     order = np.argsort(-np.abs(decomp.vdw_kcal))[:top_k]
@@ -388,10 +388,10 @@ def _collect_charmm_category_breakdown(
     tuple[CategoryForceDelta, ...],
     dict[str, Any],
 ]:
-    from mmml.interfaces.pycharmmInterface.cgenff_bonded_reference import (
+    from karml.interfaces.pycharmmInterface.cgenff_bonded_reference import (
         charmm_nonbonded_by_segment_category,
     )
-    from mmml.interfaces.pycharmmInterface.charmm_mpi import (
+    from karml.interfaces.pycharmmInterface.charmm_mpi import (
         selective_bonded_block_unsafe_under_mpi,
     )
 
@@ -402,7 +402,7 @@ def _collect_charmm_category_breakdown(
     if selective_bonded_block_unsafe_under_mpi():
         meta["charmm_category_skipped"] = (
             "selective_BLOCK_unsafe_under_mpi "
-            "(set MMML_ALLOW_SELECTIVE_BONDED_BLOCK=1 and use --category-block)"
+            "(set KARML_ALLOW_SELECTIVE_BONDED_BLOCK=1 and use --category-block)"
         )
         return (), (), (), meta
     _log("Running CHARMM segment BLOCK category breakdown (3× ENER FORCE)...")
@@ -444,7 +444,7 @@ def _jax_category_forces(
     decomp: Any,
     categories: np.ndarray,
 ) -> dict[str, np.ndarray]:
-    from mmml.interfaces.pycharmmInterface.mm_system_energy import (
+    from karml.interfaces.pycharmmInterface.mm_system_energy import (
         nonbonded_energy_and_forces,
     )
 
@@ -488,14 +488,14 @@ def collect_trialanine_nb_parity(
     verbose: bool = True,
 ) -> TrialanineNbParityReport:
     """Compare JAX MIC nonbonded decomposition to active PyCHARMM ``ENER FORCE``."""
-    from mmml.interfaces.pycharmmInterface.jax_x64_config import ensure_jax_x64
+    from karml.interfaces.pycharmmInterface.jax_x64_config import ensure_jax_x64
 
     ensure_jax_x64(context="collect_trialanine_nb_parity")
     import jax.numpy as jnp
 
     _log("Collecting parity metrics (PyCHARMM ENER + JAX MIC)...", verbose=verbose)
-    from mmml.interfaces.pycharmmInterface.cgenff_bonded import bonded_energy_and_forces
-    from mmml.interfaces.pycharmmInterface.cgenff_bonded_reference import (
+    from karml.interfaces.pycharmmInterface.cgenff_bonded import bonded_energy_and_forces
+    from karml.interfaces.pycharmmInterface.cgenff_bonded_reference import (
         charmm_bonded_energy_components_kcalmol,
         charmm_bonded_forces_kcalmol_A,
         charmm_cmap_is_active,
@@ -503,15 +503,15 @@ def collect_trialanine_nb_parity(
         run_charmm_bonded_ener_force,
         set_charmm_positions,
     )
-    from mmml.interfaces.pycharmmInterface.mm_system_energy import (
+    from karml.interfaces.pycharmmInterface.mm_system_energy import (
         CharmmNbondSettings,
         decompose_nonbonded_pair_energies,
         load_bonded_system_from_psf,
         load_nonbonded_system_from_charmm,
         nonbonded_energy_and_forces,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.block_terms import apply_charmm_mm_block
-    from mmml.interfaces.pycharmmInterface.trialanine_water_box import (
+    from karml.interfaces.pycharmmInterface.mlpot.block_terms import apply_charmm_mm_block
+    from karml.interfaces.pycharmmInterface.trialanine_water_box import (
         n_peptide_atoms_in_trialanine_box,
     )
 
@@ -1002,12 +1002,12 @@ def collect_and_render_trialanine_nb_parity(
     verbose: bool = True,
 ) -> TrialanineNbParityReport:
     """Collect metrics, write ``report.md``, ``report.json``, and PNG plots."""
-    from mmml.interfaces.pycharmmInterface.mm_system_energy import (
+    from karml.interfaces.pycharmmInterface.mm_system_energy import (
         CharmmNbondSettings,
         decompose_nonbonded_pair_energies,
         load_nonbonded_system_from_charmm,
     )
-    from mmml.interfaces.pycharmmInterface.trialanine_water_box import (
+    from karml.interfaces.pycharmmInterface.trialanine_water_box import (
         n_peptide_atoms_in_trialanine_box,
     )
 

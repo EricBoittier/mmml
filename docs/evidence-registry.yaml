@@ -22,11 +22,11 @@ claims:
     status: verified
     claim: JaxmdDriver implements minimization, NVE, NVT, and NPT dispatch.
     evidence:
-      - mmml/md/drivers/jaxmd.py
+      - karml/md/drivers/jaxmd.py
       - workflows/unified_backend_sweep/config.yaml
   long_range_solver_surface:
     status: verified
-    claim: MMML implements MIC, native Ewald, JAX-PME, NValChemI/Ops PME, and ScaFaCoS on their documented execution faces.
+    claim: KARML implements MIC, native Ewald, JAX-PME, NValChemI/Ops PME, and ScaFaCoS on their documented execution faces.
     evidence:
       - tests/unit/test_mm_energy_forces_native_ewald.py
       - tests/unit/test_jax_pme_lr_solver.py

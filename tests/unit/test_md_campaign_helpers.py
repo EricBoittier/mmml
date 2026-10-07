@@ -16,7 +16,7 @@ from pathlib import Path
 
 import pytest
 
-from mmml.cli.run.md_campaign import (
+from karml.cli.run.md_campaign import (
     _campaign_needs_pycharmm,
     _explicit_cli_output_dir,
     _lookup_resolved_output_dir,

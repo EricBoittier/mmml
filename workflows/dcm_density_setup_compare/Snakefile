@@ -7,7 +7,7 @@ from pathlib import Path
 
 def _repo_python() -> str:
     repo = Path(workflow.basedir).resolve().parents[1]
-    env_py = os.environ.get("MMML_PYTHON", "").strip()
+    env_py = os.environ.get("KARML_PYTHON", "").strip()
     if env_py:
         return env_py
     venv = repo / ".venv" / "bin" / "python"

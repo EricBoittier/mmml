@@ -57,7 +57,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
-    from mmml.interfaces.pycharmmInterface.mlpot.virial_compare import (
+    from karml.interfaces.pycharmmInterface.mlpot.virial_compare import (
         report_to_json,
         run_live_cpt_ml_virial,
     )

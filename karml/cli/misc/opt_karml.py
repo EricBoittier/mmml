@@ -6,7 +6,7 @@ dataset, and results for inspection in a notebook or REPL.
 
 Public API for notebook use:
 
-    from mmml.cli.misc.opt_mmml import run, parse_args, OptContext
+    from karml.cli.misc.opt_karml import run, parse_args, OptContext
 
     args = parse_args()  # or build argparse.Namespace with required options
     ctx = run(args)      # returns OptContext, not exit code
@@ -28,7 +28,7 @@ Public API for notebook use:
     ctx.best             # best result dict
     ctx.save_dir         # directory used for diagnostics and trajectories
 
-Notebook kernel: Use the project venv (e.g. mmml/.venv/bin/python) as the notebook kernel.
+Notebook kernel: Use the project venv (e.g. karml/.venv/bin/python) as the notebook kernel.
 Using a different Python (e.g. ~/.local) can cause JaxRuntimeError / PJRT version mismatch.
 """
 
@@ -45,24 +45,24 @@ from typing import Any
 
 import numpy as np
 
-from mmml.cli.base import (
+from karml.cli.base import (
     resolve_checkpoint_paths,
     setup_ase_imports,
-    setup_mmml_imports,
+    setup_karml_imports,
 )
-from mmml.interfaces.pycharmmInterface.cutoffs import (
+from karml.interfaces.pycharmmInterface.cutoffs import (
     add_handoff_cutoff_args,
     add_handoff_cutoff_grid_args,
     cutoff_grids_from_args,
     cutoff_parameters_from_args,
     handoff_widths_from_args,
 )
-from mmml.interfaces.pycharmmInterface.hybrid_reference import (
+from karml.interfaces.pycharmmInterface.hybrid_reference import (
     ReferenceTrajectory,
     load_reference_trajectory_npz,
     run_cutoff_grid_search,
 )
-from mmml.interfaces.pycharmmInterface.mlpot.mlpot_gpu_policy import (
+from karml.interfaces.pycharmmInterface.mlpot.mlpot_gpu_policy import (
     resolve_ml_gpu_count as _resolve_ml_gpu_count,
 )
 
@@ -177,7 +177,7 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=None,
         metavar="N",
-        help="Parallel PhysNet chunks on N local GPUs (default 1; or MMML_MLPOT_N_GPUS).",
+        help="Parallel PhysNet chunks on N local GPUs (default 1; or KARML_MLPOT_N_GPUS).",
     )
     parser.add_argument(
         "--debug",
@@ -192,7 +192,7 @@ def parse_args() -> argparse.Namespace:
 @dataclass
 class OptContext:
     """
-    Holds all calculators, data, and results from opt_mmml for inspection.
+    Holds all calculators, data, and results from opt_karml for inspection.
     Returned by run(); use ctx.atoms, ctx.hybrid_calc, ctx.dataset, etc. in a notebook.
     """
 
@@ -234,8 +234,8 @@ def _ensure_opt_imports() -> dict[str, Any]:
         import pandas as pd
         from ase.io import Trajectory
         from ase.calculators.singlepoint import SinglePointCalculator
-        from mmml.interfaces.pycharmmInterface.setupBox import setup_box_generic
-        from mmml.interfaces.pycharmmInterface.import_pycharmm import coor
+        from karml.interfaces.pycharmmInterface.setupBox import setup_box_generic
+        from karml.interfaces.pycharmmInterface.import_pycharmm import coor
         return {
             "ase_io": ase_io,
             "plt": plt,
@@ -447,7 +447,7 @@ def write_reference_trajectory(ctx: OptContext, save_dir: Path) -> None:
     Trajectory = imp["Trajectory"]
     SinglePointCalculator = imp["SinglePointCalculator"]
     Atoms = setup_ase_imports()
-    from mmml.cli.run.md_evaluate_npz import center_positions_at_com
+    from karml.cli.run.md_evaluate_npz import center_positions_at_com
 
     args = ctx.args
     atoms = ctx.atoms
@@ -492,7 +492,7 @@ def run(args: argparse.Namespace) -> OptContext:
     ase_io = imp["ase_io"]
     setup_box_generic_fn = imp["setup_box_generic"]
 
-    CutoffParameters, _, setup_calculator, _ = setup_mmml_imports()
+    CutoffParameters, _, setup_calculator, _ = setup_karml_imports()
 
     # Load PDB and box
     pdb_ase_atoms = load_pdb_and_box(args.pdbfile, setup_box_generic_fn, ase_io)
@@ -688,7 +688,7 @@ if __name__ == "__main__":
 
 
 
-# python -m mmml.cli.opt_mmml \
+# python -m karml.cli.opt_karml \
 #   --dataset /path/to/data.npz \
 #   --checkpoint /path/to/checkpoint \
 #   --n-monomers 2 \

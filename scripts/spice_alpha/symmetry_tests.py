@@ -61,9 +61,9 @@ def main():
     import jax
     import jax.numpy as jnp
     jax.config.update("jax_enable_x64", False)
-    from mmml.data.spice_alpha_ragged import load_ragged
-    from mmml.models.efield.packed import PackSpec, iter_packed_batches
-    from mmml.models.efield.training import EFieldPhysNet, load_params
+    from karml.data.spice_alpha_ragged import load_ragged
+    from karml.models.efield.packed import PackSpec, iter_packed_batches
+    from karml.models.efield.training import EFieldPhysNet, load_params
 
     cfg = json.loads((args.ckpt_dir / "config.json").read_text())
     shards = sorted(Path(cfg["ragged_dir"]).glob("*.npz"))

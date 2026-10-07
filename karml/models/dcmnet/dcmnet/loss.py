@@ -6,7 +6,7 @@ import numpy as np
 import optax
 import ase.data
 
-from mmml.data.units import ANGSTROM_TO_BOHR
+from karml.data.units import ANGSTROM_TO_BOHR
 
 from .electrostatics import batched_electrostatic_potential, calc_esp
 

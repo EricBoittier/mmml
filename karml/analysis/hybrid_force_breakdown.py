@@ -237,7 +237,7 @@ def print_hybrid_force_term_breakdown(
     title: str = "Hybrid force-term breakdown",
 ) -> None:
     """Emit a compact CLI table for :func:`hybrid_force_term_breakdown`."""
-    from mmml.utils.rich_report import get_reporter
+    from karml.utils.rich_report import get_reporter
 
     reporter = get_reporter()
     rows = []

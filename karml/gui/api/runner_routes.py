@@ -1,8 +1,8 @@
-"""FastAPI routes exposing the job runner (mmml.gui.api.runner).
+"""FastAPI routes exposing the job runner (karml.gui.api.runner).
 
 Mounted only when the GUI server is started with ``--enable-runner``. Provides:
 
-* ``POST /api/jobs``            - launch an ``mmml md-system`` (or ``mmml ...``) run
+* ``POST /api/jobs``            - launch an ``karml md-system`` (or ``karml ...``) run
 * ``GET  /api/jobs``           - list jobs (status snapshots)
 * ``GET  /api/jobs/{id}``      - one job's status snapshot
 * ``GET  /api/jobs/{id}/logs`` - captured log lines (poll fallback, ``?since=seq``)
@@ -32,7 +32,7 @@ class CreateJobRequest(BaseModel):
     """Request body for launching a job.
 
     Provide either a full ``argv`` list, or a ``command`` string that is
-    shell-split. The first token must be an allowed command (``mmml``).
+    shell-split. The first token must be an allowed command (``karml``).
     """
 
     argv: Optional[List[str]] = Field(default=None, description="Full argument vector")

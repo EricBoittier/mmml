@@ -15,7 +15,7 @@ driver-owned list.
 This module defines the protocol, the registry, and the composition skeleton.
 The concrete terms (``ml_intra``, ``ml_pep_water``, ``mm_nonbonded``, ``smd``,
 ``dihedral``, ``vdw_core``, ``zbl``, ``mbd``, ``multipole``) live in
-``mmml/md/energy/terms/``.
+``karml/md/energy/terms/``.
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Callable, Mapping, NamedTuple, Protocol, runtime_checkable
 
-from mmml.md.system import MolecularSystem
+from karml.md.system import MolecularSystem
 
 __all__ = [
     "NeighborRequest",
@@ -166,7 +166,7 @@ class HybridEnergy:
         if not contribs:
             raise ValueError("No terms provide an ASE contribution.")
 
-        # Lazy import: keep ``mmml.md`` importable without ASE present.
+        # Lazy import: keep ``karml.md`` importable without ASE present.
         import numpy as np
         from ase.calculators.calculator import Calculator, all_changes
 

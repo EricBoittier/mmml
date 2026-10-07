@@ -16,7 +16,7 @@ except ModuleNotFoundError:
     jnp = None  # type: ignore[assignment]
     Array = Any  # type: ignore[misc,assignment]
 
-from mmml.interfaces.pycharmmInterface.cutoffs import GAMMA_OFF, GAMMA_ON
+from karml.interfaces.pycharmmInterface.cutoffs import GAMMA_OFF, GAMMA_ON
 
 
 def unpack_factory_result(result: tuple) -> tuple:

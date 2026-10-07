@@ -14,7 +14,7 @@ import csv
 import time
 from pathlib import Path
 
-from mmml.generate.sample import sample_cc
+from karml.generate.sample import sample_cc
 
 
 def parse_args() -> argparse.Namespace:

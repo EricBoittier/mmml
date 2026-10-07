@@ -7,7 +7,7 @@ from typing import Any
 
 import numpy as np
 
-from mmml.interfaces.pycharmmInterface.packmol_placement import (
+from karml.interfaces.pycharmmInterface.packmol_placement import (
     _parse_pdb_atom_records,
     execute_packmol_script,
     packmol_cube_origin,
@@ -71,9 +71,9 @@ def _resolve_packmol_tolerance(
 
 def _charmm_atom_metadata(n_atoms: int) -> tuple[list[str], np.ndarray] | None:
     try:
-        import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+        import karml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
         import pycharmm.psf as psf
-        from mmml.interfaces.pycharmmInterface.utils import get_Z_from_psf
+        from karml.interfaces.pycharmmInterface.utils import get_Z_from_psf
 
         names = [str(x) for x in np.asarray(psf.get_atype(), dtype=str)[: int(n_atoms)]]
         z = np.asarray(get_Z_from_psf(), dtype=int)[: int(n_atoms)]
@@ -219,7 +219,7 @@ def _positions_to_packmol_primary_frame(
     cell: Any | None,
 ) -> tuple[np.ndarray, bool]:
     """Map coords to jaxmd primary cell ``[0, L)`` for Packmol (CHARMM → shift by ``L/2``)."""
-    from mmml.utils.geometry_checks import wrap_monomers_primary_cell
+    from karml.utils.geometry_checks import wrap_monomers_primary_cell
 
     pos = np.asarray(positions, dtype=float)
     offsets = np.asarray(monomer_offsets, dtype=int)
@@ -256,7 +256,7 @@ def _run_packmol_repack(
     atomic_numbers: np.ndarray | None,
     packmol_margin_A: float | None = None,
 ) -> np.ndarray:
-    from mmml.utils.geometry_checks import _monomer_internal_templates, wrap_monomers_primary_cell
+    from karml.utils.geometry_checks import _monomer_internal_templates, wrap_monomers_primary_cell
 
     pos = np.asarray(positions, dtype=float)
     offsets = np.asarray(monomer_offsets, dtype=int)
@@ -291,7 +291,7 @@ def _run_packmol_repack(
     box_side = _cell_box_side(cell)
     was_charmm_centered = False
     if box_side is not None:
-        from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import (
+        from karml.interfaces.pycharmmInterface.mlpot.box_sizing import (
             MIN_PERIODIC_LIQUID_PACKMOL_PADDING_A,
             resolve_packmol_inner_cube_side_A,
         )
@@ -478,7 +478,7 @@ def repack_monomers_clear_overlap(
             f"Packmol repack failed ({exc}); falling back to grid monomer repack",
             flush=True,
         )
-        from mmml.utils.geometry_checks import repack_monomers_clear_overlap as grid_repack
+        from karml.utils.geometry_checks import repack_monomers_clear_overlap as grid_repack
 
         return grid_repack(
             positions,
@@ -547,7 +547,7 @@ def repack_selected_monomers_clear_overlap(
             f"falling back to grid monomer repack",
             flush=True,
         )
-        from mmml.utils.geometry_checks import (
+        from karml.utils.geometry_checks import (
             repack_selected_monomers_clear_overlap as grid_repack,
         )
 

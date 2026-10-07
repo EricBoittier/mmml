@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Step 03 — write the periodic structure out for MD, viewers and other tools.
 #
-# `mmml build-crystal` reads the deposited CIF, lets ASE apply the symmetry
+# `karml build-crystal` reads the deposited CIF, lets ASE apply the symmetry
 # operators, matches each molecule onto the CHARMM `ACO` atom names from the
 # make-res template, and writes a PDB with a correct CRYST1 record plus an
 # extxyz carrying the full cell.
@@ -42,12 +42,12 @@ OUT_XYZ="${ARTIFACTS_DIR}/acetone_${ACO_PHASE}.extxyz"
 
 echo "=== 03: building ${ACO_PHASE} (preset ${PRESET}), supercell ${ACO_SUPERCELL} ==="
 
-uv run mmml build-crystal \
+uv run karml build-crystal \
   --literature "${PRESET}" \
   --supercell "${ACO_SUPERCELL}" \
   -o "${OUT_PDB}"
 
-uv run mmml build-crystal \
+uv run karml build-crystal \
   --literature "${PRESET}" \
   --supercell "${ACO_SUPERCELL}" \
   -o "${OUT_XYZ}"
@@ -59,12 +59,12 @@ echo "  ${OUT_XYZ}"
 cat <<'EOF'
 
 A note on what you can do with this. The cell is orthorhombic but strongly
-non-cubic, and mmml's periodic MD paths are cubic-only: prepare_charmm_pbc
+non-cubic, and karml's periodic MD paths are cubic-only: prepare_charmm_pbc
 installs a cubic CHARMM IMAGE, and the md-system box resolution averages the
 three edge lengths into one. Handing this structure to `md-system --box-size`
 would therefore run a differently shaped box than the one you built, silently.
 
 So: use these files for visualisation, for other codes, and for the static
-lattice energy in step 04. Running crystal MD in mmml needs orthorhombic PBC
+lattice energy in step 04. Running crystal MD in karml needs orthorhombic PBC
 support first -- see the README for what that involves.
 EOF

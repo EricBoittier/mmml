@@ -4,7 +4,7 @@ set -euo pipefail
 
 WORKFLOW_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 REPO_ROOT="$(cd "$WORKFLOW_ROOT/../.." && pwd)"
-BUILD_ROOT="${CHARMM_BUILD_DIR:-$HOME/.cache/mmml-charmm-build}"
+BUILD_ROOT="${CHARMM_BUILD_DIR:-$HOME/.cache/karml-charmm-build}"
 
 # Representative n_ml (monomers×5) that selects each PBC tier via ensure_charmm_mlpot_limits.sh
 declare -A TIER_NML=(

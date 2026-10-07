@@ -12,7 +12,7 @@ import pytest
 
 
 def test_resolve_charmm_energy_term_policies_no_periodic_vdw_implies_vdw():
-    from mmml.interfaces.pycharmmInterface.mlpot.charmm_energy_policy import (
+    from karml.interfaces.pycharmmInterface.mlpot.charmm_energy_policy import (
         resolve_charmm_energy_term_policies,
     )
 
@@ -25,7 +25,7 @@ def test_resolve_charmm_energy_term_policies_no_periodic_vdw_implies_vdw():
 
 
 def test_resolve_charmm_energy_term_policies_custom_terms():
-    from mmml.interfaces.pycharmmInterface.mlpot.charmm_energy_policy import (
+    from karml.interfaces.pycharmmInterface.mlpot.charmm_energy_policy import (
         resolve_charmm_energy_term_policies,
     )
 
@@ -41,7 +41,7 @@ def test_resolve_charmm_energy_term_policies_custom_terms():
 
 
 def test_resolve_charmm_energy_term_policies_jax_mic_adds_vdw():
-    from mmml.interfaces.pycharmmInterface.mlpot.charmm_energy_policy import (
+    from karml.interfaces.pycharmmInterface.mlpot.charmm_energy_policy import (
         resolve_charmm_energy_term_policies,
     )
 
@@ -57,7 +57,7 @@ def test_resolve_charmm_energy_term_policies_jax_mic_adds_vdw():
 
 
 def test_his93_keeps_charmm_vdw_for_the_protein():
-    from mmml.interfaces.pycharmmInterface.mlpot.charmm_energy_policy import (
+    from karml.interfaces.pycharmmInterface.mlpot.charmm_energy_policy import (
         resolve_charmm_energy_term_policies,
     )
 
@@ -73,7 +73,7 @@ def test_his93_keeps_charmm_vdw_for_the_protein():
 
 
 def test_nonbond_only_prm_text_removes_vdw_sections():
-    from mmml.interfaces.pycharmmInterface.charmm_prm_zero import (
+    from karml.interfaces.pycharmmInterface.charmm_prm_zero import (
         nonbond_only_prm_text,
     )
 
@@ -93,7 +93,7 @@ def test_nonbond_only_prm_text_removes_vdw_sections():
 
 
 def test_write_prm_policy_overlay_nonbond(tmp_path: Path):
-    from mmml.interfaces.pycharmmInterface.charmm_prm_zero import (
+    from karml.interfaces.pycharmmInterface.charmm_prm_zero import (
         write_prm_policy_overlay,
     )
 
@@ -108,7 +108,7 @@ def test_write_prm_policy_overlay_nonbond(tmp_path: Path):
     dst = tmp_path / "overlay.prm"
     write_prm_policy_overlay(src, dst, zero_bonded=False, zero_nonbond=True)
     text = dst.read_text(encoding="utf-8")
-    assert "MMML energy-policy overlay" in text
+    assert "KARML energy-policy overlay" in text
     # Append overlay must emit ε=0 NONBONDED rows (not omit the section).
     assert "NONBONDED" in text
     assert "nbxmod" not in text.lower()
@@ -119,7 +119,7 @@ def test_write_prm_policy_overlay_nonbond(tmp_path: Path):
 
 
 def test_apply_before_pbc_writes_epsilon_zero_overlay(tmp_path: Path, monkeypatch):
-    from mmml.interfaces.pycharmmInterface.mlpot import charmm_energy_policy as cep
+    from karml.interfaces.pycharmmInterface.mlpot import charmm_energy_policy as cep
 
     args = argparse.Namespace(
         mm_nonbond_mode="jax_mic",
@@ -138,15 +138,15 @@ def test_apply_before_pbc_writes_epsilon_zero_overlay(tmp_path: Path, monkeypatc
     read_calls: list[Path] = []
 
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap.cgenff_prm_path",
+        "karml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap.cgenff_prm_path",
         lambda: src,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.nbonds_config.read_cgenff_prm",
+        "karml.interfaces.pycharmmInterface.nbonds_config.read_cgenff_prm",
         lambda path, append=False: read_calls.append(Path(path)),
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.import_pycharmm",
+        "karml.interfaces.pycharmmInterface.import_pycharmm",
         object(),
         raising=False,
     )
@@ -176,7 +176,7 @@ def test_apply_before_pbc_writes_epsilon_zero_overlay(tmp_path: Path, monkeypatc
     monkeypatch.setitem(sys.modules, "pycharmm", fake_pycharmm)
     monkeypatch.setitem(sys.modules, "pycharmm.lingo", fake_lingo)
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.charmm_levels.charmm_silent_command",
+        "karml.interfaces.pycharmmInterface.charmm_levels.charmm_silent_command",
         lambda: _Silent(),
     )
 
@@ -201,7 +201,7 @@ def test_apply_before_pbc_writes_epsilon_zero_overlay(tmp_path: Path, monkeypatc
 
 
 def test_policy_violation_detects_imnb():
-    from mmml.interfaces.pycharmmInterface.mlpot.charmm_energy_policy import (
+    from karml.interfaces.pycharmmInterface.mlpot.charmm_energy_policy import (
         POLICY_REGISTRY,
         _policy_violation,
     )
@@ -216,7 +216,7 @@ def test_policy_violation_detects_imnb():
 
 
 def test_policy_violation_detects_small_imnb():
-    from mmml.interfaces.pycharmmInterface.mlpot.charmm_energy_policy import (
+    from karml.interfaces.pycharmmInterface.mlpot.charmm_energy_policy import (
         POLICY_REGISTRY,
         _policy_violation,
     )
@@ -231,10 +231,10 @@ def test_policy_violation_detects_small_imnb():
 
 
 def test_nonbond_policy_overlay_emits_epsilon_zero_rows(tmp_path: Path):
-    from mmml.interfaces.pycharmmInterface.charmm_prm_zero import (
+    from karml.interfaces.pycharmmInterface.charmm_prm_zero import (
         write_prm_policy_overlay,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap import cgenff_prm_path
+    from karml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap import cgenff_prm_path
 
     dst = tmp_path / "overlay.prm"
     write_prm_policy_overlay(
@@ -246,13 +246,13 @@ def test_nonbond_policy_overlay_emits_epsilon_zero_rows(tmp_path: Path):
     text = dst.read_text(encoding="utf-8")
     assert "NONBONDED" in text
     assert "nbxmod" not in text.lower()
-    assert "MMML energy-policy overlay" in text
+    assert "KARML energy-policy overlay" in text
     assert "HBOND" not in "\n".join(
         line for line in text.splitlines() if not line.startswith("*")
     )
 
 def test_enforce_skips_when_terms_already_zero(monkeypatch):
-    from mmml.interfaces.pycharmmInterface.mlpot import charmm_energy_policy as cep
+    from karml.interfaces.pycharmmInterface.mlpot import charmm_energy_policy as cep
 
     sel = object()
     args = argparse.Namespace(
@@ -283,7 +283,7 @@ def test_enforce_skips_when_terms_already_zero(monkeypatch):
 
 
 def test_enforce_can_verify_without_late_reload(monkeypatch):
-    from mmml.interfaces.pycharmmInterface.mlpot import charmm_energy_policy as cep
+    from karml.interfaces.pycharmmInterface.mlpot import charmm_energy_policy as cep
 
     args = argparse.Namespace(
         periodic_charmm_vdw=False,
@@ -310,7 +310,7 @@ def test_enforce_can_verify_without_late_reload(monkeypatch):
 
 
 def test_enforce_tolerates_small_imnb_after_pre_remediation(monkeypatch):
-    from mmml.interfaces.pycharmmInterface.mlpot import charmm_energy_policy as cep
+    from karml.interfaces.pycharmmInterface.mlpot import charmm_energy_policy as cep
 
     args = argparse.Namespace(
         periodic_charmm_vdw=False,
@@ -337,7 +337,7 @@ def test_enforce_tolerates_small_imnb_after_pre_remediation(monkeypatch):
 
 
 def test_enforce_tolerates_image_imnb_after_pre_remediation(monkeypatch):
-    from mmml.interfaces.pycharmmInterface.mlpot import charmm_energy_policy as cep
+    from karml.interfaces.pycharmmInterface.mlpot import charmm_energy_policy as cep
 
     args = argparse.Namespace(
         periodic_charmm_vdw=False,
@@ -367,8 +367,8 @@ def test_all_ml_registration_combined_skipe_bonded_and_vdw_keeps_user(
     tmp_path: Path, monkeypatch
 ):
     """All-ML CHARMM registration: both policies SKIPE, USER stays on."""
-    from mmml.interfaces.pycharmmInterface.mlpot import block_terms
-    from mmml.interfaces.pycharmmInterface.mlpot import charmm_energy_policy as cep
+    from karml.interfaces.pycharmmInterface.mlpot import block_terms
+    from karml.interfaces.pycharmmInterface.mlpot import charmm_energy_policy as cep
 
     scripts: list[str] = []
     sel = mock.Mock()
@@ -386,9 +386,9 @@ def test_all_ml_registration_combined_skipe_bonded_and_vdw_keeps_user(
     monkeypatch.setitem(sys.modules, "pycharmm.lingo", fake_lingo)
 
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap.apply_zeroed_cgenff_params"
+        "karml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap.apply_zeroed_cgenff_params"
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap.assert_psf_bonds_present",
+        "karml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap.assert_psf_bonds_present",
         return_value=400,
     ), mock.patch.object(block_terms, "_import_pycharmm", return_value=fake_pycharmm):
         block_terms.zero_mlpot_psf_mm_terms(sel)
@@ -399,11 +399,11 @@ def test_all_ml_registration_combined_skipe_bonded_and_vdw_keeps_user(
         encoding="utf-8",
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap.cgenff_prm_path",
+        "karml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap.cgenff_prm_path",
         lambda: src,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.nbonds_config.read_cgenff_prm",
+        "karml.interfaces.pycharmmInterface.nbonds_config.read_cgenff_prm",
         lambda path, append=False: None,
     )
 
@@ -416,7 +416,7 @@ def test_all_ml_registration_combined_skipe_bonded_and_vdw_keeps_user(
 
     monkeypatch.setattr(cep, "charmm_silent_command", lambda: _Silent(), raising=False)
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.charmm_levels.charmm_silent_command",
+        "karml.interfaces.pycharmmInterface.charmm_levels.charmm_silent_command",
         lambda: _Silent(),
     )
     applied = cep.apply_charmm_energy_term_policies_before_pbc_finalize(
@@ -439,7 +439,7 @@ def test_all_ml_registration_combined_skipe_bonded_and_vdw_keeps_user(
 
 
 def test_unknown_zero_energy_term_is_rejected():
-    from mmml.interfaces.pycharmmInterface.mlpot.charmm_energy_policy import (
+    from karml.interfaces.pycharmmInterface.mlpot.charmm_energy_policy import (
         resolve_charmm_energy_term_policies,
     )
 
@@ -452,7 +452,7 @@ def test_unknown_zero_energy_term_is_rejected():
 
 
 def test_empty_term_list_and_periodic_vdw_keeps_no_policies():
-    from mmml.interfaces.pycharmmInterface.mlpot.charmm_energy_policy import (
+    from karml.interfaces.pycharmmInterface.mlpot.charmm_energy_policy import (
         resolve_charmm_energy_term_policies,
     )
 
@@ -466,7 +466,7 @@ def test_empty_term_list_and_periodic_vdw_keeps_no_policies():
 
 
 def test_summarize_policy_energy_terms_keeps_finite_keys_only():
-    from mmml.interfaces.pycharmmInterface.mlpot.charmm_energy_policy import (
+    from karml.interfaces.pycharmmInterface.mlpot.charmm_energy_policy import (
         POLICY_REGISTRY,
         summarize_policy_energy_terms,
     )
@@ -479,7 +479,7 @@ def test_summarize_policy_energy_terms_keeps_finite_keys_only():
 
 
 def test_enforce_skips_probe_when_mlpot_user_is_active(monkeypatch):
-    from mmml.interfaces.pycharmmInterface.mlpot import charmm_energy_policy as cep
+    from karml.interfaces.pycharmmInterface.mlpot import charmm_energy_policy as cep
 
     called = []
     monkeypatch.setattr(cep, "_run_silent_ener", lambda: called.append("ener"))
@@ -499,7 +499,7 @@ def test_enforce_skips_probe_when_mlpot_user_is_active(monkeypatch):
 
 
 def test_policy_scratch_dir_defaults_and_uses_output_dir(tmp_path: Path):
-    from mmml.interfaces.pycharmmInterface.mlpot.charmm_energy_policy import (
+    from karml.interfaces.pycharmmInterface.mlpot.charmm_energy_policy import (
         _policy_scratch_dir,
     )
 
@@ -509,7 +509,7 @@ def test_policy_scratch_dir_defaults_and_uses_output_dir(tmp_path: Path):
 
 
 def test_post_remediation_policy_loosens_only_vdw():
-    from mmml.interfaces.pycharmmInterface.mlpot.charmm_energy_policy import (
+    from karml.interfaces.pycharmmInterface.mlpot.charmm_energy_policy import (
         POLICY_REGISTRY,
         _post_remediation_policy,
     )
@@ -521,7 +521,7 @@ def test_post_remediation_policy_loosens_only_vdw():
 
 
 def test_heme_vdw_policy_skips_cgenff_nonbond_append(monkeypatch):
-    from mmml.interfaces.pycharmmInterface.mlpot import charmm_energy_policy as cep
+    from karml.interfaces.pycharmmInterface.mlpot import charmm_energy_policy as cep
 
     probes = [{"VDW": 4.30824, "IMNB": 0.0, "ELEC": 0.0}, {}]
 
@@ -559,7 +559,7 @@ def test_heme_vdw_policy_skips_cgenff_nonbond_append(monkeypatch):
 
 
 def test_enforce_hbond_has_no_prm_remediation(monkeypatch):
-    from mmml.interfaces.pycharmmInterface.mlpot import charmm_energy_policy as cep
+    from karml.interfaces.pycharmmInterface.mlpot import charmm_energy_policy as cep
 
     monkeypatch.setattr(
         cep,
@@ -586,7 +586,7 @@ def test_enforce_hbond_has_no_prm_remediation(monkeypatch):
 @pytest.fixture
 def skipe_registry(monkeypatch):
     """Fresh SKIPE registry (it mirrors process-global CHARMM state)."""
-    from mmml.interfaces.pycharmmInterface.mlpot import charmm_energy_policy as cep
+    from karml.interfaces.pycharmmInterface.mlpot import charmm_energy_policy as cep
 
     monkeypatch.setattr(cep, "_SKIPPED_CHARMM_TERMS", set())
     monkeypatch.delenv(cep.KEEP_CHARMM_ELEC_ENV, raising=False)
@@ -616,7 +616,7 @@ def _fake_pycharmm_with_charges(monkeypatch, charges):
     ],
 )
 def test_charmm_elec_redundant_policy(mode, charges, expected):
-    from mmml.interfaces.pycharmmInterface.mlpot.charmm_energy_policy import (
+    from karml.interfaces.pycharmmInterface.mlpot.charmm_energy_policy import (
         charmm_elec_redundant,
         resolve_charmm_energy_term_policies,
     )
@@ -629,7 +629,7 @@ def test_charmm_elec_redundant_policy(mode, charges, expected):
 
 
 def test_charmm_elec_redundant_needs_charges():
-    from mmml.interfaces.pycharmmInterface.mlpot.charmm_energy_policy import (
+    from karml.interfaces.pycharmmInterface.mlpot.charmm_energy_policy import (
         POLICY_REGISTRY,
         charmm_elec_redundant,
     )
@@ -672,11 +672,11 @@ def test_apply_before_pbc_skips_elec_after_vdw_for_zero_charges(
     src = tmp_path / "par.prm"
     src.write_text("NONBONDED nbxmod 5\nCL     0.0       -0.1200     2.4700\nEND\n")
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap.cgenff_prm_path",
+        "karml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap.cgenff_prm_path",
         lambda: src,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.nbonds_config.read_cgenff_prm",
+        "karml.interfaces.pycharmmInterface.nbonds_config.read_cgenff_prm",
         lambda path, append=False: None,
     )
 
@@ -688,7 +688,7 @@ def test_apply_before_pbc_skips_elec_after_vdw_for_zero_charges(
             return False
 
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.charmm_levels.charmm_silent_command",
+        "karml.interfaces.pycharmmInterface.charmm_levels.charmm_silent_command",
         lambda: _Silent(),
     )
     applied = cep.apply_charmm_energy_term_policies_before_pbc_finalize(
@@ -710,12 +710,12 @@ def test_apply_before_pbc_skips_elec_after_vdw_for_zero_charges(
 
 def test_route_keeps_skipped_term_buckets_in_user(skipe_registry, monkeypatch):
     """CHARMM adds a routed bucket only to active terms: skipped ones stay in USER."""
-    from mmml.interfaces.pycharmmInterface.mlpot import charmm_eterm_routing as r
+    from karml.interfaces.pycharmmInterface.mlpot import charmm_eterm_routing as r
 
     cep = skipe_registry
     pushed: list[dict] = []
     monkeypatch.setattr(r, "push_mlpot_nb_components_to_charmm", lambda **kw: pushed.append(kw))
-    monkeypatch.delenv("MMML_MLPOT_ROUTE_MM_ETERMS", raising=False)
+    monkeypatch.delenv("KARML_MLPOT_ROUTE_MM_ETERMS", raising=False)
     comps = {
         "vdw_primary": -3.0,
         "vdw_image": -1.0,

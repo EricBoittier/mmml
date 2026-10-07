@@ -79,7 +79,7 @@ def static_pair_count(system) -> int:
 def make_static_pair_fn(system, verbose: bool = True, with_lambda: bool = False):
     """Return a ``neighbor_fn`` that hands back the same device arrays every call.
 
-    Marked ``device_native`` so :class:`~mmml.md.drivers.JaxmdDriver` skips the
+    Marked ``device_native`` so :class:`~karml.md.drivers.JaxmdDriver` skips the
     host round-trip entirely.
 
     ``with_lambda`` additionally threads an umbrella window centre through as a

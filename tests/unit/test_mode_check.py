@@ -1,4 +1,4 @@
-"""Unit tests for mmml.mode_check (no CHARMM / hybrid runtime)."""
+"""Unit tests for karml.mode_check (no CHARMM / hybrid runtime)."""
 
 from __future__ import annotations
 
@@ -9,10 +9,10 @@ import pytest
 from ase import Atoms
 from ase.calculators.emt import EMT
 
-from mmml.cli.__main__ import main as mmml_main
-from mmml.cli.misc.mode_check import build_parser
-from mmml.cli.registry import command_by_name
-from mmml.mode_check import (
+from karml.cli.__main__ import main as karml_main
+from karml.cli.misc.mode_check import build_parser
+from karml.cli.registry import command_by_name
+from karml.mode_check import (
     ModeCheckConfig,
     ModeCheckResult,
     force_fd_check,
@@ -20,23 +20,23 @@ from mmml.mode_check import (
     run_mode_check,
     spring_constant_to_wavenumber_cm,
 )
-from mmml.mode_check.bonds import infer_xh_bond_pairs, tip3_oh_pairs
-from mmml.mode_check.forces import (
+from karml.mode_check.bonds import infer_xh_bond_pairs, tip3_oh_pairs
+from karml.mode_check.forces import (
     fit_k_from_force,
     fit_quadratic_k_from_energy,
 )
-from mmml.mode_check.geometry import build_vacuum_cluster_from_molecules
+from karml.mode_check.geometry import build_vacuum_cluster_from_molecules
 
 
 def test_mode_check_cli_is_registered_and_help_is_reachable(monkeypatch, capsys):
     spec = command_by_name("mode-check")
     assert spec is not None
-    assert spec.module == "mmml.cli.misc.mode_check"
-    assert build_parser().prog == "mmml mode-check"
+    assert spec.module == "karml.cli.misc.mode_check"
+    assert build_parser().prog == "karml mode-check"
 
-    monkeypatch.setattr("sys.argv", ["mmml", "mode-check", "--help"])
+    monkeypatch.setattr("sys.argv", ["karml", "mode-check", "--help"])
     with pytest.raises(SystemExit) as exc:
-        mmml_main()
+        karml_main()
     assert exc.value.code == 0
     out = capsys.readouterr().out
     assert "mode-check" in out
@@ -131,7 +131,7 @@ def test_force_fd_check_with_emt():
 
 
 def test_hybrid_setup_disables_mm_for_monomer():
-    from mmml.mode_check import HybridModeCheckSetup
+    from karml.mode_check import HybridModeCheckSetup
 
     setup = HybridModeCheckSetup(
         composition=(("TIP3", 1),),
@@ -144,7 +144,7 @@ def test_hybrid_setup_disables_mm_for_monomer():
 
 
 def test_mode_check_cli_accepts_ewald_omit_self():
-    from mmml.cli.misc.mode_check import build_parser
+    from karml.cli.misc.mode_check import build_parser
 
     args = build_parser().parse_args(
         [
@@ -164,8 +164,8 @@ def test_mode_check_cli_accepts_ewald_omit_self():
 
 
 def test_vacuum_hybrid_rejects_ewald_without_box():
-    from mmml.mode_check import HybridModeCheckSetup
-    from mmml.mode_check.hybrid import build_psf_and_attach_hybrid
+    from karml.mode_check import HybridModeCheckSetup
+    from karml.mode_check.hybrid import build_psf_and_attach_hybrid
 
     setup = HybridModeCheckSetup(
         composition=(("TIP3", 1),),
@@ -178,7 +178,7 @@ def test_vacuum_hybrid_rejects_ewald_without_box():
 
 def test_pbc_fd_com_separation_uses_monomer_offsets():
     """Regression: pbc_fd must pass offsets, not (n_mol, atoms_per)."""
-    from mmml.cli.run.md_pbc_suite.ase import _enforce_min_com_separation
+    from karml.cli.run.md_pbc_suite.ase import _enforce_min_com_separation
 
     n_mol, atoms_per = 3, 3
     # Two monomers nearly overlapping on x; third far away.
@@ -198,7 +198,7 @@ def test_pbc_fd_com_separation_uses_monomer_offsets():
 
 
 def test_place_monomers_along_x_and_reject_collapsed_geometry():
-    from mmml.mode_check.hybrid import (
+    from karml.mode_check.hybrid import (
         assert_resolved_vacuum_geometry,
         com_separations_along_chain,
         place_monomers_along_x,
@@ -224,8 +224,8 @@ def test_place_monomers_along_x_and_reject_collapsed_geometry():
 
 
 def test_mode_check_far_vs_separation_cli():
-    from mmml.cli.misc.mode_check import build_parser, _resolve_monomer_separation_A
-    from mmml.mode_check.config import (
+    from karml.cli.misc.mode_check import build_parser, _resolve_monomer_separation_A
+    from karml.mode_check.config import (
         DEFAULT_MONOMER_SEPARATION_A,
         FAR_MONOMER_SEPARATION_A,
     )
@@ -257,7 +257,7 @@ def test_mode_check_far_vs_separation_cli():
 def test_fix_monomer_coms_preserves_com_under_forces():
     from ase import Atoms
 
-    from mmml.mode_check.constraints import FixMonomerCOMs
+    from karml.mode_check.constraints import FixMonomerCOMs
 
     atoms = Atoms(
         numbers=[8, 1, 1, 8, 1, 1],
@@ -295,7 +295,7 @@ def test_minimize_with_frozen_coms_keeps_separation():
     from ase import Atoms
     from ase.calculators.calculator import Calculator
 
-    from mmml.mode_check import ModeCheckConfig, run_mode_check
+    from karml.mode_check import ModeCheckConfig, run_mode_check
 
     class SoftSpring(Calculator):
         implemented_properties = ["energy", "forces"]
@@ -339,7 +339,7 @@ def test_minimize_with_frozen_coms_keeps_separation():
 
 
 def test_cutoff_region_stations_cover_handoff_ruler():
-    from mmml.mode_check.cutoff_ladder import cutoff_region_stations, region_boundaries
+    from karml.mode_check.cutoff_ladder import cutoff_region_stations, region_boundaries
 
     stations = cutoff_region_stations(
         ml_switch_width=1.5, mm_switch_on=6.0, mm_switch_width=5.0
@@ -374,7 +374,7 @@ def test_cutoff_region_stations_cover_handoff_ruler():
 def test_reposition_monomers_preserves_internal_geometry():
     from ase import Atoms
 
-    from mmml.mode_check.hybrid import (
+    from karml.mode_check.hybrid import (
         com_separations_along_chain,
         reposition_monomers_along_x,
     )
@@ -401,7 +401,7 @@ def test_reposition_monomers_preserves_internal_geometry():
 
 
 def test_intermolecular_clash_rejected_at_close_com():
-    from mmml.mode_check.hybrid import (
+    from karml.mode_check.hybrid import (
         assert_resolved_vacuum_geometry,
         min_intermolecular_distance_A,
         place_monomers_along_x,

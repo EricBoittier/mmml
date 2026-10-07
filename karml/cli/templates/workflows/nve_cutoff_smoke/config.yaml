@@ -1,6 +1,6 @@
-# NVE cutoff sweep smoke — mmml configure template.
+# NVE cutoff sweep smoke — karml configure template.
 composition: "DCM:5"
-checkpoint: "${MMML_CKPT}"
+checkpoint: "${KARML_CKPT}"
 output_root: artifacts/nve_cutoff_smoke
 legs:
   - name: mid

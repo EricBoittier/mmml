@@ -7,7 +7,7 @@ and grows linearly with atom count. This module reads the same C buffers straigh
 into numpy, which is bitwise identical and ~50-150x cheaper.
 
 Imports of ``pycharmm`` are deferred into the functions: importing this module must
-not load libcharmm (see the note in ``mmml_calculator``).
+not load libcharmm (see the note in ``karml_calculator``).
 """
 
 from __future__ import annotations

@@ -10,15 +10,15 @@
 front-end entrypoint swaps are landed (opt-in for `md-system`); apocharmm and
 RDF validation remain (see §0 and §11).
 **Scope:** How to split the calculators and system builders shared by
-[`mmml/cli/run/md_system.py`](https://github.com/EricBoittier/mmml/blob/main/mmml/cli/run/md_system.py) and
-[`examples/cg_jaxmd.py`](https://github.com/EricBoittier/mmml/blob/main/examples/cg_jaxmd.py) so the two can run on one
+[`karml/cli/run/md_system.py`](https://github.com/EricBoittier/karml/blob/main/karml/cli/run/md_system.py) and
+[`examples/cg_jaxmd.py`](https://github.com/EricBoittier/karml/blob/main/examples/cg_jaxmd.py) so the two can run on one
 architecture.
 
 ---
 
 ## 0. Implementation status
 
-The design below is largely realized in the `mmml/md/` package. What exists,
+The design below is largely realized in the `karml/md/` package. What exists,
 end-to-end from a config:
 
 ```
@@ -27,16 +27,16 @@ config ──lowering──▶ RunConfig ──assemble──▶ builder → Hyb
 
 | Layer | Module | State |
 |---|---|---|
-| Topology / FF state | `mmml/md/system.py` (`MolecularSystem`, `FFParams`) | ✅ tested |
-| Config | `mmml/md/config.py` (`RunConfig`, `EnsembleSpec`) | ✅ |
-| Energy terms (all 6) | `mmml/md/energy/terms/` | ✅ parity-tested |
-| Capacity / dtype policy | `mmml/md/energy/capacity.py` | ✅ tested |
-| Builders + FF bridge | `mmml/md/builders/` | ✅ CHARMM-integration tested |
-| Driver incl. **NPT** | `mmml/md/drivers/jaxmd.py` | ✅ tested |
-| Assembly glue | `mmml/md/assemble.py` | ✅ tested |
-| Lowering adapters | `mmml/md/lowering.py` | ✅ tested |
-| Neighbor-list factory | `mmml/md/neighbors.py` | ✅ tested |
-| Rigid-body `Sampler` (MC) | `mmml/md/samplers/rigid.py` | ✅ tested |
+| Topology / FF state | `karml/md/system.py` (`MolecularSystem`, `FFParams`) | ✅ tested |
+| Config | `karml/md/config.py` (`RunConfig`, `EnsembleSpec`) | ✅ |
+| Energy terms (all 6) | `karml/md/energy/terms/` | ✅ parity-tested |
+| Capacity / dtype policy | `karml/md/energy/capacity.py` | ✅ tested |
+| Builders + FF bridge | `karml/md/builders/` | ✅ CHARMM-integration tested |
+| Driver incl. **NPT** | `karml/md/drivers/jaxmd.py` | ✅ tested |
+| Assembly glue | `karml/md/assemble.py` | ✅ tested |
+| Lowering adapters | `karml/md/lowering.py` | ✅ tested |
+| Neighbor-list factory | `karml/md/neighbors.py` | ✅ tested |
+| Rigid-body `Sampler` (MC) | `karml/md/samplers/rigid.py` | ✅ tested |
 
 **Energy terms:** `ml_intra`, `ml_pep_water`, `mm_nonbonded`, `vdw_core`, `smd`,
 `dihedral` — each registered, box-aware where relevant, and validated against
@@ -48,7 +48,7 @@ auto-builds the padded neighbor list (`make_intermolecular_neighbor_fn`), and
 the `JaxmdDriver` propagates it (NVE smoke test on a multi-molecule box).
 
 **Cross-cutting:** the cross-platform `libcharmm` loader (`pycharmm/lib.py`)
-now self-discovers `setup/charmm` on both `.dylib`/`.so`; `import mmml.md`
+now self-discovers `setup/charmm` on both `.dylib`/`.so`; `import karml.md`
 stays free of jax/CHARMM (heavy deps are lazy inside `make()` / `run()`); the
 whole `tests/unit/test_md_*.py` glob (incl. pre-existing legacy `md-system`
 tests) is green (333 passed, 1 skipped).
@@ -91,7 +91,7 @@ that `build_packmol_composition_cluster` (the packmol composition builder used
 by `md-system`) neither writes a PSF file nor bootstraps CHARMM itself — both
 assumptions the legacy `md_pbc_suite/jaxmd.py` path could rely on implicitly
 because its caller already did so, but which a fresh, explicit front-end
-cannot. `mmml/cli/run/md_system_unified.py` makes both explicit: it writes the
+cannot. `karml/cli/run/md_system_unified.py` makes both explicit: it writes the
 live CHARMM PSF to a scratch file to resolve `FFParams`, and calls
 `ensure_pycharmm_loaded()` before building.
 
@@ -137,15 +137,15 @@ Today there are two parallel MD stacks that solve ~80% of the same problem but
 share almost nothing above the leaf-helper level.
 
 ### `md-system` — the orchestrator
-- File: `mmml/cli/run/md_system.py` (~3.3k lines).
+- File: `karml/cli/run/md_system.py` (~3.3k lines).
 - Pure dispatcher: `parse_args → build_command() → run_backend()` hands off
   in-process to one of three backend modules:
-  - `mmml/cli/run/md_pbc_suite/ase.py` (ASE dynamics)
-  - `mmml/cli/run/md_pbc_suite/jaxmd.py` (jax-md)
-  - `mmml/cli/run/md_pbc_suite/pycharmm_mlpot.py` (CHARMM dynamics)
+  - `karml/cli/run/md_pbc_suite/ase.py` (ASE dynamics)
+  - `karml/cli/run/md_pbc_suite/jaxmd.py` (jax-md)
+  - `karml/cli/run/md_pbc_suite/pycharmm_mlpot.py` (CHARMM dynamics)
 - Speaks in **ASE `Calculator` objects**
   (`MonomerSumCalculator` + `JAXIntermolecularCalculator`, see
-  `mmml/interfaces/calculators/hybrid.py`).
+  `karml/interfaces/calculators/hybrid.py`).
 - Generic liquid/crystal builder (packmol, pyxtal, composition, box sizing)
   plus a campaign / handoff / manifest layer.
 - Setups: `{free,pbc}_{nve,nvt,thermalize}`, `pbc_npt`, `pycharmm_*`, `lambda_ti`.
@@ -260,7 +260,7 @@ therefore a **staging order**, not an either/or:
    `CharmmContext` + `Cuda*Integrator` from an `ApoCharmmDriver`, evaluate jax
    ML forces on the host and add them per step. Used to pin down correctness
    (energy/force parity) before touching CUDA. *Not* the shipping path.
-2. **C++/CUDA, device-side ML — the target.** MMML's jax ML forces enter the
+2. **C++/CUDA, device-side ML — the target.** KARML's jax ML forces enter the
    device force loop as a custom `ForceManager` so forces never leave the GPU.
    The buffer boundary crosses via **DLPack capsules** (decided, §10) — not raw
    device pointers — to get shape/dtype/device metadata and proper ownership
@@ -397,7 +397,7 @@ class Driver(Protocol):
 Mostly *moves*, not new code.
 
 ```
-mmml/md/
+karml/md/
   system.py          # MolecularSystem, SystemSpec, FFParams
   builders/          # SystemBuilder impls (wrap existing pycharmmInterface builders)
   energy/
@@ -411,7 +411,7 @@ mmml/md/
     charmm.py        # ← md_pbc_suite/pycharmm_mlpot.py
   config.py          # RunConfig (target of both argparse and Snakemake JSON)
 
-mmml/cli/run/md_system.py   # thin: argv -> RunConfig -> Driver
+karml/cli/run/md_system.py   # thin: argv -> RunConfig -> Driver
 examples/cg_jaxmd.py        # thin: JSON -> RunConfig -> PeptideWaterBuilder + terms + JaxmdDriver
 ```
 
@@ -436,7 +436,7 @@ The sweep's two energy-mode toggles (`use_ml_intramolecular`,
 ## 9. Highest-leverage moves (recommended order)
 
 1. **Extract `cg_jaxmd`'s energy terms** (SMD, φ/ψ, vdW-core, peptide–water)
-   into `mmml/md/energy/terms/` behind the `EnergyTerm` interface. This is what
+   into `karml/md/energy/terms/` behind the `EnergyTerm` interface. This is what
    un-forks the science and makes the terms reusable from `md-system`.
 2. **Merge the two jax-md loops** — `jaxmd_runner.set_up_nhc_sim_routine` and
    `cg_jaxmd`'s inline NHC / NVE / FIRE — into one `JaxmdDriver`. They are
@@ -527,7 +527,7 @@ PyCHARMM is not an ordinary optional Python import in this stack. The vendored
 package loads a native `libcharmm` that may itself be linked to OpenMPI and
 Fortran. A native `STOP`, `MPI_Abort`, loader mismatch, or segmentation fault
 terminates the interpreter; pytest cannot convert it into a Python traceback.
-Consequently, **successful import of the MMML bootstrap module is not proof that
+Consequently, **successful import of the KARML bootstrap module is not proof that
 live CHARMM is available**. The authoritative runtime signal is
 `import_pycharmm.PYCHARMM_AVAILABLE`.
 
@@ -535,9 +535,9 @@ There are three supported execution modes:
 
 | Mode | Intended work | Contract |
 |---|---|---|
-| Offline/unit | restart parsing and text patching, builders mocked at the CHARMM boundary | pytest sets `MMML_WARMUP_MLPOT_JAX_ONLY=1`; do not enter native PyCHARMM |
-| Live, one rank | PSF/parameter reads, restart writes, CHARMM parity tests | launch with `MMML_MPI_NP=1 ./scripts/mmml-charmm-mpirun.sh ...` when `libcharmm` is MPI-linked |
-| Live, multiple ranks | DOMDEC / spatial ML MPI | launch with the same wrapper and an explicit `MMML_MPI_NP`; validate Tier 2 first |
+| Offline/unit | restart parsing and text patching, builders mocked at the CHARMM boundary | pytest sets `KARML_WARMUP_MLPOT_JAX_ONLY=1`; do not enter native PyCHARMM |
+| Live, one rank | PSF/parameter reads, restart writes, CHARMM parity tests | launch with `KARML_MPI_NP=1 ./scripts/karml-charmm-mpirun.sh ...` when `libcharmm` is MPI-linked |
+| Live, multiple ranks | DOMDEC / spatial ML MPI | launch with the same wrapper and an explicit `KARML_MPI_NP`; validate Tier 2 first |
 
 The launcher is part of the runtime ABI, not merely a convenience wrapper: it
 selects the OpenMPI installation compatible with `libcharmm`, establishes the
@@ -549,16 +549,16 @@ Preflight and test recipes:
 
 ```bash
 # Loader/OpenMPI/mpi4py survey before launching a job
-mmml mpi-check --strict
+karml mpi-check --strict
 
 # Live one-rank PyCHARMM smoke in the real runtime
-MMML_MPI_NP=1 ./scripts/mmml-charmm-mpirun.sh \
+KARML_MPI_NP=1 ./scripts/karml-charmm-mpirun.sh \
   python -m pytest tests/charmm_mpi/test_mpi_live_energy.py -q
 
 # Spatial MPI validation before a multi-rank MD run
-mmml mpi-check --tier2 --prelaunch --strict
-MMML_MPI_NP=2 MMML_MLPOT_SPATIAL_MPI=1 \
-  ./scripts/mmml-charmm-mpirun.sh mpi-check --tier2 --strict
+karml mpi-check --tier2 --prelaunch --strict
+KARML_MPI_NP=2 KARML_MLPOT_SPATIAL_MPI=1 \
+  ./scripts/karml-charmm-mpirun.sh mpi-check --tier2 --strict
 ```
 
 For normal runs, the implemented `mpi-launch` front end keeps environment,
@@ -566,10 +566,10 @@ rank topology, and JAX policy separate. `uv run` resolves Python once and the
 selected `sys.executable` is forwarded through the existing ABI-aware wrapper:
 
 ```bash
-uv run mmml mpi-launch --preset single -- md-system --config run.yaml
-uv run mmml mpi-launch --preset cpu --jax-cpu-threads 16 -- \
+uv run karml mpi-launch --preset single -- md-system --config run.yaml
+uv run karml mpi-launch --preset cpu --jax-cpu-threads 16 -- \
   md-system --config run.yaml
-uv run mmml mpi-launch --preset spatial --mpi-ranks 4 -- \
+uv run karml mpi-launch --preset spatial --mpi-ranks 4 -- \
   md-system --config run.yaml --ml-spatial-mpi
 ```
 
@@ -578,9 +578,9 @@ The presets are aliases over independent `--mpi-ranks`, `--jax-mode`,
 multi-rank CHARMM with rank-0 JAX and generic GPU-per-rank JAX without claiming
 that either is spatial decomposition. See [`mpi-launch`](cli/commands/mpi-launch.md).
 
-`MMML_NO_CHARMM_MPI=1` is only valid for a genuinely serial `libcharmm`; it must
+`KARML_NO_CHARMM_MPI=1` is only valid for a genuinely serial `libcharmm`; it must
 not be used to disguise an MPI-linked build. Likewise,
-`MMML_WARMUP_MLPOT_JAX_ONLY=1` means "bootstrap/import seams only" and must
+`KARML_WARMUP_MLPOT_JAX_ONLY=1` means "bootstrap/import seams only" and must
 never be interpreted as permission to call CHARMM state, coordinate, energy,
 or restart APIs.
 
@@ -606,7 +606,7 @@ land seams non-breaking, extract terms with parity checks, then add backends.
 ### Core unification (from §9)
 
 - [x] Land protocols/dataclasses (`system.py`, `energy/registry.py`,
-      `config.py`) with no behavior change. *(Done: `mmml/md/` package —
+      `config.py`) with no behavior change. *(Done: `karml/md/` package —
       `system.py` (`FFParams`/`MolecularSystem`/`SystemSpec`), `config.py`
       (`RunConfig`/`EnsembleSpec`), `results.py` (`Trajectory`),
       `energy/registry.py` (`EnergyTerm`/`TermFns`/`NeighborRequest`/
@@ -656,7 +656,7 @@ land seams non-breaking, extract terms with parity checks, then add backends.
         (`examples/sppoky-epoch-0010_params.json`):
         `tests/unit/test_md_ml_terms.py`.
 - [x] Build `JaxmdDriver` from `jaxmd_runner.set_up_nhc_sim_routine`. Shared
-      driver in `mmml/md/drivers/jaxmd.py`: lazy optional imports, free/PBC NVE,
+      driver in `karml/md/drivers/jaxmd.py`: lazy optional imports, free/PBC NVE,
       NVT-NHC, FIRE, **NPT (Nosé–Hoover barostat)**, block-boundary per-term
       neighbor refresh, overlap-repair hook, partial-final-block recording, and
       optional NPZ output. NPT keeps the real-space terms via a fractional↔real
@@ -664,18 +664,18 @@ land seams non-breaking, extract terms with parity checks, then add backends.
       `box` kwarg; box threaded each step). Tests (FIRE/NVE/NVT, fixed-box PBC,
       **box-evolving NPT**): `tests/unit/test_md_jaxmd_driver.py`.
 - [~] Wire the front-ends onto the shared stack. *(Assembly glue landed:
-      `mmml/md/assemble.py` — builder registry (`get_builder` /
+      `karml/md/assemble.py` — builder registry (`get_builder` /
       `available_builders` / `build_system`), `build_hybrid_energy` (term
       registry + per-term kwargs), and `assemble_and_run` (RunConfig → builder →
       HybridEnergy → JaxmdDriver). End-to-end tested from a `RunConfig`:
       `tests/unit/test_md_assemble.py`.)*
-  - [x] Lowering adapters (`mmml/md/lowering.py`): `runconfig_from_md_system_args`
+  - [x] Lowering adapters (`karml/md/lowering.py`): `runconfig_from_md_system_args`
         (argparse `Namespace` → `RunConfig`) and `runconfig_from_cg_config`
         (cg_jaxmd JSON + phase → `RunConfig`), with `terms_from_cg_config`
         implementing the sweep-toggle → term-selection mapping (doc §8). Pure /
         numpy-only; tested in `tests/unit/test_md_lowering.py`.
-  - [x] `mmml/cli/run/md_system_unified.py` — an **opt-in** `--jaxmd-unified`
-        flag on `mmml md-system --backend jaxmd` that routes through
+  - [x] `karml/cli/run/md_system_unified.py` — an **opt-in** `--jaxmd-unified`
+        flag on `karml md-system --backend jaxmd` that routes through
         `runconfig_from_md_system_args` → `assemble_and_run` instead of the
         legacy `md_pbc_suite/jaxmd.py` inline loop. Opt-in (not the default)
         so the existing path is untouched until this covers more of
@@ -689,7 +689,7 @@ land seams non-breaking, extract terms with parity checks, then add backends.
         calls `ensure_pycharmm_loaded()` before building — unlike
         `PeptideWaterSystemBuilder`'s underlying builder, the packmol
         composition builder does not self-bootstrap CHARMM. Validated
-        end-to-end via the real CLI (`mmml md-system --backend jaxmd
+        end-to-end via the real CLI (`karml md-system --backend jaxmd
         --jaxmd-unified ...`) for both `pbc_nve` and `pbc_nvt` with a real
         checkpoint; existing (non-flagged) `--backend jaxmd` behavior is
         unaffected (66 pre-existing `md_system` CLI tests still pass). Tests
@@ -725,7 +725,7 @@ land seams non-breaking, extract terms with parity checks, then add backends.
       `config.sampler == "rigid"` to the sampler.
 - [x] Rigid-body state: per-monomer COM + unit-quaternion orientation, groups
       from `MolecularSystem.monomer_indices` (`quat_from_axis_angle` /
-      `quat_to_matrix` in `mmml/md/samplers/rigid.py`).
+      `quat_to_matrix` in `karml/md/samplers/rigid.py`).
 - [x] Rigid-move propagator: Metropolis MC translation + quaternion rotation,
       reusing the jitted `HybridEnergy`. Rigid moves preserve every
       intramolecular distance (tested to 1e-8): `tests/unit/test_md_samplers.py`.
@@ -773,7 +773,7 @@ land seams non-breaking, extract terms with parity checks, then add backends.
      (`JaxRuntimeError: ... Failed to materialize symbols`). Mitigated with
      `retries: 2` in `profiles/slurm(-cpu)` (clears on a fresh node
      allocation) rather than chasing the underlying XLA race.
-  3. This cluster's mmml `.venv` has no CUDA jaxlib, so `gpu`-partition jobs
+  3. This cluster's karml `.venv` has no CUDA jaxlib, so `gpu`-partition jobs
      were already silently falling back to CPU. Added
      `config.cpu.yaml` + `profiles/slurm-cpu/` (Snakemake deep-merges
      `--configfile config.yaml config.cpu.yaml`) to submit to the CPU
@@ -808,7 +808,7 @@ sweep that exercises the checked items below on a real trialanine+TIP3-water
 system with a real ML checkpoint.
 
 **Builder / topology**
-- [x] `PeptideWaterSystemBuilder` (`mmml/md/builders/placement.py`) — one ML
+- [x] `PeptideWaterSystemBuilder` (`karml/md/builders/placement.py`) — one ML
       "core" molecule (e.g. trialanine) + N TIP3 waters, all built through
       live CHARMM (PSF + params), lowered into one `MolecularSystem` with
       `monomer_indices[0]` = core atoms and `water_indices` = per-water atom
@@ -885,7 +885,7 @@ system with a real ML checkpoint.
       the term's source** (not just inferred from timing):
       `ml_pep_water`'s `interaction_cutoff_A` does **not** reduce its
       per-step cost — checked directly in
-      `mmml/interfaces/jaxmdInterface/hybrid_energy.py::make_peptide_water_ml_energy_fn`,
+      `karml/interfaces/jaxmdInterface/hybrid_energy.py::make_peptide_water_ml_energy_fn`,
       every core-water dimer is vmapped through the ML model *every step*
       regardless of the cutoff; the cutoff only applies a post-hoc energy
       switching weight (correct physics, zero runtime effect). Unlike
@@ -936,7 +936,7 @@ system with a real ML checkpoint.
       (flagged as open in "Rigid sampling" above for the pure-MM case; doubly
       untested for the mixed ML/MM boundary).
 
-- [ ] Build apocharmm and confirm the pybind11 module imports in the MMML env
+- [ ] Build apocharmm and confirm the pybind11 module imports in the KARML env
       (CUDA 11.1.1+, GCC 10.1+, NetCDF4).
 - [ ] `MolecularSystem` → `CharmmContext` lowering (`CharmmPSF`,
       `CharmmParameters`, `CharmmCrd`).
@@ -946,10 +946,10 @@ system with a real ML checkpoint.
       / velocity-Verlet.
 - [ ] Wire `Subscriber` I/O (`DcdSubscriber` / `NetCDFSubscriber` /
       `RestartSubscriber`) into the shared `Trajectory` output.
-- [ ] **Host-side ML** (validation stepping stone, not shipping): evaluate MMML
+- [ ] **Host-side ML** (validation stepping stone, not shipping): evaluate KARML
       jax forces between steps and add them via a pybind11 force hook; use only
       to pin energy/force parity before touching CUDA.
-- [ ] **Device-side ML — the target (committed, §10):** expose MMML ML forces
+- [ ] **Device-side ML — the target (committed, §10):** expose KARML ML forces
       as a custom apocharmm `ForceManager` so forces never leave the GPU.
   - [ ] pybind11 shim wrapping apocharmm `CudaContainer`/`DeviceVector` buffers
         as DLPack `DLManagedTensor` (both directions); confirm zero-copy

@@ -29,11 +29,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from mmml.interfaces.pycharmmInterface.crystal_cell import (
+from karml.interfaces.pycharmmInterface.crystal_cell import (
     CHARMM_ANGLE_RSMALL_DEG,
     charmm_symmetric_cell,
 )
-from mmml.utils.plotting.styles import apply_plot_style, comparison_colors
+from karml.utils.plotting.styles import apply_plot_style, comparison_colors
 
 REPO = Path(__file__).resolve().parents[1]
 RUN = REPO / "artifacts/npt_argon_water/runs/ar1_90k_n500_jaxmd_200ps"
@@ -67,17 +67,17 @@ STRAIN_EPS = 3.0e-5
 
 def _env() -> None:
     os.environ.setdefault(
-        "MMML_CGENFF_EXTRA_RTF",
-        str(REPO / "mmml/data/charmm/top_noble_gases_literature.rtf"),
+        "KARML_CGENFF_EXTRA_RTF",
+        str(REPO / "karml/data/charmm/top_noble_gases_literature.rtf"),
     )
     os.environ.setdefault(
-        "MMML_CGENFF_EXTRA_PRM",
-        str(REPO / "mmml/data/charmm/par_noble_gases_literature.prm"),
+        "KARML_CGENFF_EXTRA_PRM",
+        str(REPO / "karml/data/charmm/par_noble_gases_literature.prm"),
     )
     os.environ.setdefault("CHARMM_HOME", str(REPO / "setup/charmm"))
     os.environ.setdefault("CHARMM_LIB_DIR", str(REPO / "setup/charmm/lib"))
-    os.environ.setdefault("MMML_NO_CHARMM_MPI", "1")
-    os.environ.setdefault("MMML_NO_MPI_RERUN", "1")
+    os.environ.setdefault("KARML_NO_CHARMM_MPI", "1")
+    os.environ.setdefault("KARML_NO_MPI_RERUN", "1")
     os.environ.setdefault("JAX_PLATFORMS", "cpu")
     # Shear finite differences are ~0.001 kcal/mol. Float32 truncates them.
     os.environ.setdefault("JAX_ENABLE_X64", "1")
@@ -98,7 +98,7 @@ def _box_to_abc_angles(box: np.ndarray) -> tuple[float, float, float, float, flo
 
 
 def _mm_energy_eV(pos: np.ndarray, box: np.ndarray, nbdata, settings) -> float:
-    from mmml.interfaces.pycharmmInterface.mm_system_energy import (
+    from karml.interfaces.pycharmmInterface.mm_system_energy import (
         nonbonded_energy_and_forces,
     )
 
@@ -145,18 +145,18 @@ def strain_tensor_bar(
 
 def _setup():
     _env()
-    from mmml.interfaces.pycharmmInterface.nbonds_config import read_cgenff_toppar
-    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+    from karml.interfaces.pycharmmInterface.nbonds_config import read_cgenff_toppar
+    from karml.interfaces.pycharmmInterface.mlpot.pbc_env import (
         prepare_charmm_pbc,
         apply_pbc_nbonds,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.block_terms import apply_charmm_mm_block
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import (
+    from karml.interfaces.pycharmmInterface.mlpot.block_terms import apply_charmm_mm_block
+    from karml.interfaces.pycharmmInterface.import_pycharmm import (
         reset_block,
         reset_block_no_internal,
         safe_energy_show,
     )
-    from mmml.interfaces.pycharmmInterface.mm_system_energy import (
+    from karml.interfaces.pycharmmInterface.mm_system_energy import (
         CharmmNbondSettings,
         NonbondedSystemData,
     )

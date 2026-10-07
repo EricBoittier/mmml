@@ -13,7 +13,7 @@ from ase.calculators.singlepoint import SinglePointCalculator
 from ase.io import read
 from PIL import Image
 
-from mmml.utils.plotting.styles import apply_plot_style
+from karml.utils.plotting.styles import apply_plot_style
 from scripts.render_povray_style_catalog import scene
 
 ROOT = Path(__file__).resolve().parents[1]

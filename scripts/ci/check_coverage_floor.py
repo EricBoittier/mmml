@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Fail CI when line coverage falls below a floor.
 
-A full ``MMML_DISABLE_CHARMM=1`` run covers ~46% of ~121k statements. Most of
+A full ``KARML_DISABLE_CHARMM=1`` run covers ~46% of ~121k statements. Most of
 what is left is not reachable from CI at all: ~18.7k statements need live
 CHARMM, ~10.9k are plotting, ~5.3k need PySCF/torch/GPU. Covering every
 CI-safe statement lands near 70%, so a *target* here would be a number nobody
@@ -15,7 +15,7 @@ Percentage alone is gameable in the wrong direction -- deleting covered code
 raises it -- so ``--min-covered-lines`` pins the absolute count too. Both must
 hold::
 
-    pytest --cov=mmml --cov-report=xml tests/
+    pytest --cov=karml --cov-report=xml tests/
     python scripts/ci/check_coverage_floor.py coverage.xml \\
         --min-percent 40 --min-covered-lines 50000
 

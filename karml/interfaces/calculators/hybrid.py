@@ -6,8 +6,8 @@ from typing import Any, Callable, Sequence
 import numpy as np
 
 from ase.calculators.calculator import Calculator, all_changes
-from mmml.data.units import KCAL_MOL_TO_EV
-from mmml.interfaces.pycharmmInterface.mm_system_energy import nonbonded_energy_and_forces
+from karml.data.units import KCAL_MOL_TO_EV
+from karml.interfaces.pycharmmInterface.mm_system_energy import nonbonded_energy_and_forces
 
 
 class MolecularPhysNetCalculator(Calculator):

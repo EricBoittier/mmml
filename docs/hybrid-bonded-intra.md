@@ -167,7 +167,7 @@ the flag the runner returns the original jax-md `apply_fn` unchanged.
 ### What it does
 
 - Builds one `MolecularConstraints` pattern for every monomer in
-  `mmml.md.constraints.rattle`.
+  `karml.md.constraints.rattle`.
 - Applies three distance constraints per water: O-H1, O-H2, and H1-H2. The H-H
   pseudo-bond fixes the HOH angle, so no separate angle constraint is needed.
 - Composes the projection onto the selected jax-md integrator after the runner
@@ -197,7 +197,7 @@ For a run meant to stay exactly on the DES training geometry, pass those values
 explicitly:
 
 ```bash
-mmml md-system --backend jaxmd --setup pbc_nvt \
+karml md-system --backend jaxmd --setup pbc_nvt \
   --rigid-water --rigid-water-roh 0.9840 --rigid-water-theta 104.60 \
   ...
 ```
@@ -238,8 +238,8 @@ totals — would not need flexible dimer data.
 - Bonded comparison: `scripts/bonded_vs_ml_intramolecular.py`, which also confirms
   s(R) = 1.000000 across the scan (COM separation 2.71–2.78 Å, taper starts at
   4.5 Å), so the arm differencing is valid.
-- Rigid-water implementation: `mmml/md/constraints/rattle.py` and
-  `mmml/cli/run/jaxmd_runner.py`.
+- Rigid-water implementation: `karml/md/constraints/rattle.py` and
+  `karml/cli/run/jaxmd_runner.py`.
 - Rigid-water tests: `tests/unit/test_rigid_water_constraints.py`,
   `tests/unit/test_md_handoff_velocities.py::test_constrained_degrees_of_freedom_raise_the_temperature`,
   and the oversized-function ratchet notes in

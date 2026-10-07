@@ -1,6 +1,6 @@
 """Lightweight argparse helpers for CHARMM MM pretreat flags.
 
-Kept separate from ``cli_common`` so ``mmml md-system -h`` does not import the
+Kept separate from ``cli_common`` so ``karml md-system -h`` does not import the
 large runtime module just to print help.
 """
 

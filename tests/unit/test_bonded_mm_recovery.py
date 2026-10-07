@@ -7,13 +7,13 @@ from unittest.mock import ANY, MagicMock, patch
 import pytest
 import numpy as np
 
-from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import MmStrainBaseline
-from mmml.interfaces.pycharmmInterface.mlpot.dynamics import charmm_internal_energy_kcalmol
+from karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import MmStrainBaseline
+from karml.interfaces.pycharmmInterface.mlpot.dynamics import charmm_internal_energy_kcalmol
 
 
 def test_charmm_internal_energy_prefers_inte():
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._charmm_eterm_value",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._charmm_eterm_value",
         side_effect=lambda name: {"INTE": 12.5, "BOND": 1.0}.get(name.upper()),
     ):
         assert charmm_internal_energy_kcalmol() == pytest.approx(12.5)
@@ -24,7 +24,7 @@ def test_charmm_internal_energy_sums_bonded_terms():
         return {"BOND": 1.0, "ANGL": 2.0, "DIHE": 0.5}.get(name.upper())
 
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._charmm_eterm_value",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._charmm_eterm_value",
         side_effect=fake_eterm,
     ):
         assert charmm_internal_energy_kcalmol() == pytest.approx(3.5)
@@ -35,14 +35,14 @@ def test_charmm_internal_energy_prefers_bonded_when_inte_zero():
         return {"INTE": 0.0, "BOND": 10.0, "ANGL": 2.0}.get(name.upper())
 
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._charmm_eterm_value",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._charmm_eterm_value",
         side_effect=fake_eterm,
     ):
         assert charmm_internal_energy_kcalmol() == pytest.approx(12.0)
 
 
 def test_bonded_recovery_sd_kwargs_pbc_vs_vacuum():
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         BondedMmMiniConfig,
         _bonded_recovery_sd_kwargs,
     )
@@ -62,10 +62,10 @@ def test_bonded_recovery_sd_kwargs_pbc_vs_vacuum():
 
 
 def test_charmm_bonded_term_reads_angl():
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import charmm_bonded_term_kcalmol
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import charmm_bonded_term_kcalmol
 
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._charmm_eterm_value",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._charmm_eterm_value",
         return_value=42.0,
     ) as eterm:
         assert charmm_bonded_term_kcalmol("ANGL") == pytest.approx(42.0)
@@ -78,7 +78,7 @@ def test_apply_bonded_mm_only_block_script():
 
     path = (
         Path(__file__).resolve().parents[2]
-        / "mmml/interfaces/pycharmmInterface/mlpot/block_terms.py"
+        / "karml/interfaces/pycharmmInterface/mlpot/block_terms.py"
     )
     spec = importlib.util.spec_from_file_location("block_terms", path)
     block_terms = importlib.util.module_from_spec(spec)
@@ -87,9 +87,9 @@ def test_apply_bonded_mm_only_block_script():
 
     scripts: list[str] = []
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap.apply_full_cgenff_params",
+        "karml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap.apply_full_cgenff_params",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.charmm_levels.run_charmm_script_quiet",
+        "karml.interfaces.pycharmmInterface.charmm_levels.run_charmm_script_quiet",
         side_effect=scripts.append,
     ):
         block_terms.apply_bonded_mm_only_block()
@@ -104,7 +104,7 @@ def test_apply_bonded_vdw_recovery_block_script():
 
     path = (
         Path(__file__).resolve().parents[2]
-        / "mmml/interfaces/pycharmmInterface/mlpot/block_terms.py"
+        / "karml/interfaces/pycharmmInterface/mlpot/block_terms.py"
     )
     spec = importlib.util.spec_from_file_location("block_terms", path)
     block_terms = importlib.util.module_from_spec(spec)
@@ -113,9 +113,9 @@ def test_apply_bonded_vdw_recovery_block_script():
 
     scripts: list[str] = []
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap.apply_full_cgenff_params",
+        "karml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap.apply_full_cgenff_params",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.charmm_levels.run_charmm_script_quiet",
+        "karml.interfaces.pycharmmInterface.charmm_levels.run_charmm_script_quiet",
         side_effect=scripts.append,
     ):
         block_terms.apply_bonded_vdw_recovery_block()
@@ -125,7 +125,7 @@ def test_apply_bonded_vdw_recovery_block_script():
 
 
 def test_flat_bottom_mmfp_uses_outside_harmonic_wall():
-    from mmml.interfaces.pycharmmInterface.mlpot import restraints
+    from karml.interfaces.pycharmmInterface.mlpot import restraints
 
     pycharmm = MagicMock()
     with patch.object(restraints, "_import_pycharmm", return_value=pycharmm):
@@ -147,7 +147,7 @@ def test_flat_bottom_mmfp_uses_outside_harmonic_wall():
 
 
 def test_apply_flat_bottom_workflow_accepts_selection():
-    from mmml.interfaces.pycharmmInterface.mlpot import restraints
+    from karml.interfaces.pycharmmInterface.mlpot import restraints
 
     with patch.object(restraints, "center_cluster_at_origin") as center, patch.object(
         restraints,
@@ -174,7 +174,7 @@ def test_apply_flat_bottom_workflow_accepts_selection():
 
 
 def test_apply_flat_bottom_workflow_inflates_droff_to_current_extent():
-    from mmml.interfaces.pycharmmInterface.mlpot import restraints
+    from karml.interfaces.pycharmmInterface.mlpot import restraints
 
     with patch.object(restraints, "center_cluster_at_origin"), patch.object(
         restraints,
@@ -202,7 +202,7 @@ def test_apply_flat_bottom_workflow_inflates_droff_to_current_extent():
 
 
 def test_selected_max_radius_uses_charmm_selection_bounds():
-    from mmml.interfaces.pycharmmInterface.mlpot import restraints
+    from karml.interfaces.pycharmmInterface.mlpot import restraints
 
     pycharmm = MagicMock()
     values = {
@@ -228,7 +228,7 @@ def test_selected_max_radius_uses_charmm_selection_bounds():
 
 
 def test_selected_max_radius_all_uses_coor_api():
-    from mmml.interfaces.pycharmmInterface.mlpot import restraints
+    from karml.interfaces.pycharmmInterface.mlpot import restraints
 
     x = np.array([0.0, 3.0])
     y = np.array([0.0, 4.0])
@@ -239,7 +239,7 @@ def test_selected_max_radius_all_uses_coor_api():
 
 
 def test_center_cluster_at_origin_uses_coor_api_not_lingo_translate():
-    from mmml.interfaces.pycharmmInterface.mlpot import restraints
+    from karml.interfaces.pycharmmInterface.mlpot import restraints
 
     pycharmm = MagicMock()
     x = np.array([1.0, 3.0], dtype=np.float64)
@@ -261,7 +261,7 @@ def test_center_cluster_at_origin_uses_coor_api_not_lingo_translate():
 
 
 def test_apply_flat_bottom_workflow_verifies_energy_unchanged():
-    from mmml.interfaces.pycharmmInterface.mlpot import restraints
+    from karml.interfaces.pycharmmInterface.mlpot import restraints
 
     with patch.object(restraints, "center_cluster_at_origin"), patch.object(
         restraints,
@@ -291,7 +291,7 @@ def test_apply_flat_bottom_workflow_verifies_energy_unchanged():
 
 
 def test_apply_flat_bottom_workflow_skips_ener_under_mpi():
-    from mmml.interfaces.pycharmmInterface.mlpot import restraints
+    from karml.interfaces.pycharmmInterface.mlpot import restraints
 
     with patch.object(restraints, "center_cluster_at_origin"), patch.object(
         restraints,
@@ -326,7 +326,7 @@ def test_apply_flat_bottom_workflow_skips_ener_under_mpi():
 
 
 def test_apply_flat_bottom_workflow_retries_until_energy_unchanged():
-    from mmml.interfaces.pycharmmInterface.mlpot import restraints
+    from karml.interfaces.pycharmmInterface.mlpot import restraints
 
     with patch.object(restraints, "center_cluster_at_origin"), patch.object(
         restraints,
@@ -366,7 +366,7 @@ def test_apply_flat_bottom_workflow_retries_until_energy_unchanged():
 
 
 def test_apply_flat_bottom_workflow_warns_when_energy_never_converges():
-    from mmml.interfaces.pycharmmInterface.mlpot import restraints
+    from karml.interfaces.pycharmmInterface.mlpot import restraints
 
     with patch.object(restraints, "center_cluster_at_origin"), patch.object(
         restraints,
@@ -400,7 +400,7 @@ def test_apply_flat_bottom_workflow_warns_when_energy_never_converges():
 
 
 def test_clear_mmfp_uses_block_command():
-    from mmml.interfaces.pycharmmInterface.mlpot import restraints
+    from karml.interfaces.pycharmmInterface.mlpot import restraints
 
     pycharmm = MagicMock()
     with patch.object(restraints, "_import_pycharmm", return_value=pycharmm), patch.object(
@@ -419,7 +419,7 @@ def test_clear_mmfp_uses_block_command():
 
 
 def test_clear_mmfp_noops_before_setup():
-    from mmml.interfaces.pycharmmInterface.mlpot import restraints
+    from karml.interfaces.pycharmmInterface.mlpot import restraints
 
     pycharmm = MagicMock()
     with patch.object(restraints, "_import_pycharmm", return_value=pycharmm), patch.object(
@@ -433,38 +433,38 @@ def test_clear_mmfp_noops_before_setup():
 
 
 def test_minimize_bonded_recovery_uses_bonded_vdw_block():
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         BondedMmMiniConfig,
         minimize_bonded_mm_recovery,
     )
 
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
+    from karml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
 
     ctx = MagicMock(spec=MlpotContext)
     ctx.use_pbc = False
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._with_mlpot_detached",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._with_mlpot_detached",
         side_effect=lambda _ctx, fn: fn(),
     ) as detached, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.block_terms.apply_bonded_vdw_recovery_block",
+        "karml.interfaces.pycharmmInterface.mlpot.block_terms.apply_bonded_vdw_recovery_block",
     ) as bonded_block, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.apply_recovery_nbonds",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.apply_recovery_nbonds",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_rescue_lists",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_rescue_lists",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.jax_charmm_parity_report.maybe_emit_recovery_mm_parity",
+        "karml.interfaces.pycharmmInterface.mlpot.jax_charmm_parity_report.maybe_emit_recovery_mm_parity",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._import_pycharmm_modules",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._import_pycharmm_modules",
     ) as imp, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.charmm_grms_after_ener_force",
+        "karml.interfaces.pycharmmInterface.mlpot.cli_common.charmm_grms_after_ener_force",
         return_value=1.0,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         return_value=np.zeros((4, 3)),
     ), patch(
-        "mmml.interfaces.pycharmmInterface.charmm_levels.run_charmm_script_quiet",
+        "karml.interfaces.pycharmmInterface.charmm_levels.run_charmm_script_quiet",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.restore_workflow_nbonds",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.restore_workflow_nbonds",
     ):
         imp.return_value = (MagicMock(), MagicMock(), MagicMock(), MagicMock())
         minimize_bonded_mm_recovery(ctx, BondedMmMiniConfig(nstep_sd=0, backend="charmm"))
@@ -473,12 +473,12 @@ def test_minimize_bonded_recovery_uses_bonded_vdw_block():
 
 
 def test_minimize_bonded_recovery_runs_sd_and_reports_angl():
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         BondedMmMiniConfig,
         minimize_bonded_mm_recovery,
     )
 
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
+    from karml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
 
     ctx = MagicMock(spec=MlpotContext)
     ctx.use_pbc = False
@@ -491,34 +491,34 @@ def test_minimize_bonded_recovery_runs_sd_and_reports_angl():
         return None
 
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._with_mlpot_detached",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._with_mlpot_detached",
         side_effect=lambda _ctx, fn: fn(),
     ) as detached, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._log_bonded_term_diagnostics",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._log_bonded_term_diagnostics",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.block_terms.apply_bonded_vdw_recovery_block",
+        "karml.interfaces.pycharmmInterface.mlpot.block_terms.apply_bonded_vdw_recovery_block",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.apply_recovery_nbonds",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.apply_recovery_nbonds",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_rescue_lists",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_rescue_lists",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.jax_charmm_parity_report.maybe_emit_recovery_mm_parity",
+        "karml.interfaces.pycharmmInterface.mlpot.jax_charmm_parity_report.maybe_emit_recovery_mm_parity",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._import_pycharmm_modules",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._import_pycharmm_modules",
     ) as imp, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.charmm_grms_after_ener_force",
+        "karml.interfaces.pycharmmInterface.mlpot.cli_common.charmm_grms_after_ener_force",
         return_value=1.0,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.charmm_internal_energy_kcalmol",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics.charmm_internal_energy_kcalmol",
         return_value=550.0,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._charmm_eterm_value",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._charmm_eterm_value",
         side_effect=fake_eterm,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         return_value=np.zeros((4, 3)),
     ), patch(
-        "mmml.interfaces.pycharmmInterface.charmm_levels.run_charmm_script_quiet",
+        "karml.interfaces.pycharmmInterface.charmm_levels.run_charmm_script_quiet",
     ):
         imp.return_value = (MagicMock(), MagicMock(), MagicMock(), minimize)
         grms = minimize_bonded_mm_recovery(
@@ -531,12 +531,12 @@ def test_minimize_bonded_recovery_runs_sd_and_reports_angl():
 
 
 def test_minimize_bonded_recovery_unset_and_reregister():
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         BondedMmMiniConfig,
         minimize_bonded_mm_recovery,
     )
 
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
+    from karml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
 
     ctx = MagicMock(spec=MlpotContext)
     ctx.use_pbc = False
@@ -549,26 +549,26 @@ def test_minimize_bonded_recovery_unset_and_reregister():
             _ctx.reregister_mlpot()
 
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._with_mlpot_detached",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._with_mlpot_detached",
         side_effect=_fake_detach,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.block_terms.apply_bonded_vdw_recovery_block",
+        "karml.interfaces.pycharmmInterface.mlpot.block_terms.apply_bonded_vdw_recovery_block",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.apply_recovery_nbonds",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.apply_recovery_nbonds",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_rescue_lists",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_rescue_lists",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.jax_charmm_parity_report.maybe_emit_recovery_mm_parity",
+        "karml.interfaces.pycharmmInterface.mlpot.jax_charmm_parity_report.maybe_emit_recovery_mm_parity",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._import_pycharmm_modules",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._import_pycharmm_modules",
     ) as imp, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.charmm_grms_after_ener_force",
+        "karml.interfaces.pycharmmInterface.mlpot.cli_common.charmm_grms_after_ener_force",
         return_value=1.0,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         return_value=np.zeros((4, 3)),
     ), patch(
-        "mmml.interfaces.pycharmmInterface.charmm_levels.run_charmm_script_quiet",
+        "karml.interfaces.pycharmmInterface.charmm_levels.run_charmm_script_quiet",
     ):
         imp.return_value = (MagicMock(), MagicMock(), MagicMock(), MagicMock())
         minimize_bonded_mm_recovery(ctx, BondedMmMiniConfig(nstep_sd=0, backend="charmm"))
@@ -579,8 +579,8 @@ def test_minimize_bonded_recovery_unset_and_reregister():
 def test_measure_mm_bonded_strain_uses_mlpot_detached():
     import sys
 
-    from mmml.interfaces.pycharmmInterface.mlpot import bonded_mm_recovery
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
+    from karml.interfaces.pycharmmInterface.mlpot import bonded_mm_recovery
+    from karml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
 
     ctx = MagicMock(spec=MlpotContext)
     mock_py = MagicMock()
@@ -588,11 +588,11 @@ def test_measure_mm_bonded_strain_uses_mlpot_detached():
         key: sys.modules.get(key)
         for key in (
             "pycharmm",
-            "mmml.interfaces.pycharmmInterface.import_pycharmm",
+            "karml.interfaces.pycharmmInterface.import_pycharmm",
         )
     }
     sys.modules["pycharmm"] = mock_py
-    sys.modules["mmml.interfaces.pycharmmInterface.import_pycharmm"] = MagicMock()
+    sys.modules["karml.interfaces.pycharmmInterface.import_pycharmm"] = MagicMock()
 
     def fake_detached(detach_ctx, fn):
         detach_ctx.unset()
@@ -603,21 +603,21 @@ def test_measure_mm_bonded_strain_uses_mlpot_detached():
 
     try:
         with patch(
-            "mmml.interfaces.pycharmmInterface.mlpot.dynamics._with_mlpot_detached",
+            "karml.interfaces.pycharmmInterface.mlpot.dynamics._with_mlpot_detached",
             side_effect=fake_detached,
         ) as detached, patch(
-            "mmml.interfaces.pycharmmInterface.mlpot.block_terms.apply_charmm_mm_block",
+            "karml.interfaces.pycharmmInterface.mlpot.block_terms.apply_charmm_mm_block",
         ), patch(
-            "mmml.interfaces.pycharmmInterface.mlpot.cli_common.charmm_grms",
+            "karml.interfaces.pycharmmInterface.mlpot.cli_common.charmm_grms",
             return_value=0.5,
         ), patch(
-            "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.charmm_internal_energy_kcalmol",
+            "karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.charmm_internal_energy_kcalmol",
             return_value=24.0,
         ), patch(
-            "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.charmm_bonded_term_kcalmol",
+            "karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.charmm_bonded_term_kcalmol",
             return_value=24.0,
         ), patch(
-            "mmml.interfaces.pycharmmInterface.charmm_levels.run_charmm_script_quiet",
+            "karml.interfaces.pycharmmInterface.charmm_levels.run_charmm_script_quiet",
         ):
             out = bonded_mm_recovery.measure_mm_bonded_strain_with_full_block(ctx)
     finally:
@@ -636,8 +636,8 @@ def test_measure_mm_bonded_strain_uses_mlpot_detached():
 
 
 def test_with_mlpot_detached_unset_and_reregister():
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import _with_mlpot_detached
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import _with_mlpot_detached
+    from karml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
 
     ctx = MagicMock(spec=MlpotContext)
     result = _with_mlpot_detached(ctx, lambda: 42)
@@ -647,7 +647,7 @@ def test_with_mlpot_detached_unset_and_reregister():
 
 
 def test_unset_skips_cgenff_restore_when_coordinates_unsafe():
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
+    from karml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
 
     mlpot = MagicMock()
     ctx = MlpotContext(
@@ -661,12 +661,12 @@ def test_unset_skips_cgenff_restore_when_coordinates_unsafe():
         cubic_box_side_A=31.0,
     )
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.charmm_dynamics_state_is_finite",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics_validation.charmm_dynamics_state_is_finite",
         return_value=False,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.block_terms.apply_charmm_mm_block",
+        "karml.interfaces.pycharmmInterface.mlpot.block_terms.apply_charmm_mm_block",
     ) as apply_block, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.block_terms.clear_mlpot_energy_block",
+        "karml.interfaces.pycharmmInterface.mlpot.block_terms.clear_mlpot_energy_block",
     ):
         ctx.unset()
 
@@ -675,7 +675,7 @@ def test_unset_skips_cgenff_restore_when_coordinates_unsafe():
 
 
 def test_reregister_mlpot_default_reattach_only():
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
+    from karml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
 
     mlpot = MagicMock()
     ctx = MlpotContext(
@@ -689,10 +689,10 @@ def test_reregister_mlpot_default_reattach_only():
         cubic_box_side_A=31.0,
     )
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup._apply_mlpot_psf_mm_off_and_pbc",
+        "karml.interfaces.pycharmmInterface.mlpot.setup._apply_mlpot_psf_mm_off_and_pbc",
         return_value="all",
     ) as apply_block, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.rebind_mlpot_calculator_from_pycmodel",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.rebind_mlpot_calculator_from_pycmodel",
         return_value=False,
     ):
         ctx.reregister_mlpot()
@@ -702,7 +702,7 @@ def test_reregister_mlpot_default_reattach_only():
 
 
 def test_reregister_mlpot_prefers_rebind_when_available():
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
+    from karml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
 
     mlpot = MagicMock()
     ctx = MlpotContext(
@@ -714,7 +714,7 @@ def test_reregister_mlpot_prefers_rebind_when_available():
         ml_Z=np.array([6, 1], dtype=int),
     )
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.rebind_mlpot_calculator_from_pycmodel",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.rebind_mlpot_calculator_from_pycmodel",
         return_value=True,
     ) as rebind:
         ctx.reregister_mlpot()
@@ -723,7 +723,7 @@ def test_reregister_mlpot_prefers_rebind_when_available():
 
 
 def test_reregister_mlpot_applies_params_when_requested():
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
+    from karml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
 
     mlpot = MagicMock()
     ctx = MlpotContext(
@@ -737,10 +737,10 @@ def test_reregister_mlpot_applies_params_when_requested():
         cubic_box_side_A=31.0,
     )
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup._apply_mlpot_psf_mm_off_and_pbc",
+        "karml.interfaces.pycharmmInterface.mlpot.setup._apply_mlpot_psf_mm_off_and_pbc",
         return_value="all",
     ) as apply_block, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.rebind_mlpot_calculator_from_pycmodel",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.rebind_mlpot_calculator_from_pycmodel",
         return_value=False,
     ):
         ctx.reregister_mlpot(reregister_params=True)
@@ -750,7 +750,7 @@ def test_reregister_mlpot_applies_params_when_requested():
 
 
 def test_reregister_mlpot_skips_param_read_when_reregister_params_false():
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
+    from karml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
 
     mlpot = MagicMock()
     ctx = MlpotContext(
@@ -764,9 +764,9 @@ def test_reregister_mlpot_skips_param_read_when_reregister_params_false():
         cubic_box_side_A=31.0,
     )
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup._apply_mlpot_psf_mm_off_and_pbc",
+        "karml.interfaces.pycharmmInterface.mlpot.setup._apply_mlpot_psf_mm_off_and_pbc",
     ) as apply_block, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.rebind_mlpot_calculator_from_pycmodel",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.rebind_mlpot_calculator_from_pycmodel",
         return_value=False,
     ):
         ctx.reregister_mlpot(reregister_params=False)
@@ -776,20 +776,20 @@ def test_reregister_mlpot_skips_param_read_when_reregister_params_false():
 
 
 def test_reregister_after_topology_reload_skips_upinb_rebuild():
-    from mmml.interfaces.pycharmmInterface.mlpot import bonded_mm_recovery
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
+    from karml.interfaces.pycharmmInterface.mlpot import bonded_mm_recovery
+    from karml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
 
     ctx = MagicMock(spec=MlpotContext)
     positions = np.zeros((25, 3), dtype=float)
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         return_value=positions,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
     ) as sync_pos, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.register_mlpot",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.register_mlpot",
     ) as register, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.refresh_nbonds_after_mlpot_pbc",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.refresh_nbonds_after_mlpot_pbc",
     ) as refresh_pbc:
         bonded_mm_recovery._reregister_mlpot_after_topology_reload(ctx)
 
@@ -803,7 +803,7 @@ def test_assert_mlpot_user_active_reattaches_when_user_missing():
     import sys
     import types
 
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+    from karml.interfaces.pycharmmInterface.mlpot.setup import (
         MlpotContext,
         assert_mlpot_user_active,
     )
@@ -830,10 +830,10 @@ def test_assert_mlpot_user_active_reattaches_when_user_missing():
     mock_energy.get_term_by_name.side_effect = [0.0, 0.0, -123.4, -123.4]
     mlpot.unset_mlpot = MagicMock()
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.sync_mlpot_fortran_registration",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.sync_mlpot_fortran_registration",
         return_value=True,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup._read_mlpot_user_energy_kcal",
+        "karml.interfaces.pycharmmInterface.mlpot.setup._read_mlpot_user_energy_kcal",
         side_effect=[None, -123.4],
     ), patch.object(
         ctx,
@@ -851,7 +851,7 @@ def test_rebind_mlpot_calculator_from_pycmodel_updates_callback():
     import sys
     import types
 
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+    from karml.interfaces.pycharmmInterface.mlpot.setup import (
         MlpotContext,
         rebind_mlpot_calculator_from_pycmodel,
     )
@@ -878,7 +878,7 @@ def test_rebind_mlpot_calculator_from_pycmodel_updates_callback():
     mock_py.lib = MagicMock()
     mock_py.lib.charmm = MagicMock()
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup._import_pycharmm",
+        "karml.interfaces.pycharmmInterface.mlpot.setup._import_pycharmm",
         return_value=mock_py,
     ):
         ok = rebind_mlpot_calculator_from_pycmodel(ctx, verbose=False)
@@ -894,7 +894,7 @@ def test_assert_mlpot_user_active_forces_stale_python_is_set():
     import sys
     import types
 
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+    from karml.interfaces.pycharmmInterface.mlpot.setup import (
         MlpotContext,
         assert_mlpot_user_active,
     )
@@ -925,10 +925,10 @@ def test_assert_mlpot_user_active_forces_stale_python_is_set():
     mlpot.unset_mlpot = MagicMock()
     mlpot.reattach_mlpot.side_effect = _reattach
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.sync_mlpot_fortran_registration",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.sync_mlpot_fortran_registration",
         return_value=True,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup._read_mlpot_user_energy_kcal",
+        "karml.interfaces.pycharmmInterface.mlpot.setup._read_mlpot_user_energy_kcal",
         side_effect=[None, -123.4],
     ), patch.object(
         ctx,
@@ -943,7 +943,7 @@ def test_assert_mlpot_user_active_forces_stale_python_is_set():
 
 
 def test_sync_mlpot_fortran_registration_unsets_when_fortran_inactive():
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+    from karml.interfaces.pycharmmInterface.mlpot.setup import (
         MlpotContext,
         sync_mlpot_fortran_registration,
     )
@@ -959,10 +959,10 @@ def test_sync_mlpot_fortran_registration_unsets_when_fortran_inactive():
         ml_Z=np.array([6, 1], dtype=int),
     )
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.rebind_mlpot_calculator_from_pycmodel",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.rebind_mlpot_calculator_from_pycmodel",
         side_effect=[True, True],
     ) as rebind, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup._fortran_mlpot_callback_active",
+        "karml.interfaces.pycharmmInterface.mlpot.setup._fortran_mlpot_callback_active",
         side_effect=[False, True],
     ):
         ok = sync_mlpot_fortran_registration(ctx, verbose=False)
@@ -972,7 +972,7 @@ def test_sync_mlpot_fortran_registration_unsets_when_fortran_inactive():
 
 
 def test_assert_mlpot_user_active_error_includes_jax_hybrid_diag():
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+    from karml.interfaces.pycharmmInterface.mlpot.setup import (
         MlpotContext,
         assert_mlpot_user_active,
     )
@@ -986,22 +986,22 @@ def test_assert_mlpot_user_active_error_includes_jax_hybrid_diag():
         ml_Z=np.array([6, 1], dtype=int),
     )
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.sync_mlpot_fortran_registration",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.sync_mlpot_fortran_registration",
         return_value=True,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup._read_mlpot_user_energy_kcal",
+        "karml.interfaces.pycharmmInterface.mlpot.setup._read_mlpot_user_energy_kcal",
         return_value=0.0,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup._probe_mlpot_hybrid_energy_kcal",
+        "karml.interfaces.pycharmmInterface.mlpot.setup._probe_mlpot_hybrid_energy_kcal",
         return_value=-50000.0,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup._fortran_mlpot_callback_active",
+        "karml.interfaces.pycharmmInterface.mlpot.setup._fortran_mlpot_callback_active",
         return_value=None,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup._read_mlpot_charmm_energy_terms_kcal",
+        "karml.interfaces.pycharmmInterface.mlpot.setup._read_mlpot_charmm_energy_terms_kcal",
         return_value={},
     ), patch.object(ctx, "reregister_mlpot"), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.light_resync_mlpot_state",
+        "karml.interfaces.pycharmmInterface.mlpot.cli_common.light_resync_mlpot_state",
         return_value=1081.0,
     ):
         with pytest.raises(RuntimeError, match="JAX hybrid energy is active but CHARMM USER"):
@@ -1009,7 +1009,7 @@ def test_assert_mlpot_user_active_error_includes_jax_hybrid_diag():
 
 
 def test_assert_mlpot_user_active_error_includes_callback_pair_failure():
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+    from karml.interfaces.pycharmmInterface.mlpot.setup import (
         MlpotContext,
         assert_mlpot_user_active,
     )
@@ -1025,22 +1025,22 @@ def test_assert_mlpot_user_active_error_includes_callback_pair_failure():
         ml_Z=np.array([6, 1], dtype=int),
     )
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.sync_mlpot_fortran_registration",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.sync_mlpot_fortran_registration",
         return_value=True,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup._read_mlpot_user_energy_kcal",
+        "karml.interfaces.pycharmmInterface.mlpot.setup._read_mlpot_user_energy_kcal",
         return_value=0.0,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup._probe_mlpot_hybrid_energy_kcal",
+        "karml.interfaces.pycharmmInterface.mlpot.setup._probe_mlpot_hybrid_energy_kcal",
         return_value=0.0,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup._fortran_mlpot_callback_active",
+        "karml.interfaces.pycharmmInterface.mlpot.setup._fortran_mlpot_callback_active",
         return_value=None,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup._read_mlpot_charmm_energy_terms_kcal",
+        "karml.interfaces.pycharmmInterface.mlpot.setup._read_mlpot_charmm_energy_terms_kcal",
         return_value={},
     ), patch.object(ctx, "reregister_mlpot"), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.light_resync_mlpot_state",
+        "karml.interfaces.pycharmmInterface.mlpot.cli_common.light_resync_mlpot_state",
         return_value=0.0,
     ):
         with pytest.raises(RuntimeError, match="callback returned zero ML/MM pairs"):
@@ -1048,7 +1048,7 @@ def test_assert_mlpot_user_active_error_includes_callback_pair_failure():
 
 
 def test_restore_workflow_nbonds_skips_nbond_rebuild():
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext, restore_workflow_nbonds
+    from karml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext, restore_workflow_nbonds
 
     ctx = MlpotContext(
         mlpot=MagicMock(),
@@ -1059,7 +1059,7 @@ def test_restore_workflow_nbonds_skips_nbond_rebuild():
     )
     mock_py = MagicMock()
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup._import_pycharmm",
+        "karml.interfaces.pycharmmInterface.mlpot.setup._import_pycharmm",
         return_value=mock_py,
     ):
         restore_workflow_nbonds(ctx)
@@ -1070,7 +1070,7 @@ def test_restore_workflow_nbonds_skips_nbond_rebuild():
 
 
 def test_bonded_mm_mini_watches_heat_even_when_after_is_mini_only():
-    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+    from karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
         bonded_mm_mini_watches_stage,
     )
 
@@ -1085,10 +1085,10 @@ def test_bonded_mm_mini_watches_heat_even_when_after_is_mini_only():
 
 
 def test_apply_bonded_mm_only_block_raises_under_mpi_mpirun():
-    from mmml.interfaces.pycharmmInterface.mlpot import block_terms
+    from karml.interfaces.pycharmmInterface.mlpot import block_terms
 
     with patch(
-        "mmml.interfaces.pycharmmInterface.charmm_mpi.selective_bonded_block_unsafe_under_mpi",
+        "karml.interfaces.pycharmmInterface.charmm_mpi.selective_bonded_block_unsafe_under_mpi",
         return_value=True,
     ):
         with pytest.raises(block_terms.SelectiveBondedBlockUnsupportedUnderMPI):
@@ -1096,7 +1096,7 @@ def test_apply_bonded_mm_only_block_raises_under_mpi_mpirun():
 
 
 def test_maybe_run_bonded_mm_mini_skips_under_mpi_mpirun():
-    from mmml.interfaces.pycharmmInterface.mlpot import bonded_mm_recovery
+    from karml.interfaces.pycharmmInterface.mlpot import bonded_mm_recovery
 
     ctx = MagicMock()
     args = argparse_namespace(
@@ -1105,7 +1105,7 @@ def test_maybe_run_bonded_mm_mini_skips_under_mpi_mpirun():
         quiet=False,
     )
     with patch(
-        "mmml.interfaces.pycharmmInterface.charmm_mpi.selective_bonded_block_unsafe_under_mpi",
+        "karml.interfaces.pycharmmInterface.charmm_mpi.selective_bonded_block_unsafe_under_mpi",
         return_value=True,
     ), patch.object(
         bonded_mm_recovery,
@@ -1122,7 +1122,7 @@ def test_maybe_run_bonded_mm_mini_skips_under_mpi_mpirun():
 
 
 def test_maybe_run_bonded_mm_mini_skips_when_grms_ok():
-    from mmml.interfaces.pycharmmInterface.mlpot import bonded_mm_recovery
+    from karml.interfaces.pycharmmInterface.mlpot import bonded_mm_recovery
 
     ctx = MagicMock()
     args = argparse_namespace(
@@ -1154,7 +1154,7 @@ def test_maybe_run_bonded_mm_mini_skips_when_grms_ok():
 
 
 def test_maybe_run_bonded_mm_mini_always_runs_when_grms_ok():
-    from mmml.interfaces.pycharmmInterface.mlpot import bonded_mm_recovery
+    from karml.interfaces.pycharmmInterface.mlpot import bonded_mm_recovery
 
     ctx = MagicMock()
     ctx.pyCModel = MagicMock()
@@ -1198,7 +1198,7 @@ def test_maybe_run_bonded_mm_mini_always_runs_when_grms_ok():
 
 
 def test_maybe_run_bonded_mm_mini_always_inplace_all_ml(tmp_path):
-    from mmml.interfaces.pycharmmInterface.mlpot import bonded_mm_recovery
+    from karml.interfaces.pycharmmInterface.mlpot import bonded_mm_recovery
 
     ctx = MagicMock()
     args = argparse_namespace(
@@ -1216,7 +1216,7 @@ def test_maybe_run_bonded_mm_mini_always_inplace_all_ml(tmp_path):
         "_mlpot_covers_all_atoms",
         return_value=True,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._run_hybrid_bonded_mlpot_recovery",
+        "karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._run_hybrid_bonded_mlpot_recovery",
     ) as inplace:
         ran = bonded_mm_recovery.maybe_run_bonded_mm_mini_after_stage(
             ctx,
@@ -1230,7 +1230,7 @@ def test_maybe_run_bonded_mm_mini_always_inplace_all_ml(tmp_path):
 
 
 def test_maybe_run_bonded_mm_mini_always_all_ml_mini_uses_inplace(tmp_path):
-    from mmml.interfaces.pycharmmInterface.mlpot import bonded_mm_recovery
+    from karml.interfaces.pycharmmInterface.mlpot import bonded_mm_recovery
 
     ctx = MagicMock()
     args = argparse_namespace(
@@ -1248,7 +1248,7 @@ def test_maybe_run_bonded_mm_mini_always_all_ml_mini_uses_inplace(tmp_path):
         "_mlpot_covers_all_atoms",
         return_value=True,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._run_hybrid_bonded_mlpot_recovery",
+        "karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._run_hybrid_bonded_mlpot_recovery",
     ) as inplace, patch.object(
         bonded_mm_recovery,
         "_measure_stage_bonded_strain",
@@ -1266,7 +1266,7 @@ def test_maybe_run_bonded_mm_mini_always_all_ml_mini_uses_inplace(tmp_path):
 
 
 def test_recovery_reasons_angl_margin():
-    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+    from karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
         MmStrainBaseline,
         _recovery_reasons,
     )
@@ -1281,7 +1281,7 @@ def test_recovery_reasons_angl_margin():
 
 
 def test_maybe_run_bonded_mm_mini_runs_when_grms_high():
-    from mmml.interfaces.pycharmmInterface.mlpot import bonded_mm_recovery
+    from karml.interfaces.pycharmmInterface.mlpot import bonded_mm_recovery
 
     ctx = MagicMock()
     ctx.pyCModel = MagicMock()
@@ -1320,7 +1320,7 @@ def test_maybe_run_bonded_mm_mini_runs_when_grms_high():
 
 
 def test_maybe_run_bonded_mm_mini_skips_heavy_when_heat_overlap(tmp_path):
-    from mmml.interfaces.pycharmmInterface.mlpot import bonded_mm_recovery
+    from karml.interfaces.pycharmmInterface.mlpot import bonded_mm_recovery
 
     ctx = MagicMock(n_monomers=90, use_pbc=False)
     args = argparse_namespace(
@@ -1340,7 +1340,7 @@ def test_maybe_run_bonded_mm_mini_skips_heavy_when_heat_overlap(tmp_path):
         "_bonded_mm_skip_reason_after_heat_overlap",
         return_value="worst inter-monomer distance 0.71 Å < 0.50 Å",
     ) as skip, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._run_hybrid_bonded_mlpot_recovery",
+        "karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._run_hybrid_bonded_mlpot_recovery",
     ) as inplace:
         ran = bonded_mm_recovery.maybe_run_bonded_mm_mini_after_stage(
             ctx,
@@ -1355,7 +1355,7 @@ def test_maybe_run_bonded_mm_mini_skips_heavy_when_heat_overlap(tmp_path):
 
 
 def test_maybe_run_bonded_mm_mini_all_ml_skips_when_strain_ok(tmp_path):
-    from mmml.interfaces.pycharmmInterface.mlpot import bonded_mm_recovery
+    from karml.interfaces.pycharmmInterface.mlpot import bonded_mm_recovery
 
     ctx = MagicMock()
     args = argparse_namespace(
@@ -1376,7 +1376,7 @@ def test_maybe_run_bonded_mm_mini_all_ml_skips_when_strain_ok(tmp_path):
         "_measure_stage_bonded_strain",
         return_value=ok,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._run_hybrid_bonded_mlpot_recovery",
+        "karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._run_hybrid_bonded_mlpot_recovery",
     ) as inplace:
         ran = bonded_mm_recovery.maybe_run_bonded_mm_mini_after_stage(
             ctx,
@@ -1391,7 +1391,7 @@ def test_maybe_run_bonded_mm_mini_all_ml_skips_when_strain_ok(tmp_path):
 
 
 def test_maybe_run_bonded_mm_mini_all_ml_runs_inplace_when_strain_high(tmp_path):
-    from mmml.interfaces.pycharmmInterface.mlpot import bonded_mm_recovery
+    from karml.interfaces.pycharmmInterface.mlpot import bonded_mm_recovery
 
     ctx = MagicMock()
     args = argparse_namespace(
@@ -1413,7 +1413,7 @@ def test_maybe_run_bonded_mm_mini_all_ml_runs_inplace_when_strain_high(tmp_path)
         "_measure_stage_bonded_strain",
         return_value=high,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._run_hybrid_bonded_mlpot_recovery",
+        "karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._run_hybrid_bonded_mlpot_recovery",
     ) as inplace:
         ran = bonded_mm_recovery.maybe_run_bonded_mm_mini_after_stage(
             ctx,
@@ -1428,7 +1428,7 @@ def test_maybe_run_bonded_mm_mini_all_ml_runs_inplace_when_strain_high(tmp_path)
 
 
 def test_maybe_run_bonded_mm_mini_all_ml_uses_inplace_recovery(tmp_path):
-    from mmml.interfaces.pycharmmInterface.mlpot import bonded_mm_recovery
+    from karml.interfaces.pycharmmInterface.mlpot import bonded_mm_recovery
 
     ctx = MagicMock()
     args = argparse_namespace(
@@ -1450,7 +1450,7 @@ def test_maybe_run_bonded_mm_mini_all_ml_uses_inplace_recovery(tmp_path):
         "_measure_stage_bonded_strain",
         return_value=high,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._run_hybrid_bonded_mlpot_recovery",
+        "karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._run_hybrid_bonded_mlpot_recovery",
     ) as inplace, patch.object(
         bonded_mm_recovery,
         "minimize_bonded_mm_recovery",
@@ -1472,7 +1472,7 @@ def test_maybe_run_bonded_mm_mini_all_ml_uses_inplace_recovery(tmp_path):
 def test_assert_pre_min_bonded_geometry_exits_on_high_angl():
     import sys
 
-    from mmml.interfaces.pycharmmInterface.mlpot import bonded_mm_recovery
+    from karml.interfaces.pycharmmInterface.mlpot import bonded_mm_recovery
 
     args = argparse_namespace(
         bonded_mm_mini=True,
@@ -1481,7 +1481,7 @@ def test_assert_pre_min_bonded_geometry_exits_on_high_angl():
     )
     mock_py = MagicMock()
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.block_terms.apply_charmm_mm_block",
+        "karml.interfaces.pycharmmInterface.mlpot.block_terms.apply_charmm_mm_block",
     ), patch.object(
         bonded_mm_recovery,
         "charmm_bonded_term_kcalmol",
@@ -1491,20 +1491,20 @@ def test_assert_pre_min_bonded_geometry_exits_on_high_angl():
         "charmm_internal_energy_kcalmol",
         return_value=24.0,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.charmm_levels.run_charmm_script_quiet",
+        "karml.interfaces.pycharmmInterface.charmm_levels.run_charmm_script_quiet",
     ), patch.dict(sys.modules, {"pycharmm": mock_py}), pytest.raises(SystemExit):
         bonded_mm_recovery.assert_pre_min_bonded_geometry(args)
 
 
 def test_run_intra_overlap_rescue_all_ml_uses_bonded_sd_path(tmp_path):
-    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+    from karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
         run_intra_monomer_overlap_rescue,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+    from karml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
         DynamicsOverlapConfig,
         OverlapRescueConfig,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
+    from karml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
 
     ctx = MagicMock(spec=MlpotContext)
     ctx.ml_selection = MagicMock()
@@ -1520,18 +1520,18 @@ def test_run_intra_overlap_rescue_all_ml_uses_bonded_sd_path(tmp_path):
         pyCModel=model,
     )
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._run_all_ml_intra_overlap_rescue",
+        "karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._run_all_ml_intra_overlap_rescue",
     ) as intra:
         run_intra_monomer_overlap_rescue(ctx, cfg)
     intra.assert_called_once()
 
 
 def test_run_all_ml_intra_overlap_rescue_refuses_all_ml_pbc_sd():
-    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+    from karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
         _run_all_ml_intra_overlap_rescue,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import BondedMmMiniConfig
-    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import BondedMmMiniConfig
+    from karml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
         DynamicsOverlapConfig,
         OverlapRescueConfig,
     )
@@ -1548,21 +1548,21 @@ def test_run_all_ml_intra_overlap_rescue_refuses_all_ml_pbc_sd():
     )
     bonded = BondedMmMiniConfig(nstep_sd=50, verbose=False)
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup._is_all_ml_pbc_context",
+        "karml.interfaces.pycharmmInterface.mlpot.setup._is_all_ml_pbc_context",
         return_value=True,
     ), pytest.raises(RuntimeError, match="refuses MLpot/bonded SD polish"):
         _run_all_ml_intra_overlap_rescue(ctx, cfg, bonded)
 
 
 def test_run_inter_overlap_rescue_all_ml_uses_bonded_vdw_path(tmp_path):
-    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+    from karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
         run_inter_monomer_overlap_rescue,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+    from karml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
         DynamicsOverlapConfig,
         OverlapRescueConfig,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
+    from karml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
 
     topo = tmp_path / "cluster.psf"
     topo.write_text("psf", encoding="utf-8")
@@ -1578,21 +1578,21 @@ def test_run_inter_overlap_rescue_all_ml_uses_bonded_vdw_path(tmp_path):
         rescue=OverlapRescueConfig(nstep_sd=50, verbose=False),
     )
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._run_all_ml_inter_overlap_rescue",
+        "karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._run_all_ml_inter_overlap_rescue",
     ) as inter:
         run_inter_monomer_overlap_rescue(ctx, cfg)
     inter.assert_called_once()
 
 
 def test_all_ml_inter_overlap_rescue_uses_mlpot_sd_when_no_block():
-    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+    from karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
         _run_all_ml_inter_overlap_rescue,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+    from karml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
         DynamicsOverlapConfig,
         OverlapRescueConfig,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
+    from karml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
 
     ctx = MagicMock(spec=MlpotContext)
     ctx.registration_uses_block = False
@@ -1605,14 +1605,14 @@ def test_all_ml_inter_overlap_rescue_uses_mlpot_sd_when_no_block():
         rescue=OverlapRescueConfig(nstep_sd=200, nstep_abnr=100, verbose=False),
     )
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.apply_charmm_position_noise",
+        "karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.apply_charmm_position_noise",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._mlpot_covers_all_atoms",
+        "karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._mlpot_covers_all_atoms",
         return_value=True,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._run_mlpot_overlap_rescue",
+        "karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._run_mlpot_overlap_rescue",
     ) as mlpot_rescue, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.minimize_overlap_rescue",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics.minimize_overlap_rescue",
     ) as charmm_rescue:
         _run_all_ml_inter_overlap_rescue(ctx, cfg)
     mlpot_rescue.assert_called_once()
@@ -1620,14 +1620,14 @@ def test_all_ml_inter_overlap_rescue_uses_mlpot_sd_when_no_block():
 
 
 def test_all_ml_inter_overlap_rescue_uses_bonded_vdw_sd_with_block_registration():
-    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+    from karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
         _run_all_ml_inter_overlap_rescue,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+    from karml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
         DynamicsOverlapConfig,
         OverlapRescueConfig,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
+    from karml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
 
     ctx = MagicMock(spec=MlpotContext)
     ctx.registration_uses_block = True
@@ -1640,14 +1640,14 @@ def test_all_ml_inter_overlap_rescue_uses_bonded_vdw_sd_with_block_registration(
         rescue=OverlapRescueConfig(nstep_sd=200, verbose=False),
     )
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.apply_charmm_position_noise",
+        "karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.apply_charmm_position_noise",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._mlpot_covers_all_atoms",
+        "karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._mlpot_covers_all_atoms",
         return_value=True,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.minimize_overlap_rescue",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics.minimize_overlap_rescue",
     ) as bonded_rescue, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._run_mlpot_overlap_rescue",
+        "karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._run_mlpot_overlap_rescue",
     ) as mlpot_rescue:
         _run_all_ml_inter_overlap_rescue(ctx, cfg)
     bonded_rescue.assert_called_once_with(ctx, cfg.rescue)
@@ -1655,14 +1655,14 @@ def test_all_ml_inter_overlap_rescue_uses_bonded_vdw_sd_with_block_registration(
 
 
 def test_run_inter_overlap_rescue_calls_bonded_vdw_rescue():
-    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+    from karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
         run_inter_monomer_overlap_rescue,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+    from karml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
         DynamicsOverlapConfig,
         OverlapRescueConfig,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
+    from karml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
 
     ctx = MagicMock(spec=MlpotContext)
     cfg = DynamicsOverlapConfig(
@@ -1673,21 +1673,21 @@ def test_run_inter_overlap_rescue_calls_bonded_vdw_rescue():
         rescue=OverlapRescueConfig(nstep_sd=50, verbose=False),
     )
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._run_all_ml_inter_overlap_rescue",
+        "karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._run_all_ml_inter_overlap_rescue",
     ) as inter:
         run_inter_monomer_overlap_rescue(ctx, cfg)
     inter.assert_called_once()
 
 
 def test_run_intra_overlap_rescue_partial_ml_uses_light_path():
-    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+    from karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
         run_intra_monomer_overlap_rescue,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+    from karml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
         DynamicsOverlapConfig,
         OverlapRescueConfig,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
+    from karml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
 
     ctx = MagicMock(spec=MlpotContext)
     cfg = DynamicsOverlapConfig(
@@ -1699,20 +1699,20 @@ def test_run_intra_overlap_rescue_partial_ml_uses_light_path():
         rescue=OverlapRescueConfig(nstep_sd=50, verbose=False),
     )
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._run_all_ml_intra_overlap_rescue",
+        "karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._run_all_ml_intra_overlap_rescue",
     ) as intra:
         run_intra_monomer_overlap_rescue(ctx, cfg)
     intra.assert_called_once()
 
 
 def test_rewrite_dynamics_restart_writes_current_state(tmp_path):
-    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+    from karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
         rewrite_dynamics_restart_from_current_state,
     )
 
     res = tmp_path / "equi.res"
     with patch(
-        "mmml.interfaces.pycharmmInterface.charmm_restart_io.write_charmm_restart_from_memory",
+        "karml.interfaces.pycharmmInterface.charmm_restart_io.write_charmm_restart_from_memory",
     ) as writer:
         rewrite_dynamics_restart_from_current_state(res, write_unit=92)
 
@@ -1720,7 +1720,7 @@ def test_rewrite_dynamics_restart_writes_current_state(tmp_path):
 
 
 def test_restore_charmm_state_from_restart_parses_and_syncs_positions(tmp_path):
-    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+    from karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
         restore_charmm_state_from_restart,
     )
 
@@ -1751,19 +1751,19 @@ def test_restore_charmm_state_from_restart_parses_and_syncs_positions(tmp_path):
         "sys.modules",
         {
             "pycharmm": mock_py,
-            "mmml.interfaces.pycharmmInterface.import_pycharmm": MagicMock(),
+            "karml.interfaces.pycharmmInterface.import_pycharmm": MagicMock(),
         },
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._charmm_natom_count",
+        "karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._charmm_natom_count",
         return_value=2,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.charmm_levels.charmm_relaxed_bomlev",
+        "karml.interfaces.pycharmmInterface.charmm_levels.charmm_relaxed_bomlev",
         return_value=__import__("contextlib").nullcontext(),
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         return_value=np.zeros((2, 3), dtype=float),
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
         side_effect=_capture_sync,
     ):
         restore_charmm_state_from_restart(restart, read_unit=93)
@@ -1778,7 +1778,7 @@ def test_restore_charmm_state_from_restart_parses_and_syncs_positions(tmp_path):
 
 
 def test_restore_charmm_state_from_restart_syncs_velocities_when_present(tmp_path):
-    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+    from karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
         restore_charmm_state_from_restart,
     )
 
@@ -1805,21 +1805,21 @@ def test_restore_charmm_state_from_restart_syncs_velocities_when_present(tmp_pat
         "sys.modules",
         {
             "pycharmm": mock_py,
-            "mmml.interfaces.pycharmmInterface.import_pycharmm": MagicMock(),
+            "karml.interfaces.pycharmmInterface.import_pycharmm": MagicMock(),
         },
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._charmm_natom_count",
+        "karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._charmm_natom_count",
         return_value=2,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.charmm_levels.charmm_relaxed_bomlev",
+        "karml.interfaces.pycharmmInterface.charmm_levels.charmm_relaxed_bomlev",
         return_value=__import__("contextlib").nullcontext(),
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         return_value=np.zeros((2, 3), dtype=float),
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.sync_charmm_velocities_akma",
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.sync_charmm_velocities_akma",
         side_effect=lambda v: synced_vel.append(np.asarray(v, dtype=float)),
     ):
         restore_charmm_state_from_restart(restart, read_unit=93)
@@ -1830,7 +1830,7 @@ def test_restore_charmm_state_from_restart_syncs_velocities_when_present(tmp_pat
 
 
 def test_restore_charmm_state_from_restart_prefers_live_coords(tmp_path):
-    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+    from karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
         restore_charmm_state_from_restart,
     )
 
@@ -1858,19 +1858,19 @@ def test_restore_charmm_state_from_restart_prefers_live_coords(tmp_path):
         "sys.modules",
         {
             "pycharmm": mock_py,
-            "mmml.interfaces.pycharmmInterface.import_pycharmm": MagicMock(),
+            "karml.interfaces.pycharmmInterface.import_pycharmm": MagicMock(),
         },
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._charmm_natom_count",
+        "karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._charmm_natom_count",
         return_value=2,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.charmm_levels.charmm_relaxed_bomlev",
+        "karml.interfaces.pycharmmInterface.charmm_levels.charmm_relaxed_bomlev",
         return_value=__import__("contextlib").nullcontext(),
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         return_value=live.copy(),
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
         side_effect=_capture_sync,
     ):
         restore_charmm_state_from_restart(restart, read_unit=93)
@@ -1880,7 +1880,7 @@ def test_restore_charmm_state_from_restart_prefers_live_coords(tmp_path):
 
 
 def test_restore_charmm_state_from_restart_raises_natom_mismatch(tmp_path):
-    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+    from karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
         restore_charmm_state_from_restart,
     )
 
@@ -1906,19 +1906,19 @@ def test_restore_charmm_state_from_restart_raises_natom_mismatch(tmp_path):
         "sys.modules",
         {
             "pycharmm": mock_py,
-            "mmml.interfaces.pycharmmInterface.import_pycharmm": MagicMock(),
+            "karml.interfaces.pycharmmInterface.import_pycharmm": MagicMock(),
         },
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._charmm_natom_count",
+        "karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._charmm_natom_count",
         return_value=100,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.charmm_levels.charmm_relaxed_bomlev",
+        "karml.interfaces.pycharmmInterface.charmm_levels.charmm_relaxed_bomlev",
         return_value=__import__("contextlib").nullcontext(),
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         return_value=live,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
     ) as mock_sync:
         with pytest.raises(RuntimeError, match="offline NATOM=125 vs CHARMM natom=100"):
             restore_charmm_state_from_restart(restart, read_unit=93)
@@ -1926,7 +1926,7 @@ def test_restore_charmm_state_from_restart_raises_natom_mismatch(tmp_path):
 
 
 def test_restore_charmm_state_from_restart_raises_without_finite_coords(tmp_path):
-    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+    from karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
         restore_charmm_state_from_restart,
     )
 
@@ -1947,7 +1947,7 @@ def test_restore_charmm_state_from_restart_raises_without_finite_coords(tmp_path
 
 
 def test_reload_pre_mlpot_topology_disabled_without_env_flag(tmp_path):
-    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+    from karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
         _reload_pre_mlpot_topology,
     )
 
@@ -1959,11 +1959,11 @@ def test_reload_pre_mlpot_topology_disabled_without_env_flag(tmp_path):
 
 
 def test_reload_pre_mlpot_topology_uses_explicit_positions_not_charmm_array(tmp_path, monkeypatch):
-    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+    from karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
         _reload_pre_mlpot_topology,
     )
 
-    monkeypatch.setenv("MMML_ALLOW_PSF_DELETE_RELOAD", "1")
+    monkeypatch.setenv("KARML_ALLOW_PSF_DELETE_RELOAD", "1")
 
     topo = tmp_path / "cluster.psf"
     topo.write_text("psf", encoding="utf-8")
@@ -1987,21 +1987,21 @@ def test_reload_pre_mlpot_topology_uses_explicit_positions_not_charmm_array(tmp_
         {
             "pycharmm": mock_py,
             "pycharmm.read": mock_read,
-            "mmml.interfaces.pycharmmInterface.import_pycharmm": MagicMock(),
+            "karml.interfaces.pycharmmInterface.import_pycharmm": MagicMock(),
         },
     ), patch(
-        "mmml.interfaces.pycharmmInterface.cgenff_bonded_reference.read_psf_card_file"
+        "karml.interfaces.pycharmmInterface.cgenff_bonded_reference.read_psf_card_file"
     ) as mock_read_psf, patch(
-        "mmml.interfaces.pycharmmInterface.charmm_levels.charmm_relaxed_bomlev",
+        "karml.interfaces.pycharmmInterface.charmm_levels.charmm_relaxed_bomlev",
         return_value=__import__("contextlib").nullcontext(),
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         return_value=stale_nan,
     ) as get_pos, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
         side_effect=lambda pos: synced.append(np.asarray(pos, dtype=float)),
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.setup_default_nbonds",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.setup_default_nbonds",
     ):
         _reload_pre_mlpot_topology(ctx, topology_psf=topo, positions=explicit)
 
@@ -2014,11 +2014,11 @@ def test_reload_pre_mlpot_topology_uses_explicit_positions_not_charmm_array(tmp_
 
 
 def test_reload_pre_mlpot_topology_raises_on_nonfinite_explicit_positions(tmp_path, monkeypatch):
-    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+    from karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
         _reload_pre_mlpot_topology,
     )
 
-    monkeypatch.setenv("MMML_ALLOW_PSF_DELETE_RELOAD", "1")
+    monkeypatch.setenv("KARML_ALLOW_PSF_DELETE_RELOAD", "1")
 
     topo = tmp_path / "cluster.psf"
     topo.write_text("psf", encoding="utf-8")
@@ -2030,11 +2030,11 @@ def test_reload_pre_mlpot_topology_raises_on_nonfinite_explicit_positions(tmp_pa
 
 
 def test_reload_pre_mlpot_topology_default_reads_finite_charmm_positions(tmp_path, monkeypatch):
-    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+    from karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
         _reload_pre_mlpot_topology,
     )
 
-    monkeypatch.setenv("MMML_ALLOW_PSF_DELETE_RELOAD", "1")
+    monkeypatch.setenv("KARML_ALLOW_PSF_DELETE_RELOAD", "1")
 
     topo = tmp_path / "cluster.psf"
     topo.write_text("psf", encoding="utf-8")
@@ -2054,21 +2054,21 @@ def test_reload_pre_mlpot_topology_default_reads_finite_charmm_positions(tmp_pat
         {
             "pycharmm": mock_py,
             "pycharmm.read": mock_read,
-            "mmml.interfaces.pycharmmInterface.import_pycharmm": MagicMock(),
+            "karml.interfaces.pycharmmInterface.import_pycharmm": MagicMock(),
         },
     ), patch(
-        "mmml.interfaces.pycharmmInterface.charmm_levels.charmm_relaxed_bomlev",
+        "karml.interfaces.pycharmmInterface.charmm_levels.charmm_relaxed_bomlev",
         return_value=__import__("contextlib").nullcontext(),
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         return_value=from_charmm,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
         side_effect=lambda pos: synced.append(np.asarray(pos, dtype=float)),
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.setup_default_nbonds",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.setup_default_nbonds",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.cgenff_bonded_reference.read_psf_card_file",
+        "karml.interfaces.pycharmmInterface.cgenff_bonded_reference.read_psf_card_file",
     ):
         _reload_pre_mlpot_topology(ctx, topology_psf=topo)
 
@@ -2077,14 +2077,14 @@ def test_reload_pre_mlpot_topology_default_reads_finite_charmm_positions(tmp_pat
 
 
 def test_run_extent_recovery_passes_restart_coords_to_all_ml_path(tmp_path):
-    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+    from karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
         run_extent_recovery_from_prior_restart,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+    from karml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
         DynamicsOverlapConfig,
         OverlapRescueConfig,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
+    from karml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
 
     restart = tmp_path / "prior.res"
     restart.write_text(
@@ -2115,21 +2115,21 @@ def test_run_extent_recovery_passes_restart_coords_to_all_ml_path(tmp_path):
         rescue=OverlapRescueConfig(nstep_sd=10, verbose=False),
     )
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint.try_recovery_from_checkpoint_ladder",
+        "karml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint.try_recovery_from_checkpoint_ladder",
         return_value=restart,
     ) as restore, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard.flyoff_checkpoint_geometry_acceptable",
+        "karml.interfaces.pycharmmInterface.mlpot.overlap_guard.flyoff_checkpoint_geometry_acceptable",
         return_value=True,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint.build_extent_recovery_candidates",
+        "karml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint.build_extent_recovery_candidates",
         return_value=[],
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         return_value=expected,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._run_all_ml_extent_recovery",
+        "karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._run_all_ml_extent_recovery",
     ) as extent_path, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.minimize_bonded_mm_recovery",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics.minimize_bonded_mm_recovery",
     ) as light:
         run_extent_recovery_from_prior_restart(ctx, cfg, prior_restart=restart)
 
@@ -2148,14 +2148,14 @@ def argparse_namespace(**kwargs):
 
 
 def test_finalize_overlap_rescue_for_dynamics_reregisters_and_gates_grms():
-    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+    from karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
         finalize_overlap_rescue_for_dynamics,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+    from karml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
         DynamicsOverlapConfig,
         OverlapRescueConfig,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
+    from karml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
 
     ctx = MagicMock(spec=MlpotContext)
     cfg = DynamicsOverlapConfig(
@@ -2166,16 +2166,16 @@ def test_finalize_overlap_rescue_for_dynamics_reregisters_and_gates_grms():
         pyCModel=MagicMock(),
     )
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.sync_charmm_lists_after_mini",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics.sync_charmm_lists_after_mini",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.invalidate_mlpot_calculator_caches",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics.invalidate_mlpot_calculator_caches",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.refresh_mlpot_energy_and_grms",
+        "karml.interfaces.pycharmmInterface.mlpot.cli_common.refresh_mlpot_energy_and_grms",
         return_value=12.0,
     ) as refresh, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.assert_mlpot_user_active",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.assert_mlpot_user_active",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.resolve_mlpot_grms_kcalmol_A",
+        "karml.interfaces.pycharmmInterface.mlpot.cli_common.resolve_mlpot_grms_kcalmol_A",
         return_value=12.0,
     ):
         grms = finalize_overlap_rescue_for_dynamics(
@@ -2188,14 +2188,14 @@ def test_finalize_overlap_rescue_for_dynamics_reregisters_and_gates_grms():
 
 
 def test_finalize_overlap_rescue_skips_duplicate_mlpot_sd_after_extent_polish():
-    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+    from karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
         finalize_overlap_rescue_for_dynamics,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+    from karml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
         DynamicsOverlapConfig,
         OverlapRescueConfig,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
+    from karml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
 
     ctx = MagicMock(spec=MlpotContext)
     ctx._overlap_extent_polish_mlpot_sd_done = True
@@ -2207,19 +2207,19 @@ def test_finalize_overlap_rescue_skips_duplicate_mlpot_sd_after_extent_polish():
         pyCModel=MagicMock(),
     )
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.sync_charmm_lists_after_mini",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics.sync_charmm_lists_after_mini",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.invalidate_mlpot_calculator_caches",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics.invalidate_mlpot_calculator_caches",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.refresh_mlpot_energy_and_grms",
+        "karml.interfaces.pycharmmInterface.mlpot.cli_common.refresh_mlpot_energy_and_grms",
         return_value=28.9,
     ) as refresh, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.assert_mlpot_user_active",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.assert_mlpot_user_active",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.resolve_mlpot_grms_kcalmol_A",
+        "karml.interfaces.pycharmmInterface.mlpot.cli_common.resolve_mlpot_grms_kcalmol_A",
         return_value=28.9,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._run_mlpot_recovery_mini",
+        "karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._run_mlpot_recovery_mini",
     ) as mini:
         grms = finalize_overlap_rescue_for_dynamics(
             ctx, cfg, context="EQUI at step 39000"
@@ -2230,14 +2230,14 @@ def test_finalize_overlap_rescue_skips_duplicate_mlpot_sd_after_extent_polish():
 
 
 def test_finalize_overlap_rescue_all_ml_pbc_skips_mlpot_sd_mini():
-    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+    from karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
         finalize_overlap_rescue_for_dynamics,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+    from karml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
         DynamicsOverlapConfig,
         OverlapRescueConfig,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
+    from karml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
 
     ctx = MagicMock(spec=MlpotContext)
     ctx.use_pbc = True
@@ -2250,22 +2250,22 @@ def test_finalize_overlap_rescue_all_ml_pbc_skips_mlpot_sd_mini():
         pyCModel=MagicMock(),
     )
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.sync_charmm_lists_after_mini",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics.sync_charmm_lists_after_mini",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.invalidate_mlpot_calculator_caches",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics.invalidate_mlpot_calculator_caches",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.refresh_mlpot_energy_and_grms",
+        "karml.interfaces.pycharmmInterface.mlpot.cli_common.refresh_mlpot_energy_and_grms",
         return_value=4.3,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.assert_mlpot_user_active",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.assert_mlpot_user_active",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.resolve_mlpot_grms_kcalmol_A",
+        "karml.interfaces.pycharmmInterface.mlpot.cli_common.resolve_mlpot_grms_kcalmol_A",
         return_value=4.3,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup._is_all_ml_pbc_context",
+        "karml.interfaces.pycharmmInterface.mlpot.setup._is_all_ml_pbc_context",
         return_value=True,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._run_mlpot_recovery_mini",
+        "karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._run_mlpot_recovery_mini",
     ) as mini:
         grms = finalize_overlap_rescue_for_dynamics(
             ctx, cfg, context="heat segment 1/2 at step 500"
@@ -2276,19 +2276,19 @@ def test_finalize_overlap_rescue_all_ml_pbc_skips_mlpot_sd_mini():
 
 
 def test_run_mlpot_recovery_mini_skips_all_ml_pbc():
-    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+    from karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
         _run_mlpot_recovery_mini,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import BondedMmMiniConfig
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import BondedMmMiniConfig
 
     ctx = MagicMock()
     ctx.use_pbc = True
     bonded = BondedMmMiniConfig(nstep_sd=1000, verbose=False)
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup._is_all_ml_pbc_context",
+        "karml.interfaces.pycharmmInterface.mlpot.setup._is_all_ml_pbc_context",
         return_value=True,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.minimize_with_mlpot",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics.minimize_with_mlpot",
     ) as mini:
         _run_mlpot_recovery_mini(
             ctx,
@@ -2301,14 +2301,14 @@ def test_run_mlpot_recovery_mini_skips_all_ml_pbc():
 
 
 def test_finalize_overlap_rescue_retries_near_miss_grms_gate():
-    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+    from karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
         finalize_overlap_rescue_for_dynamics,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+    from karml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
         DynamicsOverlapConfig,
         OverlapRescueConfig,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
+    from karml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
 
     ctx = MagicMock(spec=MlpotContext)
     cfg = DynamicsOverlapConfig(
@@ -2319,19 +2319,19 @@ def test_finalize_overlap_rescue_retries_near_miss_grms_gate():
         pyCModel=MagicMock(),
     )
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.sync_charmm_lists_after_mini",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics.sync_charmm_lists_after_mini",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.invalidate_mlpot_calculator_caches",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics.invalidate_mlpot_calculator_caches",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.refresh_mlpot_energy_and_grms",
+        "karml.interfaces.pycharmmInterface.mlpot.cli_common.refresh_mlpot_energy_and_grms",
         side_effect=[355.72, 320.0],
     ) as refresh, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.assert_mlpot_user_active",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.assert_mlpot_user_active",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.resolve_mlpot_grms_kcalmol_A",
+        "karml.interfaces.pycharmmInterface.mlpot.cli_common.resolve_mlpot_grms_kcalmol_A",
         side_effect=[355.72, 320.0],
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._run_mlpot_recovery_mini",
+        "karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._run_mlpot_recovery_mini",
     ) as mini:
         grms = finalize_overlap_rescue_for_dynamics(
             ctx,
@@ -2348,14 +2348,14 @@ def test_finalize_overlap_rescue_retries_near_miss_grms_gate():
 
 
 def test_finalize_overlap_rescue_retries_moderate_high_grms_gate():
-    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+    from karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
         finalize_overlap_rescue_for_dynamics,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+    from karml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
         DynamicsOverlapConfig,
         OverlapRescueConfig,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
+    from karml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
 
     ctx = MagicMock(spec=MlpotContext)
     cfg = DynamicsOverlapConfig(
@@ -2366,19 +2366,19 @@ def test_finalize_overlap_rescue_retries_moderate_high_grms_gate():
         pyCModel=MagicMock(),
     )
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.sync_charmm_lists_after_mini",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics.sync_charmm_lists_after_mini",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.invalidate_mlpot_calculator_caches",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics.invalidate_mlpot_calculator_caches",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.refresh_mlpot_energy_and_grms",
+        "karml.interfaces.pycharmmInterface.mlpot.cli_common.refresh_mlpot_energy_and_grms",
         side_effect=[448.18, 300.0],
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.assert_mlpot_user_active",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.assert_mlpot_user_active",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.resolve_mlpot_grms_kcalmol_A",
+        "karml.interfaces.pycharmmInterface.mlpot.cli_common.resolve_mlpot_grms_kcalmol_A",
         side_effect=[448.18, 300.0],
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._run_mlpot_recovery_mini",
+        "karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._run_mlpot_recovery_mini",
     ) as mini:
         grms = finalize_overlap_rescue_for_dynamics(
             ctx,
@@ -2392,14 +2392,14 @@ def test_finalize_overlap_rescue_retries_moderate_high_grms_gate():
 
 
 def test_finalize_overlap_rescue_retries_high_but_recoverable_grms_gate():
-    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+    from karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
         finalize_overlap_rescue_for_dynamics,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+    from karml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
         DynamicsOverlapConfig,
         OverlapRescueConfig,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
+    from karml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
 
     ctx = MagicMock(spec=MlpotContext)
     cfg = DynamicsOverlapConfig(
@@ -2410,19 +2410,19 @@ def test_finalize_overlap_rescue_retries_high_but_recoverable_grms_gate():
         pyCModel=MagicMock(),
     )
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.sync_charmm_lists_after_mini",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics.sync_charmm_lists_after_mini",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.invalidate_mlpot_calculator_caches",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics.invalidate_mlpot_calculator_caches",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.refresh_mlpot_energy_and_grms",
+        "karml.interfaces.pycharmmInterface.mlpot.cli_common.refresh_mlpot_energy_and_grms",
         side_effect=[712.81, 320.0],
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.assert_mlpot_user_active",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.assert_mlpot_user_active",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.resolve_mlpot_grms_kcalmol_A",
+        "karml.interfaces.pycharmmInterface.mlpot.cli_common.resolve_mlpot_grms_kcalmol_A",
         side_effect=[712.81, 320.0],
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._run_mlpot_recovery_mini",
+        "karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._run_mlpot_recovery_mini",
     ) as mini:
         grms = finalize_overlap_rescue_for_dynamics(
             ctx,
@@ -2436,14 +2436,14 @@ def test_finalize_overlap_rescue_retries_high_but_recoverable_grms_gate():
 
 
 def test_finalize_overlap_rescue_continues_bounded_grms_after_retry():
-    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+    from karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
         finalize_overlap_rescue_for_dynamics,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+    from karml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
         DynamicsOverlapConfig,
         OverlapRescueConfig,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
+    from karml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
 
     ctx = MagicMock(spec=MlpotContext)
     cfg = DynamicsOverlapConfig(
@@ -2454,19 +2454,19 @@ def test_finalize_overlap_rescue_continues_bounded_grms_after_retry():
         pyCModel=MagicMock(),
     )
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.sync_charmm_lists_after_mini",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics.sync_charmm_lists_after_mini",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.invalidate_mlpot_calculator_caches",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics.invalidate_mlpot_calculator_caches",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.refresh_mlpot_energy_and_grms",
+        "karml.interfaces.pycharmmInterface.mlpot.cli_common.refresh_mlpot_energy_and_grms",
         side_effect=[501.0924, 501.0924],
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.assert_mlpot_user_active",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.assert_mlpot_user_active",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.resolve_mlpot_grms_kcalmol_A",
+        "karml.interfaces.pycharmmInterface.mlpot.cli_common.resolve_mlpot_grms_kcalmol_A",
         side_effect=[501.0924, 501.0924],
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._run_mlpot_recovery_mini",
+        "karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._run_mlpot_recovery_mini",
     ) as mini:
         grms = finalize_overlap_rescue_for_dynamics(
             ctx,
@@ -2480,14 +2480,14 @@ def test_finalize_overlap_rescue_continues_bounded_grms_after_retry():
 
 
 def test_finalize_overlap_rescue_for_dynamics_aborts_on_high_grms():
-    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+    from karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
         finalize_overlap_rescue_for_dynamics,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+    from karml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
         DynamicsOverlapConfig,
         OverlapRescueConfig,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
+    from karml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
 
     ctx = MagicMock(spec=MlpotContext)
     cfg = DynamicsOverlapConfig(
@@ -2498,16 +2498,16 @@ def test_finalize_overlap_rescue_for_dynamics_aborts_on_high_grms():
         pyCModel=MagicMock(),
     )
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.sync_charmm_lists_after_mini",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics.sync_charmm_lists_after_mini",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.invalidate_mlpot_calculator_caches",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics.invalidate_mlpot_calculator_caches",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.refresh_mlpot_energy_and_grms",
+        "karml.interfaces.pycharmmInterface.mlpot.cli_common.refresh_mlpot_energy_and_grms",
         return_value=5000.0,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.assert_mlpot_user_active",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.assert_mlpot_user_active",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.resolve_mlpot_grms_kcalmol_A",
+        "karml.interfaces.pycharmmInterface.mlpot.cli_common.resolve_mlpot_grms_kcalmol_A",
         return_value=5692.0,
     ):
         with pytest.raises(RuntimeError, match="post-overlap-rescue hybrid GRMS"):
@@ -2518,26 +2518,26 @@ def test_finalize_overlap_rescue_for_dynamics_aborts_on_high_grms():
 
 def test_run_mlpot_recovery_mini_skips_when_all_ml_pbc_lattice_not_ready():
     """All-ML PBC: keep restored geometry; never MLpot SD polish (even if lattice-ready)."""
-    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+    from karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
         _run_mlpot_recovery_mini,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import BondedMmMiniConfig
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import BondedMmMiniConfig
+    from karml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
 
     ctx = MagicMock(spec=MlpotContext)
     ctx.use_pbc = True
     ctx.cubic_box_side_A = 30.0
     bonded = BondedMmMiniConfig(nstep_sd=10, verbose=False)
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup._is_all_ml_pbc_context",
+        "karml.interfaces.pycharmmInterface.mlpot.setup._is_all_ml_pbc_context",
         return_value=True,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.charmm_crystal_lattice_ready",
+        "karml.interfaces.pycharmmInterface.mlpot.pbc_env.charmm_crystal_lattice_ready",
         return_value=True,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.minimize_with_mlpot",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics.minimize_with_mlpot",
     ) as mini, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.restraints.clear_mmfp_restraints",
+        "karml.interfaces.pycharmmInterface.mlpot.restraints.clear_mmfp_restraints",
     ) as clear:
         _run_mlpot_recovery_mini(
             ctx,

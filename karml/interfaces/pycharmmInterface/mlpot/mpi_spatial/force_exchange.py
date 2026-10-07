@@ -30,7 +30,7 @@ def mpi_allreduce_forces(
     comm: Any = None,
 ) -> np.ndarray:
     """Elementwise sum of forces across MPI ranks (mpi4py when available)."""
-    from mmml.interfaces.pycharmmInterface.charmm_mpi import ensure_charmm_mpi_initialized
+    from karml.interfaces.pycharmmInterface.charmm_mpi import ensure_charmm_mpi_initialized
 
     ensure_charmm_mpi_initialized()
     local = np.asarray(forces, dtype=np.float64)
@@ -52,7 +52,7 @@ def mpi_allreduce_forces(
 
 def mpi_allreduce_energy(energy: float, comm: Any = None) -> float:
     """Sum ML energy contributions across MPI ranks."""
-    from mmml.interfaces.pycharmmInterface.charmm_mpi import ensure_charmm_mpi_initialized
+    from karml.interfaces.pycharmmInterface.charmm_mpi import ensure_charmm_mpi_initialized
 
     ensure_charmm_mpi_initialized()
     local = float(energy)

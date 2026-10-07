@@ -2,9 +2,9 @@
 
 Run under PyCHARMM::
 
-    ./scripts/mmml-charmm-mpirun.sh python scripts/export_trialanine_cgenff_rtf.py
+    ./scripts/karml-charmm-mpirun.sh python scripts/export_trialanine_cgenff_rtf.py
 
-Writes ``mmml/data/charmm/top_trialanine_cgenff.rtf`` and appends a line to
+Writes ``karml/data/charmm/top_trialanine_cgenff.rtf`` and appends a line to
 ``CGENFF.RES``.
 """
 
@@ -15,9 +15,9 @@ import shutil
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
-OUT_RTF = REPO / "mmml" / "data" / "charmm" / "top_trialanine_cgenff.rtf"
-OUT_RES = REPO / "mmml" / "data" / "charmm" / "CGENFF.RES"
-OUT_CMAP_PRM = REPO / "mmml" / "data" / "charmm" / "par_trialanine_backbone_cmap.prm"
+OUT_RTF = REPO / "karml" / "data" / "charmm" / "top_trialanine_cgenff.rtf"
+OUT_RES = REPO / "karml" / "data" / "charmm" / "CGENFF.RES"
+OUT_CMAP_PRM = REPO / "karml" / "data" / "charmm" / "par_trialanine_backbone_cmap.prm"
 RESI_NAME = "TRIA"  # ACE–ALA×3–CT3 tri-alanine (CHARMM sequence names ≤ 4 characters)
 
 # Protein → CGENFF atom-type map (bonded params live in ``par_all36_cgenff.prm``).
@@ -72,7 +72,7 @@ def _map_atype(protein_type: str) -> str:
 
 
 def _protein_toppar_paths() -> tuple[Path, Path]:
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import CHARMM_HOME
+    from karml.interfaces.pycharmmInterface.import_pycharmm import CHARMM_HOME
 
     base = Path(CHARMM_HOME) / "toppar"
     rtf = base / "top_all36_prot.rtf"
@@ -85,15 +85,15 @@ def _protein_toppar_paths() -> tuple[Path, Path]:
 
 
 def _build_minimized_trialanine() -> None:
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import ensure_pycharmm_loaded
+    from karml.interfaces.pycharmmInterface.import_pycharmm import ensure_pycharmm_loaded
 
     ensure_pycharmm_loaded()
-    from mmml.interfaces.pycharmmInterface import setupRes
+    from karml.interfaces.pycharmmInterface import setupRes
     import pycharmm.read as read
     import pycharmm.generate as generate
     import pycharmm.lingo as lingo
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import reset_block
-    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
+    from karml.interfaces.pycharmmInterface.import_pycharmm import reset_block
+    from karml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
 
     rtf, prm = _protein_toppar_paths()
     lingo.charmm_script("DELETE ATOM SELE ALL END")
@@ -149,7 +149,7 @@ def _atom_names_in_psf_order() -> list[str]:
 
 
 def _cmap_lines_from_psf() -> list[str]:
-    from mmml.interfaces.pycharmmInterface.cgenff_topology import parse_psf_ext
+    from karml.interfaces.pycharmmInterface.cgenff_topology import parse_psf_ext
     import pycharmm.write as write
 
     write.psf_card("export_tria.psf")
@@ -165,7 +165,7 @@ def _cmap_lines_from_psf() -> list[str]:
 
 
 def _write_backbone_cmap_prm() -> None:
-    from mmml.interfaces.pycharmmInterface.cgenff_cmap import parse_cmap_types_from_prm
+    from karml.interfaces.pycharmmInterface.cgenff_cmap import parse_cmap_types_from_prm
 
     _rtf, prm = _protein_toppar_paths()
     cmap_types = parse_cmap_types_from_prm(prm)
@@ -185,7 +185,7 @@ def _write_backbone_cmap_prm() -> None:
     )
     lines = [
         "* TRIA backbone CMAP (alanine grid from protein PRM, CGENFF types)",
-        "* Regenerate: ./scripts/mmml-charmm-mpirun.sh python scripts/export_trialanine_cgenff_rtf.py",
+        "* Regenerate: ./scripts/karml-charmm-mpirun.sh python scripts/export_trialanine_cgenff_rtf.py",
         "CMAP",
         "! alanine backbone map",
         " ".join(cg_key) + f"  {cmap.resolution}",
@@ -220,7 +220,7 @@ def _format_rtf_block() -> str:
 
     lines: list[str] = [
         "* TRIALANINE — ACE–ALA×3–CT3 capped tri-alanine (CGENFF atom types)",
-        "* Regenerate: ./scripts/mmml-charmm-mpirun.sh python scripts/export_trialanine_cgenff_rtf.py",
+        "* Regenerate: ./scripts/karml-charmm-mpirun.sh python scripts/export_trialanine_cgenff_rtf.py",
         "",
         f"RESI {RESI_NAME:<8}  0.00 ! C12H22N4O5, ACE–ALA×3–CT3 (TRIALANINE)",
     ]

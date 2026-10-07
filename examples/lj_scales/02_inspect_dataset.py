@@ -78,7 +78,7 @@ print(f"  monomers        : {len(np.unique(mol[mol >= 0]))}")
 print(f"  net charge/frame: {chg[0][real[0]].sum():+.4f} e")
 
 try:
-    from mmml.models.mm_lj_scales import cgenff_type_names_from_prm
+    from karml.models.mm_lj_scales import cgenff_type_names_from_prm
 
     names = cgenff_type_names_from_prm()
     counts = Counter(int(v) for v in idx[real])

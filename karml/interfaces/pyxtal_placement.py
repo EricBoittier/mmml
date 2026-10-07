@@ -1,8 +1,8 @@
-"""PyXtal-backed symmetry-aware structure building (optional ``mmml[chem]``).
+"""PyXtal-backed symmetry-aware structure building (optional ``karml[chem]``).
 
 PyXtal generates crystal structures with space-group symmetry. This module
 exports ASE :class:`ase.Atoms` with periodic boundary conditions for downstream
-MMML workflows (ASE/JAX-MD optimization, NPZ handoff, PyCHARMM setup).
+KARML workflows (ASE/JAX-MD optimization, NPZ handoff, PyCHARMM setup).
 
 Install PyXtal with::
 
@@ -36,7 +36,7 @@ def require_pyxtal() -> None:
     if not have_pyxtal():
         raise ImportError(
             "PyXtal is not installed. Install with: uv sync --extra chem  "
-            "(or pip install 'mmml[chem]')."
+            "(or pip install 'karml[chem]')."
         )
 
 
@@ -341,7 +341,7 @@ def resolve_pyxtal_molecule_spec(residue: str) -> str | None:
     """Return a PyXtal-friendly molecule spec when CHARMM PDB is known to fail."""
     key = str(residue).strip().upper()
     if key == "DCM":
-        from mmml.paths import default_dcm_molecule_xyz
+        from karml.paths import default_dcm_molecule_xyz
 
         return str(default_dcm_molecule_xyz())
     return None
@@ -395,7 +395,7 @@ def validate_pyxtal_cluster_args(
 
 def add_pyxtal_cluster_args(parser: argparse.ArgumentParser) -> None:
     """CLI flags for PyXtal symmetry-aware cluster placement in ``md-system``."""
-    group = parser.add_argument_group("PyXtal crystal placement (requires mmml[chem])")
+    group = parser.add_argument_group("PyXtal crystal placement (requires karml[chem])")
     group.add_argument(
         "--pyxtal",
         action=argparse.BooleanOptionalAction,
@@ -509,7 +509,7 @@ def _molecule_blocks_from_ase_atoms(
         return []
     if len(set(apm_list)) == 1:
         apm = apm_list[0]
-        from mmml.interfaces.crystal_charmm import split_crystal_molecules
+        from karml.interfaces.crystal_charmm import split_crystal_molecules
 
         blocks = split_crystal_molecules(atoms, apm)
         if max_molecules is not None:
@@ -610,13 +610,13 @@ def write_psf_order_mapping_pdb(
     Uses :func:`format_cgenff_pdb_atom_line` so 4–5 character CGenFF names
     (``BENZ``, ``CH3CL``) are not truncated to 3 characters.
     """
-    from mmml.interfaces.pycharmmInterface.packmol_placement import (
+    from karml.interfaces.pycharmmInterface.packmol_placement import (
         _element_symbol,
         format_cgenff_pdb_atom_line,
     )
 
     lines = [
-        "REMARK   mmml PyXtal cluster (CHARMM atom names for PSF reordering)",
+        "REMARK   karml PyXtal cluster (CHARMM atom names for PSF reordering)",
         "CRYST1   200.000   200.000   200.000  90.00  90.00  90.00 P 1           1",
     ]
     serial = 1
@@ -665,7 +665,7 @@ def assign_ase_cluster_to_psf_order(
     """Map PyXtal ASE coordinates onto CHARMM PSF atom order."""
     from ase import Atoms
 
-    from mmml.interfaces.pycharmmInterface.packmol_placement import (
+    from karml.interfaces.pycharmmInterface.packmol_placement import (
         assign_packmol_pdb_to_psf_order,
     )
 

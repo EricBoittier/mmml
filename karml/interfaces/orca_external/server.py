@@ -1,4 +1,4 @@
-"""Persistent JAX server for MMML ORCA external-tool calculations."""
+"""Persistent JAX server for KARML ORCA external-tool calculations."""
 
 from __future__ import annotations
 
@@ -18,15 +18,15 @@ from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-from mmml.interfaces.orca_external.runner import (
+from karml.interfaces.orca_external.runner import (
     OrcaPreparedJob,
     _cache_key,
     get_calculator,
     prepare_orca_job_from_arguments,
     run_prepared_jobs,
 )
-from mmml.interfaces.orca_external.settings import (
-    MmmlOrcaSettings,
+from karml.interfaces.orca_external.settings import (
+    KarmlOrcaSettings,
     add_model_arguments,
     settings_from_namespace,
 )
@@ -48,12 +48,12 @@ class _PendingRequest:
     result: dict[str, Any] | None = None
 
 
-class MmmlOrcaServer:
+class KarmlOrcaServer:
     """Handle ORCA external-tool requests with optional GPU micro-batching."""
 
     def __init__(
         self,
-        default_settings: MmmlOrcaSettings | None = None,
+        default_settings: KarmlOrcaSettings | None = None,
         *,
         max_batch_size: int = DEFAULT_BATCH_SIZE,
         batch_wait_ms: float = DEFAULT_BATCH_WAIT_MS,
@@ -64,7 +64,7 @@ class MmmlOrcaServer:
         self._queue: list[_PendingRequest] = []
         self._queue_cond = threading.Condition()
         self._shutdown = False
-        self._worker = threading.Thread(target=self._batch_worker, name="mmml-orca-batch", daemon=True)
+        self._worker = threading.Thread(target=self._batch_worker, name="karml-orca-batch", daemon=True)
         self._worker.start()
 
     def shutdown(self) -> None:
@@ -191,8 +191,8 @@ class MmmlOrcaServer:
                 pending.done.set()
 
 
-def create_app(server: MmmlOrcaServer) -> FastAPI:
-    app = FastAPI(title="mmml-orca-server")
+def create_app(server: KarmlOrcaServer) -> FastAPI:
+    app = FastAPI(title="karml-orca-server")
 
     @app.get("/healthz")
     def healthz() -> dict[str, str]:
@@ -218,10 +218,10 @@ def create_app(server: MmmlOrcaServer) -> FastAPI:
 
 def build_server_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="mmml-orca-server",
+        prog="karml-orca-server",
         description=(
-            "Start a persistent MMML server for ORCA external-tool calculations. "
-            "Point ORCA ProgExt at mmml-orca-client."
+            "Start a persistent KARML server for ORCA external-tool calculations. "
+            "Point ORCA ProgExt at karml-orca-client."
         ),
     )
     parser.add_argument(
@@ -263,17 +263,17 @@ def main(argv: list[str] | None = None) -> None:
     parser = build_server_parser()
     args = parser.parse_args(argv)
 
-    default_settings: MmmlOrcaSettings | None = None
-    if args.checkpoint or os.environ.get("MMML_CHECKPOINT"):
+    default_settings: KarmlOrcaSettings | None = None
+    if args.checkpoint or os.environ.get("KARML_CHECKPOINT"):
         default_settings = settings_from_namespace(args)
 
-    server = MmmlOrcaServer(
+    server = KarmlOrcaServer(
         default_settings=default_settings,
         max_batch_size=args.batch_size,
         batch_wait_ms=args.batch_wait_ms,
     )
     if args.warmup:
-        logging.info("Warming up MMML checkpoint...")
+        logging.info("Warming up KARML checkpoint...")
         server.warmup()
 
     host, port = args.host_port.split(":", 1)

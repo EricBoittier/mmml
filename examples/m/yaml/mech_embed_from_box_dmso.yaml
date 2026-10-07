@@ -1,5 +1,5 @@
 # Mechanical embedding from make-box DMSO box (after 08_make_boxes.sh).
-#   uv run mmml md-system --config examples/m/yaml/mech_embed_from_box_dmso.yaml --run-all
+#   uv run karml md-system --config examples/m/yaml/mech_embed_from_box_dmso.yaml --run-all
 
 defaults:
   from_pdb: artifacts/nh3_ch3cl/boxes/dmso/model.pdb

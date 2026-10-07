@@ -1,7 +1,7 @@
-"""CLI adapter for ASE NEB sampling with an MMML PhysNet checkpoint.
+"""CLI adapter for ASE NEB sampling with an KARML PhysNet checkpoint.
 
 Usage:
-    mmml neb \\
+    karml neb \\
       --checkpoint examples/m/kl.json \\
       --initial examples/m/neb/reag_0_opt.xyz \\
       --final examples/m/neb/prod_0_opt.xyz \\
@@ -16,7 +16,7 @@ import os
 from pathlib import Path
 from typing import Any
 
-from mmml.neb import NebConfig, run_neb
+from karml.neb import NebConfig, run_neb
 
 
 def _parse_pair(value: str) -> tuple[int, int]:
@@ -31,9 +31,9 @@ def _parse_pair(value: str) -> tuple[int, int]:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="mmml neb",
+        prog="karml neb",
         description=(
-            "Nudged elastic band (NEB) path sampling with a PhysNet / MMML "
+            "Nudged elastic band (NEB) path sampling with a PhysNet / KARML "
             "checkpoint as the ASE calculator."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -44,7 +44,7 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         help="YAML/JSON NebConfig; CLI flags override file values when set",
     )
-    parser.add_argument("--checkpoint", type=Path, help="PhysNet / KerNN / MMML checkpoint")
+    parser.add_argument("--checkpoint", type=Path, help="PhysNet / KerNN / KARML checkpoint")
     parser.add_argument(
         "--calculator",
         choices=("physnet", "kernnn"),

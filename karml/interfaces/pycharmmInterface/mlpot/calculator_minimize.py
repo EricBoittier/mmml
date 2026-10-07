@@ -16,9 +16,9 @@ CalculatorMiniSafeGrmsContext = Literal[
 
 import numpy as np
 
-from mmml.data.units import EV_TO_KCAL_MOL, format_energy_ev_kcal
+from karml.data.units import EV_TO_KCAL_MOL, format_energy_ev_kcal
 
-from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
     mlpot_hybrid_grms_from_calculator,
     mlpot_spherical_energy_forces_ev_angstrom,
 )
@@ -144,8 +144,8 @@ def safe_grms_stop_allowed(
 
 def _hybrid_grms_from_ase_atoms(atoms: Any) -> float:
     """Hybrid GRMS (kcal/mol/Å) from ASE calculator forces (eV/Å)."""
-    from mmml.data.units import EV_TO_KCAL_MOL
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import forces_grms_kcalmol_A
+    from karml.data.units import EV_TO_KCAL_MOL
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import forces_grms_kcalmol_A
 
     forces_ev = np.asarray(atoms.get_forces(), dtype=np.float64).reshape(-1, 3)
     return forces_grms_kcalmol_A(forces_ev * EV_TO_KCAL_MOL)
@@ -598,12 +598,12 @@ def _commit_hybrid_calculator_mini_result(
     recorded fmax — restoring that frame reintroduces the stressed monomers the
     repair just fixed (seen: TIP3:903 gate 3.59 eV/Å after a successful 0.9 repair).
     """
-    from mmml.interfaces.pycharmmInterface.mlpot import cli_common
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot import cli_common
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         invalidate_mlpot_calculator_caches,
         sync_charmm_lists_after_mini,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+    from karml.interfaces.pycharmmInterface.mlpot.setup import (
         invalidate_mlpot_pre_sd_ener_probe,
         mlpot_skip_charmm_ener_force_before_first_sd,
         prime_charmm_hybrid_energy_before_mlpot_sd,
@@ -702,7 +702,7 @@ def _commit_hybrid_calculator_mini_result(
 
 def calculator_mini_supported(mlpot_ctx: Any) -> bool:
     """ASE calculator mini needs the JAX ``spherical_fn`` (not a torch metatomic USER)."""
-    from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import DecomposedMlpotModel
+    from karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import DecomposedMlpotModel
 
     return isinstance(getattr(mlpot_ctx, "pyCModel", None), DecomposedMlpotModel)
 
@@ -716,7 +716,7 @@ def _skip_unsupported_calculator_mini(
     """Skip result for models without ``spherical_fn``; CHARMM SD minimizes instead."""
     if calculator_mini_supported(mlpot_ctx):
         return None
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
         charmm_grms_after_ener_force,
     )
 
@@ -761,8 +761,8 @@ def _hybrid_mlpot_ase_calculator_class():
             pos = np.asarray(atoms.get_positions(), dtype=np.float64)
             # Pair-list preparation may call CHARMM UPDATE/ENER internally.
             # Keep those implementation details quiet; Python exceptions still
-            # propagate and explicit MMML optimizer/stage reports remain visible.
-            from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_quiet_output
+            # propagate and explicit KARML optimizer/stage reports remain visible.
+            from karml.interfaces.pycharmmInterface.charmm_levels import charmm_quiet_output
 
             with charmm_quiet_output():
                 evald = mlpot_spherical_energy_forces_ev_angstrom(
@@ -800,7 +800,7 @@ def _hybrid_minimize_atoms(mlpot_ctx: Any, z: Any, positions: np.ndarray) -> Any
         box_side_A = getattr(mlpot_ctx, "charmm_cubic_box_side_A", None)
     atoms_per = getattr(mlpot_ctx, "atoms_per_monomer", None)
     if use_pbc and box_side_A is not None and atoms_per is not None:
-        from mmml.cli.run.md_handoff import rewrap_charmm_pbc_molecules
+        from karml.cli.run.md_handoff import rewrap_charmm_pbc_molecules
 
         # Exact COM lattice wrap only (margin_A=None): the inward nudge would translate face-straddling
         # molecules by a non-lattice vector, and constrained repairs (FIRE with the other molecules frozen)
@@ -820,7 +820,7 @@ def _hybrid_minimize_atoms(mlpot_ctx: Any, z: Any, positions: np.ndarray) -> Any
 
 def _promote_mlpot_jax_for_calculator_mini(mlpot_ctx: Any, *, verbose: bool) -> None:
     pyCModel = getattr(mlpot_ctx, "pyCModel", None)
-    from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
+    from karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
         DecomposedMlpotModel,
         warmup_decomposed_mlpot,
     )
@@ -843,7 +843,7 @@ def _promote_mlpot_jax_for_calculator_mini(mlpot_ctx: Any, *, verbose: bool) -> 
             )
         return
     if defer_sd:
-        from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
+        from karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
             materialize_deferred_mlpot_jax_before_sd,
         )
 
@@ -868,7 +868,7 @@ def _promote_mlpot_jax_for_calculator_mini(mlpot_ctx: Any, *, verbose: bool) -> 
             and (not was_gpu or not pyCModel._jax_warmup_done)
             and int(getattr(pyCModel, "_n_monomers", 0) or 0) > 1
         ):
-            from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+            from karml.interfaces.pycharmmInterface.mlpot.setup import (
                 get_charmm_positions_array,
             )
 
@@ -903,7 +903,7 @@ def _promote_mlpot_jax_for_calculator_mini(mlpot_ctx: Any, *, verbose: bool) -> 
                 flush=True,
             )
         return
-    from mmml.utils.jax_gpu_warmup import ensure_xla_gpu_warmed
+    from karml.utils.jax_gpu_warmup import ensure_xla_gpu_warmed
 
     ensure_xla_gpu_warmed(force=True)
 
@@ -1020,7 +1020,7 @@ def _run_hybrid_calculator_bfgs(
                     flush=True,
                 )
 
-    from mmml.interfaces.pycharmmInterface.charmm_mpi import disable_ase_mpi_parallel
+    from karml.interfaces.pycharmmInterface.charmm_mpi import disable_ase_mpi_parallel
 
     # ASE Optimizer.log → world.rank; serial libcharmm has no libmpi for mpi4py.
     disable_ase_mpi_parallel()
@@ -1173,7 +1173,7 @@ def _run_hybrid_calculator_fire(
             flush=True,
         )
 
-    from mmml.interfaces.pycharmmInterface.charmm_mpi import disable_ase_mpi_parallel
+    from karml.interfaces.pycharmmInterface.charmm_mpi import disable_ase_mpi_parallel
 
     disable_ase_mpi_parallel()
     opt = FIRE(
@@ -1200,7 +1200,7 @@ def minimize_hybrid_calculator_before_sd(
     context_prefix: str = "Pre-SD",
 ) -> HybridMinimizeResult:
     """Relax CHARMM coordinates with ASE BFGS on the hybrid calculator."""
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+    from karml.interfaces.pycharmmInterface.mlpot.setup import (
         get_charmm_positions_array,
     )
 
@@ -1324,7 +1324,7 @@ def minimize_hybrid_calculator_fire_before_sd(
     context_prefix: str = "Pre-SD",
 ) -> HybridMinimizeResult:
     """Relax CHARMM coordinates with guarded ASE FIRE on the hybrid calculator."""
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+    from karml.interfaces.pycharmmInterface.mlpot.setup import (
         get_charmm_positions_array,
     )
 
@@ -1470,11 +1470,11 @@ def repair_stressed_monomers_with_calculator(
     """
     from ase.constraints import FixAtoms
 
-    from mmml.interfaces.pycharmmInterface.mlpot.grms_thresholds import (
+    from karml.interfaces.pycharmmInterface.mlpot.grms_thresholds import (
         per_monomer_fmax_from_forces,
         select_stressed_monomers,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+    from karml.interfaces.pycharmmInterface.mlpot.setup import (
         get_charmm_positions_array,
     )
 
@@ -1587,7 +1587,7 @@ def run_pre_dynamics_hybrid_calculator_prep(
     verbose: bool = True,
 ) -> tuple[float, bool]:
     """Run ASE FIRE then BFGS when live hybrid GRMS reflects ML geometry stress."""
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
         charmm_grms_after_ener_force,
         measure_hybrid_charmm_grms,
     )
@@ -1686,11 +1686,11 @@ def _report_pre_dynamics_hot_atoms(mlpot_ctx: Any, args: Any, *, verbose: bool) 
     if not verbose:
         return
     try:
-        from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+        from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
             charmm_positions_angstrom,
             mlpot_spherical_forces_ev_angstrom,
         )
-        from mmml.interfaces.pycharmmInterface.mmml_calculator import ev2kcalmol
+        from karml.interfaces.pycharmmInterface.karml_calculator import ev2kcalmol
 
         py_model = getattr(mlpot_ctx, "pyCModel", None)
         if py_model is None:
@@ -1705,7 +1705,7 @@ def _report_pre_dynamics_hot_atoms(mlpot_ctx: Any, args: Any, *, verbose: bool) 
             box_A=float(box) if box is not None else None,
         )
         if forces_ev is None:
-            from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+            from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
                 charmm_grms_after_ener_force,
                 charmm_total_forces_kcalmol_A,
             )
@@ -1719,7 +1719,7 @@ def _report_pre_dynamics_hot_atoms(mlpot_ctx: Any, args: Any, *, verbose: bool) 
         resids = getattr(args, "_cluster_atom_resids", None)
         segids = getattr(args, "_cluster_atom_segids", None)
         if not names:
-            from mmml.interfaces.pycharmmInterface.myoglobin import psf_per_atom_identity
+            from karml.interfaces.pycharmmInterface.myoglobin import psf_per_atom_identity
 
             names, resnames, resids, segids = psf_per_atom_identity()
         text = format_hottest_atoms(
@@ -1751,14 +1751,14 @@ def _relax_force_gate_with_charmm_abnr(
     Metatomic has no JAX ``spherical_fn``, so FIRE/BFGS cannot run. Steepest
     descent already stopped on the RMS, which can leave one atom above 2 eV/Å.
     """
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
         charmm_grms_after_ener_force,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         MinimizeWithMlpotConfig,
         minimize_with_mlpot,
     )
-    from mmml.interfaces.pycharmmInterface.mmml_calculator import ev2kcalmol
+    from karml.interfaces.pycharmmInterface.karml_calculator import ev2kcalmol
 
     nstep = int(getattr(args, "fire_min_steps", 200) or 200)
     ceiling_kcal = float(fmax_ceiling_ev_a) * float(ev2kcalmol)

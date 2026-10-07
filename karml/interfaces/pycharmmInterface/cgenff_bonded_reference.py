@@ -7,19 +7,19 @@ from typing import Any
 
 import numpy as np
 
-from mmml.interfaces.pycharmmInterface.mlpot.dynamics import charmm_bonded_term_kcalmol
+from karml.interfaces.pycharmmInterface.mlpot.dynamics import charmm_bonded_term_kcalmol
 
 
 def charmm_positions_xyz_array() -> np.ndarray:
     """Read active PyCHARMM coordinates as ``(N, 3)``."""
-    from mmml.interfaces.pycharmmInterface.charmm_forces import charmm_positions_array
+    from karml.interfaces.pycharmmInterface.charmm_forces import charmm_positions_array
 
     return charmm_positions_array()
 
 
 def set_charmm_positions(positions: np.ndarray) -> None:
     """Load ``(N, 3)`` coordinates into the active PyCHARMM session."""
-    from mmml.interfaces.pycharmmInterface.charmm_forces import set_charmm_positions_array
+    from karml.interfaces.pycharmmInterface.charmm_forces import set_charmm_positions_array
 
     arr = np.asarray(positions, dtype=np.float64)
     if arr.ndim != 2 or arr.shape[1] != 3:
@@ -50,7 +50,7 @@ def read_psf_card_file(
 
     import pycharmm.lib as lib
 
-    from mmml.interfaces.pycharmmInterface.charmm_paths import charmm_fortran_path
+    from karml.interfaces.pycharmmInterface.charmm_paths import charmm_fortran_path
 
     p = Path(path)
     use_xplor = _psf_needs_xplor_reader(p) if xplor is None else bool(xplor)
@@ -71,7 +71,7 @@ def read_psf_card_file(
 
 def read_pdb_file(path: str | Path, **kwargs: Any) -> None:
     """Read PDB coordinates with lowercase Fortran-safe staging when needed."""
-    from mmml.interfaces.pycharmmInterface.charmm_paths import charmm_fortran_path
+    from karml.interfaces.pycharmmInterface.charmm_paths import charmm_fortran_path
 
     import pycharmm.read as read
 
@@ -99,7 +99,7 @@ def charmm_cmap_is_active(
 
 def setup_bonded_only_charmm() -> None:
     """Zero nonbonded terms so ``ENER FORCE`` reports bonded MM only."""
-    from mmml.interfaces.pycharmmInterface.mlpot.block_terms import apply_bonded_mm_only_block
+    from karml.interfaces.pycharmmInterface.mlpot.block_terms import apply_bonded_mm_only_block
 
     apply_bonded_mm_only_block()
 
@@ -121,18 +121,18 @@ def charmm_bonded_energy_components_kcalmol() -> dict[str, float]:
 
 def charmm_bonded_forces_kcalmol_A() -> np.ndarray:
     """Per-atom bonded-only forces (kcal/mol/Å) from the last ``ENER FORCE``."""
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_total_forces_kcalmol_A
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_total_forces_kcalmol_A
 
     return np.asarray(charmm_total_forces_kcalmol_A(), dtype=np.float64)
 
 
 def run_charmm_bonded_ener_force(*, silent: bool = True) -> None:
     """Evaluate bonded-only CHARMM energy and forces."""
-    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+    import karml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
     import pycharmm
 
     if silent:
-        from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_silent_command
+        from karml.interfaces.pycharmmInterface.charmm_levels import charmm_silent_command
 
         with charmm_silent_command():
             pycharmm.lingo.charmm_script("ENER FORCE")
@@ -222,7 +222,7 @@ def compare_bonded_to_charmm(
 
 def setup_nonbonded_only_charmm() -> None:
     """Zero bonded terms so ``ENER FORCE`` reports VDW/ELEC only."""
-    from mmml.interfaces.pycharmmInterface.mlpot.block_terms import (
+    from karml.interfaces.pycharmmInterface.mlpot.block_terms import (
         _assert_selective_block_safe,
     )
 
@@ -259,7 +259,7 @@ def _charmm_nb_term_sum(*names: str) -> float:
     if active:
         return sum(float(active.get(str(name).strip().upper(), 0.0)) for name in names)
 
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import charmm_bonded_term_kcalmol
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import charmm_bonded_term_kcalmol
 
     total = 0.0
     for name in names:
@@ -322,14 +322,14 @@ def charmm_nonbonded_by_segment_category(
 
     Requires an active PBC solvated PSF with ``SEGID`` ``PEPT`` and ``SOLV``.
     Under MPI-linked libcharmm + ``mpirun``, selective BLOCK may hang unless
-    ``MMML_ALLOW_SELECTIVE_BONDED_BLOCK=1``.
+    ``KARML_ALLOW_SELECTIVE_BONDED_BLOCK=1``.
     """
-    from mmml.interfaces.pycharmmInterface.charmm_levels import run_charmm_script_quiet
-    from mmml.interfaces.pycharmmInterface.mlpot.block_terms import (
+    from karml.interfaces.pycharmmInterface.charmm_levels import run_charmm_script_quiet
+    from karml.interfaces.pycharmmInterface.mlpot.block_terms import (
         _assert_selective_block_safe,
         apply_charmm_mm_block,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_total_forces_kcalmol_A
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_total_forces_kcalmol_A
 
     _assert_selective_block_safe(context="charmm_nonbonded_by_segment_category")
     out: dict[str, dict[str, float | np.ndarray]] = {}
@@ -443,7 +443,7 @@ def compare_mm_system_to_charmm(
     ignore_charmm_bonded_terms: tuple[str, ...] = (),
 ) -> None:
     """Assert full JAX MM (bonded + nonbonded) matches PyCHARMM ``ENER FORCE``."""
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_total_forces_kcalmol_A
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_total_forces_kcalmol_A
 
     charmm_bonded = charmm_bonded_energy_components_kcalmol()
     charmm_nb = charmm_nonbonded_energy_components_kcalmol()

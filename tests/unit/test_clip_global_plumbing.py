@@ -12,7 +12,7 @@ import pytest
 jnp = pytest.importorskip("jax.numpy")
 pytest.importorskip("optax")
 
-from mmml.models.physnetjax.physnetjax.training.optimizer import get_optimizer
+from karml.models.physnetjax.physnetjax.training.optimizer import get_optimizer
 
 
 def _applied_norm(clip_kwargs, raw_norm=1000.0):
@@ -60,7 +60,7 @@ def test_train_model_forwards_clip_global():
     """The CLI value must reach get_optimizer, not be silently dropped."""
     import inspect
 
-    from mmml.models.physnetjax.physnetjax.training import training
+    from karml.models.physnetjax.physnetjax.training import training
 
     assert "clip_global" in inspect.signature(training.train_model).parameters
     src = inspect.getsource(training.train_model)
@@ -68,7 +68,7 @@ def test_train_model_forwards_clip_global():
 
 
 def test_cli_exposes_clip_global():
-    from mmml.cli.make.make_training import build_parser
+    from karml.cli.make.make_training import build_parser
 
     args = build_parser().parse_args(["--clip-global", "1.0"])
     assert args.clip_global == 1.0

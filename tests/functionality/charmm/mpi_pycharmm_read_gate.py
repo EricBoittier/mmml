@@ -5,10 +5,10 @@ No JAX, ASE, Rich, or MLpot — isolates ``eval_charmm_script`` topology I/O han
 
 Usage (node09)::
 
-    MMML_MPI_NP=1 ./scripts/run_mpi_pycharmm_read_gate.sh
-    MMML_MPI_NP=4 ./scripts/run_mpi_pycharmm_read_gate.sh --mode psf-crd
-    MMML_MPI_NP=4 ./scripts/run_mpi_pycharmm_read_gate.sh --mode stream-inp
-    MMML_MPI_NP=4 ./scripts/run_mpi_pycharmm_read_gate.sh --mode restart
+    KARML_MPI_NP=1 ./scripts/run_mpi_pycharmm_read_gate.sh
+    KARML_MPI_NP=4 ./scripts/run_mpi_pycharmm_read_gate.sh --mode psf-crd
+    KARML_MPI_NP=4 ./scripts/run_mpi_pycharmm_read_gate.sh --mode stream-inp
+    KARML_MPI_NP=4 ./scripts/run_mpi_pycharmm_read_gate.sh --mode restart
 
 Pass: exit 0 and ``PASS read_gate: n_atoms=100`` on all ranks (DCM:20 prebuilt).
 Fail/hang: note the last ``[step rank */N] begin`` line before the stall.
@@ -76,11 +76,11 @@ def _parse_args() -> argparse.Namespace:
 
 def _mpi_info() -> tuple[int, int]:
     try:
-        from mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
+        from karml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
 
         return mpi_rank_size()
     except Exception:
-        return 0, max(1, int(os.environ.get("MMML_MPI_NP", "1")))
+        return 0, max(1, int(os.environ.get("KARML_MPI_NP", "1")))
 
 
 def _log(step: str, msg: str) -> None:
@@ -93,13 +93,13 @@ def _print_dry_run(args: argparse.Namespace) -> None:
     for np in (1, 2, 4):
         print(f"# np={np} mode={args.mode}")
         print(
-            f"MMML_MPI_NP={np} ./scripts/run_mpi_pycharmm_read_gate.sh "
+            f"KARML_MPI_NP={np} ./scripts/run_mpi_pycharmm_read_gate.sh "
             f"--mode {args.mode} --psf {psf}"
         )
         print()
     print("# Native CHARMM control (finds setup/charmm/charmm or CHARMM_EXE):")
-    print("MMML_MPI_NP=4 ./scripts/run_native_charmm_read_gate.sh")
-    print("MMML_MPI_NP=4 ./scripts/run_native_charmm_read_gate.sh --with-restart")
+    print("KARML_MPI_NP=4 ./scripts/run_native_charmm_read_gate.sh")
+    print("KARML_MPI_NP=4 ./scripts/run_native_charmm_read_gate.sh --with-restart")
 
 
 def main() -> int:
@@ -108,7 +108,7 @@ def main() -> int:
         _print_dry_run(args)
         return 0
 
-    from mmml.interfaces.pycharmmInterface.charmm_mpi import (
+    from karml.interfaces.pycharmmInterface.charmm_mpi import (
         BOOTSTRAP_MPI_API,
         bootstrap_topology_mpi,
         configure_mpi_bootstrap_env,
@@ -159,9 +159,9 @@ def main() -> int:
         )
         if size > 1 and rank == 0:
             print(
-                "[gate] bisect: MMML_QUIET=0 (CHARMM errors) | "
-                "MMML_MPI_BOOTSTRAP_RANK0_DRIVE=1 | "
-                "MMML_MPI_NP=1 --mode restart | "
+                "[gate] bisect: KARML_QUIET=0 (CHARMM errors) | "
+                "KARML_MPI_BOOTSTRAP_RANK0_DRIVE=1 | "
+                "KARML_MPI_NP=1 --mode restart | "
                 "./scripts/run_native_charmm_read_gate.sh",
                 flush=True,
             )

@@ -10,8 +10,8 @@ import numpy as np
 import pytest
 from ase.calculators.calculator import Calculator, all_changes
 
-from mmml.cli.misc.pet_physnet_distill import build_parser, main as distill_main
-from mmml.distill.acetone_pool import (
+from karml.cli.misc.pet_physnet_distill import build_parser, main as distill_main
+from karml.distill.acetone_pool import (
     ATOMS_PER_ACETONE,
     DIMER_ATOMS,
     AcetonePoolConfig,
@@ -23,8 +23,8 @@ from mmml.distill.acetone_pool import (
     pool_config_for_preset,
     random_rotation,
 )
-from mmml.distill.npz_export import write_distill_npz
-from mmml.distill.teacher_label import ENERGY_MODE_INTERACTION, ENERGY_MODE_TOTAL, label_geometries
+from karml.distill.npz_export import write_distill_npz
+from karml.distill.teacher_label import ENERGY_MODE_INTERACTION, ENERGY_MODE_TOTAL, label_geometries
 
 
 class PairwiseDistanceCalculator(Calculator):
@@ -140,7 +140,7 @@ def test_interaction_labels_match_cross_pairs() -> None:
     z = mono.get_atomic_numbers()
     r = mono.get_positions()
     dimer_pos = assemble_dimer(r, r, com_distance_A=6.0, rotation_b=np.eye(3))
-    from mmml.distill.acetone_pool import Geometry
+    from karml.distill.acetone_pool import Geometry
 
     geos = [
         Geometry(z, r, "monomer", "pdb_eq", None, (10,)),
@@ -169,7 +169,7 @@ def test_interaction_labels_match_cross_pairs() -> None:
 
 
 def test_total_mode_keeps_raw_teacher_energy() -> None:
-    from mmml.distill.acetone_pool import Geometry
+    from karml.distill.acetone_pool import Geometry
 
     mono = load_acetone_monomer()
     geo = Geometry(mono.get_atomic_numbers(), mono.get_positions(), "monomer", "pdb_eq", None, (10,))
@@ -183,7 +183,7 @@ def test_write_npz_units_and_padding(tmp_path: Path) -> None:
     labeled = label_geometries(PairwiseDistanceCalculator(), geos)
     paths = write_distill_npz(labeled, tmp_path, seed=0, valid_fraction=0.2)
     train = np.load(paths["train"], allow_pickle=True)
-    units = json.loads(str(train["_mmml_units"].item()))
+    units = json.loads(str(train["_karml_units"].item()))
     assert units["E"] == "ev"
     assert units["F"] == "ev_angstrom"
     assert train["R"].shape[1] == DIMER_ATOMS
@@ -230,7 +230,7 @@ class _BatchedPairwise:
         self._calc = PairwiseDistanceCalculator()
 
     def evaluate(self, structures):
-        from mmml.distill.teacher_label import AseTeacher
+        from karml.distill.teacher_label import AseTeacher
 
         self.calls.append(len(structures))
         return AseTeacher(self._calc).evaluate(structures)
@@ -250,7 +250,7 @@ def test_batched_teacher_matches_ase_labels(mode: str) -> None:
 
 
 def test_pack_batches_respects_budgets() -> None:
-    from mmml.distill.batched_teacher import pack_batches
+    from karml.distill.batched_teacher import pack_batches
 
     sizes = [10, 10, 20, 20, 20, 50]
     batches = pack_batches(sizes, max_atoms=40, max_systems=3)
@@ -266,7 +266,7 @@ def test_pack_batches_respects_budgets() -> None:
 def test_mlmm_labels_match_mlpot_decomposition() -> None:
     """mlmm: dimer target is E_AB - 2 E_ref with full forces, so the MLpot
     difference P(AB) - P(A) - P(B) of perfect fits reproduces E_int."""
-    from mmml.distill.teacher_label import ENERGY_MODE_MLMM
+    from karml.distill.teacher_label import ENERGY_MODE_MLMM
 
     geos = build_acetone_pool(_tiny_pool())
     calc = PairwiseDistanceCalculator()
@@ -290,7 +290,7 @@ def test_mlmm_labels_match_mlpot_decomposition() -> None:
 
 
 def test_stratified_pick_fills_every_bin() -> None:
-    from mmml.distill.box_clusters import _stratified_pick
+    from karml.distill.box_clusters import _stratified_pick
 
     rng = np.random.default_rng(0)
     r = np.concatenate([np.full(100, 4.8), [3.0, 3.2], np.full(5, 6.5)])
@@ -303,7 +303,7 @@ def test_stratified_pick_fills_every_bin() -> None:
 
 
 def test_include_dimer_fragments_emits_matched_triples() -> None:
-    from mmml.distill.teacher_label import ENERGY_MODE_MLMM
+    from karml.distill.teacher_label import ENERGY_MODE_MLMM
 
     geos = build_acetone_pool(_tiny_pool())
     calc = PairwiseDistanceCalculator()

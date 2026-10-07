@@ -24,7 +24,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from mmml.data.units import (
+from karml.data.units import (
     ANGSTROM_TO_BOHR,
     DEBYE_TO_EANGSTROM,
     DEBYE_TO_EBOHR,
@@ -32,7 +32,7 @@ from mmml.data.units import (
     EBOHR_TO_DEBYE,
 )
 
-# CODATA 2018, spelled out so the reference does not come from mmml.data.units.
+# CODATA 2018, spelled out so the reference does not come from karml.data.units.
 _BOHR_RADIUS_ANGSTROM = 0.529177210903
 _ELEMENTARY_CHARGE_C = 1.602176634e-19
 _DEBYE_C_M = 3.335640952e-30
@@ -93,7 +93,7 @@ def test_the_old_typo_is_not_reintroduced():
 def _pred_dipole(positions, com, charges):
     import jax.numpy as jnp
 
-    from mmml.models.dcmnet.dcmnet.loss import pred_dipole
+    from karml.models.dcmnet.dcmnet.loss import pred_dipole
 
     return np.asarray(
         pred_dipole(jnp.asarray(positions), jnp.asarray(com), jnp.asarray(charges))
@@ -175,7 +175,7 @@ def test_pred_dipole_matches_an_independent_numpy_sum():
 
 
 def _ase_dipole(dipole_positions, monopoles, com):
-    from mmml.models.dcmnet.dcmnet_ase import DCMNetCalculator
+    from karml.models.dcmnet.dcmnet_ase import DCMNetCalculator
 
     # The method touches no instance state, so bind it to None rather than
     # standing up a calculator (which would need a trained model).
@@ -220,6 +220,6 @@ def test_ase_and_loss_dipoles_differ_only_by_the_documented_conversion():
 def test_analysis_reuses_the_shared_conversion():
     """``analysis.au_to_debye`` was a fourth independent literal; it must now
     be the same object the rest of the chain uses."""
-    from mmml.models.dcmnet.dcmnet import analysis
+    from karml.models.dcmnet.dcmnet import analysis
 
     assert analysis.au_to_debye == pytest.approx(EBOHR_TO_DEBYE, rel=1e-12)

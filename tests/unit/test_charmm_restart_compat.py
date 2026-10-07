@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from mmml.interfaces.pycharmmInterface.mlpot.charmm_restart_compat import restart_with_seed_count
+from karml.interfaces.pycharmmInterface.mlpot.charmm_restart_compat import restart_with_seed_count
 
 _HEAD = " !NATOM,NPRIV,NSTEP,NSAVC,NSAVV,JHSTRT,NDEGF,SEED,NSAVL\n"
 

@@ -2,7 +2,7 @@
 # Build reference DCM:5 box (if needed), run MM on/off + electrostatics + NVE backends.
 #
 # Usage:
-#   export MMML_CKPT=~/mmml_tutorial/acodcm/ckpts/dcm1-...
+#   export KARML_CKPT=~/karml_tutorial/acodcm/ckpts/dcm1-...
 #   bash tests/functionality/box_electro_compare/run_compare.sh
 #
 # Env:
@@ -15,30 +15,30 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-MMML_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
+KARML_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 TESTS_ROOT="${TESTS_ROOT:-$HOME/tests}"
 BOX_DIR="${BOX_DIR:-$TESTS_ROOT/boxes/dcm5_l25_ref}"
 RUN_TAG="${RUN_TAG:-$(date -u +%Y%m%dT%H%M%SZ)}"
 RUN_ROOT="${RUN_ROOT:-$TESTS_ROOT/runs/dcm5_l25_electro_compare_${RUN_TAG}}"
 CONFIG="$SCRIPT_DIR/config.yaml"
 
-# shellcheck source=../../../scripts/resolve_mmml_env.sh
-source "$MMML_ROOT/scripts/resolve_mmml_env.sh"
-mmml_resolve_env "$MMML_ROOT"
-PY="${MMML_PYTHON}"
-MPIRUN="${MMML_MPIRUN_WRAPPER:-$MMML_ROOT/scripts/mmml-charmm-mpirun.sh}"
+# shellcheck source=../../../scripts/resolve_karml_env.sh
+source "$KARML_ROOT/scripts/resolve_karml_env.sh"
+karml_resolve_env "$KARML_ROOT"
+PY="${KARML_PYTHON}"
+MPIRUN="${KARML_MPIRUN_WRAPPER:-$KARML_ROOT/scripts/karml-charmm-mpirun.sh}"
 
 # shellcheck source=../../../scripts/setup_jax_cuda_env.sh
-source "$MMML_ROOT/scripts/setup_jax_cuda_env.sh" 2>/dev/null || true
+source "$KARML_ROOT/scripts/setup_jax_cuda_env.sh" 2>/dev/null || true
 export JAX_PLATFORMS="${JAX_PLATFORMS:-cuda,cpu}"
 export JAX_ENABLE_X64="${JAX_ENABLE_X64:-true}"
-export MMML_JAX_PME_DEVICE="${MMML_JAX_PME_DEVICE:-cpu}"
-export MMML_MPI_NP="${MMML_MPI_NP:-1}"
+export KARML_JAX_PME_DEVICE="${KARML_JAX_PME_DEVICE:-cpu}"
+export KARML_MPI_NP="${KARML_MPI_NP:-1}"
 
-if [[ -z "${MMML_CKPT:-}" ]]; then
-  MMML_CKPT="${MMML_CKPT:-$HOME/mmml_tutorial/acodcm/ckpts/dcm1-c137fb42-1f65-4748-880b-8f8184a20f70}"
+if [[ -z "${KARML_CKPT:-}" ]]; then
+  KARML_CKPT="${KARML_CKPT:-$HOME/karml_tutorial/acodcm/ckpts/dcm1-c137fb42-1f65-4748-880b-8f8184a20f70}"
 fi
-export MMML_CKPT
+export KARML_CKPT
 
 mkdir -p "$RUN_ROOT"
 ln -sfn "$RUN_ROOT" "$SCRIPT_DIR/results"
@@ -46,10 +46,10 @@ ln -sfn "$RUN_ROOT" "$SCRIPT_DIR/results"
 echo "================================================================"
 echo " Box electrostatics / backend compare"
 echo " $(date -Iseconds)"
-echo " MMML_ROOT:  $MMML_ROOT"
+echo " KARML_ROOT:  $KARML_ROOT"
 echo " BOX_DIR:    $BOX_DIR"
 echo " RUN_ROOT:   $RUN_ROOT"
-echo " MMML_CKPT:  $MMML_CKPT"
+echo " KARML_CKPT:  $KARML_CKPT"
 echo " JAX:        $JAX_PLATFORMS"
 echo "================================================================"
 
@@ -86,25 +86,25 @@ _warmup_mlpot_jax() {
     echo "[warmup] SKIP_WARMUP=1"
     return 0
   fi
-  echo "[warmup] mmml warmup-mlpot-jax (serial, before mpirun) $(date -Iseconds)"
+  echo "[warmup] karml warmup-mlpot-jax (serial, before mpirun) $(date -Iseconds)"
   # Slurm/srun exports PMI env; JAX/ptxas must not load OpenMPI libs during compile.
   while IFS= read -r _var; do
     [[ -n "$_var" ]] && unset "$_var" 2>/dev/null || true
   done < <(env | cut -d= -f1 | grep -E '^(OMPI_|PMI_|PMIX_|MPI_LOCALRANKID$|SLURM_MPI_TYPE$)' || true)
-  export MMML_WARMUP_MLPOT_JAX_ONLY=1
+  export KARML_WARMUP_MLPOT_JAX_ONLY=1
   export XLA_PYTHON_CLIENT_PREALLOCATE=false
-  export MMML_JAX_COMPILE_THREADS="${MMML_JAX_COMPILE_THREADS:-1}"
+  export KARML_JAX_COMPILE_THREADS="${KARML_JAX_COMPILE_THREADS:-1}"
   export OMP_NUM_THREADS="${OMP_NUM_THREADS:-1}"
-  _warmup_extra=(--checkpoint "$MMML_CKPT" --n-monomers 5 --box-side 25 --spacing 5 --ml-batch-size 64 --ml-gpu-count 1)
+  _warmup_extra=(--checkpoint "$KARML_CKPT" --n-monomers 5 --box-side 25 --spacing 5 --ml-batch-size 64 --ml-gpu-count 1)
   # --do-mm needs a loaded PSF; skip on Slurm (hybrid compile happens under mpirun jobs).
   if [[ -z "${SLURM_JOB_ID:-}" ]]; then
     _warmup_extra+=(--do-mm)
   fi
-  if ! "$PY" -m mmml.cli.__main__ warmup-mlpot-jax "${_warmup_extra[@]}"; then
+  if ! "$PY" -m karml.cli.__main__ warmup-mlpot-jax "${_warmup_extra[@]}"; then
     echo "ERROR: warmup-mlpot-jax failed" >&2
     return 1
   fi
-  unset MMML_WARMUP_MLPOT_JAX_ONLY
+  unset KARML_WARMUP_MLPOT_JAX_ONLY
 }
 
 _warmup_jax_pme_mesh() {
@@ -115,14 +115,14 @@ _warmup_jax_pme_mesh() {
   while IFS= read -r _var; do
     [[ -n "$_var" ]] && unset "$_var" 2>/dev/null || true
   done < <(env | cut -d= -f1 | grep -E '^(OMPI_|PMI_|PMIX_|MPI_LOCALRANKID$|SLURM_MPI_TYPE$)' || true)
-  export MMML_JAX_PME_DEVICE=cpu
+  export KARML_JAX_PME_DEVICE=cpu
   export JAX_ENABLE_X64=true
   if ! "$PY" - <<'PY'
 import os
 import time
 import numpy as np
 
-from mmml.interfaces.pycharmmInterface.long_range_backend import warmup_jax_pme_coulomb_host
+from karml.interfaces.pycharmmInterface.long_range_backend import warmup_jax_pme_coulomb_host
 
 rng = np.random.default_rng(42)
 n = 50

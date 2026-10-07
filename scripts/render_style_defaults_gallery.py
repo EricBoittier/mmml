@@ -14,7 +14,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 
-from mmml.utils.plotting.styles import (
+from karml.utils.plotting.styles import (
     DEFAULT_CYCLIC_CMAP,
     DEFAULT_DIVERGING_CMAP,
     DEFAULT_SEQUENTIAL_CMAP,

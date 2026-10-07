@@ -18,7 +18,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from mmml.interfaces.parse_molpro.read_molden import (
+from karml.interfaces.parse_molpro.read_molden import (
     MolproData,
     MolproXMLParser,
     read_molpro_xml,

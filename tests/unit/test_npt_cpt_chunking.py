@@ -9,13 +9,13 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
     DEFAULT_CPT_DYNAMICS_CHUNK_NSTEP,
     _cpt_stability_chunk_nstep,
     _cpt_subchunk_use_in_memory_handoff,
     _dynamics_chunk_state_corrupt,
 )
-from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
     charmm_coordinates_are_finite,
     charmm_dynamics_energy_is_finite,
     charmm_dynamics_state_is_finite,
@@ -38,17 +38,17 @@ def test_cpt_stability_chunk_nstep_for_long_npt():
 
 
 def test_cpt_stability_chunk_nstep_env_override(monkeypatch):
-    monkeypatch.setenv("MMML_CPT_DYNAMICS_CHUNK_NSTEP", "100")
+    monkeypatch.setenv("KARML_CPT_DYNAMICS_CHUNK_NSTEP", "100")
     assert _cpt_stability_chunk_nstep({"cpt": True}, 500) == 100
 
 
 def test_cpt_subchunk_defaults_to_in_memory_handoff(monkeypatch):
-    monkeypatch.delenv("MMML_CPT_READYN_SUBCHUNK", raising=False)
+    monkeypatch.delenv("KARML_CPT_READYN_SUBCHUNK", raising=False)
     assert _cpt_subchunk_use_in_memory_handoff() is True
 
 
 def test_cpt_subchunk_readyn_handoff_opt_in(monkeypatch):
-    monkeypatch.setenv("MMML_CPT_READYN_SUBCHUNK", "1")
+    monkeypatch.setenv("KARML_CPT_READYN_SUBCHUNK", "1")
     assert _cpt_subchunk_use_in_memory_handoff() is False
 
 
@@ -80,20 +80,20 @@ def test_charmm_dynamics_state_is_finite_requires_both():
 
 
 def test_sync_charmm_lists_after_mini_skips_stale_grms_gate():
-    from mmml.interfaces.pycharmmInterface.mlpot import dynamics
+    from karml.interfaces.pycharmmInterface.mlpot import dynamics
 
     fake_lingo = mock.MagicMock()
     fake_pycharmm = mock.MagicMock(lingo=fake_lingo)
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.assert_charmm_dynamics_chunk_safe"
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics_validation.assert_charmm_dynamics_chunk_safe"
     ) as assert_safe, mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._import_pycharmm_modules",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._import_pycharmm_modules",
         return_value=(fake_pycharmm, None, None, None, None, None),
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.charmm_levels.charmm_silent_command",
+        "karml.interfaces.pycharmmInterface.charmm_levels.charmm_silent_command",
         return_value=nullcontext(),
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_nbond_diagnostics.maybe_snapshot_nbond_state"
+        "karml.interfaces.pycharmmInterface.mlpot.charmm_nbond_diagnostics.maybe_snapshot_nbond_state"
     ):
         dynamics.sync_charmm_lists_after_mini(quiet=True)
 
@@ -105,7 +105,7 @@ def test_sync_charmm_lists_after_mini_skips_stale_grms_gate():
 
 
 def test_charmm_dynamics_energy_is_plausible_rejects_blowup_totke():
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         charmm_dynamics_energy_is_plausible,
         charmm_dynamics_state_is_finite,
     )
@@ -122,7 +122,7 @@ def test_charmm_dynamics_energy_is_plausible_rejects_blowup_totke():
 
 
 def test_validate_charmm_dynamics_state_raises_on_energy_blowup():
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         validate_charmm_dynamics_state_after_chunk,
     )
 
@@ -139,7 +139,7 @@ def test_validate_charmm_dynamics_state_raises_on_energy_blowup():
 
 def test_validate_charmm_dynamics_state_raises_on_corruption():
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.charmm_coordinates_are_finite",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics_validation.charmm_coordinates_are_finite",
         return_value=False,
     ):
         with pytest.raises(RuntimeError, match="non-finite"):
@@ -150,10 +150,10 @@ def test_dynamics_chunk_state_corrupt_checks_memory_and_restart(tmp_path):
     bad_restart = tmp_path / "bad.res"
     bad_restart.write_text("REST\n!X, Y, Z\nNAN\n", encoding="utf-8")
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.charmm_dynamics_state_is_finite",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics_validation.charmm_dynamics_state_is_finite",
         return_value=True,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.restart_has_nonfinite_coordinates",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics_validation.restart_has_nonfinite_coordinates",
         return_value=True,
     ):
         assert _dynamics_chunk_state_corrupt(
@@ -164,7 +164,7 @@ def test_dynamics_chunk_state_corrupt_checks_memory_and_restart(tmp_path):
 
 def test_materialize_cpt_subchunk_skips_nstep0_velocity_assign(tmp_path):
     """CPT sub-chunk handoff must snapshot in-memory barostat state, not nstep=0 assign."""
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _materialize_cpt_subchunk_restart_handoff,
     )
 
@@ -172,12 +172,12 @@ def test_materialize_cpt_subchunk_skips_nstep0_velocity_assign(tmp_path):
     chunk_kw = {"cpt": True, "hoover reft": 300.0, "timestep": 0.00025}
 
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.assign_velocities_at_temperature",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics.assign_velocities_at_temperature",
     ) as assign, mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.rewrite_dynamics_restart_validated",
+        "karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.rewrite_dynamics_restart_validated",
         return_value=True,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._valid_restart_file",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._valid_restart_file",
         return_value=write_path,
     ):
         _materialize_cpt_subchunk_restart_handoff(
@@ -192,7 +192,7 @@ def test_materialize_cpt_subchunk_skips_nstep0_velocity_assign(tmp_path):
 
 
 def test_cpt_stability_chunking_skips_constant_volume():
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import _cpt_stability_chunk_nstep
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import _cpt_stability_chunk_nstep
 
     assert _cpt_stability_chunk_nstep({"cpt": True, "pmass": 500}, 100000) is not None
     assert _cpt_stability_chunk_nstep({"cpt": True, "pmass": 0}, 100000) is None
@@ -201,7 +201,7 @@ def test_cpt_stability_chunking_skips_constant_volume():
 
 # --- CPT sub-chunk DCD merge (each sub-chunk used to overwrite the chunk DCD) ---
 
-_DYN = "mmml.interfaces.pycharmmInterface.mlpot.dynamics"
+_DYN = "karml.interfaces.pycharmmInterface.mlpot.dynamics"
 _N_ATOMS = 4
 
 
@@ -227,7 +227,7 @@ class _FakeDynaDcd:
     def __call__(self, kw, io, *, extra_iokw=None, **_kwargs):
         from pathlib import Path
 
-        from mmml.utils.dcd_writer import save_trajectory_dcd
+        from karml.utils.dcd_writer import save_trajectory_dcd
 
         traj = io.trajectory if io is not None else None
         self.calls.append(dict(kw))
@@ -274,7 +274,7 @@ def _run_overlap_cpt_chunk(
     segment_local_restart: bool = False,
 ):
     """Drive the real outer harmonize + CPT sub-chunk runner for one overlap chunk."""
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         CharmmTrajectoryFiles,
         _harmonize_overlap_chunk_frequencies,
         _overlap_should_drop_chunk_trajectory,
@@ -319,7 +319,7 @@ def _run_overlap_cpt_chunk(
         ),
     ):
         if cpt_sub is None:
-            from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+            from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
                 _run_dynamics_chunk,
             )
 
@@ -340,7 +340,7 @@ def _run_overlap_cpt_chunk(
 
 
 def _frames(path):
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         count_dcd_frames,
         count_readable_dcd_frames,
     )
@@ -350,7 +350,7 @@ def _frames(path):
 
 def _frame_steps(path):
     """Global step stored in each frame's coordinates by ``_FakeDynaDcd``."""
-    from mmml.utils.dcd_writer import _dcd_frame_byte_size, _dcd_header_byte_size
+    from karml.utils.dcd_writer import _dcd_frame_byte_size, _dcd_header_byte_size
 
     data = path.read_bytes()
     hdr, n_frames, natoms, uc = _dcd_header_byte_size(data)
@@ -371,7 +371,7 @@ def _dcd_header(path):
 
 
 def test_cpt_subchunks_merge_all_frames_nsavc125(tmp_path):
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         overlap_chunk_dcd_paths,
     )
 
@@ -418,7 +418,7 @@ def test_cpt_subchunks_early_break_keeps_frames(tmp_path):
 
 
 def test_cpt_subchunks_readyn_mode(tmp_path, monkeypatch):
-    monkeypatch.setenv("MMML_CPT_READYN_SUBCHUNK", "1")
+    monkeypatch.setenv("KARML_CPT_READYN_SUBCHUNK", "1")
     fake, chunk_traj = _run_overlap_cpt_chunk(
         tmp_path,
         nsavc=125,
@@ -455,7 +455,7 @@ def test_cpt_subchunks_segment_local_restart_step_runs_all_subchunks(tmp_path, n
 def test_cpt_subchunks_short_global_restart_still_breaks(tmp_path):
     from pathlib import Path
 
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         CharmmTrajectoryFiles,
         _run_cpt_stability_subchunked,
     )
@@ -503,15 +503,15 @@ def test_cpt_constant_volume_no_subfiles(tmp_path):
 def test_run_dynamics_with_io_cpt_overlap_merges(tmp_path):
     from pathlib import Path
 
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         CharmmTrajectoryFiles,
         run_dynamics_with_io,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         count_overlap_chunk_dcd_frames,
         overlap_chunk_dcd_paths,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+    from karml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
         DynamicsOverlapConfig,
     )
 
@@ -538,7 +538,7 @@ def test_run_dynamics_with_io_cpt_overlap_merges(tmp_path):
         mock.patch(f"{_DYN}._prepare_overlap_chunk_after_restart"),
         mock.patch(f"{_DYN}._dynamics_chunk_state_corrupt", return_value=False),
         mock.patch(
-            "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+            "karml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
             return_value=pos_ok,
         ),
         mock.patch(f"{_DYN}._refresh_restart_write_after_chunk"),
@@ -620,7 +620,7 @@ def test_cpt_subchunk_boundaries_do_not_depend_on_nsavc(tmp_path):
 
 @pytest.mark.parametrize("nsavc", [20, 125, 150, 270, 333, 4000])
 def test_cpt_subchunk_frames_exact_without_overlap(tmp_path, nsavc):
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         CharmmTrajectoryFiles,
         _run_cpt_stability_subchunked,
     )
@@ -649,7 +649,7 @@ def test_cpt_subchunk_frames_exact_without_overlap(tmp_path, nsavc):
 
 
 def test_cpt_subchunk_nstep_fixed_boundaries():
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         cpt_subchunk_nstep,
     )
 
@@ -669,7 +669,7 @@ def test_cpt_subchunk_nstep_fixed_boundaries():
 
 
 def test_cpt_dcd_segment_brute_force_on_fixed_boundaries():
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         cpt_dcd_segment,
         cpt_subchunk_nstep,
     )
@@ -693,7 +693,7 @@ def test_cpt_dcd_segment_brute_force_on_fixed_boundaries():
 
 
 def test_cpt_dcd_segment_one_step_save_is_dropped_not_raised():
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import cpt_dcd_segment
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import cpt_dcd_segment
 
     seg = cpt_dcd_segment(9, 1, 5)
     assert seg.nsavc is None and seg.dropped == (10,)
@@ -702,7 +702,7 @@ def test_cpt_dcd_segment_one_step_save_is_dropped_not_raised():
 
 @pytest.mark.parametrize("stability", [1, 2])
 def test_cpt_tiny_stability_size_does_not_abort(tmp_path, stability):
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         CharmmTrajectoryFiles,
         _run_cpt_stability_subchunked,
     )
@@ -731,8 +731,8 @@ def test_cpt_tiny_stability_size_does_not_abort(tmp_path, stability):
 
 
 def test_merge_error_keeps_subfiles(tmp_path):
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import _merge_cpt_subchunk_dcds
-    from mmml.utils.dcd_writer import save_trajectory_dcd
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import _merge_cpt_subchunk_dcds
+    from karml.utils.dcd_writer import save_trajectory_dcd
 
     a, b = tmp_path / "c.cptsub000.dcd", tmp_path / "c.cptsub001.dcd"
     save_trajectory_dcd(a, np.zeros((2, 4, 3)), [None] * 4, boxes=[np.ones(3)] * 2)
@@ -743,7 +743,7 @@ def test_merge_error_keeps_subfiles(tmp_path):
 
 
 def test_merge_failure_does_not_mask_dynamics_error(tmp_path):
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         CharmmTrajectoryFiles,
         _run_cpt_stability_subchunked,
     )
@@ -775,7 +775,7 @@ def test_merge_failure_does_not_mask_dynamics_error(tmp_path):
 
 
 def test_failed_dynamics_still_salvages_frames(tmp_path):
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         CharmmTrajectoryFiles,
         _run_cpt_stability_subchunked,
     )
@@ -826,7 +826,7 @@ def test_failed_dynamics_still_salvages_frames(tmp_path):
     ],
 )
 def test_cpt_subchunk_restart_is_short_by_mode(step, offset, steps_done, n, handoff, short):
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import _cpt_subchunk_restart_is_short
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import _cpt_subchunk_restart_is_short
 
     assert (
         _cpt_subchunk_restart_is_short(
@@ -858,7 +858,7 @@ def test_cpt_subchunk_restart_is_short_by_mode(step, offset, steps_done, n, hand
 )
 def test_cpt_subchunk_chunk_local_counter(step, steps_done, fresh_start, rewritten, short):
     """In-memory CPT sub-chunks read a chunk-local JHSTRT; complete iff this sub-chunk rewrote the restart."""
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import _cpt_subchunk_restart_is_short
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import _cpt_subchunk_restart_is_short
 
     assert (
         _cpt_subchunk_restart_is_short(

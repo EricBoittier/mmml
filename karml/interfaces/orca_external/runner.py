@@ -1,4 +1,4 @@
-"""MMML potential evaluation for ORCA external-tool jobs."""
+"""KARML potential evaluation for ORCA external-tool jobs."""
 
 from __future__ import annotations
 
@@ -13,19 +13,19 @@ from ase import Atoms
 from ase.calculators.calculator import Calculator
 from ase.data import atomic_numbers
 
-from mmml.cli.misc.fix_and_split import (
+from karml.cli.misc.fix_and_split import (
     convert_energy_ev_to_hartree,
     convert_forces_ev_angstrom_to_hartree_bohr,
 )
-from mmml.interfaces.calculators.simple_inference import create_calculator_from_checkpoint
-from mmml.interfaces.orca_external.protocol import (
+from karml.interfaces.calculators.simple_inference import create_calculator_from_checkpoint
+from karml.interfaces.orca_external.protocol import (
     ExtInpData,
     read_extinp,
     read_xyz,
     write_engrad,
 )
-from mmml.interfaces.orca_external.settings import (
-    MmmlOrcaSettings,
+from karml.interfaces.orca_external.settings import (
+    KarmlOrcaSettings,
     add_model_arguments,
     settings_from_namespace,
 )
@@ -37,13 +37,13 @@ class OrcaPreparedJob:
 
     input_path: Path
     extinp: ExtInpData
-    settings: MmmlOrcaSettings
+    settings: KarmlOrcaSettings
     atoms: Atoms
 
 _CALCULATOR_CACHE: dict[tuple[Any, ...], Calculator] = {}
 
 
-def _cache_key(settings: MmmlOrcaSettings) -> tuple[Any, ...]:
+def _cache_key(settings: KarmlOrcaSettings) -> tuple[Any, ...]:
     return (
         str(settings.checkpoint.resolve()),
         settings.cutoff,
@@ -53,8 +53,8 @@ def _cache_key(settings: MmmlOrcaSettings) -> tuple[Any, ...]:
     )
 
 
-def get_calculator(settings: MmmlOrcaSettings) -> Calculator:
-    """Return a cached MMML calculator for the given settings."""
+def get_calculator(settings: KarmlOrcaSettings) -> Calculator:
+    """Return a cached KARML calculator for the given settings."""
     key = _cache_key(settings)
     cached = _CALCULATOR_CACHE.get(key)
     if cached is not None:
@@ -85,7 +85,7 @@ def atoms_from_xyz(xyz_file: str | Path) -> Atoms:
     return Atoms(numbers=numbers, positions=np.asarray(coordinates, dtype=float))
 
 
-def mmml_forces_to_orca_gradient(forces_ev_angstrom: np.ndarray) -> np.ndarray:
+def karml_forces_to_orca_gradient(forces_ev_angstrom: np.ndarray) -> np.ndarray:
     """Convert ASE forces (eV/Å) to ORCA gradients (Eh/bohr)."""
     gradient_ev_angstrom = -np.asarray(forces_ev_angstrom, dtype=float)
     return convert_forces_ev_angstrom_to_hartree_bohr(gradient_ev_angstrom).reshape(-1)
@@ -106,7 +106,7 @@ def evaluate_structure(
     gradient: list[float] = []
     if do_gradient:
         forces = atoms.get_forces()
-        gradient = mmml_forces_to_orca_gradient(forces).tolist()
+        gradient = karml_forces_to_orca_gradient(forces).tolist()
 
     return float(energy_hartree), gradient
 
@@ -114,20 +114,20 @@ def evaluate_structure(
 def _warn_unsupported_extinp_fields(extinp: ExtInpData) -> None:
     if extinp.charge != 0:
         warnings.warn(
-            "MMML ORCA external tool does not apply the requested total charge to the "
+            "KARML ORCA external tool does not apply the requested total charge to the "
             "potential; ensure your checkpoint was trained for this charge state.",
             UserWarning,
             stacklevel=2,
         )
     if extinp.multiplicity != 1:
         warnings.warn(
-            "MMML ORCA external tool ignores multiplicity (models are closed-shell).",
+            "KARML ORCA external tool ignores multiplicity (models are closed-shell).",
             UserWarning,
             stacklevel=2,
         )
     if extinp.pointcharges_path is not None:
         warnings.warn(
-            "MMML ORCA external tool does not incorporate ORCA point charges.",
+            "KARML ORCA external tool does not incorporate ORCA point charges.",
             UserWarning,
             stacklevel=2,
         )
@@ -137,7 +137,7 @@ def prepare_orca_job_from_arguments(
     arguments: list[str],
     directory: str,
     *,
-    default_settings: MmmlOrcaSettings | None = None,
+    default_settings: KarmlOrcaSettings | None = None,
 ) -> OrcaPreparedJob:
     """Parse an ORCA/client argument vector into a prepared job."""
     working_dir = Path(directory).resolve()
@@ -151,8 +151,8 @@ def prepare_orca_job_from_arguments(
 def prepare_orca_job(
     inputfile: str | Path,
     *,
-    default_settings: MmmlOrcaSettings | None = None,
-    settings: MmmlOrcaSettings | None = None,
+    default_settings: KarmlOrcaSettings | None = None,
+    settings: KarmlOrcaSettings | None = None,
 ) -> OrcaPreparedJob:
     """Parse an ORCA external-tool input file into a prepared job."""
     input_path = Path(inputfile).resolve()
@@ -188,7 +188,7 @@ def run_prepared_jobs(
         raise ValueError("Batched ORCA jobs must share the same checkpoint and model flags.")
 
     calculator = get_calculator(jobs[0].settings)
-    from mmml.interfaces.orca_external.batch_inference import (
+    from karml.interfaces.orca_external.batch_inference import (
         OrcaStructureJob,
         evaluate_structures_batched,
     )
@@ -231,10 +231,10 @@ def _run_single_prepared_job(job: OrcaPreparedJob) -> Path:
     return engrad_path
 
 
-class MmmlOrcaExternalRunner:
-    """Run a single ORCA external-tool request with an MMML checkpoint."""
+class KarmlOrcaExternalRunner:
+    """Run a single ORCA external-tool request with an KARML checkpoint."""
 
-    def __init__(self, settings: MmmlOrcaSettings) -> None:
+    def __init__(self, settings: KarmlOrcaSettings) -> None:
         self.settings = settings
 
     def run(self, inputfile: str | Path) -> Path:
@@ -246,8 +246,8 @@ class MmmlOrcaExternalRunner:
 def build_runner_parser() -> ArgumentParser:
     """CLI argument parser for standalone ORCA external-tool runs."""
     parser = ArgumentParser(
-        prog="mmml-orca-external",
-        description="MMML ML potential wrapper for ORCA's external-tool interface.",
+        prog="karml-orca-external",
+        description="KARML ML potential wrapper for ORCA's external-tool interface.",
     )
     parser.add_argument("inputfile", help="ORCA *.extinp.tmp file")
     add_model_arguments(parser)
@@ -257,8 +257,8 @@ def build_runner_parser() -> ArgumentParser:
 def parse_runner_arguments(
     arguments: list[str] | None = None,
     *,
-    default_settings: MmmlOrcaSettings | None = None,
-) -> tuple[Path, MmmlOrcaSettings]:
+    default_settings: KarmlOrcaSettings | None = None,
+) -> tuple[Path, KarmlOrcaSettings]:
     """Parse ORCA/client argument vectors into an input path and settings."""
     parser = build_runner_parser()
     args = parser.parse_args(arguments)
@@ -271,4 +271,4 @@ def main(argv: list[str] | None = None) -> None:
         inputfile, settings = parse_runner_arguments(argv)
     except (ValueError, FileNotFoundError) as exc:
         raise SystemExit(str(exc)) from exc
-    MmmlOrcaExternalRunner(settings).run(inputfile)
+    KarmlOrcaExternalRunner(settings).run(inputfile)

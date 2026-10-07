@@ -40,15 +40,15 @@ def test_write_coor_pdb_uses_c_api_not_write_script():
     assert "c_api_path_buffer" in block
 
 
-def test_write_coor_card_avoids_write_script_when_mmml_available():
+def test_write_coor_card_avoids_write_script_when_karml_available():
     block = _read("pycharmm/write.py").split("def coor_card(")[1].split("\ndef ")[0]
     assert "write_charmm_crd_from_charmm" in block
-    assert "WriteScript" in block  # fallback when mmml not importable
+    assert "WriteScript" in block  # fallback when karml not importable
 
 
 def test_write_charmm_crd_from_charmm_avoids_charmm_write():
     block = (
-        _read("mmml/interfaces/pycharmmInterface/mlpot/setup.py")
+        _read("karml/interfaces/pycharmmInterface/mlpot/setup.py")
         .split("def write_charmm_crd_from_charmm(")[1]
         .split("\ndef ")[0]
     )
@@ -58,7 +58,7 @@ def test_write_charmm_crd_from_charmm_avoids_charmm_write():
 
 
 def test_write_charmm_restart_from_memory_roundtrip(tmp_path):
-    from mmml.interfaces.pycharmmInterface.charmm_restart_io import (
+    from karml.interfaces.pycharmmInterface.charmm_restart_io import (
         write_charmm_restart_from_memory,
     )
 
@@ -83,10 +83,10 @@ def test_write_charmm_restart_from_memory_roundtrip(tmp_path):
 
 def test_write_charmm_restart_from_memory_header_ldyna_not_step(tmp_path):
     """REST header (A4,2I6) is HDR, IVERS, LDYNA: the step goes in JHSTRT (#219)."""
-    from mmml.interfaces.pycharmmInterface.charmm_restart_io import (
+    from karml.interfaces.pycharmmInterface.charmm_restart_io import (
         write_charmm_restart_from_memory,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         read_restart_last_step,
     )
 
@@ -104,10 +104,10 @@ def test_write_charmm_restart_from_memory_header_ldyna_not_step(tmp_path):
 
 
 def test_write_charmm_restart_from_memory_sets_nsavv(tmp_path):
-    from mmml.interfaces.pycharmmInterface.charmm_restart_io import (
+    from karml.interfaces.pycharmmInterface.charmm_restart_io import (
         write_charmm_restart_from_memory,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         read_restart_nsavv,
     )
 
@@ -127,7 +127,7 @@ def test_write_charmm_restart_from_memory_sets_nsavv(tmp_path):
 
 def test_rewrite_dynamics_restart_avoids_charmm_script():
     block = (
-        _read("mmml/interfaces/pycharmmInterface/mlpot/bonded_mm_recovery.py")
+        _read("karml/interfaces/pycharmmInterface/mlpot/bonded_mm_recovery.py")
         .split("def rewrite_dynamics_restart_from_current_state(")[1]
         .split("\ndef ")[0]
     )
@@ -145,7 +145,7 @@ def test_dynamics_setters_use_c_api_path_buffer():
 
 
 def test_dynamics_script_append_for_heat_ramp():
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _dynamics_script_append_for_heat_ramp,
         _merge_dynamics_script_append,
     )
@@ -165,7 +165,7 @@ def test_dynamics_script_append_for_heat_ramp():
 
 
 def test_run_dynamics_merges_heat_ramp_onto_dynamics_line():
-    block = _read("mmml/interfaces/pycharmmInterface/mlpot/dynamics.py").split(
+    block = _read("karml/interfaces/pycharmmInterface/mlpot/dynamics.py").split(
         "def run_dynamics("
     )[1].split("\ndef ")[0]
     assert "_execute_dynamics_script" in block or "_run_dynamics_via_c_api" in block
@@ -180,7 +180,7 @@ def test_apply_dynamics_io_setters_uses_path_strings():
     from types import SimpleNamespace
     from unittest.mock import patch
 
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _apply_dynamics_io_setters,
     )
 
@@ -221,7 +221,7 @@ def test_apply_dynamics_io_setters_keeps_integer_units():
     from types import SimpleNamespace
     from unittest.mock import patch
 
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _apply_dynamics_io_setters,
     )
 

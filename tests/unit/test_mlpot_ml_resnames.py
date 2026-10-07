@@ -10,7 +10,7 @@ import pytest
 
 
 def test_resolve_mlpot_selection_defaults_to_all_atoms(monkeypatch):
-    from mmml.interfaces.pycharmmInterface.mlpot import setup as setup_mod
+    from karml.interfaces.pycharmmInterface.mlpot import setup as setup_mod
 
     all_sel = object()
     monkeypatch.setattr(setup_mod, "select_all_atoms", lambda: all_sel)
@@ -19,7 +19,7 @@ def test_resolve_mlpot_selection_defaults_to_all_atoms(monkeypatch):
 
 
 def test_resolve_mlpot_selection_uses_resnames(monkeypatch):
-    from mmml.interfaces.pycharmmInterface.mlpot import setup as setup_mod
+    from karml.interfaces.pycharmmInterface.mlpot import setup as setup_mod
 
     called: list[tuple[str, ...]] = []
 
@@ -35,7 +35,7 @@ def test_resolve_mlpot_selection_uses_resnames(monkeypatch):
 
 
 def test_select_by_resnames_expands_ch3cl_alias(monkeypatch):
-    from mmml.interfaces.pycharmmInterface.mlpot import setup as setup_mod
+    from karml.interfaces.pycharmmInterface.mlpot import setup as setup_mod
 
     names_seen: list[str] = []
 
@@ -54,7 +54,7 @@ def test_select_by_resnames_expands_ch3cl_alias(monkeypatch):
 
 
 def test_register_mlpot_context_refuses_jax_mic_with_ml_resnames(monkeypatch):
-    from mmml.interfaces.pycharmmInterface.mlpot import run_workflow as rw
+    from karml.interfaces.pycharmmInterface.mlpot import run_workflow as rw
 
     args = SimpleNamespace(
         ml_resnames=["AMM1", "CH3CL"],
@@ -68,7 +68,7 @@ def test_register_mlpot_context_refuses_jax_mic_with_ml_resnames(monkeypatch):
     sel = mock.Mock()
     sel.get_atom_indexes.return_value = [0, 1, 2, 3, 4, 5, 6, 7, 8]
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.resolve_mlpot_selection_from_args",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.resolve_mlpot_selection_from_args",
         lambda _a: sel,
     )
     monkeypatch.setattr(

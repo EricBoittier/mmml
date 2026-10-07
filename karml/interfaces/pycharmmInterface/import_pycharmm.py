@@ -10,13 +10,13 @@ cwd = Path(__file__).parent
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
-from mmml.interfaces.pycharmmInterface.charmm_paths import bootstrap_charmm_env, resolve_cgenff_toppar_paths
+from karml.interfaces.pycharmmInterface.charmm_paths import bootstrap_charmm_env, resolve_cgenff_toppar_paths
 
 CHARMM_HOME, CHARMM_LIB_DIR = bootstrap_charmm_env(repo_root=_REPO_ROOT)
 
 
 def _vendored_pycharmm_sys_path_entries() -> list[str]:
-    """Return ``sys.path`` entries that expose mmml's patched ``pycharmm`` package.
+    """Return ``sys.path`` entries that expose karml's patched ``pycharmm`` package.
 
     Preference order:
 
@@ -85,7 +85,7 @@ def _charmm_home_pycharmm_entry(charmm_home: str | os.PathLike | None) -> str | 
 
 
 def _ensure_vendored_pycharmm_on_path() -> None:
-    """Prefer mmml's patched ``pycharmm`` over ``$CHARMM_HOME/tool/pycharmm``.
+    """Prefer karml's patched ``pycharmm`` over ``$CHARMM_HOME/tool/pycharmm``.
 
     ``sys.path.append(tool/pycharmm)`` alone lets an older CHARMM install shadow the
     vendored package (missing ``MLpot.skip_iblo_inb_update`` for PBC registration).
@@ -138,7 +138,7 @@ _ensure_vendored_pycharmm_on_path()
 
 # Import before any CHARMM output is silenced: the MLpot callback guard keeps
 # copies of the original stdout/stderr fds for its failure report.
-import mmml.interfaces.pycharmmInterface.mlpot.callback_failstop  # noqa: E402,F401
+import karml.interfaces.pycharmmInterface.mlpot.callback_failstop  # noqa: E402,F401
 if CHARMM_HOME:
     chmhp = Path(CHARMM_HOME) / "tool" / "pycharmm"
     if str(chmhp) not in sys.path:
@@ -148,14 +148,14 @@ _cgenff_toppar = resolve_cgenff_toppar_paths(repo_root=_REPO_ROOT)
 CGENFF_RTF = str(_cgenff_toppar.rtf)
 CGENFF_PRM = str(_cgenff_toppar.prm)
 
-from mmml.interfaces.pycharmmInterface.charmm_mpi import (  # noqa: E402
+from karml.interfaces.pycharmmInterface.charmm_mpi import (  # noqa: E402
     charmm_lib_available,
     charmm_lib_links_mpi,
     prepare_serial_charmm_mpi_env,
     _under_mpirun,
 )
 
-_WARMUP_JAX_ONLY = (os.environ.get("MMML_WARMUP_MLPOT_JAX_ONLY") or "").strip().lower() in (
+_WARMUP_JAX_ONLY = (os.environ.get("KARML_WARMUP_MLPOT_JAX_ONLY") or "").strip().lower() in (
     "1",
     "yes",
     "true",
@@ -191,7 +191,7 @@ if PYCHARMM_AVAILABLE:
     psf = _psf
     minimize = _minimize
 
-    from mmml.interfaces.pycharmmInterface.charmm_mpi import (
+    from karml.interfaces.pycharmmInterface.charmm_mpi import (
         ensure_mpi4py_after_charmm_init,
     )
 
@@ -202,10 +202,10 @@ if PYCHARMM_AVAILABLE:
 def _report_charmm_import_paths() -> None:
     if not PYCHARMM_AVAILABLE:
         return
-    if (os.environ.get("MMML_QUIET") or "").strip().lower() in ("1", "yes", "true"):
+    if (os.environ.get("KARML_QUIET") or "").strip().lower() in ("1", "yes", "true"):
         return
     try:
-        from mmml.utils.rich_report import emit_charmm_env
+        from karml.utils.rich_report import emit_charmm_env
 
         emit_charmm_env(
             cgenff_rtf=CGENFF_RTF,
@@ -225,7 +225,7 @@ _report_charmm_import_paths()
 
 def should_skip_vacuum_charmm_init() -> bool:
     """Skip import-time / vacuum ``crystal free`` (poisons MPI-linked CHARMM as ``crys``)."""
-    flag = os.environ.get("MMML_SKIP_VACUUM_CHARMM_INIT", "").strip().lower()
+    flag = os.environ.get("KARML_SKIP_VACUUM_CHARMM_INIT", "").strip().lower()
     if flag in ("1", "true", "yes"):
         return True
     if _under_mpirun() and charmm_lib_links_mpi():
@@ -235,7 +235,7 @@ def should_skip_vacuum_charmm_init() -> bool:
 
 def should_skip_charmm_reset_block() -> bool:
     """Skip import-time / vacuum ``BLOCK`` reset (hangs or aborts under ``mpirun``)."""
-    flag = os.environ.get("MMML_SKIP_CHARMM_RESET_BLOCK", "").strip().lower()
+    flag = os.environ.get("KARML_SKIP_CHARMM_RESET_BLOCK", "").strip().lower()
     if flag in ("1", "true", "yes"):
         return True
     if _under_mpirun() and charmm_lib_links_mpi():
@@ -260,7 +260,7 @@ def reset_block() -> None:
         return
     if should_skip_charmm_reset_block():
         return
-    from mmml.utils.rich_report import emit_charmm_block, is_verbose
+    from karml.utils.rich_report import emit_charmm_block, is_verbose
 
     # run_charmm_script_quiet(block)
     if is_verbose():
@@ -305,7 +305,7 @@ def print_charmm_energy_summary() -> None:
         return
     import math
 
-    from mmml.data.units import format_energy_kcal_ev
+    from karml.data.units import format_energy_kcal_ev
 
     try:
         parts: list[str] = []
@@ -313,7 +313,7 @@ def print_charmm_energy_summary() -> None:
             try:
                 if term == "USER":
                     # MLpot lands in USER on c49, in MLPO + MLEL on c52a1.
-                    from mmml.interfaces.pycharmmInterface.mlpot.mlpot_eterms import (
+                    from karml.interfaces.pycharmmInterface.mlpot.mlpot_eterms import (
                         read_mlpot_eterm_kcal,
                     )
 
@@ -372,14 +372,14 @@ def get_forces_pycharmm(update: bool = True):
     is the negative gradient. Pass ``update=False`` to read the forces left by a
     previous ``ENER FORCE`` instead of re-evaluating.
     """
-    from mmml.interfaces.pycharmmInterface.charmm_forces import charmm_forces_array
+    from karml.interfaces.pycharmmInterface.charmm_forces import charmm_forces_array
 
     if update:
         pycharmm.lingo.charmm_script("ENER FORCE")
     return charmm_forces_array()
 
 def set_pycharmm_xyz(atom_positions):
-    from mmml.interfaces.pycharmmInterface.charmm_forces import set_charmm_positions_array
+    from karml.interfaces.pycharmmInterface.charmm_forces import set_charmm_positions_array
 
     set_charmm_positions_array(atom_positions)
 
@@ -455,7 +455,7 @@ def _maybe_reset_block_at_import() -> None:
     (``import ase``, etc.) and deadlock when early ranks enter CHARMM while
     late ranks are still in Python.  Skip import-time ``reset_block`` under
     ``mpirun``; callers run it after topology load or rank-synchronized setup
-    (``MMML_SKIP_CHARMM_RESET_BLOCK`` to force-skip on serial diagnostics).
+    (``KARML_SKIP_CHARMM_RESET_BLOCK`` to force-skip on serial diagnostics).
 
     Also skip when no PSF is loaded yet: ``BLOCK`` on an empty topology can
     stall indefinitely on MPI-linked builds (e.g. calculator primitive benchmark
@@ -477,11 +477,11 @@ _maybe_reset_block_at_import()
 
 
 def _init_charmm_default_levels() -> None:
-    """Match ``mmml md-system`` defaults; ``bomlev 0`` aborts minimize in notebooks."""
+    """Match ``karml md-system`` defaults; ``bomlev 0`` aborts minimize in notebooks."""
     if not PYCHARMM_AVAILABLE:
         return
     try:
-        from mmml.interfaces.pycharmmInterface.mlpot.setup import apply_charmm_verbosity
+        from karml.interfaces.pycharmmInterface.mlpot.setup import apply_charmm_verbosity
 
         apply_charmm_verbosity(prnlev=5, warnlev=5, bomlev=-2)
     except Exception:
@@ -504,19 +504,19 @@ def _should_run_domdec_off() -> bool:
     DOMDEC was never active, which can corrupt OpenMPI pools and segfault the next
     ``gete`` in ``send_coord_to_recip`` / ``PMPI_Free_mem`` (benz100 MLpot SD on gpu09).
 
-    Set ``MMML_FORCE_DOMDEC_OFF=1`` only if your stream explicitly enabled domdec.
+    Set ``KARML_FORCE_DOMDEC_OFF=1`` only if your stream explicitly enabled domdec.
     Prefer ``./scripts/rebuild_charmm_mlpot.sh --no-domdec`` for MPI MLpot campaigns.
     """
-    if _truthy_env("MMML_NO_CHARMM_DOMDEC_OFF"):
+    if _truthy_env("KARML_NO_CHARMM_DOMDEC_OFF"):
         return False
-    return _truthy_env("MMML_FORCE_DOMDEC_OFF")
+    return _truthy_env("KARML_FORCE_DOMDEC_OFF")
 
 
 def disable_charmm_domdec(*, when: str = "early") -> bool:
     """Turn off domdec once per process (repeat ``domdec off`` segfaults on DOMDEC builds).
 
     Skipped by default — see :func:`_should_run_domdec_off`. When enabled via
-    ``MMML_FORCE_DOMDEC_OFF=1``, defer the single call until MLpot SD/dynamics
+    ``KARML_FORCE_DOMDEC_OFF=1``, defer the single call until MLpot SD/dynamics
     (``when="mlpot_energy"``).
     """
     global _domdec_vacuum_disabled, _domdec_disabled_early
@@ -525,16 +525,16 @@ def disable_charmm_domdec(*, when: str = "early") -> bool:
     if _domdec_vacuum_disabled:
         if when == "mlpot_energy" and _domdec_disabled_early:
             print(
-                "mmml: domdec off already ran before MLpot JAX warmup; cannot repeat "
-                "domdec off on DOMDEC builds. Sync mmml (defer setup-time domdec off) "
-                "and launch via scripts/mmml-charmm-mpirun.sh.",
+                "karml: domdec off already ran before MLpot JAX warmup; cannot repeat "
+                "domdec off on DOMDEC builds. Sync karml (defer setup-time domdec off) "
+                "and launch via scripts/karml-charmm-mpirun.sh.",
                 file=sys.stderr,
                 flush=True,
             )
         return False
 
     try:
-        from mmml.interfaces.pycharmmInterface.charmm_levels import (
+        from karml.interfaces.pycharmmInterface.charmm_levels import (
             charmm_relaxed_bomlev,
         )
 
@@ -542,7 +542,7 @@ def disable_charmm_domdec(*, when: str = "early") -> bool:
             pycharmm.lingo.charmm_script("domdec off")
     except Exception as exc:
         print(
-            f"mmml: domdec off failed ({when}): {exc}",
+            f"karml: domdec off failed ({when}): {exc}",
             file=sys.stderr,
             flush=True,
         )
@@ -555,7 +555,7 @@ def disable_charmm_domdec(*, when: str = "early") -> bool:
 
 def ensure_domdec_off_for_mlpot_energy(*, context: str = "MLpot energy") -> bool:
     """Optional ``domdec off`` before MLpot SD / dynamics (off by default)."""
-    from mmml.interfaces.pycharmmInterface.charmm_mpi import recover_mpi_for_charmm_after_jax
+    from karml.interfaces.pycharmmInterface.charmm_mpi import recover_mpi_for_charmm_after_jax
 
     ok = disable_charmm_domdec(when="mlpot_energy")
     if ok:
@@ -575,8 +575,8 @@ def _run_crystal_free(*, mpi_safe: bool = False) -> bool:
     except Exception:
         pass
     try:
-        from mmml.interfaces.pycharmmInterface.charmm_levels import run_charmm_script_quiet
-        from mmml.interfaces.pycharmmInterface.charmm_mpi import (
+        from karml.interfaces.pycharmmInterface.charmm_levels import run_charmm_script_quiet
+        from karml.interfaces.pycharmmInterface.charmm_mpi import (
             _under_mpirun,
             mpi_charmm_script,
         )
@@ -650,9 +650,9 @@ def init_vacuum_charmm_state_mpi() -> None:
 
 
 def ensure_pycharmm_loaded() -> bool:
-    """Load libcharmm into module globals when collection used ``MMML_WARMUP_MLPOT_JAX_ONLY``.
+    """Load libcharmm into module globals when collection used ``KARML_WARMUP_MLPOT_JAX_ONLY``.
 
-    Live tests under ``mmml-charmm-mpirun.sh`` need ``import_pycharmm.pycharmm`` and
+    Live tests under ``karml-charmm-mpirun.sh`` need ``import_pycharmm.pycharmm`` and
     ``reset_block`` wired even though unit-test collection defers the import.
     """
     global PYCHARMM_AVAILABLE, pycharmm, coor, energy, read, settings, psf, minimize
@@ -678,7 +678,7 @@ def ensure_pycharmm_loaded() -> bool:
     minimize = _minimize
     PYCHARMM_AVAILABLE = True
     if charmm_lib_links_mpi():
-        from mmml.interfaces.pycharmmInterface.charmm_mpi import (
+        from karml.interfaces.pycharmmInterface.charmm_mpi import (
             ensure_mpi4py_after_charmm_init,
         )
 
@@ -691,7 +691,7 @@ _init_charmm_default_levels()
 
 
 def _skip_import_vacuum_init() -> bool:
-    flag = os.environ.get("MMML_SKIP_VACUUM_CHARMM_INIT", "").strip().lower()
+    flag = os.environ.get("KARML_SKIP_VACUUM_CHARMM_INIT", "").strip().lower()
     return flag in ("1", "true", "yes")
 
 
@@ -702,7 +702,7 @@ if PYCHARMM_AVAILABLE and not _under_mpirun() and not _skip_import_vacuum_init()
 def ase_from_pycharmm_state():
     import ase
 
-    from mmml.interfaces.pycharmmInterface.utils import get_Z_from_psf
+    from karml.interfaces.pycharmmInterface.utils import get_Z_from_psf
 
     Z = get_Z_from_psf()
     R = coor.get_positions()

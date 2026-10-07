@@ -6,12 +6,12 @@ import argparse
 
 import pytest
 
-from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
     resolve_dynamics_freq_cadence,
     resolve_dynamics_print_kwargs,
     resolve_heat_ihtfrq,
 )
-from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
     apply_heat_ramp_frequencies,
     apply_heat_ramp_overlap_chunk,
     apply_heat_segment_ramp_kwargs,
@@ -19,7 +19,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
     finalize_heat_dynamics_frequencies,
     heat_ramp_bath_target_K,
 )
-from mmml.interfaces.pycharmmInterface.mlpot.staged_workflow import _build_stage_dynamics_kw
+from karml.interfaces.pycharmmInterface.mlpot.staged_workflow import _build_stage_dynamics_kw
 
 
 def test_resolve_heat_ihtfrq_defaults_to_freq_cadence():
@@ -131,7 +131,7 @@ def test_apply_heat_ramp_frequencies_recomputes_teminc():
 
 
 def test_normalize_dynamics_heat_ramp_kw_sets_tstruct_from_firstt():
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _normalize_dynamics_heat_ramp_kw,
     )
 
@@ -141,7 +141,7 @@ def test_normalize_dynamics_heat_ramp_kw_sets_tstruct_from_firstt():
 
 
 def test_build_heat_dynamics_sets_tstruct_to_firstt():
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import build_heat_dynamics
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import build_heat_dynamics
 
     kw = build_heat_dynamics(temp=240.0, firstt=48.0, finalt=240.0, use_pbc=True)
     assert kw["firstt"] == pytest.approx(48.0)
@@ -192,7 +192,7 @@ def test_apply_heat_ramp_overlap_chunk_continues_ramp():
 
 
 def test_hoover_cpt_heat_ramp_infers_cold_start_without_start_flag():
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _apply_overlap_chunk_dynamics_kw,
         apply_hoover_cpt_heat_ramp_overlap_chunk,
     )
@@ -219,7 +219,7 @@ def test_hoover_cpt_heat_ramp_infers_cold_start_without_start_flag():
 
 
 def test_hoover_cpt_heat_ramp_preserves_cold_start_on_overlap_chunk_zero():
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _apply_overlap_chunk_dynamics_kw,
         apply_hoover_cpt_heat_ramp_overlap_chunk,
     )
@@ -248,7 +248,7 @@ def test_hoover_cpt_heat_ramp_preserves_cold_start_on_overlap_chunk_zero():
 
 
 def test_hoover_cpt_heat_ramp_overlap_chunk_uses_iasvel_one_after_boltzmann():
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _apply_overlap_chunk_dynamics_kw,
         apply_hoover_cpt_heat_ramp_overlap_chunk,
     )
@@ -276,7 +276,7 @@ def test_hoover_cpt_heat_ramp_overlap_chunk_uses_iasvel_one_after_boltzmann():
 
 
 def test_hoover_cpt_heat_ramp_overlap_chunk_continuation_uses_iasvel_one():
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         apply_hoover_cpt_heat_ramp_overlap_chunk,
     )
 
@@ -303,7 +303,7 @@ def test_hoover_cpt_heat_ramp_overlap_chunk_continuation_uses_iasvel_one():
 
 
 def test_hoover_cpt_heat_ramp_targets_and_iasvel_one():
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         apply_hoover_cpt_heat_ramp_overlap_chunk,
         hoover_cpt_heat_ramp_spec_from_kw,
         hoover_cpt_heat_ramp_target_K,
@@ -377,7 +377,7 @@ def test_apply_heat_segment_ramp_kwargs_splits_ramp():
 
 
 def test_apply_heat_segment_ramp_hoover_reft_starts_at_segment_low():
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import apply_heat_segment_ramp_kwargs
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import apply_heat_segment_ramp_kwargs
 
     kw = {
         "firstt": 0.0,

@@ -1,9 +1,9 @@
 """Standalone ASE calculator for SpookyNet-style PhysNet checkpoints (JSON format).
 
 Loads a ``SpookyPhysNet`` model + params from a JSON checkpoint (as produced by
-``mmml.utils.model_checkpoint``) and exposes it as a plain ASE ``Calculator``
+``karml.utils.model_checkpoint``) and exposes it as a plain ASE ``Calculator``
 so it can be dropped into the same scan pipelines as the xTB/CHARMM/learned
-multipole backends (see ``mmml.analysis.dimer_scans.evaluate_scan``).
+multipole backends (see ``karml.analysis.dimer_scans.evaluate_scan``).
 
 Atom counts smaller than the checkpoint's ``max_padded_atoms`` are handled by
 zero-padding + masking, so one calculator instance can be reused for both the
@@ -34,13 +34,13 @@ import jax.numpy as jnp
 import numpy as np
 from ase.calculators.calculator import Calculator, all_changes
 
-from mmml.interfaces.pycharmmInterface.ml_dtypes import (
+from karml.interfaces.pycharmmInterface.ml_dtypes import (
     json_tree_to_jax_params,
     ml_numpy_dtype,
     resolve_ml_compute_dtype,
 )
-from mmml.models.physnetjax.physnetjax.models.spooky_model import SpookyPhysNet
-from mmml.utils.model_checkpoint import (
+from karml.models.physnetjax.physnetjax.models.spooky_model import SpookyPhysNet
+from karml.utils.model_checkpoint import (
     infer_trainable_zbl_config,
     load_model_checkpoint,
     normalize_physnet_config,
@@ -157,7 +157,7 @@ class SpookyNetCalculator(Calculator):
         jax_params = json_tree_to_jax_params(params, dtype=self.compute_dtype)
         model_type = str(config.get("model_type", "")).lower()
         if not _is_spooky_checkpoint(model_type, jax_params):
-            from mmml.models.physnetjax.physnetjax.models.model import PhysNet
+            from karml.models.physnetjax.physnetjax.models.model import PhysNet
             model_config = physnet_constructor_kwargs(config, PhysNet)
             self.model = PhysNet(**model_config)
         else:
@@ -184,7 +184,7 @@ class SpookyNetCalculator(Calculator):
         # --- Companion MBD correction (see module docstring) -------------
         self.mbd_calc = None
         self.mbd_weight = 0.0
-        from mmml.models.mbd.calculator import QCMLMBDCalculator, resolve_companion_mbd
+        from karml.models.mbd.calculator import QCMLMBDCalculator, resolve_companion_mbd
 
         load_path, weight, missing = resolve_companion_mbd(
             mbd_checkpoint,

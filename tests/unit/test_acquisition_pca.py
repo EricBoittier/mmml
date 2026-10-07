@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from mmml.acquisition.pca import (
+from karml.acquisition.pca import (
     PCAFit,
     assert_no_leakage,
     fit_pca,

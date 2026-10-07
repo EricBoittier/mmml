@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from mmml.umbrella.hybrid_windows import (
+from karml.umbrella.hybrid_windows import (
     bootstrap_windows_from_snapshots,
     load_all_window_arrays,
     load_window_checkpoint,
@@ -13,7 +13,7 @@ from mmml.umbrella.hybrid_windows import (
     should_bootstrap_windows,
     window_is_ok,
 )
-from mmml.umbrella.io import save_snapshots
+from karml.umbrella.io import save_snapshots
 
 
 def _ok_arrays(t=4, n=3):
@@ -79,7 +79,7 @@ def test_select_only_windows(tmp_path):
 
 def test_save_window_checkpoint_unique_tmp(tmp_path, monkeypatch):
     """Parallel writers must not share wXXX.tmp.npz (race → FileNotFoundError)."""
-    import mmml.umbrella.hybrid_windows as hw
+    import karml.umbrella.hybrid_windows as hw
 
     names: list[str] = []
     real_savez = hw.np.savez_compressed

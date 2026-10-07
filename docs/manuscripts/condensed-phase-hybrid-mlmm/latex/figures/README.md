@@ -3,7 +3,7 @@
 | File | Source |
 |------|--------|
 | `chart_energy_conservation_*.png` | `docs/robustness-report-assets/` |
-| `mixed_*.png` | `workflows/mixed_calculator_sweep/results/figures/` (sibling `mmml` tree) |
+| `mixed_*.png` | `workflows/mixed_calculator_sweep/results/figures/` (sibling `karml` tree) |
 | `DCM_DCM.png`, `ACE_ACE.png`, `DCM_TIP3.png`, `dimer_scan_DCM_ACE.png` | replot from `scan_results_clean.csv` via `replot_dimer_campaign_clean.py` |
 | `umbrella_pmf_mbar.{png,pdf}` | regenerated from `artifacts/umbrella/umbrella_summary.json` |
 | `adumb_nc_distance_status.{png,pdf}` | regenerated from `artifacts/nh3_ch3cl/adumb_nc_distance/` |
@@ -16,7 +16,7 @@
 Regenerate hybrid LJ training plots (CPU-safe; no CUDA restore):
 
 ```bash
-# from mmml tree: read objectives.* scalars via tensorstore OCDBT/zarr
+# from karml tree: read objectives.* scalars via tensorstore OCDBT/zarr
 # then write figures into docs/manuscripts/.../latex/figures/
 ```
 

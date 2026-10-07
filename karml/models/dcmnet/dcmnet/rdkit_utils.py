@@ -32,7 +32,7 @@ except ModuleNotFoundError:  # pragma: no cover
     pd = None  # type: ignore[assignment]
 
 
-_QM9_CSV = Path(os.environ.get("MMML_QM9_CSV", "/pchem-data/meuwly/boittier/home/jaxeq/data/qm9.csv"))
+_QM9_CSV = Path(os.environ.get("KARML_QM9_CSV", "/pchem-data/meuwly/boittier/home/jaxeq/data/qm9.csv"))
 _QM9_DF = None
 
 
@@ -51,7 +51,7 @@ def _load_qm9_dataframe():
         _require_dependencies()
         if not _QM9_CSV.exists():
             raise FileNotFoundError(
-                "QM9 CSV file not found. Set MMML_QM9_CSV to point to the dataset."
+                "QM9 CSV file not found. Set KARML_QM9_CSV to point to the dataset."
             )
         _QM9_DF = pd.read_csv(_QM9_CSV)
     return _QM9_DF

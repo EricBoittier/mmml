@@ -25,10 +25,10 @@ if [[ -n "${RUN_CHARMM_NL:-}" ]]; then
     --backends vesin,jax_md,ase,pycharmm
 fi
 
-echo "=== MM NL backend env smoke (jax_md vs cell_list via MMML_MM_NL_BACKEND) ==="
+echo "=== MM NL backend env smoke (jax_md vs cell_list via KARML_MM_NL_BACKEND) ==="
 for backend in auto cell_list jax_md; do
-  echo "--- MMML_MM_NL_BACKEND=${backend} ---"
-  MMML_MM_NL_BACKEND="${backend}" uv run python tests/functionality/neighbor_lists/02_path_parity.py
+  echo "--- KARML_MM_NL_BACKEND=${backend} ---"
+  KARML_MM_NL_BACKEND="${backend}" uv run python tests/functionality/neighbor_lists/02_path_parity.py
 done
 
 echo "PASS: NL backend matrix"

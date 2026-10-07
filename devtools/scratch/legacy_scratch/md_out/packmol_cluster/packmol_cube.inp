@@ -1,9 +1,9 @@
 seed 123
-output /Users/ericboittier/mmml/scratch/md_out/packmol_cluster/init-packmol-sphere.pdb
+output /Users/ericboittier/karml/scratch/md_out/packmol_cluster/init-packmol-sphere.pdb
 filetype pdb
 tolerance 2.0
 
-structure /Users/ericboittier/mmml/scratch/md_out/packmol_cluster/monomers/dcm.pdb
+structure /Users/ericboittier/karml/scratch/md_out/packmol_cluster/monomers/dcm.pdb
   chain A
   resnumbers 2
   number 4

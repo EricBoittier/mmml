@@ -26,35 +26,35 @@ from ase.calculators.calculator import Calculator, all_changes
 from ase.optimize.fire import FIRE
 from jax_md import space
 
-from mmml.data.units import KCAL_MOL_TO_EV
-from mmml.interfaces.pycharmmInterface.cgenff_bonded import (
+from karml.data.units import KCAL_MOL_TO_EV
+from karml.interfaces.pycharmmInterface.cgenff_bonded import (
     bonded_energy_and_forces,
 )
-from mmml.interfaces.pycharmmInterface.cgenff_topology import (
+from karml.interfaces.pycharmmInterface.cgenff_topology import (
     CgenffBondedSystem,
     filter_bonded_topology_excluding_ml_interior,
 )
-from mmml.interfaces.pycharmmInterface.charmm_jax_energy_benchmark import (
+from karml.interfaces.pycharmmInterface.charmm_jax_energy_benchmark import (
     _nbond_settings_from_cutoffs,
 )
-from mmml.interfaces.pycharmmInterface.import_pycharmm import (
+from karml.interfaces.pycharmmInterface.import_pycharmm import (
     CGENFF_PRM,
     ensure_pycharmm_loaded,
     pycharmm_loud,
 )
-from mmml.interfaces.pycharmmInterface.mm_system_energy import (
+from karml.interfaces.pycharmmInterface.mm_system_energy import (
     load_bonded_system_from_psf,
     load_nonbonded_system_from_charmm,
     nonbonded_energy_and_forces,
 )
-from mmml.interfaces.pycharmmInterface.nbonds_config import PbcNbondCutoffs
-from mmml.interfaces.pycharmmInterface.peptide_builder import (
+from karml.interfaces.pycharmmInterface.nbonds_config import PbcNbondCutoffs
+from karml.interfaces.pycharmmInterface.peptide_builder import (
     build_peptide_in_charmm,
 )
-from mmml.interfaces.pycharmmInterface.protein_charmm_build import (
+from karml.interfaces.pycharmmInterface.protein_charmm_build import (
     protein_toppar_paths,
 )
-from mmml.interfaces.pycharmmInterface.utils import get_Z_from_psf
+from karml.interfaces.pycharmmInterface.utils import get_Z_from_psf
 
 jax.config.update("jax_enable_x64", True)
 

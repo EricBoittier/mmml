@@ -34,7 +34,7 @@ def _nacl_cell(r0: float = 2.82, reps: tuple[int, int, int] = (1, 1, 1)):
 
 
 def test_ewald_reproduces_the_nacl_madelung_constant():
-    from mmml.analysis.lattice_energy import periodic_coulomb_energy
+    from karml.analysis.lattice_energy import periodic_coulomb_energy
 
     r0 = 2.82
     positions, charges, cell = _nacl_cell(r0)
@@ -50,7 +50,7 @@ def test_ewald_answer_does_not_depend_on_the_real_reciprocal_split():
     This is the property that makes a truncated Coulomb sum unnecessary, and the
     one that fails first if the self or exclusion term is wrong.
     """
-    from mmml.analysis.lattice_energy import periodic_coulomb_energy
+    from karml.analysis.lattice_energy import periodic_coulomb_energy
 
     positions, charges, cell = _nacl_cell()
     energies = [
@@ -66,7 +66,7 @@ def test_ewald_is_correct_for_a_non_cubic_cell():
     The whole point of this module is that it carries a full cell rather than
     one side length; a cubic-only reduction would fail here by construction.
     """
-    from mmml.analysis.lattice_energy import periodic_coulomb_energy
+    from karml.analysis.lattice_energy import periodic_coulomb_energy
 
     r0 = 2.82
     unit_pos, unit_q, unit_cell = _nacl_cell(r0)
@@ -85,7 +85,7 @@ def test_ewald_is_correct_for_a_non_cubic_cell():
 
 def test_ewald_refuses_a_charged_cell():
     """Without a neutralising background the reciprocal sum diverges at k -> 0."""
-    from mmml.analysis.lattice_energy import periodic_coulomb_energy
+    from karml.analysis.lattice_energy import periodic_coulomb_energy
 
     positions, charges, cell = _nacl_cell()
     charges = charges.copy()
@@ -96,7 +96,7 @@ def test_ewald_refuses_a_charged_cell():
 
 def test_unwrap_rebuilds_a_molecule_split_across_a_cell_face():
     """Molecules straddling a boundary must come back whole, not as fragments."""
-    from mmml.analysis.lattice_energy import unwrap_molecules
+    from karml.analysis.lattice_energy import unwrap_molecules
 
     cell = np.diag([10.0, 12.0, 14.0])
     # A water-like triatomic sitting on the x face: O just inside, H just outside
@@ -115,7 +115,7 @@ def test_unwrap_rebuilds_a_molecule_split_across_a_cell_face():
 
 def test_unwrap_puts_every_centroid_inside_the_cell():
     """The lattice-shift bound assumes centroids are wrapped; check they are."""
-    from mmml.analysis.lattice_energy import unwrap_molecules
+    from karml.analysis.lattice_energy import unwrap_molecules
 
     cell = np.diag([10.0, 12.0, 14.0])
     positions = np.array([[9.8, 5.0, 5.0], [0.15, 5.0, 5.0], [9.3, 5.9, 5.0]])
@@ -127,7 +127,7 @@ def test_unwrap_puts_every_centroid_inside_the_cell():
 
 
 def test_lattice_shift_vectors_grow_with_cutoff_and_include_the_home_cell():
-    from mmml.analysis.lattice_energy import lattice_shift_vectors
+    from karml.analysis.lattice_energy import lattice_shift_vectors
 
     cell = np.diag([9.17, 7.53, 21.25])
     near = lattice_shift_vectors(cell, 6.0)
@@ -141,7 +141,7 @@ def test_lattice_shift_vectors_grow_with_cutoff_and_include_the_home_cell():
 
 
 def test_sublimation_enthalpy_is_minus_lattice_energy_less_2rt():
-    from mmml.analysis.lattice_energy import (
+    from karml.analysis.lattice_energy import (
         GAS_CONSTANT_KCAL_MOL_K,
         sublimation_enthalpy_kcal_mol,
     )
@@ -156,7 +156,7 @@ def test_sublimation_enthalpy_is_minus_lattice_energy_less_2rt():
 
 def test_non_cubic_cell_warns_when_collapsed_to_a_cubic_side():
     """Averaging 9.17/7.53/21.25 into one number must not happen in silence."""
-    from mmml.cli.run.md_stage_summary import cubic_box_side_from_cell
+    from karml.cli.run.md_stage_summary import cubic_box_side_from_cell
 
     cell = np.diag([9.17, 7.53, 21.25])
     with pytest.warns(RuntimeWarning, match="Non-cubic cell"):
@@ -175,7 +175,7 @@ def test_cubic_cell_does_not_warn():
     """Existing cubic workflows must stay quiet, float noise included."""
     import warnings
 
-    from mmml.cli.run.md_stage_summary import cubic_box_side_from_cell
+    from karml.cli.run.md_stage_summary import cubic_box_side_from_cell
 
     with warnings.catch_warnings():
         warnings.simplefilter("error")

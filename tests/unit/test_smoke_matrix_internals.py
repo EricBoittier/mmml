@@ -1,4 +1,4 @@
-"""Coverage for mmml.validation.smoke_matrix internals not exercised by
+"""Coverage for karml.validation.smoke_matrix internals not exercised by
 test_smoke_matrix.py: manifest validation errors, per-requirement-type
 blocking, command token resolution, hashing, FAIL status, and the CLI."""
 
@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from mmml.validation.smoke_matrix import (
+from karml.validation.smoke_matrix import (
     SmokeCase,
     _blocked_reasons,
     _resolve_command,
@@ -127,28 +127,28 @@ def test_blocked_reasons_empty_for_unconstrained_case():
 def test_blocked_reasons_env_unset(monkeypatch):
     case = SmokeCase(
         id="x", category="c", description="d", command=("true",),
-        requires_env=("MMML_TEST_UNSET_VAR",),
+        requires_env=("KARML_TEST_UNSET_VAR",),
     )
     reasons = _blocked_reasons(case, env={})
-    assert any("MMML_TEST_UNSET_VAR is unset" in r for r in reasons)
+    assert any("KARML_TEST_UNSET_VAR is unset" in r for r in reasons)
 
 
 def test_blocked_reasons_env_path_missing(tmp_path):
     missing = tmp_path / "does-not-exist"
     case = SmokeCase(
         id="x", category="c", description="d", command=("true",),
-        requires_env=("MMML_TEST_PATH_VAR",),
+        requires_env=("KARML_TEST_PATH_VAR",),
     )
-    reasons = _blocked_reasons(case, env={"MMML_TEST_PATH_VAR": str(missing)})
+    reasons = _blocked_reasons(case, env={"KARML_TEST_PATH_VAR": str(missing)})
     assert any("does not exist" in r for r in reasons)
 
 
 def test_blocked_reasons_env_path_exists_not_blocked(tmp_path):
     case = SmokeCase(
         id="x", category="c", description="d", command=("true",),
-        requires_env=("MMML_TEST_PATH_VAR",),
+        requires_env=("KARML_TEST_PATH_VAR",),
     )
-    reasons = _blocked_reasons(case, env={"MMML_TEST_PATH_VAR": str(tmp_path)})
+    reasons = _blocked_reasons(case, env={"KARML_TEST_PATH_VAR": str(tmp_path)})
     assert reasons == []
 
 
@@ -223,15 +223,15 @@ def test_resolve_command_substitutes_known_tokens(tmp_path):
 
 
 def test_resolve_command_expands_environment_variables(tmp_path, monkeypatch):
-    monkeypatch.setenv("MMML_TEST_RESOLVE_VAR", "resolved-value")
-    case = SmokeCase(id="x", category="c", description="d", command=("$MMML_TEST_RESOLVE_VAR",))
+    monkeypatch.setenv("KARML_TEST_RESOLVE_VAR", "resolved-value")
+    case = SmokeCase(id="x", category="c", description="d", command=("$KARML_TEST_RESOLVE_VAR",))
     resolved = _resolve_command(case, repo=tmp_path, output_dir=tmp_path)
     assert resolved == ["resolved-value"]
 
 
 def test_resolve_command_raises_on_unresolved_env_var(tmp_path, monkeypatch):
-    monkeypatch.delenv("MMML_TEST_UNRESOLVED_VAR", raising=False)
-    case = SmokeCase(id="x", category="c", description="d", command=("$MMML_TEST_UNRESOLVED_VAR",))
+    monkeypatch.delenv("KARML_TEST_UNRESOLVED_VAR", raising=False)
+    case = SmokeCase(id="x", category="c", description="d", command=("$KARML_TEST_UNRESOLVED_VAR",))
     with pytest.raises(ValueError, match="unresolved environment variable"):
         _resolve_command(case, repo=tmp_path, output_dir=tmp_path)
 
@@ -360,7 +360,7 @@ cases:
 
 
 def test_main_strict_blocked_fails_on_blocked_case(tmp_path, monkeypatch):
-    monkeypatch.delenv("MMML_TEST_STRICT_BLOCKED_VAR", raising=False)
+    monkeypatch.delenv("KARML_TEST_STRICT_BLOCKED_VAR", raising=False)
     manifest_path = _write_manifest(
         tmp_path,
         """
@@ -369,7 +369,7 @@ cases:
   - id: blocked
     category: calculator
     description: missing env
-    requires_env: [MMML_TEST_STRICT_BLOCKED_VAR]
+    requires_env: [KARML_TEST_STRICT_BLOCKED_VAR]
     command: ["true"]
 """,
     )

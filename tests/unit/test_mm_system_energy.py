@@ -1,4 +1,4 @@
-"""Unit tests for :mod:`mmml.interfaces.pycharmmInterface.mm_system_energy`."""
+"""Unit tests for :mod:`karml.interfaces.pycharmmInterface.mm_system_energy`."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ import pytest
 
 jax.config.update("jax_enable_x64", True)
 
-from mmml.interfaces.pycharmmInterface.mm_system_energy import (
+from karml.interfaces.pycharmmInterface.mm_system_energy import (
     COULOMB_KCAL,
     CharmmFswitchCoeffs,
     CharmmNbondSettings,
@@ -287,8 +287,8 @@ def test_pair_lj_epsilon_uses_abs_product() -> None:
 def test_resolve_nonbonded_excluded_pairs_prefers_psf_iblo_inb() -> None:
     from pathlib import Path
 
-    from mmml.interfaces.pycharmmInterface.cgenff_topology import parse_psf_ext
-    from mmml.interfaces.pycharmmInterface.mm_system_energy import (
+    from karml.interfaces.pycharmmInterface.cgenff_topology import parse_psf_ext
+    from karml.interfaces.pycharmmInterface.mm_system_energy import (
         excluded_pairs_from_psf_bonds,
         resolve_nonbonded_excluded_pairs,
     )
@@ -310,8 +310,8 @@ def test_resolve_nonbonded_excluded_pairs_prefers_psf_iblo_inb() -> None:
 def test_excluded_pairs_from_psf_nnb_mini_mlpot_fixture() -> None:
     from pathlib import Path
 
-    from mmml.interfaces.pycharmmInterface.cgenff_topology import parse_psf_ext
-    from mmml.interfaces.pycharmmInterface.mm_system_energy import (
+    from karml.interfaces.pycharmmInterface.cgenff_topology import parse_psf_ext
+    from karml.interfaces.pycharmmInterface.mm_system_energy import (
         excluded_pairs_from_psf_inb_iblo,
         excluded_pairs_from_psf_nnb,
     )
@@ -386,7 +386,7 @@ def test_decompose_nonbonded_pair_energies_matches_aggregate() -> None:
 
 
 def test_single_pair_mic_nonbonded_energies_jax_grad() -> None:
-    from mmml.interfaces.pycharmmInterface.mm_system_energy import (
+    from karml.interfaces.pycharmmInterface.mm_system_energy import (
         single_pair_mic_nonbonded_energies,
     )
 
@@ -419,7 +419,7 @@ def test_single_pair_mic_nonbonded_energies_jax_grad() -> None:
 
 
 def test_single_pair_dedr_numeric_matches_autodiff() -> None:
-    from mmml.interfaces.pycharmmInterface.trialanine_nb_parity import (
+    from karml.interfaces.pycharmmInterface.trialanine_nb_parity import (
         _mic_unit_vector,
         _single_pair_analytic_dedr,
         _single_pair_nb_energies,

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from mmml.interfaces.pycharmmInterface.cgenff_bonded_reference import charmm_cmap_is_active
+from karml.interfaces.pycharmmInterface.cgenff_bonded_reference import charmm_cmap_is_active
 
 
 def test_charmm_cmap_is_active_false_for_zero():

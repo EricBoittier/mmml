@@ -1,7 +1,7 @@
 {
   "backend": "jaxmd",
   "ensemble": "nve",
-  "checkpoint": "/mmhome/boittier/home/mmml/examples/m/kl.json",
+  "checkpoint": "/mmhome/boittier/home/karml/examples/m/kl.json",
   "n_atoms": 9,
   "n_steps": 10000,
   "dt_fs": 0.5,

@@ -29,7 +29,7 @@ CKPT="${CKPT:?set CKPT to PhysNet portable JSON (charges=False → use fixed MM)
 OUT_ROOT="${OUT_ROOT:-./scratch/tip3_physnet_ewald_ir}"
 MM_CHARGE_MODE="${MM_CHARGE_MODE:-fixed}"
 STAGE="${STAGE:-all}"
-MPIRUN="${MMML_MPIRUN_WRAPPER:-$ROOT/scripts/mmml-charmm-mpirun.sh}"
+MPIRUN="${KARML_MPIRUN_WRAPPER:-$ROOT/scripts/karml-charmm-mpirun.sh}"
 
 # Geometry / timing knobs — TIP3:90 @ 30 Å is ~0.1 g/cm³ (smoke wiring).
 # True ~1 g/cm³ liquid: ~903 waters @ 30 Å, or L≈13.9 Å for 90 waters.
@@ -84,7 +84,7 @@ echo "  STAGE=$STAGE  mm-charge=$MM_CHARGE_MODE  lr=ewald --ewald-omit-self --ml
 if _want fd; then
   echo ""
   echo "=== [fd] mode-check --pbc-fd TIP3 + ewald omit-self ==="
-  if ! mmml mode-check --pbc-fd \
+  if ! karml mode-check --pbc-fd \
     --residue TIP3 \
     --n-molecules 10 \
     --checkpoint "$CKPT" \
@@ -227,7 +227,7 @@ if _want prod; then
   echo "  box=${BOX_PROD} Å  dt=${DT_FS_PROD} fs  record/${STEPS_PER_REC} → frame_dt=$(
     awk -v d="$DT_FS_PROD" -v s="$STEPS_PER_REC" 'BEGIN{printf "%.3f", d*s}'
   ) fs"
-  mmml md-system \
+  karml md-system \
     --backend jaxmd \
     --setup pbc_nve \
     --composition "TIP3:${N_PROD}" \

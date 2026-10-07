@@ -8,8 +8,8 @@ from typing import Any, Iterator
 
 import yaml
 
-from mmml.interfaces.pycharmmInterface.cgenff_residues import parse_cgenff_residues
-from mmml.interfaces.pycharmmInterface.mlpot.cli_common import parse_composition
+from karml.interfaces.pycharmmInterface.cgenff_residues import parse_cgenff_residues
+from karml.interfaces.pycharmmInterface.mlpot.cli_common import parse_composition
 
 
 @dataclass(frozen=True)

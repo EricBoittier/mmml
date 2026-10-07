@@ -36,7 +36,7 @@ def read_charmm_crd_positions(path: Path) -> np.ndarray:
 
 
 def count_peptide_atoms_psf(psf_path: Path) -> int:
-    from mmml.interfaces.pycharmmInterface.trialanine_water_box import (
+    from karml.interfaces.pycharmmInterface.trialanine_water_box import (
         n_peptide_atoms_in_trialanine_box,
     )
 
@@ -55,7 +55,7 @@ def finalize(artifacts: Path = ARTIFACTS) -> int:
     box_side = 28.0
     bonded = _load_json(out / "bonded_report.json")
 
-    from mmml.interfaces.pycharmmInterface.mlpot.embedding_workflow import (
+    from karml.interfaces.pycharmmInterface.mlpot.embedding_workflow import (
         plot_embedding_box_structures,
     )
 
@@ -99,7 +99,7 @@ def finalize(artifacts: Path = ARTIFACTS) -> int:
         key=lambda p: p.stat().st_mtime,
     ) if (out / "checkpoints").is_dir() else []
     if runs:
-        from mmml.cli.misc.compare_training_runs import collect_all_metrics
+        from karml.cli.misc.compare_training_runs import collect_all_metrics
 
         m = collect_all_metrics(runs[-1], verbose=False)
         if m is not None and len(m.get("valid_loss", [])):

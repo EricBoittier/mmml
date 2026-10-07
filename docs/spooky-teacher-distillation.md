@@ -4,9 +4,9 @@
 checkpoint. Ground-truth energy and force labels remain the primary objective;
 the teacher regularizes them.
 
-This is **not** the same thing as `mmml physnet-train --distill`, which is a
+This is **not** the same thing as `karml physnet-train --distill`, which is a
 separate generic PhysNet pipeline. The two share only the blending arithmetic
-(`mmml/models/physnetjax/physnetjax/training/distill.py`).
+(`karml/models/physnetjax/physnetjax/training/distill.py`).
 
 ## Usage
 

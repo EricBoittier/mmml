@@ -17,7 +17,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from mmml.cli.run.md_handoff import (
+from karml.cli.run.md_handoff import (
     ang_ps_velocities_to_jaxmd_metal,
     kinetic_temperature_k_from_ang_ps_velocities,
     kinetic_temperature_k_from_jaxmd_metal_velocities,

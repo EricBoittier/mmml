@@ -9,22 +9,22 @@
 # Phase C: summary table of final energies / solver metadata
 #
 # Examples:
-#   ~/mmml/scripts/run_dcm_long_range_workflow.sh
-#   LR_SOLVERS=mic,jax_pme JAX_PME_METHODS=ewald,pme,p3m ~/mmml/scripts/run_dcm_long_range_workflow.sh
+#   ~/karml/scripts/run_dcm_long_range_workflow.sh
+#   LR_SOLVERS=mic,jax_pme JAX_PME_METHODS=ewald,pme,p3m ~/karml/scripts/run_dcm_long_range_workflow.sh
 #   MM_NONBOND_MODE=periodic_external LR_SOLVERS=jax_pme,nvalchemiops_pme,scafacos SKIP_LIQUID_BOX=1 \
-#     BOX_DIR=~/tests/boxes/dcm60_l32 ~/mmml/scripts/run_dcm_long_range_workflow.sh
-#   SKIP_MD=1 ~/mmml/scripts/run_dcm_long_range_workflow.sh   # validation only
+#     BOX_DIR=~/tests/boxes/dcm60_l32 ~/karml/scripts/run_dcm_long_range_workflow.sh
+#   SKIP_MD=1 ~/karml/scripts/run_dcm_long_range_workflow.sh   # validation only
 #
 set -euo pipefail
 
-MMML_ROOT="${MMML_ROOT:-$HOME/mmml}"
+KARML_ROOT="${KARML_ROOT:-$HOME/karml}"
 TESTS_ROOT="${TESTS_ROOT:-$HOME/tests}"
-MPIRUN="${MMML_MPIRUN_WRAPPER:-$MMML_ROOT/scripts/mmml-charmm-mpirun.sh}"
+MPIRUN="${KARML_MPIRUN_WRAPPER:-$KARML_ROOT/scripts/karml-charmm-mpirun.sh}"
 
-# shellcheck source=scripts/resolve_mmml_env.sh
-source "$MMML_ROOT/scripts/resolve_mmml_env.sh"
-mmml_resolve_env "$MMML_ROOT"
-PY="${MMML_PYTHON}"
+# shellcheck source=scripts/resolve_karml_env.sh
+source "$KARML_ROOT/scripts/resolve_karml_env.sh"
+karml_resolve_env "$KARML_ROOT"
+PY="${KARML_PYTHON}"
 
 # --- inherit DCM sizing defaults (override as for liquid workflow) ------------
 N_DCM="${N_DCM:-60}"
@@ -53,15 +53,15 @@ REBUILD_BOX="${REBUILD_BOX:-0}"
 # --- md-system (short mini per solver) ----------------------------------------
 MD_STAGES="${MD_STAGES:-mini}"
 MINI_NSTEP="${MINI_NSTEP:-30}"
-MMML_CKPT="${MMML_CKPT:-}"
+KARML_CKPT="${KARML_CKPT:-}"
 
-if [[ ! -d "$MMML_ROOT" ]]; then
-  echo "MMML_ROOT not found: $MMML_ROOT" >&2
+if [[ ! -d "$KARML_ROOT" ]]; then
+  echo "KARML_ROOT not found: $KARML_ROOT" >&2
   exit 1
 fi
 
 # shellcheck source=scripts/setup_jax_cuda_env.sh
-source "$MMML_ROOT/scripts/setup_jax_cuda_env.sh" 2>/dev/null || true
+source "$KARML_ROOT/scripts/setup_jax_cuda_env.sh" 2>/dev/null || true
 export JAX_PLATFORMS="${JAX_PLATFORMS:-cpu}"
 
 IFS=',' read -r -a _lr_list <<< "${LR_SOLVERS// /}"
@@ -71,7 +71,7 @@ IFS=',' read -r -a _scf_list <<< "${SCAFACOS_METHODS// /}"
 echo "================================================================"
 echo " DCM long-range solver workflow"
 echo "================================================================"
-echo " MMML_ROOT:        $MMML_ROOT"
+echo " KARML_ROOT:        $KARML_ROOT"
 echo " Box:              DCM:${N_DCM} L=${BOX_SIZE} Å → $BOX_DIR"
 echo " Run root:         $RUN_ROOT"
 echo " mm_nonbond_mode:  $MM_NONBOND_MODE"
@@ -82,16 +82,16 @@ echo " scafacos_methods: ${SCAFACOS_METHODS}"
 echo "================================================================"
 
 have_scafacos() {
-  "$PY" -c "from mmml.interfaces.scafacosInterface import have_scafacos; raise SystemExit(0 if have_scafacos() else 1)" 2>/dev/null
+  "$PY" -c "from karml.interfaces.scafacosInterface import have_scafacos; raise SystemExit(0 if have_scafacos() else 1)" 2>/dev/null
 }
 
 have_nvalchemiops_pme() {
-  "$PY" -c "from mmml.interfaces.pycharmmInterface.long_range_backend import have_nvalchemiops_pme; raise SystemExit(0 if have_nvalchemiops_pme() else 1)" 2>/dev/null
+  "$PY" -c "from karml.interfaces.pycharmmInterface.long_range_backend import have_nvalchemiops_pme; raise SystemExit(0 if have_nvalchemiops_pme() else 1)" 2>/dev/null
 }
 
 if [[ "$SKIP_VALIDATION" != "1" ]]; then
   echo "[phase 0] long-range backend validation (pytest) ..."
-  (cd "$MMML_ROOT" && JAX_PLATFORMS=cpu "$PY" -m pytest \
+  (cd "$KARML_ROOT" && JAX_PLATFORMS=cpu "$PY" -m pytest \
     tests/unit/test_jax_pme_lr_solver.py \
     tests/functionality/long_range/test_hybrid_jax_pme_mm.py \
     -q --tb=line)
@@ -99,7 +99,7 @@ if [[ "$SKIP_VALIDATION" != "1" ]]; then
     echo "[phase 0] ScaFaCoS smoke (via mpirun wrapper) ..."
     export SCAFACOS_LIB="${SCAFACOS_LIB:-$HOME/.local/scafacos/lib/libfcs.so}"
     export LD_LIBRARY_PATH="${HOME}/.local/scafacos/lib:/usr/lib/x86_64-linux-gnu:${LD_LIBRARY_PATH:-}"
-    (cd "$MMML_ROOT/tests/functionality/long_range" && \
+    (cd "$KARML_ROOT/tests/functionality/long_range" && \
       "$MPIRUN" "$PY" 04_scafacos_methods.py) || echo "  WARN: ScaFaCoS smoke failed (see above)"
   else
     echo "[phase 0] ScaFaCoS not installed — skipping 04_scafacos_methods.py"
@@ -110,16 +110,16 @@ if [[ "$SKIP_LIQUID_BOX" != "1" ]]; then
   echo "[phase A] liquid-box (delegate to run_dcm_liquid_workflow.sh) ..."
   N_DCM="$N_DCM" BOX_SIZE="$BOX_SIZE" BOX_DIR="$BOX_DIR" \
     SKIP_HEALTH=1 SKIP_MD=1 REBUILD_BOX="$REBUILD_BOX" \
-    "$MMML_ROOT/scripts/run_dcm_liquid_workflow.sh"
+    "$KARML_ROOT/scripts/run_dcm_liquid_workflow.sh"
 fi
 
-if [[ -z "$MMML_CKPT" ]]; then
-  MMML_CKPT="$(
-    find "$MMML_ROOT/mmml/models/physnetjax/defaults/hf_json" -maxdepth 1 -name '*_portable.json' 2>/dev/null | head -n 1
+if [[ -z "$KARML_CKPT" ]]; then
+  KARML_CKPT="$(
+    find "$KARML_ROOT/karml/models/physnetjax/defaults/hf_json" -maxdepth 1 -name '*_portable.json' 2>/dev/null | head -n 1
   )"
 fi
-if [[ -z "$MMML_CKPT" && "$SKIP_MD" != "1" ]]; then
-  echo "Set MMML_CKPT for hybrid md-system runs." >&2
+if [[ -z "$KARML_CKPT" && "$SKIP_MD" != "1" ]]; then
+  echo "Set KARML_CKPT for hybrid md-system runs." >&2
   exit 1
 fi
 
@@ -130,7 +130,7 @@ echo -e "lr_solver\tjax_pme_method\tscafacos_method\tmm_nonbond_mode\trun_dir\ts
 read_hybrid_grms() {
   "$PY" -c "
 from pathlib import Path
-from mmml.interfaces.pycharmmInterface.lr_solver_grms_compare import read_hybrid_grms_from_output_dir
+from karml.interfaces.pycharmmInterface.lr_solver_grms_compare import read_hybrid_grms_from_output_dir
 val = read_hybrid_grms_from_output_dir(Path('$1'))
 print('' if val is None else f'{val:.6f}')
 "
@@ -176,14 +176,14 @@ if [[ "$SKIP_MD" != "1" ]]; then
 
         MD_ARGS=(
           md-system
-          --config "$MMML_ROOT/mmml/cli/run/dcm_long_range_solvers.example.yaml"
+          --config "$KARML_ROOT/karml/cli/run/dcm_long_range_solvers.example.yaml"
           --setup pbc_npt
           --backend pycharmm
           --composition "DCM:${N_DCM}"
           --from-psf "$PSF"
           --from-crd "$CRD"
           --skip-cluster-build
-          --checkpoint "$MMML_CKPT"
+          --checkpoint "$KARML_CKPT"
           --output-dir "$run_dir"
           --md-stages "$MD_STAGES"
           --mini-nstep "$MINI_NSTEP"
@@ -224,7 +224,7 @@ echo "[phase C] summary: $SUMMARY_TSV"
 column -t -s $'\t' "$SUMMARY_TSV" 2>/dev/null || cat "$SUMMARY_TSV"
 if [[ "$SKIP_MD" != "1" && -f "$SUMMARY_TSV" ]]; then
   echo "[phase C] hybrid GRMS validation ..."
-  if ! (cd "$MMML_ROOT/tests/functionality/long_range" && \
+  if ! (cd "$KARML_ROOT/tests/functionality/long_range" && \
     JAX_PLATFORMS=cpu "$PY" 07_hybrid_grms_lr_solver_compare.py --summary-tsv "$SUMMARY_TSV"); then
     echo "WARN: hybrid GRMS cross-solver validation failed (see above)" >&2
   fi

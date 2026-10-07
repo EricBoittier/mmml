@@ -4,9 +4,9 @@ The existing ``smd`` term biases a single interatomic distance, which cannot
 express an SN2 reaction coordinate: methyl transfer is described by the
 antisymmetric stretch ``xi = r(C-X) - r(C-N)``, where forming and breaking bonds
 move in opposite directions. This term biases any
-:class:`~mmml.md.restraints.LinearDistanceCV`, so the solvated umbrella windows
+:class:`~karml.md.restraints.LinearDistanceCV`, so the solvated umbrella windows
 use exactly the same coordinate definition as the gas-phase packed sampler in
-:mod:`mmml.umbrella` -- two profiles computed against differently-defined
+:mod:`karml.umbrella` -- two profiles computed against differently-defined
 coordinates would not be comparable, which is the whole point of the campaign.
 
 The CV is minimum-image aware so a solute that straddles a periodic boundary
@@ -20,16 +20,16 @@ from __future__ import annotations
 
 from typing import Any
 
-from mmml.md.energy.registry import EnergyContext, TermFns, register_term
-from mmml.md.energy.terms._common import ase_contribution_from_jax
-from mmml.md.restraints import (
+from karml.md.energy.registry import EnergyContext, TermFns, register_term
+from karml.md.energy.terms._common import ase_contribution_from_jax
+from karml.md.restraints import (
     AngleWall,
     ReactionChannelRestraint,
     BondRetentionWall,
     FlatBottomWall,
     LinearDistanceCV,
 )
-from mmml.md.system import MolecularSystem
+from karml.md.system import MolecularSystem
 
 __all__ = ["ReactionCoordinateBiasTerm"]
 

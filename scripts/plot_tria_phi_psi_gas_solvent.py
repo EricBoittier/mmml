@@ -20,7 +20,7 @@ import pandas as pd
 from scipy.interpolate import griddata
 from scipy.ndimage import gaussian_filter
 
-from mmml.utils.plotting.styles import apply_plot_style, default_cmap
+from karml.utils.plotting.styles import apply_plot_style, default_cmap
 
 
 def _wrap180(deg: pd.Series | np.ndarray) -> np.ndarray:

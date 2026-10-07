@@ -1,6 +1,6 @@
 # Batched umbrella sampling (NVT + MBAR)
 
-`mmml umbrella-sample` supports two engines:
+`karml umbrella-sample` supports two engines:
 
 | `engine` | System | Energy |
 |----------|--------|--------|
@@ -22,12 +22,12 @@ barrier paths see [NEB](neb.md).
 
 | Goal | Tool |
 |------|------|
-| Canonical PMF along a bond / contact distance (pure ML, gas) | `mmml umbrella-sample` (`packed_ml`) + `mmml umbrella-mbar` |
-| Same PMF with explicit solvent (ML solute + MM solvent) | `mmml umbrella-sample --engine hybrid_jaxmd` + `mmml umbrella-mbar` |
+| Canonical PMF along a bond / contact distance (pure ML, gas) | `karml umbrella-sample` (`packed_ml`) + `karml umbrella-mbar` |
+| Same PMF with explicit solvent (ML solute + MM solvent) | `karml umbrella-sample --engine hybrid_jaxmd` + `karml umbrella-mbar` |
 | Backbone φ/ψ constrained maps + gas dihedral PMF | [Teaching exercise](examples/tria-phi-psi-scan.md) (`DihedralCV`, `seed_mode: frames`) |
-| Alchemical λ free energy (hybrid MMML) | `md-system --setup lambda_ti` + `mmml lambda-mbar` |
+| Alchemical λ free energy (hybrid KARML) | `md-system --setup lambda_ti` + `karml lambda-mbar` |
 | Adaptive umbrella in CHARMM | ADUMB via `pycharmm_pre_dynamics_lingo` |
-| Minimum-energy path | [`mmml neb`](neb.md) |
+| Minimum-energy path | [`karml neb`](neb.md) |
 
 ## How packing works
 
@@ -50,7 +50,7 @@ Metropolis; ML energy cancels). Even/odd neighbor pairs on the 1D chain or 2D
 grid are proposed every `--rex-freq` steps (default 100). Cumulative acceptance
 is written to `umbrella_summary.json`.
 
-The packed layout matches multi-replica [`mmml physnet-md`](cli/commands/physnet-md.md)
+The packed layout matches multi-replica [`karml physnet-md`](cli/commands/physnet-md.md)
 batching. Use `hybrid_jaxmd` for PBC / explicit solvent (MIC restraints via the
 shared `smd` energy term).
 
@@ -72,7 +72,7 @@ PSF + PDB + box → MolecularSystem
   so MBAR does not need to rebuild the hybrid Hamiltonian.
 - v1: 1D CV only; no replica exchange.
 
-Example: [`examples/m/yaml/umbrella_nc_tip3.yaml`](https://github.com/EricBoittier/mmml/blob/main/examples/m/yaml/umbrella_nc_tip3.yaml).
+Example: [`examples/m/yaml/umbrella_nc_tip3.yaml`](https://github.com/EricBoittier/karml/blob/main/examples/m/yaml/umbrella_nc_tip3.yaml).
 
 #### Pair lists: static or rebuilt
 
@@ -82,7 +82,7 @@ Example: [`examples/m/yaml/umbrella_nc_tip3.yaml`](https://github.com/EricBoitti
 | `static_pairs` | What happens | Use when |
 |---|---|---|
 | `true` (default) | The complete intermolecular list is built once and uploaded once. The switching functions cull by distance on the GPU, so no host rebuild happens and none of the per-block transfer cost is paid. | Up to ~4 800 atoms |
-| `false` | `make_intermolecular_neighbor_fn` rebuilds a padded list on the host, with `nl_skin_A` of Verlet skin and a block size from `mmml.md.nl_cadence`. | Above ~4 800 atoms, where the O(N²) energy costs more than the rebuild saves |
+| `false` | `make_intermolecular_neighbor_fn` rebuilds a padded list on the host, with `nl_skin_A` of Verlet skin and a block size from `karml.md.nl_cadence`. | Above ~4 800 atoms, where the O(N²) energy costs more than the rebuild saves |
 
 **Correctness is identical**, which is the precondition for treating this as a
 pure performance choice. The switched force field makes pairs beyond `ctofnb`
@@ -96,7 +96,7 @@ built at the production cutoff (12 Å = `ctofnb`):
 | max \|ΔF\| | 6.4 × 10⁻¹⁴ eV/Å |
 
 Reproduce with
-[`scripts/bench_static_vs_neighbor_pairs.py`](https://github.com/EricBoittier/mmml/blob/main/scripts/bench_static_vs_neighbor_pairs.py)
+[`scripts/bench_static_vs_neighbor_pairs.py`](https://github.com/EricBoittier/karml/blob/main/scripts/bench_static_vs_neighbor_pairs.py)
 (CHARMM-free; TIP3P water at experimental density).
 
 ##### Where the crossover is
@@ -227,7 +227,7 @@ natural source of centres is the reaction path the model was trained on.
 ```bash
 # 1a) Gas-phase sample (requires jax-md + a PhysNet/Spooky checkpoint)
 # Fix C (2), translate NH₃ (N+H) rigidly along N–C; default dt=0.1 fs
-mmml umbrella-sample \
+karml umbrella-sample \
   --checkpoint examples/m/kl.json \
   --structure examples/m/neb/reag_0_opt.xyz \
   --atoms 2,1 --move-with 1,3,4,5 \
@@ -236,15 +236,15 @@ mmml umbrella-sample \
   -o artifacts/umbrella --overwrite
 
 # 1b) Solvated mechanical-embedding sample (after make-box)
-mmml umbrella-sample --config examples/m/yaml/umbrella_nc_tip3.yaml --overwrite
+karml umbrella-sample --config examples/m/yaml/umbrella_nc_tip3.yaml --overwrite
 # or: bash examples/m/14_umbrella_sample_sol.sh
 
 # NPZ with R/Z (optional --seed-mode frames for pre-generated window seeds):
-# mmml umbrella-sample --checkpoint ckpt.json --structure data.npz \
+# karml umbrella-sample --checkpoint ckpt.json --structure data.npz \
 #   --atoms 0,1 --targets 1.8,2.0,2.2 --seed-mode frames -o artifacts/umbrella
 
 # 2) MBAR (requires: uv sync --extra mbar)
-mmml umbrella-mbar --run-dir artifacts/umbrella
+karml umbrella-mbar --run-dir artifacts/umbrella
 ```
 
 `--structure` accepts **XYZ, PDB, or NPZ** (`R`, `Z`). Default `--seed-mode stretch`
@@ -261,7 +261,7 @@ grid (``nx × ny``), batched in one JAX-MD NVT. MBAR writes
 `pmf_rel_kcal_mol_2d` reshaped to `grid_shape`.
 
 ```bash
-mmml umbrella-sample \
+karml umbrella-sample \
   --checkpoint examples/m/kl.json \
   --structure examples/m/neb/reag_0_opt.xyz \
   --atoms 0,2 --atoms2 1,2 \
@@ -322,14 +322,14 @@ Worked TRIA path (gas scan → seeds → sample → MBAR → plot):
 
 ## CLI reference
 
-- [`mmml umbrella-sample`](cli/commands/umbrella-sample.md)
-- [`mmml umbrella-mbar`](cli/commands/umbrella-mbar.md)
+- [`karml umbrella-sample`](cli/commands/umbrella-sample.md)
+- [`karml umbrella-mbar`](cli/commands/umbrella-mbar.md)
 
 ## Library API
 
 ```python
-from mmml.umbrella import UmbrellaConfig, run_umbrella_nvt, run_umbrella_mbar
-from mmml.umbrella.config import UmbrellaMbarConfig
+from karml.umbrella import UmbrellaConfig, run_umbrella_nvt, run_umbrella_mbar
+from karml.umbrella.config import UmbrellaMbarConfig
 
 cfg = UmbrellaConfig(
     checkpoint="ckpt",

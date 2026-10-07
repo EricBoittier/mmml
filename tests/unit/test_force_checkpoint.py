@@ -8,7 +8,7 @@ import numpy as np
 
 
 def test_maybe_record_forces_uses_physical_forces() -> None:
-    from mmml.interfaces.pycharmmInterface.mlpot.force_checkpoint import (
+    from karml.interfaces.pycharmmInterface.mlpot.force_checkpoint import (
         ForceCheckpointConfig,
         ForceCheckpointWriter,
         configure_force_checkpoint,
@@ -20,7 +20,7 @@ def test_maybe_record_forces_uses_physical_forces() -> None:
     )
     configure_force_checkpoint(writer.config)
     # Re-bind active writer (configure creates new instance)
-    from mmml.interfaces.pycharmmInterface.mlpot import force_checkpoint as fc
+    from karml.interfaces.pycharmmInterface.mlpot import force_checkpoint as fc
 
     fc._active = writer
 
@@ -28,11 +28,11 @@ def test_maybe_record_forces_uses_physical_forces() -> None:
     pos = np.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]], dtype=np.float64)
     with (
         patch(
-            "mmml.interfaces.pycharmmInterface.mlpot.cli_common.charmm_total_forces_kcalmol_A",
+            "karml.interfaces.pycharmmInterface.mlpot.cli_common.charmm_total_forces_kcalmol_A",
             return_value=physical,
         ),
         patch(
-            "mmml.interfaces.pycharmmInterface.mlpot.cli_common.charmm_positions_angstrom",
+            "karml.interfaces.pycharmmInterface.mlpot.cli_common.charmm_positions_angstrom",
             return_value=pos,
         ),
     ):

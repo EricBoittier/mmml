@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from mmml.md.restraints import (
+from karml.md.restraints import (
     FlatBottomWall,
     LinearDistanceCV,
     harmonic_bias_energy,

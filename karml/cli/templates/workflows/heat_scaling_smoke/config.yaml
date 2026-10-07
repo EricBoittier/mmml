@@ -1,9 +1,9 @@
-# Heat scaling smoke (N=5,10 × dt=0.25) — mmml configure template.
+# Heat scaling smoke (N=5,10 × dt=0.25) — karml configure template.
 cluster_sizes: [5, 10]
 repeats: [1]
 dt_fs_values: [0.25]
 composition_prefix: DCM
-checkpoint: "${MMML_CKPT}"
+checkpoint: "${KARML_CKPT}"
 output_root: artifacts/pycharmm_mlpot
 use_mpirun: false
 seed_base: 123456

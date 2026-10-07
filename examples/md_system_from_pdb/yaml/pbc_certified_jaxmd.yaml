@@ -1,12 +1,12 @@
 # Certified liquid-box (PSF/CRD) → JAX-MD NVT → NVE.
 #
 # Edit from_psf / from_crd / checkpoint, then:
-#   uv run mmml md-system \
+#   uv run karml md-system \
 #     --config examples/md_system_from_pdb/yaml/pbc_certified_jaxmd.yaml \
 #     --run-all
 #
 # Build a tiny box first if needed:
-#   uv run mmml liquid-box --composition DCM:8 \
+#   uv run karml liquid-box --composition DCM:8 \
 #     --output-dir artifacts/md_system_from_pdb/box_dcm8
 
 defaults:

@@ -1,4 +1,4 @@
-"""YAML configuration helpers for ``mmml md-system``."""
+"""YAML configuration helpers for ``karml md-system``."""
 
 from __future__ import annotations
 
@@ -86,13 +86,13 @@ def _resolve_include_path(config_path: Path, include_ref: str) -> Path:
     ref = Path(include_ref)
     if ref.is_absolute():
         return ref
-    # Prefer relative to the including file, then repo-root relative (mmml/cli/run/...).
+    # Prefer relative to the including file, then repo-root relative (karml/cli/run/...).
     candidate = (config_path.parent / ref).resolve()
     if candidate.is_file():
         return candidate
     repo_root = config_path.resolve()
     for _ in range(8):
-        if (repo_root / "mmml" / "cli" / "run").is_dir():
+        if (repo_root / "karml" / "cli" / "run").is_dir():
             break
         if repo_root.parent == repo_root:
             break
@@ -298,17 +298,17 @@ def validate_campaign_checkpoint(value: Any, *, job_id: str | None = None) -> No
 
 
 def resolve_campaign_checkpoint_value(raw: Any, *, must_exist: bool = True) -> str:
-    """Expand ``${MMML_CKPT}`` and env vars for campaign YAML / job merge.
+    """Expand ``${KARML_CKPT}`` and env vars for campaign YAML / job merge.
 
     ``must_exist=False`` expands without checking the filesystem, for call sites
     where a later ``--checkpoint`` on the parent CLI still gets to replace the
     value. Validating there would reject a placeholder that never gets used.
     """
     text = str(raw).strip()
-    if text == "${MMML_CKPT}":
-        env = os.environ.get("MMML_CKPT", "").strip()
+    if text == "${KARML_CKPT}":
+        env = os.environ.get("KARML_CKPT", "").strip()
         if not env:
-            raise RuntimeError("MMML_CKPT is not set (config checkpoint: ${MMML_CKPT})")
+            raise RuntimeError("KARML_CKPT is not set (config checkpoint: ${KARML_CKPT})")
         path = Path(env).expanduser().resolve()
     else:
         path = Path(os.path.expandvars(text)).expanduser().resolve()

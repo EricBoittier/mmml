@@ -1,14 +1,14 @@
 # Merge record: PR #185, electrical embedding
 
-What [PR #185](https://github.com/EricBoittier/mmml/pull/185) contained, why it
+What [PR #185](https://github.com/EricBoittier/karml/pull/185) contained, why it
 conflicted, and what each conflict was resolved to. Written at merge time so the
 reasoning behind the resolutions is recoverable later — a merge commit records
 *what* survived, never *why*.
 
 | | |
 |---|---|
-| PR | [#185 "Electrical embedding fully working"](https://github.com/EricBoittier/mmml/pull/185) |
-| Author | Valerii Andreichev, from the fork `vandreichev/mmml` |
+| PR | [#185 "Electrical embedding fully working"](https://github.com/EricBoittier/karml/pull/185) |
+| Author | Valerii Andreichev, from the fork `vandreichev/karml` |
 | Size | 40 files, +5500 / −1750 |
 | Merge base | `6292fd3e4`, a fork-sync commit — **516 commits behind `main`** |
 | Merged into | `461f0958f` |
@@ -65,7 +65,7 @@ competes.
 
 ## The four conflicts
 
-### `mmml/umbrella/hybrid.py` — the substantive one
+### `karml/umbrella/hybrid.py` — the substantive one
 
 `main` had grown resume support, per-window checkpoints, `--windows` for Slurm
 fan-out, `save_failure_trace`, `relax_around_frozen_seed` with a seed-force gate,
@@ -83,7 +83,7 @@ or pair-list treatment.
 Two judgement calls inside this one:
 
 **The two pair-list optimisations became alternatives, not a replacement.**
-`main` reduced rebuild *frequency* (`nl_skin_A` plus `mmml.md.nl_cadence` block
+`main` reduced rebuild *frequency* (`nl_skin_A` plus `karml.md.nl_cadence` block
 sizing); #185 eliminated rebuilds entirely with a complete O(N²) list. Both are
 correct — the switched force field makes distant pairs contribute exactly zero —
 so `cfg.static_pairs` selects between them. It **defaults to `True`**, matching
@@ -108,7 +108,7 @@ would have added a 28th member to the 500-line club that
 `_relax_and_gate_seed` were extracted to module level; the function is back to
 495 lines.
 
-### `mmml/md/drivers/jaxmd.py`
+### `karml/md/drivers/jaxmd.py`
 
 `main` added `abort_nonfinite` and `NonFiniteStateError`, which raises with the
 frames recorded so far. #185 added per-frame momentum recording, explicitly so a
@@ -123,14 +123,14 @@ guards `state.mass` the way `_record_momentum` already guarded `state.momentum`,
 so states carrying neither still abort with a real error rather than an
 `AttributeError` raised from inside the raise.
 
-### `mmml/umbrella/config.py`
+### `karml/umbrella/config.py`
 
 #185's `uses_paired_windows` property kept. Its narrowing of `resolve_cvs` to
 `tuple[LinearDistanceCV, ...]` **not** kept: `main` had since generalised
 `cv_from_spec` to also return `DihedralCV`, so `tuple[Any, ...]` is the correct
 annotation.
 
-### `mmml/md/restraints/__init__.py`
+### `karml/md/restraints/__init__.py`
 
 Both export lists, merged.
 
@@ -165,14 +165,14 @@ were already red before the merge.
 
 **Still failing on `main` and deliberately not touched here:**
 `test_oversized_function_ratchet` reports
-`mmml/cli/run/jaxmd_runner.py::set_up_nhc_sim_routine` at 2734 lines against a
+`karml/cli/run/jaxmd_runner.py::set_up_nhc_sim_routine` at 2734 lines against a
 2522 baseline, and `.run_sim` at 2131 against 1986. That file is byte-identical
 between `main` and this merge, so the growth predates #185 and belongs to
 whoever grew it.
 
 ### Verification run
 
-Full suite on the merge, `MMML_DISABLE_CHARMM=1`, 27 min:
+Full suite on the merge, `KARML_DISABLE_CHARMM=1`, 27 min:
 
 ```
 5407 passed, 161 skipped, 2 failed
@@ -183,7 +183,7 @@ failure.** Skipped fraction 2.9 %, against the 25 % ceiling
 `scripts/ci/check_test_report.py` enforces, and the pass count is well clear of
 its 3000 floor.
 
-Also green: `ruff check` over `mmml/ scripts/ setup/charmm/tool/pycharmm/`,
+Also green: `ruff check` over `karml/ scripts/ setup/charmm/tool/pycharmm/`,
 `make lint-dupes`, `mkdocs build --strict`, and all four `--check` doc
 generators (`generate_cli_docs`, `generate_package_architecture`,
 `generate_docs_figures`, `generate_crystal_lit_compare`).
@@ -213,7 +213,7 @@ and reporting a campaign status the merge contradicts.
 ## Coverage notes
 
 The results stand on the literature comparison in
-[`RESULTS.md`](https://github.com/EricBoittier/mmml/blob/main/examples/menshutkin/RESULTS.md);
+[`RESULTS.md`](https://github.com/EricBoittier/karml/blob/main/examples/menshutkin/RESULTS.md);
 these are notes on what the automated gates do and do not touch, so nobody later
 mistakes a green CI run for a re-derivation of the science.
 

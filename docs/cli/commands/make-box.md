@@ -1,4 +1,4 @@
-# `mmml make-box`
+# `karml make-box`
 
 Pack molecules into a periodic box.
 
@@ -6,13 +6,13 @@ Pack molecules into a periodic box.
 ## Usage
 
 ```bash
-mmml make-box --help
+karml make-box --help
 ```
 
 ## Options
 
 ```text
-usage: mmml make-box [-h] [--n N] [--res RES] [--side_length SIDE_LENGTH]
+usage: karml make-box [-h] [--n N] [--res RES] [--side_length SIDE_LENGTH]
                      [--pdb PDB] [--solvent SOLVENT] [--density DENSITY]
                      [--packmol-region {box,sphere}]
                      [--packmol-tolerance PACKMOL_TOLERANCE]
@@ -25,7 +25,7 @@ Pack a solute into a periodic box (vacuum copies or explicit solvent). Stages
 Input & configuration:
   --pdb PDB             Solute PDB (CGenFF residue/atom names). Copied to
                         pdb/initial.pdb before Packmol. When omitted,
-                        pdb/initial.pdb must already exist (e.g. from mmml make-
+                        pdb/initial.pdb must already exist (e.g. from karml make-
                         res).
 
 Scientific model:

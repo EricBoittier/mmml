@@ -5,7 +5,7 @@ single box with packmol, then sets up the PyCHARMM PSF / coordinates.
 
 Usage from Python::
 
-    from mmml.cli.make_mixed_box import main_loop
+    from karml.cli.make_mixed_box import main_loop
     import argparse
 
     args = argparse.Namespace(
@@ -20,7 +20,7 @@ Usage from Python::
 
 CLI::
 
-    python -m mmml.cli.make_mixed_box --residues MEOH ACET --counts 10 10 --box-size 23.0
+    python -m karml.cli.make_mixed_box --residues MEOH ACET --counts 10 10 --box-size 23.0
 """
 
 from __future__ import annotations
@@ -87,8 +87,8 @@ def _generate_residue_pdbs(
 
     Returns a dict mapping residue name -> {"pdb": Path, "n_atoms": int, "atoms": Atoms}.
     """
-    from mmml.cli.make import make_res
-    from mmml.interfaces.pycharmmInterface.pycharmmCommands import CLEAR_CHARMM
+    from karml.cli.make import make_res
+    from karml.interfaces.pycharmmInterface.pycharmmCommands import CLEAR_CHARMM
 
     os.makedirs("pdb", exist_ok=True)
     os.makedirs("xyz", exist_ok=True)
@@ -124,7 +124,7 @@ def _run_packmol_mixed(
 
     Returns the path to the output PDB.
     """
-    from mmml.interfaces.pycharmmInterface.packmol_placement import packmol_executable
+    from karml.interfaces.pycharmmInterface.packmol_placement import packmol_executable
 
     os.makedirs("packmol", exist_ok=True)
     os.makedirs(str(Path(output_pdb).parent), exist_ok=True)
@@ -171,12 +171,12 @@ def _setup_charmm_box(
     skip_energy_show: bool = False,
 ) -> None:
     """Read the mixed PDB into PyCHARMM, set up PSF / PBC, and minimise."""
-    from mmml.interfaces.pycharmmInterface import setupBox
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import (
+    from karml.interfaces.pycharmmInterface import setupBox
+    from karml.interfaces.pycharmmInterface.import_pycharmm import (
         reset_block,
         reset_block_no_internal,
     )
-    from mmml.interfaces.pycharmmInterface.pycharmmCommands import CLEAR_CHARMM
+    from karml.interfaces.pycharmmInterface.pycharmmCommands import CLEAR_CHARMM
 
     CLEAR_CHARMM()
     setupBox.setup_box_generic(

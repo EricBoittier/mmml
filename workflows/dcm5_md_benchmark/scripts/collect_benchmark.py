@@ -156,7 +156,7 @@ def _parse_jaxmd(out_dir: Path, meta: dict[str, Any]) -> dict[str, Any]:
 def _restart_step_from_res_files(out_dir: Path) -> int | None:
     """Read global step from CHARMM ``.res`` (JHSTRT), not segment ``NSTEP``."""
     try:
-        from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
             read_restart_last_step,
         )
     except ImportError:

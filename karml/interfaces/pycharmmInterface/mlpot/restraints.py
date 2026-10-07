@@ -99,7 +99,7 @@ def adumb_rc_wall_pairs_for_names(
 
 def adumb_rc_wall_margin_A() -> float:
     """Inside offset (Å) for MMFP ``droff`` below umbrella ``max``."""
-    raw = (os.environ.get("MMML_ADUMB_RC_WALL_MARGIN") or "").strip()
+    raw = (os.environ.get("KARML_ADUMB_RC_WALL_MARGIN") or "").strip()
     if raw:
         try:
             margin = float(raw)
@@ -137,7 +137,7 @@ def _mmfp_rcm_distance_wall_block(
 
 def adumb_rc_walls_backend() -> str:
     """Return ``resd``, ``noe``, ``mmfp``, or ``off`` for traced-RC outer walls."""
-    raw = (os.environ.get("MMML_ADUMB_RC_WALL_BACKEND") or "").strip().lower()
+    raw = (os.environ.get("KARML_ADUMB_RC_WALL_BACKEND") or "").strip().lower()
     if raw in ("0", "off", "none", "no"):
         return "off"
     if raw in ("mmfp",):
@@ -146,7 +146,7 @@ def adumb_rc_walls_backend() -> str:
         return "noe"
     if raw in ("resd", "resdistance"):
         return "resd"
-    legacy = (os.environ.get("MMML_ADUMB_RC_MMFP_WALLS") or "").strip().lower()
+    legacy = (os.environ.get("KARML_ADUMB_RC_MMFP_WALLS") or "").strip().lower()
     if legacy in ("1", "yes", "true", "on"):
         return "mmfp"
     if legacy in ("0", "no", "false", "off"):
@@ -424,10 +424,10 @@ def prepare_adumb_rc_before_overlap_chunk(
             "Widen umbrella min/max, tighten dynamics, or enable RC walls (default RESD)."
         )
 
-    from mmml.interfaces.pycharmmInterface.mlpot.artifact_paths import (
+    from karml.interfaces.pycharmmInterface.mlpot.artifact_paths import (
         overlap_chunk_restart_path,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+    from karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
         restore_charmm_state_from_restart,
     )
 
@@ -501,7 +501,7 @@ def prepare_adumb_rc_before_overlap_chunk(
             f"No restart has RC below safe limit {safe_rc:.2f} Å "
             f"(RESD onset {wall_onset:.2f} Å, umbmax {rcmax:g} Å). "
             "Resume from an earlier heat.NNNN.res, widen adumrcmax / umbrella max, "
-            "or lower MMML_ADUMB_IASVEL1_T_CAP / heat temperature."
+            "or lower KARML_ADUMB_IASVEL1_T_CAP / heat temperature."
         )
     if force_rewind:
         print(
@@ -534,7 +534,7 @@ class FlatBottomSphereConfig:
 
 
 def _import_pycharmm():
-    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401 — CHARMM env
+    import karml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401 — CHARMM env
     import pycharmm
 
     return pycharmm
@@ -650,13 +650,13 @@ def _skip_mmfp_energy_verify() -> bool:
     """Skip post-MMFP ``ENER`` on MPI-linked CHARMM (can hang after GEO install)."""
     import os
 
-    flag = (os.environ.get("MMML_MMFP_ENERGY_VERIFY") or "").strip().lower()
+    flag = (os.environ.get("KARML_MMFP_ENERGY_VERIFY") or "").strip().lower()
     if flag in ("0", "no", "false", "off"):
         return True
     if flag in ("1", "yes", "true", "on"):
         return False
     try:
-        from mmml.interfaces.pycharmmInterface.charmm_mpi import (
+        from karml.interfaces.pycharmmInterface.charmm_mpi import (
             _under_mpirun,
             charmm_lib_links_mpi,
         )
@@ -672,7 +672,7 @@ def _current_charmm_energy_kcalmol() -> float | None:
     try:
         import pycharmm.energy as energy
 
-        from mmml.interfaces.pycharmmInterface.charmm_levels import run_charmm_script_quiet
+        from karml.interfaces.pycharmmInterface.charmm_levels import run_charmm_script_quiet
 
         print("MMFP: running CHARMM ENER for zero-wall check…", flush=True)
         run_charmm_script_quiet("ENER")
@@ -734,13 +734,13 @@ def _resd_restraint_count_from_log(log_text: str) -> int | None:
 
 def _skip_adumb_rc_wall_verify() -> bool:
     """Skip captured-output verify on MPI-linked CHARMM (RESD can trigger ENER)."""
-    flag = (os.environ.get("MMML_ADUMB_RC_WALL_VERIFY") or "").strip().lower()
+    flag = (os.environ.get("KARML_ADUMB_RC_WALL_VERIFY") or "").strip().lower()
     if flag in ("0", "no", "false", "off"):
         return True
     if flag in ("1", "yes", "true", "on"):
         return False
     try:
-        from mmml.interfaces.pycharmmInterface.charmm_mpi import (
+        from karml.interfaces.pycharmmInterface.charmm_mpi import (
             _under_mpirun,
             charmm_lib_links_mpi,
         )
@@ -765,7 +765,7 @@ def _run_charmm_commands_verified(
         return
     do_verify = not _skip_adumb_rc_wall_verify() if verify is None else bool(verify)
     if do_verify:
-        from mmml.interfaces.pycharmmInterface.charmm_levels import capture_fortran_stdio
+        from karml.interfaces.pycharmmInterface.charmm_levels import capture_fortran_stdio
 
         with capture_fortran_stdio() as tmp_path:
             for cmd in commands:
@@ -818,7 +818,7 @@ def _run_charmm_lingo_block(script: str, *, label: str = "CHARMM") -> None:
     ``mpi_charmm_script`` uppercases the whole blob and can hang in ``NOESET`` /
     ``MMFP`` on MPI-linked builds when cards use ``-`` continuations.
     """
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
         split_charmm_lingo_commands,
     )
 
@@ -902,7 +902,7 @@ def install_adumb_rxncor_distance_walls(
 
     Default backend is CHARMM **RESDistance POSITIVE** half-harmonic walls (works
     without the NOE module).  Legacy backends: ``noe`` (needs KEY_NOE), ``mmfp``
-    (``MMML_ADUMB_RC_WALL_BACKEND=mmfp``; can hang on MPI-linked builds).
+    (``KARML_ADUMB_RC_WALL_BACKEND=mmfp``; can hang on MPI-linked builds).
     ``rmax`` / ``droff`` is set below umbrella ``max`` so the wall activates
     before UM1RXN hard-aborts.
     """
@@ -1046,7 +1046,7 @@ def apply_flat_bottom_workflow(
     if skip_ener:
         print(
             "MMFP: skipping CHARMM ENER zero-wall verify "
-            "(MPI-linked CHARMM under mpirun; set MMML_MMFP_ENERGY_VERIFY=1 to force)",
+            "(MPI-linked CHARMM under mpirun; set KARML_MMFP_ENERGY_VERIFY=1 to force)",
             flush=True,
         )
         energy_before = None

@@ -7,7 +7,7 @@ heatmap. Here the natural surface is a **sphere around each source** whose
 angular colour/radius encodes the field that source produces.
 
 Three related views, all driven by the *same* physics already in
-:mod:`mmml.models.multipoles.electrostatics`:
+:mod:`karml.models.multipoles.electrostatics`:
 
 * :func:`plot_multipole_surfaces` -- one deformed sphere per atom/fragment,
   radius and colour set by the angular electrostatic potential of its point
@@ -15,7 +15,7 @@ Three related views, all driven by the *same* physics already in
   sphere; a dipole shows the familiar +/- lobes; higher poles add structure.
 * :func:`plot_field_slice` -- the potential + electric field of the whole set
   on a 2D plane (filled potential contours + streamlines). This wraps the
-  existing :func:`~mmml.models.multipoles.electrostatics._point_multipole_potential_field_au`;
+  existing :func:`~karml.models.multipoles.electrostatics._point_multipole_potential_field_au`;
   reach for it when you want *the field itself*, not the per-source surfaces.
 * :func:`plot_mbd_surfaces` / :func:`plot_dispersion_field_slice` -- the same
   language extended to the learned MBD term: per-atom polarizability spheres
@@ -34,11 +34,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 from mpl_toolkits.mplot3d import Axes3D  # noqa: F401  (registers 3d projection)
 
-from mmml.models.multipoles.electrostatics import (
+from karml.models.multipoles.electrostatics import (
     BOHR_TO_ANGSTROM,
     _point_multipole_potential_field_au,
 )
-from mmml.utils.plotting.styles import apply_plot_style, default_cmap
+from karml.utils.plotting.styles import apply_plot_style, default_cmap
 
 __all__ = [
     "plot_multipole_surfaces",
@@ -274,7 +274,7 @@ def plot_field_slice(
     """Potential contours + electric-field streamlines on a 2D plane.
 
     This is the "plot the field" entry point. It wraps the existing physics
-    :func:`~mmml.models.multipoles.electrostatics._point_multipole_potential_field_au`
+    :func:`~karml.models.multipoles.electrostatics._point_multipole_potential_field_au`
     (potential in Hartree/e, field in a.u.); nothing new is computed here beyond
     laying a grid on ``plane`` through the sources' centroid and drawing it.
     Potential has a real zero -> diverging colour; streamlines show E = -grad V.
@@ -327,7 +327,7 @@ def plot_field_progression(
     Each panel adds the next rank of the *same* site's expansion, all on a
     shared colour scale so the growing angular structure is directly
     comparable. Purely illustrative of the expansion — the physics is the same
-    :func:`~mmml.models.multipoles.electrostatics._point_multipole_potential_field_au`.
+    :func:`~karml.models.multipoles.electrostatics._point_multipole_potential_field_au`.
     """
     apply_plot_style(style)
     origin = np.asarray(origin_bohr, dtype=np.float64).reshape(1, 3)
@@ -389,7 +389,7 @@ def plot_mbd_surfaces(
     coefficient. Both are strictly positive -> **sequential** colour. This is
     the dispersion analogue of :func:`plot_multipole_surfaces`; feed it the
     ``polarizabilities`` / ``c6_coefficients`` from
-    :func:`mmml.models.mbd.calculator.predict_mbd_from_atoms`.
+    :func:`karml.models.mbd.calculator.predict_mbd_from_atoms`.
     """
     apply_plot_style(style)
     pos = np.asarray(positions_angstrom, dtype=np.float64).reshape(-1, 3)

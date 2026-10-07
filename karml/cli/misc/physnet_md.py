@@ -6,9 +6,9 @@ Runs NVT Langevin (ASE) and NVT Nose-Hoover (JAX-MD) using a trained PhysNet
 checkpoint as the energy/force calculator.
 
 Usage:
-    mmml physnet-md --checkpoint out/ckpts/cybz_physnet --structure molecule.xyz -o out/
-    mmml physnet-md --checkpoint out/ckpts/cybz_physnet --data splits/energies_forces_dipoles_train.npz -o out/
-    mmml physnet-md --checkpoint out/ckpts/cybz_physnet --data splits/train.npz -o out/ --n-replicas 4
+    karml physnet-md --checkpoint out/ckpts/cybz_physnet --structure molecule.xyz -o out/
+    karml physnet-md --checkpoint out/ckpts/cybz_physnet --data splits/energies_forces_dipoles_train.npz -o out/
+    karml physnet-md --checkpoint out/ckpts/cybz_physnet --data splits/train.npz -o out/ --n-replicas 4
 """
 
 import argparse
@@ -61,8 +61,8 @@ def _run_ase_replica(args: Dict[str, Any]) -> tuple[int, Path]:
     from ase.md.langevin import Langevin
     from ase.md.velocitydistribution import MaxwellBoltzmannDistribution, Stationary, ZeroRotation
 
-    from mmml.models.physnetjax.physnetjax.restart.restart import get_last, get_params_model
-    from mmml.models.physnetjax.physnetjax.calc.helper_mlp import get_ase_calc
+    from karml.models.physnetjax.physnetjax.restart.restart import get_last, get_params_model
+    from karml.models.physnetjax.physnetjax.calc.helper_mlp import get_ase_calc
 
     replica_id = args["replica_id"]
     R = np.array(args["R"])
@@ -239,8 +239,8 @@ def main() -> int:
     n_atoms = len(Z)
     args.output_dir.mkdir(parents=True, exist_ok=True)
 
-    from mmml.models.physnetjax.physnetjax.restart.restart import get_last, get_params_model
-    from mmml.models.physnetjax.physnetjax.calc.helper_mlp import get_ase_calc
+    from karml.models.physnetjax.physnetjax.restart.restart import get_last, get_params_model
+    from karml.models.physnetjax.physnetjax.calc.helper_mlp import get_ase_calc
     import e3x
     import jax
     import jax.numpy as jnp

@@ -10,7 +10,7 @@ from typing import Any, Literal, Sequence
 
 import numpy as np
 
-from mmml.interfaces.pycharmmInterface.trialanine_nb_parity import (
+from karml.interfaces.pycharmmInterface.trialanine_nb_parity import (
     CategoryNonbondedTotals,
     PairSwitchAudit,
     TermComparison,
@@ -132,7 +132,7 @@ class LiquidNbParityReport:
 
 def oxygen_atom_mask_from_psf(psf_path: Path | str) -> np.ndarray:
     """True for CHARMM water oxygens (CGENFF ``OT`` / ``OW`` types)."""
-    from mmml.interfaces.pycharmmInterface.cgenff_topology import parse_psf_ext
+    from karml.interfaces.pycharmmInterface.cgenff_topology import parse_psf_ext
 
     psf_data = parse_psf_ext(psf_path)
     oxygen_types = frozenset({"OT", "OW", "OH"})
@@ -259,14 +259,14 @@ def collect_liquid_nb_parity(
     verbose: bool = True,
 ) -> LiquidNbParityReport:
     """Compare JAX MIC nonbonded decomposition to active PyCHARMM ``ENER FORCE``."""
-    from mmml.interfaces.pycharmmInterface.jax_x64_config import ensure_jax_x64
+    from karml.interfaces.pycharmmInterface.jax_x64_config import ensure_jax_x64
 
     ensure_jax_x64(context="collect_liquid_nb_parity")
     import jax.numpy as jnp
 
     _log("Collecting parity metrics (PyCHARMM ENER + JAX MIC)...", verbose=verbose)
-    from mmml.interfaces.pycharmmInterface.cgenff_bonded import bonded_energy_and_forces
-    from mmml.interfaces.pycharmmInterface.cgenff_bonded_reference import (
+    from karml.interfaces.pycharmmInterface.cgenff_bonded import bonded_energy_and_forces
+    from karml.interfaces.pycharmmInterface.cgenff_bonded_reference import (
         charmm_bonded_energy_components_kcalmol,
         charmm_bonded_forces_kcalmol_A,
         charmm_cmap_is_active,
@@ -274,14 +274,14 @@ def collect_liquid_nb_parity(
         run_charmm_bonded_ener_force,
         set_charmm_positions,
     )
-    from mmml.interfaces.pycharmmInterface.mm_system_energy import (
+    from karml.interfaces.pycharmmInterface.mm_system_energy import (
         CharmmNbondSettings,
         decompose_nonbonded_pair_energies,
         load_bonded_system_from_psf,
         load_nonbonded_system_from_charmm,
         nonbonded_energy_and_forces,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.block_terms import apply_charmm_mm_block
+    from karml.interfaces.pycharmmInterface.mlpot.block_terms import apply_charmm_mm_block
 
     pos = np.asarray(positions, dtype=np.float64)
     monomer_id = np.asarray(monomer_id, dtype=np.int32)
@@ -718,7 +718,7 @@ def collect_and_render_liquid_nb_parity(
     switch_audit_top_k: int = 5,
     verbose: bool = True,
 ) -> LiquidNbParityReport:
-    from mmml.interfaces.pycharmmInterface.mm_system_energy import (
+    from karml.interfaces.pycharmmInterface.mm_system_energy import (
         CharmmNbondSettings,
         decompose_nonbonded_pair_energies,
         load_nonbonded_system_from_charmm,

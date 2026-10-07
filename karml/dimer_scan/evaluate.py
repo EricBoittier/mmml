@@ -8,7 +8,7 @@ import numpy as np
 from ase.calculators.calculator import Calculator
 from ase.calculators.singlepoint import SinglePointCalculator
 
-from mmml.analysis.dimer_scans import DimerGeometry, min_fragment_contact_distance
+from karml.analysis.dimer_scans import DimerGeometry, min_fragment_contact_distance
 
 from .config import DimerScanConfig
 from .result import Provenance, ScanRecord, ScanResult

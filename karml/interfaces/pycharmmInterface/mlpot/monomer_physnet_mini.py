@@ -9,7 +9,7 @@ from typing import Any
 
 import numpy as np
 
-from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
     mlpot_hybrid_grms_from_calculator,
     refresh_mlpot_energy_and_grms,
     resolve_checkpoint,
@@ -90,7 +90,7 @@ def resolve_mlpot_checkpoint_path(mlpot_ctx: Any) -> Path:
 
 
 def _monomer_offsets(atoms_per_list: list[int]) -> np.ndarray:
-    from mmml.interfaces.pycharmmInterface.mlpot.mc_density import (
+    from karml.interfaces.pycharmmInterface.mlpot.mc_density import (
         monomer_offsets_from_atoms_per,
     )
 
@@ -105,7 +105,7 @@ def build_monomer_template_recovery_candidates(
     """Disk restart/CRD ladder for flagged-monomer template restore."""
     from types import SimpleNamespace
 
-    from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
+    from karml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
         build_extent_recovery_candidates,
         resolve_geometry_checkpoint_ladder,
     )
@@ -176,7 +176,7 @@ def resolve_monomer_template_reference_positions(
     monomer radii differ grossly from the intact current geometry and continue
     down the in-memory mini/baseline ladder.
     """
-    from mmml.interfaces.pycharmmInterface.mlpot.extent_repack_recovery import (
+    from karml.interfaces.pycharmmInterface.mlpot.extent_repack_recovery import (
         _memory_extent_reference_sources,
         resolve_extent_reference_positions,
     )
@@ -245,7 +245,7 @@ def resolve_monomer_template_reference_positions(
         )
 
     try:
-        from mmml.interfaces.pycharmmInterface.cluster_geometry import (
+        from karml.interfaces.pycharmmInterface.cluster_geometry import (
             packmol_template_reference_from_ctx,
             same_residue_cluster_reference_from_ctx,
         )
@@ -298,8 +298,8 @@ def _monomer_ase_calculator(
         return calc
 
     import ase
-    from mmml.cli.base import load_physnet_params_and_ef_model
-    from mmml.models.physnetjax.physnetjax.calc.helper_mlp import get_ase_calc
+    from karml.cli.base import load_physnet_params_and_ef_model
+    from karml.models.physnetjax.physnetjax.calc.helper_mlp import get_ase_calc
 
     z = np.asarray(atomic_numbers, dtype=int)
     n = int(z.size)
@@ -388,10 +388,10 @@ def _cap_flagged_monomers(
 
     scores = np.full(len(unique), -np.inf, dtype=np.float64)
     try:
-        from mmml.interfaces.pycharmmInterface.mlpot.grms_thresholds import (
+        from karml.interfaces.pycharmmInterface.mlpot.grms_thresholds import (
             per_monomer_fmax_from_forces,
         )
-        from mmml.utils.monomer_force_diag import mlpot_hybrid_forces_kcalmol_A
+        from karml.utils.monomer_force_diag import mlpot_hybrid_forces_kcalmol_A
 
         forces = mlpot_hybrid_forces_kcalmol_A(mlpot_ctx, positions=positions)
         if forces is not None:
@@ -426,15 +426,15 @@ def run_selective_monomer_physnet_mini(
     restart_path: Path | str | None = None,
 ) -> SelectiveMonomerPhysnetMiniResult:
     """FIRE-minimize flagged monomers/dimers; rest of the box stays fixed."""
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import (
         invalidate_mlpot_calculator_caches,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+    from karml.interfaces.pycharmmInterface.mlpot.setup import (
         get_charmm_positions_array,
         sync_charmm_positions,
     )
-    from mmml.utils.geometry_checks import rebuild_monomers_from_reference
-    from mmml.utils.monomer_force_diag import resolve_selective_repack_monomers
+    from karml.utils.geometry_checks import rebuild_monomers_from_reference
+    from karml.utils.monomer_force_diag import resolve_selective_repack_monomers
 
     args = getattr(mlpot_ctx, "workflow_args", None)
     if config is None:
@@ -533,10 +533,10 @@ def run_selective_monomer_physnet_mini(
                 f"(per-mono GRMS {grms_txt} kcal/mol/Å; cluster {diag.cluster_grms:.1f})",
                 flush=True,
             )
-            from mmml.interfaces.pycharmmInterface.mlpot.mc_density import (
+            from karml.interfaces.pycharmmInterface.mlpot.mc_density import (
                 monomer_offsets_from_atoms_per,
             )
-            from mmml.utils.monomer_force_diag import (
+            from karml.utils.monomer_force_diag import (
                 format_worst_atom_force_peaks,
                 mlpot_hybrid_forces_kcalmol_A,
                 worst_atom_force_peaks,

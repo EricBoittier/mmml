@@ -9,7 +9,7 @@ from unittest.mock import patch
 import numpy as np
 import pytest
 
-from mmml.cli.run.md_handoff import (
+from karml.cli.run.md_handoff import (
     MdHandoffState,
     cluster_layout_from_composition_string,
     detect_handoff_format,
@@ -53,7 +53,7 @@ def test_load_handoff_from_h5_allows_missing_box(tmp_path: Path) -> None:
 
 
 def test_cluster_geometry_from_handoff_skips_packmol_layout() -> None:
-    from mmml.cli.run.md_handoff import MdHandoffState, cluster_geometry_from_handoff
+    from karml.cli.run.md_handoff import MdHandoffState, cluster_geometry_from_handoff
 
     handoff = MdHandoffState(
         positions=np.zeros((100, 3), dtype=float),
@@ -91,7 +91,7 @@ def test_mixed_water_methanol_handoff_layout_rejects_wrong_atom_count() -> None:
 
 
 def test_pycharmm_stage_dcd_frames_counts_overlap_chunks(tmp_path: Path) -> None:
-    from mmml.cli.run.md_stage_summary import pycharmm_stage_dcd_frames
+    from karml.cli.run.md_stage_summary import pycharmm_stage_dcd_frames
 
     out = tmp_path
     (out / "equi_dcm_20.chunk.0000.dcd").write_bytes(b"")
@@ -133,7 +133,7 @@ def test_npz_round_trip(tmp_path: Path) -> None:
 def test_akma_handoff_conversion_is_angstrom_per_ps_not_per_fs() -> None:
     from ase.data import atomic_masses
 
-    from mmml.cli.run.md_handoff import (
+    from karml.cli.run.md_handoff import (
         handoff_velocities_as_ang_ps,
         kinetic_temperature_k_from_ang_ps_velocities,
     )
@@ -161,7 +161,7 @@ def test_akma_handoff_conversion_is_angstrom_per_ps_not_per_fs() -> None:
 def test_handoff_temperature_and_displacement_do_not_use_fs_as_ps() -> None:
     from ase.data import atomic_masses
 
-    from mmml.cli.run.md_handoff import kinetic_temperature_k_from_ang_ps_velocities
+    from karml.cli.run.md_handoff import kinetic_temperature_k_from_ang_ps_velocities
 
     z = np.array([6, 1, 17], dtype=np.int32)
     masses = atomic_masses[z]
@@ -186,7 +186,7 @@ def test_jaxmd_metal_temperature_matches_ase_not_ang_ps_thermometer() -> None:
     from ase import Atoms
     from ase.md.velocitydistribution import MaxwellBoltzmannDistribution, Stationary
 
-    from mmml.cli.run.md_handoff import (
+    from karml.cli.run.md_handoff import (
         kinetic_temperature_k_from_ang_ps_velocities,
         kinetic_temperature_k_from_jaxmd_metal_velocities,
     )
@@ -206,7 +206,7 @@ def test_jaxmd_metal_temperature_matches_ase_not_ang_ps_thermometer() -> None:
 
 
 def test_remove_center_of_mass_velocity_preserves_internal_motion() -> None:
-    from mmml.cli.run.md_handoff import remove_center_of_mass_velocity_ang_ps
+    from karml.cli.run.md_handoff import remove_center_of_mass_velocity_ang_ps
 
     masses = np.array([12.0, 1.0, 35.0])
     velocities = np.array([[2.0, 1.0, 0.0], [-1.0, 4.0, 2.0], [0.5, -2.0, 1.0]])
@@ -217,7 +217,7 @@ def test_remove_center_of_mass_velocity_preserves_internal_motion() -> None:
 
 
 def test_format_fortran_float_rejects_non_finite() -> None:
-    from mmml.cli.run.md_handoff import _format_fortran_float
+    from karml.cli.run.md_handoff import _format_fortran_float
 
     with pytest.raises(ValueError, match="non-finite"):
         _format_fortran_float(float("nan"))
@@ -226,7 +226,7 @@ def test_format_fortran_float_rejects_non_finite() -> None:
 def test_is_usable_restart_template_accepts_valid_overlap(
     tmp_path: Path, nve_stub: Path
 ) -> None:
-    from mmml.cli.run.md_handoff import _is_usable_restart_template
+    from karml.cli.run.md_handoff import _is_usable_restart_template
 
     overlap = tmp_path / "heat_tag.overlap_a.res"
     overlap.write_text(nve_stub.read_text(encoding="ascii"), encoding="ascii")
@@ -238,7 +238,7 @@ def test_is_usable_restart_template_accepts_valid_overlap(
 def test_is_usable_restart_template_quiet_suppresses_natom_mismatch_stderr(
     nve_stub: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    from mmml.cli.run.md_handoff import _is_usable_restart_template
+    from karml.cli.run.md_handoff import _is_usable_restart_template
 
     res = tmp_path / "twenty_atoms.res"
     res.write_text(nve_stub.read_text(encoding="ascii"), encoding="ascii")
@@ -252,7 +252,7 @@ def test_is_usable_restart_template_quiet_suppresses_natom_mismatch_stderr(
 def test_find_usable_fallback_template_stays_within_campaign_root(
     nve_stub: Path, tmp_path: Path
 ) -> None:
-    from mmml.cli.run.md_handoff import _find_usable_fallback_template
+    from karml.cli.run.md_handoff import _find_usable_fallback_template
 
     results = tmp_path / "runned" / "tests" / "test01" / "results"
     bad = results / "dcm_large_201" / "jaxmd_nve" / "handoff" / "final.res"
@@ -273,7 +273,7 @@ def test_find_usable_fallback_template_stays_within_campaign_root(
 
 
 def test_campaign_root_from_handoff_path_resolves_run_directory(tmp_path: Path) -> None:
-    from mmml.cli.run.md_handoff import _campaign_root_from_handoff_path
+    from karml.cli.run.md_handoff import _campaign_root_from_handoff_path
 
     handoff = (
         tmp_path
@@ -297,7 +297,7 @@ def test_resolve_handoff_restart_template_prefers_heat_over_overlap(
 ) -> None:
     import argparse
 
-    from mmml.cli.run.md_handoff import (
+    from karml.cli.run.md_handoff import (
         MdHandoffState,
         resolve_handoff_restart_template,
     )
@@ -324,7 +324,7 @@ def test_resolve_handoff_restart_template_falls_back_to_overlap_scratch(
 ) -> None:
     import argparse
 
-    from mmml.cli.run.md_handoff import (
+    from karml.cli.run.md_handoff import (
         MdHandoffState,
         resolve_handoff_restart_template,
     )
@@ -350,11 +350,11 @@ def test_save_handoff_to_res_with_template(
     # pytest collection uses JAX-only warmup mode.  The bootstrap module remains
     # importable, but native CHARMM is deliberately unavailable; template
     # patching must not enter the MPI/Fortran restart writer in this state.
-    import mmml.interfaces.pycharmmInterface.import_pycharmm as charmm_bootstrap
+    import karml.interfaces.pycharmmInterface.import_pycharmm as charmm_bootstrap
 
     monkeypatch.setattr(charmm_bootstrap, "PYCHARMM_AVAILABLE", False)
     monkeypatch.setattr(
-        "mmml.cli.run.md_handoff._write_handoff_restart_via_charmm",
+        "karml.cli.run.md_handoff._write_handoff_restart_via_charmm",
         lambda *args, **kwargs: pytest.fail("native CHARMM writer called in JAX-only mode"),
     )
     pos = load_handoff_from_res(nve_stub).positions
@@ -375,8 +375,8 @@ def test_save_handoff_to_res_with_template(
 def test_save_handoff_replaces_native_charmm_velocity_block(
     nve_stub: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    import mmml.interfaces.pycharmmInterface.import_pycharmm as charmm_bootstrap
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+    import karml.interfaces.pycharmmInterface.import_pycharmm as charmm_bootstrap
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         read_restart_velocities,
     )
 
@@ -454,7 +454,7 @@ def test_handoff_to_npz_dict_serializes_metadata() -> None:
 
 
 def test_find_latest_charmm_restart_prefers_equi_segment(tmp_path: Path) -> None:
-    from mmml.cli.run.md_handoff import find_latest_charmm_restart_in_dir
+    from karml.cli.run.md_handoff import find_latest_charmm_restart_in_dir
 
     (tmp_path / "heat.res").write_text("heat", encoding="utf-8")
     equi0 = tmp_path / "equi.0.res"
@@ -470,7 +470,7 @@ def test_load_dependency_handoff_falls_back_to_staged_res(
 ) -> None:
     import shutil
 
-    from mmml.cli.run.md_handoff import load_dependency_handoff
+    from karml.cli.run.md_handoff import load_dependency_handoff
 
     dep = tmp_path / "equil"
     dep.mkdir()
@@ -483,7 +483,7 @@ def test_load_dependency_handoff_falls_back_to_staged_res(
 def test_apply_handoff_geometry_wraps_pbc_monomers() -> None:
     from ase import Atoms
 
-    from mmml.cli.run.md_handoff import MdHandoffState, apply_handoff_geometry_to_atoms
+    from karml.cli.run.md_handoff import MdHandoffState, apply_handoff_geometry_to_atoms
 
     L = 32.0
     cell = np.diag([L, L, L])
@@ -511,7 +511,7 @@ def test_apply_handoff_geometry_wraps_pbc_monomers() -> None:
 
 
 def test_align_handoff_positions_for_charmm_pbc_shifts_jaxmd_wrap():
-    from mmml.cli.run.md_handoff import (
+    from karml.cli.run.md_handoff import (
         MdHandoffState,
         align_handoff_positions_for_charmm_pbc,
         monomer_offsets_uniform,
@@ -540,7 +540,7 @@ def test_align_handoff_positions_for_charmm_pbc_shifts_jaxmd_wrap():
 
 
 def test_align_fresh_cluster_positions_for_charmm_pbc_from_mc_recipe():
-    from mmml.cli.run.md_handoff import (
+    from karml.cli.run.md_handoff import (
         align_fresh_cluster_positions_for_charmm_pbc,
         cluster_positions_use_jaxmd_primary_cell_frame,
     )
@@ -563,7 +563,7 @@ def test_align_fresh_cluster_positions_for_charmm_pbc_from_mc_recipe():
 
 
 def test_align_fresh_cluster_skips_origin_centered_packmol():
-    from mmml.cli.run.md_handoff import (
+    from karml.cli.run.md_handoff import (
         align_fresh_cluster_positions_for_charmm_pbc,
         cluster_positions_use_jaxmd_primary_cell_frame,
     )
@@ -582,7 +582,7 @@ def test_align_fresh_cluster_skips_origin_centered_packmol():
 
 
 def test_align_handoff_positions_skips_pycharmm_handoff():
-    from mmml.cli.run.md_handoff import (
+    from karml.cli.run.md_handoff import (
         MdHandoffState,
         align_handoff_positions_for_charmm_pbc,
         monomer_offsets_uniform,
@@ -605,7 +605,7 @@ def test_align_handoff_positions_skips_pycharmm_handoff():
 
 
 def test_align_handoff_positions_for_jaxmd_pbc_shifts_charmm_center():
-    from mmml.cli.run.md_handoff import (
+    from karml.cli.run.md_handoff import (
         MdHandoffState,
         align_handoff_positions_for_jaxmd_pbc,
         monomer_offsets_uniform,
@@ -634,7 +634,7 @@ def test_align_handoff_positions_for_jaxmd_pbc_shifts_charmm_center():
 
 
 def test_align_handoff_positions_jaxmd_skips_jaxmd_handoff():
-    from mmml.cli.run.md_handoff import (
+    from karml.cli.run.md_handoff import (
         MdHandoffState,
         align_handoff_positions_for_jaxmd_pbc,
         monomer_offsets_uniform,
@@ -657,7 +657,7 @@ def test_align_handoff_positions_jaxmd_skips_jaxmd_handoff():
 
 
 def test_charmm_jaxmd_pbc_alignment_roundtrip():
-    from mmml.cli.run.md_handoff import (
+    from karml.cli.run.md_handoff import (
         MdHandoffState,
         align_handoff_positions_for_charmm_pbc,
         align_handoff_positions_for_jaxmd_pbc,
@@ -698,7 +698,7 @@ def test_charmm_jaxmd_pbc_alignment_roundtrip():
 def test_handoff_positions_for_charmm_restart_prefers_live_charmm(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from mmml.cli.run.md_handoff import (
+    from karml.cli.run.md_handoff import (
         MdHandoffState,
         _handoff_positions_for_charmm_restart,
     )
@@ -714,7 +714,7 @@ def test_handoff_positions_for_charmm_restart_prefers_live_charmm(
         return live_pos.copy()
 
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         _fake_live,
     )
     got = _handoff_positions_for_charmm_restart(handoff)
@@ -722,7 +722,7 @@ def test_handoff_positions_for_charmm_restart_prefers_live_charmm(
 
 
 def test_validate_handoff_matches_cluster_geometry_rejects_mismatch() -> None:
-    from mmml.cli.run.md_handoff import (
+    from karml.cli.run.md_handoff import (
         MdHandoffState,
         validate_handoff_matches_cluster_geometry,
     )
@@ -744,7 +744,7 @@ def test_validate_handoff_matches_cluster_geometry_rejects_mismatch() -> None:
 
 
 def test_validate_handoff_matches_cluster_geometry_accepts_match() -> None:
-    from mmml.cli.run.md_handoff import (
+    from karml.cli.run.md_handoff import (
         MdHandoffState,
         validate_handoff_matches_cluster_geometry,
     )
@@ -761,7 +761,7 @@ def test_staged_handoff_r_matches_charmm_aligned_positions() -> None:
     """Regression: jaxmd handoff must update ``r`` after CHARMM PBC alignment."""
     from dataclasses import replace
 
-    from mmml.cli.run.md_handoff import (
+    from karml.cli.run.md_handoff import (
         MdHandoffState,
         align_handoff_positions_for_charmm_pbc,
         monomer_offsets_uniform,
@@ -797,7 +797,7 @@ def test_resolve_handoff_restart_template_uses_continue_from_final_res(
 ) -> None:
     import argparse
 
-    from mmml.cli.run.md_handoff import resolve_handoff_restart_template
+    from karml.cli.run.md_handoff import resolve_handoff_restart_template
 
     handoff_dir = tmp_path / "jaxmd_nve" / "handoff"
     handoff_dir.mkdir(parents=True)
@@ -822,7 +822,7 @@ def test_resolve_handoff_restart_template_rejects_mismatched_atom_count(
     nve_stub: Path, tmp_path: Path
 ) -> None:
     import argparse
-    from mmml.cli.run.md_handoff import resolve_handoff_restart_template
+    from karml.cli.run.md_handoff import resolve_handoff_restart_template
 
     handoff_dir = tmp_path / "mismatch" / "handoff"
     handoff_dir.mkdir(parents=True)
@@ -851,7 +851,7 @@ def test_prepare_pycharmm_handoff_continuation_writes_seed(
 ) -> None:
     import argparse
 
-    from mmml.cli.run.md_handoff import (
+    from karml.cli.run.md_handoff import (
         prepare_pycharmm_handoff_continuation,
         resolve_handoff_restart_template,
     )
@@ -892,10 +892,10 @@ def test_prepare_pycharmm_handoff_continuation_writes_seed(
         restored.append(Path(path))
 
     bonded_mm_recovery = importlib.import_module(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery"
+        "karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery"
     )
     monkeypatch.setattr(bonded_mm_recovery, "restore_charmm_state_from_restart", _fake_restore)
-    with patch("mmml.cli.run.md_handoff.save_handoff_to_res", _fake_save):
+    with patch("karml.cli.run.md_handoff.save_handoff_to_res", _fake_save):
         seed = prepare_pycharmm_handoff_continuation(
             handoff, args, tmp_path / "prod", {}, quiet=True
         )
@@ -905,8 +905,8 @@ def test_prepare_pycharmm_handoff_continuation_writes_seed(
 
 
 def test_resolve_existing_file_path(tmp_path: Path) -> None:
-    from mmml.cli.run.md_handoff import _resolve_existing_file_path
-    import mmml.cli.run.md_handoff as md_handoff
+    from karml.cli.run.md_handoff import _resolve_existing_file_path
+    import karml.cli.run.md_handoff as md_handoff
 
     # 1. Test None or empty path
     assert _resolve_existing_file_path(None) is None
@@ -956,8 +956,8 @@ def test_resolve_handoff_restart_template_resolves_varying_mount(
     nve_stub: Path, tmp_path: Path
 ) -> None:
     import argparse
-    from mmml.cli.run.md_handoff import resolve_handoff_restart_template
-    import mmml.cli.run.md_handoff as md_handoff
+    from karml.cli.run.md_handoff import resolve_handoff_restart_template
+    import karml.cli.run.md_handoff as md_handoff
 
     repo_root = Path(md_handoff.__file__).resolve().parents[3]
 
@@ -997,8 +997,8 @@ def test_resolve_handoff_restart_template_fallback_any_res(
     nve_stub: Path, tmp_path: Path
 ) -> None:
     import argparse
-    from mmml.cli.run.md_handoff import resolve_handoff_restart_template
-    import mmml.cli.run.md_handoff as md_handoff
+    from karml.cli.run.md_handoff import resolve_handoff_restart_template
+    import karml.cli.run.md_handoff as md_handoff
 
     repo_root = Path(md_handoff.__file__).resolve().parents[3]
 
@@ -1039,7 +1039,7 @@ def test_save_handoff_to_res_unusable_template_fallback_to_memory(
 ) -> None:
     import sys
     from unittest.mock import MagicMock
-    from mmml.cli.run.md_handoff import save_handoff_to_res
+    from karml.cli.run.md_handoff import save_handoff_to_res
 
     state = MdHandoffState(
         positions=np.zeros((3, 3)),
@@ -1049,13 +1049,13 @@ def test_save_handoff_to_res_unusable_template_fallback_to_memory(
 
     orig_modules = sys.modules.copy()
     try:
-        sys.modules["mmml.interfaces.pycharmmInterface.import_pycharmm"] = MagicMock()
+        sys.modules["karml.interfaces.pycharmmInterface.import_pycharmm"] = MagicMock()
         mock_recovery = MagicMock()
         mock_recovery.rewrite_dynamics_restart_validated.return_value = True
-        sys.modules["mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery"] = mock_recovery
+        sys.modules["karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery"] = mock_recovery
 
         mock_setup = MagicMock()
-        sys.modules["mmml.interfaces.pycharmmInterface.mlpot.setup"] = mock_setup
+        sys.modules["karml.interfaces.pycharmmInterface.mlpot.setup"] = mock_setup
 
         res_path = save_handoff_to_res(state, out, template_res=nve_stub)
         assert res_path == out
@@ -1069,7 +1069,7 @@ def test_save_handoff_to_res_unusable_template_fallback_to_memory(
 def test_save_handoff_to_res_unusable_template_resolves_fallback(
     nve_stub: Path, tmp_path: Path
 ) -> None:
-    from mmml.cli.run.md_handoff import save_handoff_to_res, load_handoff_from_res
+    from karml.cli.run.md_handoff import save_handoff_to_res, load_handoff_from_res
 
     # Create directories for failed template and a fallback
     bad_dir = tmp_path / "init" / "handoff"
@@ -1105,7 +1105,7 @@ def test_find_usable_fallback_template_prefers_newest_restart(
 ) -> None:
     import os
     import time
-    from mmml.cli.run.md_handoff import _find_usable_fallback_template
+    from karml.cli.run.md_handoff import _find_usable_fallback_template
 
     bad_template = tmp_path / "handoff" / "final.res"
     bad_template.parent.mkdir(parents=True)
@@ -1131,7 +1131,7 @@ def test_prepare_pycharmm_handoff_continuation_no_template_invalid_restart(
     import sys
     import argparse
     from unittest.mock import MagicMock, patch
-    from mmml.cli.run.md_handoff import prepare_pycharmm_handoff_continuation
+    from karml.cli.run.md_handoff import prepare_pycharmm_handoff_continuation
 
     pos = np.random.default_rng(0).random((20, 3))
     handoff = MdHandoffState(
@@ -1147,17 +1147,17 @@ def test_prepare_pycharmm_handoff_continuation_no_template_invalid_restart(
 
     orig_modules = sys.modules.copy()
     try:
-        sys.modules["mmml.interfaces.pycharmmInterface.import_pycharmm"] = MagicMock()
+        sys.modules["karml.interfaces.pycharmmInterface.import_pycharmm"] = MagicMock()
 
         mock_recovery = MagicMock()
         # Return False to simulate validation failure (e.g. uninitialized coords)
         mock_recovery.rewrite_dynamics_restart_validated.return_value = False
-        sys.modules["mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery"] = mock_recovery
+        sys.modules["karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery"] = mock_recovery
 
         mock_setup = MagicMock()
-        sys.modules["mmml.interfaces.pycharmmInterface.mlpot.setup"] = mock_setup
+        sys.modules["karml.interfaces.pycharmmInterface.mlpot.setup"] = mock_setup
 
-        with patch("mmml.cli.run.md_handoff.resolve_handoff_restart_template", return_value=None):
+        with patch("karml.cli.run.md_handoff.resolve_handoff_restart_template", return_value=None):
             result = prepare_pycharmm_handoff_continuation(
                 handoff, args, tmp_path / "prod", {}, quiet=False
             )
@@ -1175,23 +1175,23 @@ def test_prepare_pycharmm_handoff_continuation_no_template_invalid_restart(
 def test_handoff_from_charmm_raises_on_all_zero_positions() -> None:
     import sys
     from unittest.mock import MagicMock
-    from mmml.cli.run.md_handoff import handoff_from_charmm
+    from karml.cli.run.md_handoff import handoff_from_charmm
 
     orig_modules = sys.modules.copy()
     try:
         # Mock setup to return zeros
         mock_setup = MagicMock()
         mock_setup.get_charmm_positions_array.return_value = np.zeros((10, 3))
-        sys.modules["mmml.interfaces.pycharmmInterface.mlpot.setup"] = mock_setup
+        sys.modules["karml.interfaces.pycharmmInterface.mlpot.setup"] = mock_setup
 
         # Mock run_state_checkpoint to return velocities or None
         mock_checkpoint = MagicMock()
         mock_checkpoint._charmm_velocities_array.return_value = None
-        sys.modules["mmml.interfaces.pycharmmInterface.mlpot.run_state_checkpoint"] = mock_checkpoint
+        sys.modules["karml.interfaces.pycharmmInterface.mlpot.run_state_checkpoint"] = mock_checkpoint
 
         # Mock dynamics_validation
         mock_validation = MagicMock()
-        sys.modules["mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation"] = mock_validation
+        sys.modules["karml.interfaces.pycharmmInterface.mlpot.dynamics_validation"] = mock_validation
 
         # Call and expect RuntimeError
         with pytest.raises(RuntimeError, match="handoff_from_charmm: CHARMM returned all-zero positions"):
@@ -1207,32 +1207,32 @@ def test_handoff_from_charmm_raises_on_all_zero_positions() -> None:
 def test_handoff_from_charmm_recovers_from_restart(tmp_path: Path) -> None:
     import sys
     from unittest.mock import MagicMock
-    from mmml.cli.run.md_handoff import handoff_from_charmm
+    from karml.cli.run.md_handoff import handoff_from_charmm
 
     orig_modules = sys.modules.copy()
     try:
         # Mock setup to return zeros
         mock_setup = MagicMock()
         mock_setup.get_charmm_positions_array.return_value = np.zeros((10, 3))
-        sys.modules["mmml.interfaces.pycharmmInterface.mlpot.setup"] = mock_setup
+        sys.modules["karml.interfaces.pycharmmInterface.mlpot.setup"] = mock_setup
 
         # Mock run_state_checkpoint to return velocities or None
         mock_checkpoint = MagicMock()
         mock_checkpoint._charmm_velocities_array.return_value = None
-        sys.modules["mmml.interfaces.pycharmmInterface.mlpot.run_state_checkpoint"] = mock_checkpoint
+        sys.modules["karml.interfaces.pycharmmInterface.mlpot.run_state_checkpoint"] = mock_checkpoint
 
         # Mock dynamics_validation to return valid coordinates from read_restart_coordinates
         mock_validation = MagicMock()
         valid_coords = np.ones((10, 3))
         mock_validation.read_restart_coordinates.return_value = valid_coords
-        sys.modules["mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation"] = mock_validation
+        sys.modules["karml.interfaces.pycharmmInterface.mlpot.dynamics_validation"] = mock_validation
 
         # Mock import_pycharmm and pbc_env so the rest of handoff_from_charmm works or falls back
-        sys.modules["mmml.interfaces.pycharmmInterface.import_pycharmm"] = MagicMock()
+        sys.modules["karml.interfaces.pycharmmInterface.import_pycharmm"] = MagicMock()
         mock_pbc = MagicMock()
         mock_pbc.resolve_charmm_cubic_box_side_A.return_value = (None, None)
         mock_pbc.parse_cubic_box_side_from_charmm_restart.return_value = None
-        sys.modules["mmml.interfaces.pycharmmInterface.mlpot.pbc_env"] = mock_pbc
+        sys.modules["karml.interfaces.pycharmmInterface.mlpot.pbc_env"] = mock_pbc
 
         # Write a dummy restart file so cand.is_file() is True
         dummy_restart = tmp_path / "dummy.res"
@@ -1251,7 +1251,7 @@ def test_handoff_from_charmm_recovers_from_restart(tmp_path: Path) -> None:
 
 
 def test_cluster_geometry_from_handoff_warns_on_all_zeros() -> None:
-    from mmml.cli.run.md_handoff import MdHandoffState, cluster_geometry_from_handoff
+    from karml.cli.run.md_handoff import MdHandoffState, cluster_geometry_from_handoff
 
     handoff = MdHandoffState(
         positions=np.zeros((10, 3)),
@@ -1265,15 +1265,15 @@ def test_cluster_geometry_from_handoff_warns_on_all_zeros() -> None:
 
 
 def test_synthetic_restart_usability_and_round_trip(tmp_path: Path) -> None:
-    from mmml.cli.run.md_handoff import (
+    from karml.cli.run.md_handoff import (
         _write_synthetic_charmm_restart,
         _is_usable_restart_template,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         read_restart_coordinates,
         read_restart_velocities,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+    from karml.interfaces.pycharmmInterface.mlpot.pbc_env import (
         parse_cubic_box_side_from_charmm_restart,
     )
 
@@ -1329,7 +1329,7 @@ def test_synthetic_restart_usability_and_round_trip(tmp_path: Path) -> None:
 
 
 def test_save_handoff_automatically_resolves_template(nve_stub: Path, tmp_path: Path) -> None:
-    from mmml.cli.run.md_handoff import save_handoff, load_handoff_from_res
+    from karml.cli.run.md_handoff import save_handoff, load_handoff_from_res
 
     # Create a valid stage restart file in the output directory
     (tmp_path / "heat_DCM.res").write_text(nve_stub.read_text(encoding="ascii"), encoding="ascii")
@@ -1357,7 +1357,7 @@ def test_save_handoff_to_res_charmm_write_fails_falls_back_to_patching(
     nve_stub: Path, tmp_path: Path
 ) -> None:
     from unittest.mock import patch
-    from mmml.cli.run.md_handoff import save_handoff_to_res, load_handoff_from_res
+    from karml.cli.run.md_handoff import save_handoff_to_res, load_handoff_from_res
 
     # State we want to save (20 atoms to match nve_stub)
     pos = np.random.default_rng(42).random((20, 3))
@@ -1369,10 +1369,10 @@ def test_save_handoff_to_res_charmm_write_fails_falls_back_to_patching(
 
     # Mock _write_handoff_restart_via_charmm to raise ValueError
     with patch(
-        "mmml.cli.run.md_handoff._write_handoff_restart_via_charmm",
+        "karml.cli.run.md_handoff._write_handoff_restart_via_charmm",
         side_effect=ValueError("Simulated validation failure"),
     ), patch(
-        "mmml.cli.run.md_handoff.pycharmm",
+        "karml.cli.run.md_handoff.pycharmm",
         create=True,
     ):
         res_path = save_handoff_to_res(state, out, template_res=nve_stub)
@@ -1387,7 +1387,7 @@ def test_save_handoff_to_res_charmm_write_fails_falls_back_to_patching(
 def test_res_to_trajectory_akma_velocities_round_trip(tmp_path: Path) -> None:
     from ase.io import read as ase_read
 
-    from mmml.cli.run.md_handoff import (
+    from karml.cli.run.md_handoff import (
         _write_synthetic_charmm_restart,
         atoms_from_handoff,
         load_handoff_from_res,
@@ -1415,7 +1415,7 @@ def test_res_to_trajectory_akma_velocities_round_trip(tmp_path: Path) -> None:
     # CHARMM restart velocities: Å per AKMA time unit (not mass-weighted).
     from ase import units as ase_units
 
-    from mmml.cli.run.md_handoff import CHARMM_AKMA_TIME_PS
+    from karml.cli.run.md_handoff import CHARMM_AKMA_TIME_PS
 
     v_akma = v_ase * 1000.0 * ase_units.fs * CHARMM_AKMA_TIME_PS
     cell = np.diag([30.0, 30.0, 30.0])
@@ -1444,7 +1444,7 @@ def test_res_to_trajectory_akma_velocities_round_trip(tmp_path: Path) -> None:
 
 
 def test_resolve_atomic_numbers_from_psf_and_cluster_npz(tmp_path: Path) -> None:
-    from mmml.cli.run.md_handoff import (
+    from karml.cli.run.md_handoff import (
         _write_synthetic_charmm_restart,
         resolve_atomic_numbers_for_res,
     )

@@ -152,7 +152,7 @@ def local_coverage_indices(
     This does not replace pooled-activation selection; it checks whether
     pooling hid unusual environments.
     """
-    from mmml.acquisition.selection import farthest_point_sampling
+    from karml.acquisition.selection import farthest_point_sampling
 
     if n_select <= 0:
         return np.zeros((0,), dtype=np.int64)

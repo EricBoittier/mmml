@@ -4,7 +4,7 @@
 # Usage:
 #   bash scripts/resume_heat_from_res.sh TAG
 #   bash scripts/resume_heat_from_res.sh TAG /path/to/heat.res
-#   MMML_WORKFLOW_CONFIG=config.prep_sweep.yaml bash scripts/resume_heat_from_res.sh \
+#   KARML_WORKFLOW_CONFIG=config.prep_sweep.yaml bash scripts/resume_heat_from_res.sh \
 #     resilient_dcm_52_t50_l38_ht_bussi_sw_baseline
 #   bash scripts/resume_heat_from_res.sh TAG --dry-run
 #
@@ -46,19 +46,19 @@ done
 
 cd "$REPO_ROOT"
 
-# shellcheck source=../../../scripts/resolve_mmml_env.sh
-source "$REPO_ROOT/scripts/resolve_mmml_env.sh"
-mmml_resolve_env "$REPO_ROOT"
-PY="${MMML_PYTHON}"
+# shellcheck source=../../../scripts/resolve_karml_env.sh
+source "$REPO_ROOT/scripts/resolve_karml_env.sh"
+karml_resolve_env "$REPO_ROOT"
+PY="${KARML_PYTHON}"
 
 export JAX_ENABLE_X64="${JAX_ENABLE_X64:-1}"
 
 # shellcheck source=ckpt_defaults.sh
 source "$WORKFLOW_ROOT/scripts/ckpt_defaults.sh"
-export MMML_CKPT="${MMML_CKPT:-$(default_mmml_ckpt "$REPO_ROOT")}"
+export KARML_CKPT="${KARML_CKPT:-$(default_karml_ckpt "$REPO_ROOT")}"
 
-if [[ -n "${MMML_WORKFLOW_CONFIG:-}" ]]; then
-  _cfg_raw="${MMML_WORKFLOW_CONFIG}"
+if [[ -n "${KARML_WORKFLOW_CONFIG:-}" ]]; then
+  _cfg_raw="${KARML_WORKFLOW_CONFIG}"
 else
   _cfg_raw="$("$PY" -c "
 import sys
@@ -73,7 +73,7 @@ if [[ "$_cfg_raw" = /* ]]; then
 else
   CFG="${WORKFLOW_ROOT}/${_cfg_raw}"
 fi
-export MMML_WORKFLOW_CONFIG="$CFG"
+export KARML_WORKFLOW_CONFIG="$CFG"
 
 _MLPOT_PROF="$("$PY" -c "
 import sys
@@ -100,13 +100,13 @@ cfg = load_config(Path('${CFG}'))
 print(int(bool(cfg.get('jax_pme_profile', False))))
 " 2>/dev/null || echo 0)"
 if [[ "$_MLPOT_PROF" == "1" ]]; then
-  export MMML_MLPOT_PROFILE="${MMML_MLPOT_PROFILE:-1}"
+  export KARML_MLPOT_PROFILE="${KARML_MLPOT_PROFILE:-1}"
 fi
 if [[ "$_JAX_TIMERS" == "1" ]]; then
-  export MMML_JAX_COMPILE_TIMERS="${MMML_JAX_COMPILE_TIMERS:-1}"
+  export KARML_JAX_COMPILE_TIMERS="${KARML_JAX_COMPILE_TIMERS:-1}"
 fi
 if [[ "$_JAX_PME_PROF" == "1" ]]; then
-  export MMML_JAX_PME_PROFILE="${MMML_JAX_PME_PROFILE:-1}"
+  export KARML_JAX_PME_PROFILE="${KARML_JAX_PME_PROFILE:-1}"
 fi
 
 if ! ldconfig -p 2>/dev/null | grep -q 'libOpenCL\.so'; then
@@ -120,14 +120,14 @@ echo "=== dcm_density_setup_compare heat resume: ${RUN_TAG} ==="
 echo "REPO_ROOT=${REPO_ROOT}"
 echo "WORKFLOW_CONFIG=${CFG}"
 echo "PY=${PY}"
-echo "MMML_CKPT=${MMML_CKPT:-<unset>}"
+echo "KARML_CKPT=${KARML_CKPT:-<unset>}"
 
 N_ML="$("$PY" -c "
 import sys
 from pathlib import Path
 sys.path.insert(0, '${WORKFLOW_ROOT}/scripts')
 from campaign_lib import load_config, cell_from_tag, config_for_run_tag
-from mmml.interfaces.pycharmmInterface.mlpot.mlpot_limits import estimate_ml_atoms
+from karml.interfaces.pycharmmInterface.mlpot.mlpot_limits import estimate_ml_atoms
 cfg = load_config(Path('${CFG}'))
 cfg = config_for_run_tag(cfg, '${RUN_TAG}')
 cell = cell_from_tag(cfg, '${RUN_TAG}')

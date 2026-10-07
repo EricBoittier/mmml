@@ -16,16 +16,16 @@
 # Deliberately no `set -e`: this file is *sourced*, and imposing errexit on the
 # calling job script would abort it on the first tolerated non-zero command.
 
-MMML_SCICORE_TOOLCHAIN="${MMML_SCICORE_TOOLCHAIN:-foss/2023b}"
-MMML_SCICORE_CMAKE="${MMML_SCICORE_CMAKE:-CMake/3.27.6-GCCcore-13.2.0}"
+KARML_SCICORE_TOOLCHAIN="${KARML_SCICORE_TOOLCHAIN:-foss/2023b}"
+KARML_SCICORE_CMAKE="${KARML_SCICORE_CMAKE:-CMake/3.27.6-GCCcore-13.2.0}"
 
 # The system profile scripts below are not written to survive `set -u`
 # (soft_stacks.sh dereferences MODULEPATH before assigning it). Job scripts run
 # with `set -u`, where sourcing them aborts the whole job. Relax nounset for the
 # duration and restore the caller's setting afterwards.
-_mmml_had_nounset=0
+_karml_had_nounset=0
 case "$-" in
-  *u*) _mmml_had_nounset=1 ;;
+  *u*) _karml_had_nounset=1 ;;
 esac
 set +u
 
@@ -34,17 +34,17 @@ set +u
 # defined but MODULEPATH empty, `module load` finds nothing and fails *silently*,
 # and CHARMM then fails to dlopen at runtime.
 if ! command -v module >/dev/null 2>&1; then
-  for _mmml_lmod_init in \
+  for _karml_lmod_init in \
     "${LMOD_PKG:-/scicore/soft/lmod/lmod}/init/bash" \
     /etc/profile.d/lmod.sh \
     /usr/share/lmod/lmod/init/bash; do
-    if [[ -r "$_mmml_lmod_init" ]]; then
+    if [[ -r "$_karml_lmod_init" ]]; then
       # shellcheck disable=SC1090
-      source "$_mmml_lmod_init"
+      source "$_karml_lmod_init"
       break
     fi
   done
-  unset _mmml_lmod_init
+  unset _karml_lmod_init
 fi
 
 # soft_stacks.sh is what populates MODULEPATH with the easybuild module trees.
@@ -54,23 +54,23 @@ if [[ -z "${MODULEPATH:-}" && -r /etc/profile.d/soft_stacks.sh ]]; then
 fi
 
 if command -v module >/dev/null 2>&1; then
-  module load "$MMML_SCICORE_TOOLCHAIN" || true
+  module load "$KARML_SCICORE_TOOLCHAIN" || true
   # SciCORE disables Lmod's automatic same-name swapping.  foss/2025a may
   # leave GCCcore/14.2.0 loaded while the requested CMake module was built
   # against 14.3.0, so make the required swap explicit.
-  if [[ "$MMML_SCICORE_CMAKE" == *"GCCcore-14.3.0"* ]] && \
+  if [[ "$KARML_SCICORE_CMAKE" == *"GCCcore-14.3.0"* ]] && \
      module is-loaded GCCcore/14.2.0 >/dev/null 2>&1; then
     module swap GCCcore/14.2.0 GCCcore/14.3.0 || true
   fi
-  _mmml_saved_autoswap="${LMOD_DISABLE_SAME_NAME_AUTOSWAP-}"
+  _karml_saved_autoswap="${LMOD_DISABLE_SAME_NAME_AUTOSWAP-}"
   export LMOD_DISABLE_SAME_NAME_AUTOSWAP=no
-  module load "$MMML_SCICORE_CMAKE" || true
-  if [[ -n "$_mmml_saved_autoswap" ]]; then
-    export LMOD_DISABLE_SAME_NAME_AUTOSWAP="$_mmml_saved_autoswap"
+  module load "$KARML_SCICORE_CMAKE" || true
+  if [[ -n "$_karml_saved_autoswap" ]]; then
+    export LMOD_DISABLE_SAME_NAME_AUTOSWAP="$_karml_saved_autoswap"
   else
     unset LMOD_DISABLE_SAME_NAME_AUTOSWAP
   fi
-  unset _mmml_saved_autoswap
+  unset _karml_saved_autoswap
 else
   echo "scicore_env: lmod not found; libcharmm will fail to dlopen" >&2
 fi
@@ -80,23 +80,23 @@ fi
 #
 # NB: this file is *sourced*. Never call `exit` here -- it terminates the
 # calling job script, not this snippet.
-_mmml_found_libmpi=0
-_mmml_saved_ifs="$IFS"
+_karml_found_libmpi=0
+_karml_saved_ifs="$IFS"
 IFS=:
-for _mmml_dir in ${LD_LIBRARY_PATH:-}; do
-  if [[ -e "$_mmml_dir/libmpi.so.40" ]]; then
-    _mmml_found_libmpi=1
+for _karml_dir in ${LD_LIBRARY_PATH:-}; do
+  if [[ -e "$_karml_dir/libmpi.so.40" ]]; then
+    _karml_found_libmpi=1
     break
   fi
 done
-IFS="$_mmml_saved_ifs"
-unset _mmml_dir _mmml_saved_ifs
+IFS="$_karml_saved_ifs"
+unset _karml_dir _karml_saved_ifs
 
-if [[ "$_mmml_found_libmpi" != "1" ]]; then
+if [[ "$_karml_found_libmpi" != "1" ]]; then
   echo "scicore_env: warning: libmpi.so.40 not on LD_LIBRARY_PATH after loading" \
-       "'$MMML_SCICORE_TOOLCHAIN' (MODULEPATH=${MODULEPATH:-empty}); CHARMM will fail to load." >&2
+       "'$KARML_SCICORE_TOOLCHAIN' (MODULEPATH=${MODULEPATH:-empty}); CHARMM will fail to load." >&2
 fi
-unset _mmml_found_libmpi
+unset _karml_found_libmpi
 
 export JAX_ENABLE_X64="${JAX_ENABLE_X64:-1}"
 
@@ -105,16 +105,16 @@ export JAX_ENABLE_X64="${JAX_ENABLE_X64:-1}"
 # for incomplete/local OpenMPI builds: on sgd GPU nodes those workarounds make
 # the rank segfault before Python's first instruction.  The module-provided
 # LD_LIBRARY_PATH is sufficient and is still forwarded by the launcher.
-export MMML_NO_MPI_MCA_PREFIX="${MMML_NO_MPI_MCA_PREFIX:-1}"
-export MMML_NO_MPI_MPI_PRELOAD="${MMML_NO_MPI_MPI_PRELOAD:-1}"
-export MMML_NO_MPI_OPAL_PRELOAD="${MMML_NO_MPI_OPAL_PRELOAD:-1}"
-export MMML_NO_MPI_PMIX_PRELOAD="${MMML_NO_MPI_PMIX_PRELOAD:-1}"
+export KARML_NO_MPI_MCA_PREFIX="${KARML_NO_MPI_MCA_PREFIX:-1}"
+export KARML_NO_MPI_MPI_PRELOAD="${KARML_NO_MPI_MPI_PRELOAD:-1}"
+export KARML_NO_MPI_OPAL_PRELOAD="${KARML_NO_MPI_OPAL_PRELOAD:-1}"
+export KARML_NO_MPI_PMIX_PRELOAD="${KARML_NO_MPI_PMIX_PRELOAD:-1}"
 
 # Restore the caller's nounset setting.
-if [[ "$_mmml_had_nounset" == "1" ]]; then
+if [[ "$_karml_had_nounset" == "1" ]]; then
   set -u
 fi
-unset _mmml_had_nounset
+unset _karml_had_nounset
 
 # CHARMM_HOME / CHARMM_LIB_DIR are auto-discovered from setup/charmm; set them
 # only to point at an out-of-tree or per-tier CHARMM build.

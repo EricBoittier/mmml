@@ -1,5 +1,5 @@
 """
-Data preprocessing utilities for MMML.
+Data preprocessing utilities for KARML.
 
 Common preprocessing operations for molecular data including
 centering, normalization, and masking.
@@ -10,7 +10,7 @@ from typing import Optional, Tuple, Dict
 import ase.data
 from scipy.spatial.distance import cdist
 
-from mmml.data.atomic_references import (
+from karml.data.atomic_references import (
     DEFAULT_CHARGE_STATE,
     DEFAULT_REFERENCE_LEVEL,
     get_atomic_reference_array,
@@ -241,7 +241,7 @@ def get_default_atomic_energies(
     unit
         Target energy unit (``'eV'``, ``'hartree'``, ``'kcal/mol'`` or ``'kJ/mol'``).
     reference
-        Level of theory key inside :mod:`mmml.data.atomic_reference_energies`.
+        Level of theory key inside :mod:`karml.data.atomic_reference_energies`.
     charge_state
         Atomic charge state to select (default: neutral atoms).
     fallback_to_neutral

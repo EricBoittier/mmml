@@ -5,7 +5,7 @@ COM–COM ``r`` is not a steric coordinate for DCM: many rays at r≈3.5 Å stil
 have atom–atom contacts ≪ 2 Å. Those clash points dominate well metrics
 (−30…−55 kcal/mol) and force envelopes. This module adds ``dmin_A`` and
 clash-aware summaries using
-:data:`mmml.analysis.dimer_scans.DEFAULT_ORIENT_MIN_CONTACT_A`.
+:data:`karml.analysis.dimer_scans.DEFAULT_ORIENT_MIN_CONTACT_A`.
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from mmml.analysis.dimer_scans import (
+from karml.analysis.dimer_scans import (
     DEFAULT_ORIENT_MIN_CONTACT_A,
     intermolecular_min_distance,
 )

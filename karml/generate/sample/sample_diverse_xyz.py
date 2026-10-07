@@ -5,7 +5,7 @@ Select the top-N diverse structures from one or more multi-frame XYZ files.
 Diversity is measured in SOAP descriptor space (dscribe): greedy farthest-point
 sampling (k-center style) on column-standardized inner-averaged SOAP vectors.
 
-Writes a compressed NPZ compatible with other MMML trajectories::
+Writes a compressed NPZ compatible with other KARML trajectories::
 
     R: list of (n_i, 3) position arrays (float64)
     Z: list of chemical-symbol lists (one list per frame)
@@ -20,7 +20,7 @@ Optional provenance::
 
 Example::
 
-    python -m mmml.generate.sample.sample_diverse_xyz \\
+    python -m karml.generate.sample.sample_diverse_xyz \\
         bench/*.xyz -n 64 -o sampled.npz --seed 0
 """
 

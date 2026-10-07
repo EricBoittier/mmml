@@ -19,13 +19,13 @@ from _common import (
     scafacos_coulomb_energy_forces,
     scafacos_integration_enabled,
 )
-from mmml.interfaces.scafacosInterface.scafacos_session import SCAFACOS_DEFAULT_METHODS
+from karml.interfaces.scafacosInterface.scafacos_session import SCAFACOS_DEFAULT_METHODS
 
 
 def main() -> int:
     print_header("ScaFaCoS method comparison")
     if not scafacos_integration_enabled():
-        print("SKIP: ScaFaCoS integration (set MMML_SCAFACOS_TESTS=1 and SCAFACOS_LIB)")
+        print("SKIP: ScaFaCoS integration (set KARML_SCAFACOS_TESTS=1 and SCAFACOS_LIB)")
         return 0
 
     if not have_jax_pme_package():

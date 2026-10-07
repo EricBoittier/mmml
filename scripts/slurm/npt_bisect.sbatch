@@ -34,14 +34,14 @@
 #   idx 3  npt  mine          <- reproduces the failure
 set -uo pipefail
 
-REPO="${MMML_REPO:-$HOME/mmml_npt}"
+REPO="${KARML_REPO:-$HOME/karml_npt}"
 cd "$REPO" || exit 1
-export MMML_SCICORE_CMAKE="${MMML_SCICORE_CMAKE:-CMake/3.31.8-GCCcore-14.3.0}"
-export MMML_SCICORE_TOOLCHAIN="${MMML_SCICORE_TOOLCHAIN:-foss/2025a}"
+export KARML_SCICORE_CMAKE="${KARML_SCICORE_CMAKE:-CMake/3.31.8-GCCcore-14.3.0}"
+export KARML_SCICORE_TOOLCHAIN="${KARML_SCICORE_TOOLCHAIN:-foss/2025a}"
 # shellcheck disable=SC1091
 source scripts/scicore_env.sh
-if [[ ! -f "$REPO/setup/charmm/libcharmm.so" && -f "$HOME/mmml/setup/charmm/libcharmm.so" ]]; then
-  export CHARMM_LIB_DIR="$HOME/mmml/setup/charmm" CHARMM_HOME="$HOME/mmml/setup/charmm"
+if [[ ! -f "$REPO/setup/charmm/libcharmm.so" && -f "$HOME/karml/setup/charmm/libcharmm.so" ]]; then
+  export CHARMM_LIB_DIR="$HOME/karml/setup/charmm" CHARMM_HOME="$HOME/karml/setup/charmm"
 fi
 source .venv/bin/activate
 export PYTHONPATH="$REPO${PYTHONPATH:+:$PYTHONPATH}"
@@ -130,7 +130,7 @@ fi
 echo "=== [$IDX] $tag : ensemble=$ens prep=$prep  ${nmol} TIP3, ${side} A, ${PS} ps"
 nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -1
 
-uv run mmml md-system "${common[@]}" "${scale_flags[@]}" "${prep_flags[@]}" > "$out/md.log" 2>&1
+uv run karml md-system "${common[@]}" "${scale_flags[@]}" "${prep_flags[@]}" > "$out/md.log" 2>&1
 rc=$?
 
 echo "--- exit $rc"

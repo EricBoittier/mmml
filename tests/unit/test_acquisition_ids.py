@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from mmml.acquisition.ids import (
+from karml.acquisition.ids import (
     composition_key,
     condition_key,
     geometry_fingerprint,

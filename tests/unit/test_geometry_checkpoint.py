@@ -12,7 +12,7 @@ import numpy as np
 
 from tests.unit.conftest import write_minimal_restart
 
-from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
+from karml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
     attempt_overlap_early_abort_recovery,
     build_extent_recovery_candidates,
     build_flyoff_recovery_candidates,
@@ -31,7 +31,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
     resume_charmm_mm_pretreat_if_available,
     write_geometry_baseline_restart,
 )
-from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import DynamicsOverlapConfig
+from karml.interfaces.pycharmmInterface.mlpot.overlap_guard import DynamicsOverlapConfig
 
 
 def test_geometry_ladder_prefers_baseline_over_pretreat_prod(tmp_path):
@@ -65,7 +65,7 @@ def test_geometry_ladder_includes_mlpot_mini_crd_fallbacks(tmp_path):
     heat = tmp_path / "heat.res"
     paths = {
         "geometry_baseline_res": baseline,
-        "mlpot_mmml_crd": mlpot_crd,
+        "mlpot_karml_crd": mlpot_crd,
         "mini_crd": legacy_crd,
         "bonded_mm_after_mini_crd": bonded_crd,
         "heat_res": heat,
@@ -141,7 +141,7 @@ def test_pretreat_resume_skips_completed_heat(tmp_path):
         dcd_nsavc=100,
     )
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint.pretreat_stage_complete",
+        "karml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint.pretreat_stage_complete",
         side_effect=lambda path, **kw: path == heat,
     ):
         state = resume_charmm_mm_pretreat_if_available(
@@ -173,7 +173,7 @@ def test_pretreat_resume_skips_completed_legs(tmp_path):
         dcd_nsavc=100,
     )
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint.pretreat_stage_complete",
+        "karml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint.pretreat_stage_complete",
         side_effect=lambda path, **kw: path == prod,
     ):
         state = resume_charmm_mm_pretreat_if_available(
@@ -191,11 +191,11 @@ def test_write_geometry_baseline_restart(tmp_path):
     expected = out / "baseline.res"
     with (
         mock.patch(
-            "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.rewrite_dynamics_restart_validated",
+            "karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.rewrite_dynamics_restart_validated",
             return_value=True,
         ) as rewrite,
         mock.patch(
-            "mmml.interfaces.pycharmmInterface.mlpot.dynamics._valid_restart_file",
+            "karml.interfaces.pycharmmInterface.mlpot.dynamics._valid_restart_file",
             return_value=expected,
         ),
     ):
@@ -209,11 +209,11 @@ def test_write_geometry_baseline_restart_unlinks_invalid_file(tmp_path):
     out.mkdir()
     with (
         mock.patch(
-            "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.rewrite_dynamics_restart_validated",
+            "karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.rewrite_dynamics_restart_validated",
             return_value=True,
         ),
         mock.patch(
-            "mmml.interfaces.pycharmmInterface.mlpot.dynamics._valid_restart_file",
+            "karml.interfaces.pycharmmInterface.mlpot.dynamics._valid_restart_file",
             return_value=None,
         ),
     ):
@@ -242,13 +242,13 @@ def test_pretreat_resume_continues_partial_heat(tmp_path):
         dcd_nsavc=100,
     )
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint.pretreat_stage_complete",
+        "karml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint.pretreat_stage_complete",
         return_value=False,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint.first_valid_restart_path",
+        "karml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint.first_valid_restart_path",
         return_value=heat.resolve(),
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.resolve_integrated_restart_step",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics_validation.resolve_integrated_restart_step",
         return_value=1800,
     ):
         state = resume_charmm_mm_pretreat_if_available(
@@ -266,16 +266,16 @@ def test_pretreat_stage_complete_uses_integrated_step(tmp_path):
     res = tmp_path / "heat.res"
     res.write_text("REST\n", encoding="utf-8")
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._valid_restart_file",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._valid_restart_file",
         return_value=res.resolve(),
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.resolve_integrated_restart_step",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics_validation.resolve_integrated_restart_step",
         return_value=950,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.restart_has_nonfinite_coordinates",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics_validation.restart_has_nonfinite_coordinates",
         return_value=False,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.restart_coordinates_are_unsafe",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics_validation.restart_coordinates_are_unsafe",
         return_value=False,
     ):
         assert pretreat_stage_complete(res, expected_nstep=1000) is True
@@ -285,10 +285,10 @@ def test_pretreat_stage_complete_rejects_unsafe_restart(tmp_path):
     res = tmp_path / "heat.res"
     res.write_text("REST\n", encoding="utf-8")
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._valid_restart_file",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics._valid_restart_file",
         return_value=res.resolve(),
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.restart_coordinates_are_unsafe",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics_validation.restart_coordinates_are_unsafe",
         return_value=True,
     ):
         assert pretreat_stage_complete(res, expected_nstep=1000) is False
@@ -357,7 +357,7 @@ def test_try_recovery_from_checkpoint_ladder_tries_multiple(tmp_path):
         return len(calls) >= 2
 
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.restore_charmm_state_from_restart"
+        "karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.restore_charmm_state_from_restart"
     ) as restore:
         path = try_recovery_from_checkpoint_ladder(
             [bad, good],
@@ -389,7 +389,7 @@ def test_restore_geometry_from_ladder_extent_prefers_crd_over_heat_segment(
     )
     candidates = build_extent_recovery_candidates(cfg)
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.restore_charmm_state_from_crd"
+        "karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.restore_charmm_state_from_crd"
     ) as restore_crd:
         path = restore_geometry_from_ladder(
             candidates,
@@ -432,20 +432,20 @@ def test_build_geometry_recovery_candidates_skips_pretreat_mm(tmp_path):
 
 
 def test_early_abort_trust_in_memory_rejects_cpt_cold_start_blowup():
-    from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
+    from karml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
         _early_abort_trust_in_memory,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+    from karml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
         DynamicsOverlapConfig,
     )
 
     cfg = DynamicsOverlapConfig(action="rescue", n_monomers=13)
     ctx = mock.Mock()
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.charmm_memory_coordinates_usable",
+        "karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.charmm_memory_coordinates_usable",
         return_value=True,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.resolve_mlpot_grms_kcalmol_A",
+        "karml.interfaces.pycharmmInterface.mlpot.cli_common.resolve_mlpot_grms_kcalmol_A",
         return_value=5692.0,
     ):
         assert not _early_abort_trust_in_memory(
@@ -459,20 +459,20 @@ def test_early_abort_trust_in_memory_rejects_cpt_cold_start_blowup():
 
 
 def test_early_abort_trust_in_memory_accepts_stable_heat_abort():
-    from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
+    from karml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
         _early_abort_trust_in_memory,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+    from karml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
         DynamicsOverlapConfig,
     )
 
     cfg = DynamicsOverlapConfig(action="rescue", n_monomers=13)
     ctx = mock.Mock()
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.charmm_memory_coordinates_usable",
+        "karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.charmm_memory_coordinates_usable",
         return_value=True,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.resolve_mlpot_grms_kcalmol_A",
+        "karml.interfaces.pycharmmInterface.mlpot.cli_common.resolve_mlpot_grms_kcalmol_A",
         return_value=1.7,
     ):
         assert _early_abort_trust_in_memory(
@@ -492,10 +492,10 @@ def test_attempt_overlap_early_abort_recovery_reports_memory_source(tmp_path):
         geometry_fallback_restarts=(),
     )
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint.restore_geometry_from_ladder",
+        "karml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint.restore_geometry_from_ladder",
         side_effect=RuntimeError("no disk"),
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint._early_abort_trust_in_memory",
+        "karml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint._early_abort_trust_in_memory",
         return_value=True,
     ):
         recovery = attempt_overlap_early_abort_recovery(
@@ -511,7 +511,7 @@ def test_attempt_overlap_early_abort_recovery_reports_memory_source(tmp_path):
 
 
 def test_attempt_overlap_blowup_geometry_rescue_restores_and_retries():
-    from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
+    from karml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
         attempt_overlap_blowup_geometry_rescue,
     )
 
@@ -522,14 +522,14 @@ def test_attempt_overlap_blowup_geometry_rescue_restores_and_retries():
     )
     ctx = mock.Mock()
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint.restore_geometry_from_ladder",
+        "karml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint.restore_geometry_from_ladder",
         return_value=Path("02_mini.crd"),
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.sync_charmm_lists_after_mini",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics.sync_charmm_lists_after_mini",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.invalidate_mlpot_calculator_caches",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics.invalidate_mlpot_calculator_caches",
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard.probe_dynamics_geometry_violation",
+        "karml.interfaces.pycharmmInterface.mlpot.overlap_guard.probe_dynamics_geometry_violation",
         return_value=False,
     ):
         recovery = attempt_overlap_blowup_geometry_rescue(
@@ -545,10 +545,10 @@ def test_attempt_overlap_blowup_geometry_rescue_restores_and_retries():
 
 
 def test_build_early_abort_recovery_candidates_prefers_overlap_read(tmp_path):
-    from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
+    from karml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
         build_early_abort_recovery_candidates,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import DynamicsOverlapConfig
+    from karml.interfaces.pycharmmInterface.mlpot.overlap_guard import DynamicsOverlapConfig
 
     baseline = tmp_path / "geometry_baseline_dcm_10.res"
     write_minimal_restart(baseline)
@@ -575,10 +575,10 @@ def test_build_early_abort_recovery_candidates_prefers_overlap_read(tmp_path):
 def test_build_early_abort_recovery_candidates_includes_numbered_chunk_restart(
     tmp_path,
 ):
-    from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
+    from karml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
         build_early_abort_recovery_candidates,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import DynamicsOverlapConfig
+    from karml.interfaces.pycharmmInterface.mlpot.overlap_guard import DynamicsOverlapConfig
 
     baseline = tmp_path / "geometry_baseline_dcm_10.res"
     write_minimal_restart(baseline)
@@ -604,11 +604,11 @@ def test_build_early_abort_recovery_candidates_includes_numbered_chunk_restart(
 def test_attempt_overlap_early_abort_recovery_prefers_run_state_before_baseline_mid_heat(
     tmp_path,
 ):
-    from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
+    from karml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
         attempt_overlap_early_abort_recovery,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import DynamicsOverlapConfig
-    from mmml.interfaces.pycharmmInterface.mlpot.run_state_checkpoint import (
+    from karml.interfaces.pycharmmInterface.mlpot.overlap_guard import DynamicsOverlapConfig
+    from karml.interfaces.pycharmmInterface.mlpot.run_state_checkpoint import (
         save_overlap_run_state,
     )
 
@@ -631,10 +631,10 @@ def test_attempt_overlap_early_abort_recovery_prefers_run_state_before_baseline_
         geometry_fallback_restarts=(),
     )
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint.restore_geometry_from_ladder",
+        "karml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint.restore_geometry_from_ladder",
         side_effect=RuntimeError("no restart"),
     ) as restore, mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
     ) as sync_pos:
         recovery = attempt_overlap_early_abort_recovery(
             cfg,
@@ -653,10 +653,10 @@ def test_attempt_overlap_early_abort_recovery_prefers_run_state_before_baseline_
 
 
 def test_build_early_abort_recovery_candidates_includes_segment_restart(tmp_path):
-    from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
+    from karml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
         build_early_abort_recovery_candidates,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import DynamicsOverlapConfig
+    from karml.interfaces.pycharmmInterface.mlpot.overlap_guard import DynamicsOverlapConfig
 
     equi = tmp_path / "equi_dcm_10.res"
     write_minimal_restart(equi)
@@ -690,7 +690,7 @@ def test_attempt_overlap_early_abort_recovery_uses_baseline_without_overlap_read
         geometry_fallback_restarts=(),
     )
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint.restore_geometry_from_ladder",
+        "karml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint.restore_geometry_from_ladder",
         return_value=baseline,
     ) as restore:
         recovery = attempt_overlap_early_abort_recovery(
@@ -721,7 +721,7 @@ def test_attempt_overlap_early_abort_recovery_warn_adumb_rewinds(tmp_path):
         workflow_args=SimpleNamespace(_adumb_rc_guard=object()),
     )
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint.restore_geometry_from_ladder",
+        "karml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint.restore_geometry_from_ladder",
         return_value=prior,
     ) as restore:
         recovery = attempt_overlap_early_abort_recovery(
@@ -785,7 +785,7 @@ def test_restore_geometry_from_ladder_falls_back_to_crd(tmp_path):
     candidates = [bad, crd]
 
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.restore_charmm_state_from_crd"
+        "karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.restore_charmm_state_from_crd"
     ) as restore_crd:
         path = restore_geometry_from_ladder(candidates, label="test recovery")
 
@@ -802,7 +802,7 @@ def test_restore_geometry_from_ladder_falls_back_to_in_memory(tmp_path):
     candidates = [bad]
 
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.charmm_memory_coordinates_usable",
+        "karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.charmm_memory_coordinates_usable",
         return_value=True,
     ):
         path = restore_geometry_from_ladder(
@@ -835,15 +835,15 @@ def test_restore_geometry_from_ladder_rejects_collapsed_restart(tmp_path):
 
     with (
         mock.patch(
-            "mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint.first_valid_restart_path",
+            "karml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint.first_valid_restart_path",
             side_effect=lambda paths: Path(paths[0]).resolve(),
         ),
         mock.patch(
-            "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.read_restart_coordinates",
+            "karml.interfaces.pycharmmInterface.mlpot.dynamics_validation.read_restart_coordinates",
             side_effect=positions,
         ),
         mock.patch(
-            "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.restore_charmm_state_from_restart"
+            "karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.restore_charmm_state_from_restart"
         ) as restore,
     ):
         selected = restore_geometry_from_ladder(
@@ -879,9 +879,9 @@ def test_attempt_overlap_early_abort_recovery_uses_crd_when_restarts_invalid(
     )
 
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.restore_charmm_state_from_crd"
+        "karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.restore_charmm_state_from_crd"
     ) as restore_crd, mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.charmm_memory_coordinates_usable",
+        "karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.charmm_memory_coordinates_usable",
         return_value=False,
     ):
         recovery = attempt_overlap_early_abort_recovery(

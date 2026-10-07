@@ -2,7 +2,7 @@
 
 Offline stand-in for the Snakemake ``window → assemble → mbar`` tail: synthetic
 ``windows/wXXX.npz`` files are packed exactly the way
-:func:`mmml.umbrella.hybrid.run_umbrella_hybrid_nvt` packs them, then handed to
+:func:`karml.umbrella.hybrid.run_umbrella_hybrid_nvt` packs them, then handed to
 the same MBAR entry point the workflow calls, so the failed-window bookkeeping
 and the antisymmetric CV round-trip are checked without a GPU or CHARMM.
 """
@@ -15,10 +15,10 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from mmml.umbrella.config import UmbrellaMbarConfig
-from mmml.umbrella.hybrid_windows import load_all_window_arrays, save_window_checkpoint
-from mmml.umbrella.io import SNAPSHOTS_NPZ, SUMMARY_JSON, save_snapshots
-from mmml.umbrella.mbar import run_umbrella_mbar
+from karml.umbrella.config import UmbrellaMbarConfig
+from karml.umbrella.hybrid_windows import load_all_window_arrays, save_window_checkpoint
+from karml.umbrella.io import SNAPSHOTS_NPZ, SUMMARY_JSON, save_snapshots
+from karml.umbrella.mbar import run_umbrella_mbar
 
 pymbar = pytest.importorskip("pymbar")
 

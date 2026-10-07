@@ -6,7 +6,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from mmml.cli.run.md_handoff import res_to_trajectory
+from karml.cli.run.md_handoff import res_to_trajectory
 
 
 def main() -> None:

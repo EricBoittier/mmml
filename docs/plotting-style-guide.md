@@ -7,12 +7,12 @@ correction, so it doesn't happen again.
 
 ## The one module to import
 
-[`mmml/utils/plotting/styles.py`](https://github.com/EricBoittier/mmml/blob/main/mmml/utils/plotting/styles.py) defines the
+[`karml/utils/plotting/styles.py`](https://github.com/EricBoittier/karml/blob/main/karml/utils/plotting/styles.py) defines the
 house `PlotStyle` presets and is the single source of truth for fonts, colors,
 and line weights. Use it at the top of any new plotting script:
 
 ```python
-from mmml.utils.plotting.styles import apply_plot_style, comparison_colors
+from karml.utils.plotting.styles import apply_plot_style, comparison_colors
 
 style = apply_plot_style("nature")     # sets matplotlib rcParams
 colors = comparison_colors(style, n=len(settings))  # fixed categorical order
@@ -43,7 +43,7 @@ Every preset now sets `legend.frameon = False` — legends are never boxed with
 a visible border; rely on `legend_outside()` placing them clear of the data
 instead of a frame to separate them from it.
 
-Run `mmml.utils.plotting.styles.list_plot_styles()` to see all registered
+Run `karml.utils.plotting.styles.list_plot_styles()` to see all registered
 names/aliases (alphabetical — a stable lookup order, not a recommendation
 order). For a "show these to a human, default first" ordering (e.g. a
 gallery), use `STYLE_DISPLAY_ORDER` instead — it leads with `"icml"`, then
@@ -57,7 +57,7 @@ must call `apply_plot_style("icml")` before it creates a figure. This includes
 the static figure generator (`scripts/generate_docs_figures.py`), trajectory
 analysis (`scripts/plot_trajectory_structure.py`), and the aaa.ama /
 md-embedding documentation publishers. Structure drawings may additionally
-use `mmml.utils.ase_structure_plot` for bonds, element colours, and projection;
+use `karml.utils.ase_structure_plot` for bonds, element colours, and projection;
 that helper complements the shared Matplotlib baseline rather than replacing
 it. Re-run the relevant publisher after changing a preset.
 
@@ -115,7 +115,7 @@ semantic. If the only answer is "it's next in the list," fix it.
 ## Legends live outside the plot
 
 **A legend never overlaps the data.** Use
-[`mmml.utils.plotting.styles.legend_outside(target, side="auto", **kwargs)`](https://github.com/EricBoittier/mmml/blob/main/mmml/utils/plotting/styles.py)
+[`karml.utils.plotting.styles.legend_outside(target, side="auto", **kwargs)`](https://github.com/EricBoittier/karml/blob/main/karml/utils/plotting/styles.py)
 instead of `axis.legend(loc="best", ...)`.
 
 **Which side is decided by measurement, not a guess from the figure's
@@ -180,7 +180,7 @@ if titles or labels are cramped, then re-render and look again.
 When a repeated label would otherwise shrink to fit (e.g. "(seed 3)" tacked
 onto a dozen x-tick labels), replace it with a symbol instead of making the
 text smaller. House convention:
-[`mmml.utils.plotting.styles.seed_symbol(seed)`](https://github.com/EricBoittier/mmml/blob/main/mmml/utils/plotting/styles.py)
+[`karml.utils.plotting.styles.seed_symbol(seed)`](https://github.com/EricBoittier/karml/blob/main/karml/utils/plotting/styles.py)
 returns a filled-dot count — `seed_symbol(1) == "●"`, `seed_symbol(3) ==
 "●●●"` — instead of the text `"(seed 3)"`. (Unicode die faces U+2680-2685
 were tried first and rejected: they render as generic missing-glyph boxes on
@@ -265,7 +265,7 @@ wall-clock seconds) that wouldn't overlay meaningfully.
 both sweep workflows) is misleading: it can be large purely from single-frame
 noise in an otherwise-flat trace, or small while the trace trends steadily in
 one direction between two coincidentally-close endpoints. Use
-[`mmml.md.results.energy_drift_metrics`](https://github.com/EricBoittier/mmml/blob/main/mmml/md/results.py) instead, which
+[`karml.md.results.energy_drift_metrics`](https://github.com/EricBoittier/karml/blob/main/karml/md/results.py) instead, which
 reports:
 
 - `energy_fluctuation_std_ev` — std over the *whole* trace (the noise floor).
@@ -284,7 +284,7 @@ endpoints.
 
 ## Structural analysis (bonds/angles/dihedrals/RDF)
 
-Don't re-derive these — [`mmml/utils/plotting/trajectory_structure.py`](https://github.com/EricBoittier/mmml/blob/main/mmml/utils/plotting/trajectory_structure.py)
+Don't re-derive these — [`karml/utils/plotting/trajectory_structure.py`](https://github.com/EricBoittier/karml/blob/main/karml/utils/plotting/trajectory_structure.py)
 already has them, operating on `Sequence[ase.Atoms]`:
 
 - `element_pair_rdfs(frames, r_max=8.0, bins=160)` — periodic RDF per element
@@ -321,7 +321,7 @@ different styling.
 
 For drawing actual molecular geometry (not a data curve) — e.g. a dimer
 snapshot alongside an energy-scan plot — reuse
-[`scripts/plot_utils.py::render_dimer_atoms`](https://github.com/EricBoittier/mmml/blob/main/scripts/plot_utils.py),
+[`scripts/plot_utils.py::render_dimer_atoms`](https://github.com/EricBoittier/karml/blob/main/scripts/plot_utils.py),
 the good precedent already in the repo (used by the SpookyNet dimer-scan
 figures in `scripts/plot_1d_slices_by_offset.py` and `scripts/plot_2d_pes.py`):
 
@@ -350,7 +350,7 @@ an `ax` directly, so it can be drawn into an `ax.inset_axes(...)` placed
 right over the point on a curve it corresponds to (e.g. the minimum of a
 dimer scan), rather than in a separate side-by-side figure the reader has
 to cross-reference by hand — see
-[`scripts/render_chart_type_gallery.py::ase_atoms_overlay`](https://github.com/EricBoittier/mmml/blob/main/scripts/render_chart_type_gallery.py)
+[`scripts/render_chart_type_gallery.py::ase_atoms_overlay`](https://github.com/EricBoittier/karml/blob/main/scripts/render_chart_type_gallery.py)
 and the rendered example in
 [`docs/plot-style-gallery.md`](plot-style-gallery.md) "ASE Atoms as an
 overlay on a data plot".
@@ -363,7 +363,7 @@ will invent intermolecular sticks (or miss CHARMM topology), render with
 infer bonds from distances for these figures.
 
 Reference pipeline:
-[`scripts/plot_liquid_structure_validation.py`](https://github.com/EricBoittier/mmml/blob/main/scripts/plot_liquid_structure_validation.py)
+[`scripts/plot_liquid_structure_validation.py`](https://github.com/EricBoittier/karml/blob/main/scripts/plot_liquid_structure_validation.py)
 (analysis + ICML summary figure) and the campaign renderer under
 `artifacts/lj_scales/structure_analysis/make_structure_plots.py` (POV-Ray
 call). Example assets live in
@@ -380,7 +380,7 @@ Hard rules for liquid POV-Ray panels:
   across a face so a topological bond looks broken. Rebuild each residue so
   intramolecular bonds are contiguous (MIC relative to a seed atom / COM),
   then translate the molecule's centroid back into the cell. The same idea
-  as `unwrap_molecules` in `mmml.analysis.lattice_energy`, but prefer the
+  as `unwrap_molecules` in `karml.analysis.lattice_energy`, but prefer the
   PSF residue graph when you have one.
 - **jmol colors + scaled covalent radii** for atom spheres
   (`ase.data.colors.jmol_colors`, `radii_scale * covalent_radii`) — same
@@ -447,7 +447,7 @@ structures explain which geometry produced selected marks.
   composite at 300 dpi with `bbox_inches="tight"` and `transparent=True`.
 
 Reference implementation:
-[`scripts/render_povray_data_overlays.py`](https://github.com/EricBoittier/mmml/blob/main/scripts/render_povray_data_overlays.py).
+[`scripts/render_povray_data_overlays.py`](https://github.com/EricBoittier/karml/blob/main/scripts/render_povray_data_overlays.py).
 
 ![NEB energy profile with ordered POV-Ray geometries](images/povray-overlays/neb_profile_with_povray.png)
 
@@ -479,10 +479,10 @@ continuous data).
 
 **House defaults** (chosen from a rendered shortlist — see
 [`docs/plot-style-gallery.md`](plot-style-gallery.md) "Colormap picks"),
-wired into `mmml.utils.plotting.styles.default_cmap(kind)`:
+wired into `karml.utils.plotting.styles.default_cmap(kind)`:
 
 ```python
-from mmml.utils.plotting.styles import default_cmap
+from karml.utils.plotting.styles import default_cmap
 
 ax.pcolormesh(xx, yy, zz, cmap=default_cmap("sequential"))  # -> crameri:lipari
 ax.pcolormesh(xx, yy, zz, cmap=default_cmap("diverging"))   # -> contrib:pampa
@@ -591,7 +591,7 @@ real LaTeX toolchain is on the machine, prefer typesetting the table for
 real:
 
 ```python
-from mmml.utils.plotting.styles import latex_available, latex_table_image, booktabs_table
+from karml.utils.plotting.styles import latex_available, latex_table_image, booktabs_table
 
 if latex_available():
     latex_table_image(ax, cell_text, col_labels=["quantity", "value", "units"])
@@ -633,7 +633,7 @@ panels encode different quantities. Use `MULTI_CMAP_SHORTLIST` instead,
 which gives a short, fixed-order list per category:
 
 ```python
-from mmml.utils.plotting.styles import MULTI_CMAP_SHORTLIST
+from karml.utils.plotting.styles import MULTI_CMAP_SHORTLIST
 
 names = MULTI_CMAP_SHORTLIST["sequential"][:3]  # e.g. for 3 side-by-side panels
 ```
@@ -667,7 +667,7 @@ by the role a series plays):
   survives grayscale printing or a viewer who can't rely on color at all.
 
 ```python
-from mmml.utils.plotting.styles import LINE_STYLE_CYCLE, MARKER_CYCLE, comparison_colors
+from karml.utils.plotting.styles import LINE_STYLE_CYCLE, MARKER_CYCLE, comparison_colors
 
 colors = comparison_colors(style, n=len(force_fields))
 for ff, color in zip(force_fields, colors):
@@ -692,7 +692,7 @@ series in a plot must never be confused with a value colored orange because
 it failed a check). `STATUS_COLORS` is that reserved palette:
 
 ```python
-from mmml.utils.plotting.styles import STATUS_COLORS, STATUS_HATCHES, status_color, status_hatch
+from karml.utils.plotting.styles import STATUS_COLORS, STATUS_HATCHES, status_color, status_hatch
 
 STATUS_COLORS   # {"good": "#2E7D32", "warning": "#F9A825", "serious": "#E65100",
                  #  "critical": "#C62828", "neutral": "#616161"}
@@ -735,7 +735,7 @@ figure, reads every visible `Text` artist's actual laid-out bounding box
 (`get_window_extent()`), and pairwise-checks for overlap.
 
 ```python
-from mmml.utils.plotting.styles import assert_no_text_overlap, find_overlapping_text
+from karml.utils.plotting.styles import assert_no_text_overlap, find_overlapping_text
 
 fig, ax = plt.subplots()
 # ... build the figure ...

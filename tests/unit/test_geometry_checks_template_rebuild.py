@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from mmml.utils.geometry_checks import (
+from karml.utils.geometry_checks import (
     TEMPLATE_DONOR_IDEAL_TIP3,
     TEMPLATE_DONOR_NONE,
     monomer_max_force_magnitudes,

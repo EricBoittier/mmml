@@ -1,4 +1,4 @@
-"""``mmml validate`` — NPZ schema validation (argparse wrapper)."""
+"""``karml validate`` — NPZ schema validation (argparse wrapper)."""
 
 from __future__ import annotations
 
@@ -9,8 +9,8 @@ from pathlib import Path
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="mmml validate",
-        description="Validate NPZ files against the MMML schema.",
+        prog="karml validate",
+        description="Validate NPZ files against the KARML schema.",
     )
     parser.add_argument(
         "npz_files",
@@ -27,7 +27,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
-    from mmml.data.npz_schema import validate_npz
+    from karml.data.npz_schema import validate_npz
 
     args = build_parser().parse_args(argv)
     all_valid = True

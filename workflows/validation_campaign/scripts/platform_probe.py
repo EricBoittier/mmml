@@ -27,7 +27,7 @@ def main() -> int:
     args.output_dir.mkdir(parents=True, exist_ok=True)
     imports = {}
     jax_data = {}
-    for module in ("numpy", "ase", "jax", "mmml"):
+    for module in ("numpy", "ase", "jax", "karml"):
         try:
             mod = __import__(module)
             imports[module] = {"ok": True, "version": getattr(mod, "__version__", None)}
@@ -47,7 +47,7 @@ def main() -> int:
         "hostname": platform.node(),
         "platform": platform.platform(),
         "python": sys.version,
-        "environment": {key: os.environ.get(key) for key in ("JAX_ENABLE_X64", "MMML_ML_DTYPE", "CUDA_VISIBLE_DEVICES")},
+        "environment": {key: os.environ.get(key) for key in ("JAX_ENABLE_X64", "KARML_ML_DTYPE", "CUDA_VISIBLE_DEVICES")},
         "git_commit": command("git", "rev-parse", "HEAD"),
         "git_status": command("git", "status", "--short"),
         "nvidia_smi": command("nvidia-smi", "--query-gpu=name,driver_version,memory.total", "--format=csv,noheader"),

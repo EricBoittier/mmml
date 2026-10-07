@@ -10,7 +10,7 @@ Campaign jobs chain via `depends_on`. Each completed stage writes
 | `cell` | 3×3 periodic cell from PBC equilibration |
 | `metadata` | Prior backend, stages, source path |
 
-See [`MdHandoffState`](https://github.com/EricBoittier/mmml/blob/main/mmml/cli/run/md_handoff.py).
+See [`MdHandoffState`](https://github.com/EricBoittier/karml/blob/main/karml/cli/run/md_handoff.py).
 
 ## Default policy on handoff
 
@@ -26,8 +26,8 @@ When continuing from a handoff (`depends_on` or `--continue-from`):
 
 | YAML flag | Use when |
 |-----------|----------|
-| `handoff_pre_minimize: true` | Always relax on the MMML surface after PyCHARMM equil |
-| `handoff_quality_gate: true` | Only pre-min if initial MMML \|F\| > `handoff_quality_fmax_eVA` (default 1.0 eV/Å) |
+| `handoff_pre_minimize: true` | Always relax on the KARML surface after PyCHARMM equil |
+| `handoff_quality_gate: true` | Only pre-min if initial KARML \|F\| > `handoff_quality_fmax_eVA` (default 1.0 eV/Å) |
 
 ```yaml
 defaults:
@@ -53,7 +53,7 @@ runs:
 ## Diagnostics
 
 JAX-MD / ASE write `handoff_policy.json` in the job output directory with box source,
-velocity policy, cutoffs, and initial MMML energy/forces.
+velocity policy, cutoffs, and initial KARML energy/forces.
 
 ## PyCHARMM runtime guards
 
@@ -62,17 +62,17 @@ context only while the read is active, then restore the prior levels before the
 next CHARMM command. This avoids leaving `bomlev 0` pinned after benign read
 warnings, which can later abort MLpot registration or dynamics setup.
 
-Before production dynamics, MMML clears CHARMM `COMP` coordinates and scalar
+Before production dynamics, KARML clears CHARMM `COMP` coordinates and scalar
 components so stale comparison data is never interpreted as velocities when
 `iasvel=0` or restart paths are reused. `clear_comp_for_production()` preserves
 its `quiet` argument: normal calls are visible by default, and staged workflows
 can opt into quiet CHARMM housekeeping when running with reduced log noise.
 
-## Interpreting initial MMML energy
+## Interpreting initial KARML energy
 
-Positive total MMML energy (eV) is normal — the hybrid calculator is not
+Positive total KARML energy (eV) is normal — the hybrid calculator is not
 zero-referenced like CHARMM. High **\|F\|** (≫ 1 eV/Å) after handoff usually means
-cutoff mismatch or missing pre-min on the MMML surface.
+cutoff mismatch or missing pre-min on the KARML surface.
 
 ## Box and velocities on write (PyCHARMM)
 
@@ -116,7 +116,7 @@ Aborted or partial NVE runs write `output_dir/pbc_nve_jaxmd_nve.h5` (and
 **without** Packmol rebuild:
 
 ```yaml
-# Single job (mmml md-system --config …) — do NOT pass --rebuild-packmol
+# Single job (karml md-system --config …) — do NOT pass --rebuild-packmol
 setup: pbc_nve
 backend: jaxmd
 composition: DCM:80
@@ -140,7 +140,7 @@ dynamics_overlap_action: error
 CLI equivalent:
 
 ```bash
-mmml md-system --config md_system.yaml \
+karml md-system --config md_system.yaml \
   --continue-from artifacts/md_run/pbc_nve_jaxmd_nve.h5 \
   --continue-from-frame 140
 ```
@@ -187,7 +187,7 @@ runs:
 ```
 
 ```bash
-mmml md-system --config campaign_nve_reps.yaml --run-all
+karml md-system --config campaign_nve_reps.yaml --run-all
 # resume later: add --resume
 ```
 

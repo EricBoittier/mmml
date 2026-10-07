@@ -15,26 +15,26 @@ if [[ -f "$REPO_ROOT/scripts/scicore_env.sh" ]]; then
   source "$REPO_ROOT/scripts/scicore_env.sh"
 fi
 
-# shellcheck source=../../../scripts/resolve_mmml_env.sh
-source "$REPO_ROOT/scripts/resolve_mmml_env.sh"
-mmml_resolve_env "$REPO_ROOT"
+# shellcheck source=../../../scripts/resolve_karml_env.sh
+source "$REPO_ROOT/scripts/resolve_karml_env.sh"
+karml_resolve_env "$REPO_ROOT"
 
 export JAX_ENABLE_X64="${JAX_ENABLE_X64:-1}"
-_cfg_raw="${MMML_WORKFLOW_CONFIG:-$WORKFLOW_ROOT/config.yaml}"
+_cfg_raw="${KARML_WORKFLOW_CONFIG:-$WORKFLOW_ROOT/config.yaml}"
 if [[ "$_cfg_raw" = /* ]]; then
   CFG="$_cfg_raw"
 else
   CFG="$WORKFLOW_ROOT/$_cfg_raw"
 fi
-export MMML_WORKFLOW_CONFIG="$CFG"
+export KARML_WORKFLOW_CONFIG="$CFG"
 
 SCAN_PY="$WORKFLOW_ROOT/scripts/run_pair_scan.py"
-WRAPPER="${MMML_MPIRUN_WRAPPER:-$REPO_ROOT/scripts/mmml-charmm-mpirun.sh}"
+WRAPPER="${KARML_MPIRUN_WRAPPER:-$REPO_ROOT/scripts/karml-charmm-mpirun.sh}"
 
 # Prefer the CHARMM MPI launcher (np=1). Fall back to bare python for serial
 # libcharmm builds (e.g. local macOS --no-mpi).
-if [[ "${MMML_DES_SCAN_NO_MPIRUN:-0}" != "1" && -x "$WRAPPER" ]]; then
+if [[ "${KARML_DES_SCAN_NO_MPIRUN:-0}" != "1" && -x "$WRAPPER" ]]; then
   exec "$WRAPPER" python "$SCAN_PY" --config "$CFG" --pair "$PAIR_TAG"
 fi
 
-exec "${MMML_PYTHON}" "$SCAN_PY" --config "$CFG" --pair "$PAIR_TAG"
+exec "${KARML_PYTHON}" "$SCAN_PY" --config "$CFG" --pair "$PAIR_TAG"

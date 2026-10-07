@@ -1,8 +1,8 @@
 """
-Load MD17 / revised MD17 (rMD17) NPZ files into MMML PhysNet format.
+Load MD17 / revised MD17 (rMD17) NPZ files into KARML PhysNet format.
 
 rMD17 files use keys ``nuclear_charges``, ``coords``, ``energies``, ``forces``.
-MMML expects ``R``, ``Z``, ``E``, ``F``, ``N`` (coordinates in Å; default rMD17
+KARML expects ``R``, ``Z``, ``E``, ``F``, ``N`` (coordinates in Å; default rMD17
 units are kcal/mol and kcal/mol/Å).
 """
 
@@ -90,7 +90,7 @@ def load_rmd17_npz(
     max_structures: Optional[int] = None,
 ) -> Dict[str, np.ndarray]:
     """
-    Load an MD17/rMD17 NPZ file and return MMML-standard arrays.
+    Load an MD17/rMD17 NPZ file and return KARML-standard arrays.
 
     Parameters
     ----------

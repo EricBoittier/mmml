@@ -13,7 +13,7 @@ def test_minimize_bonded_jax_per_monomer_uses_mixed_composition_offsets(
     monkeypatch,
 ) -> None:
     """MEOH:TIP3 (9 atoms / 2 monomers) must not use a uniform 4.5-atom split."""
-    from mmml.interfaces.pycharmmInterface.mlpot import bonded_jax_recovery as mod
+    from karml.interfaces.pycharmmInterface.mlpot import bonded_jax_recovery as mod
 
     positions = np.zeros((9, 3), dtype=np.float64)
     captured: dict[str, object] = {}
@@ -29,19 +29,19 @@ def test_minimize_bonded_jax_per_monomer_uses_mixed_composition_offsets(
         return pos, 0.1
 
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         lambda: positions,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
+        "karml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
         lambda _p: None,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.sync_charmm_lists_after_mini",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics.sync_charmm_lists_after_mini",
         lambda **_k: None,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.invalidate_mlpot_calculator_caches",
+        "karml.interfaces.pycharmmInterface.mlpot.dynamics.invalidate_mlpot_calculator_caches",
         lambda _c: None,
     )
     monkeypatch.setattr(
@@ -82,21 +82,21 @@ def test_minimize_bonded_jax_per_monomer_uses_mixed_composition_offsets(
 
 
 def test_maybe_run_per_monomer_preflight_skips_single_monomer() -> None:
-    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+    from karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
         _maybe_run_per_monomer_bonded_jax_preflight,
     )
 
     ctx = MagicMock()
     config = MagicMock(n_monomers=1, rescue=MagicMock())
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_jax_recovery.minimize_bonded_jax_per_monomer_recovery",
+        "karml.interfaces.pycharmmInterface.mlpot.bonded_jax_recovery.minimize_bonded_jax_per_monomer_recovery",
     ) as mini:
         _maybe_run_per_monomer_bonded_jax_preflight(ctx, config, context="test")
     mini.assert_not_called()
 
 
 def test_maybe_run_per_monomer_preflight_calls_jax() -> None:
-    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+    from karml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
         _maybe_run_per_monomer_bonded_jax_preflight,
     )
 
@@ -114,7 +114,7 @@ def test_maybe_run_per_monomer_preflight_calls_jax() -> None:
         topology_psf=None,
     )
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_jax_recovery.minimize_bonded_jax_per_monomer_recovery",
+        "karml.interfaces.pycharmmInterface.mlpot.bonded_jax_recovery.minimize_bonded_jax_per_monomer_recovery",
     ) as mini:
         _maybe_run_per_monomer_bonded_jax_preflight(ctx, config, context="test")
     mini.assert_called_once()

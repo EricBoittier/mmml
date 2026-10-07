@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from mmml.mcp.ir_comparison import (
+from karml.mcp.ir_comparison import (
     NIST_DCM_IR,
     build_post_smooth_variants,
     compute_all_method_spectra,

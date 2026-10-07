@@ -1,4 +1,4 @@
-"""Unit tests for :mod:`mmml.interfaces.pycharmmInterface.mm_system_plot`."""
+"""Unit tests for :mod:`karml.interfaces.pycharmmInterface.mm_system_plot`."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ matplotlib.use("Agg")
 
 import numpy as np
 
-from mmml.interfaces.pycharmmInterface.mm_system_plot import plot_mm_system_diagnostics
+from karml.interfaces.pycharmmInterface.mm_system_plot import plot_mm_system_diagnostics
 
 
 def test_plot_mm_system_diagnostics_smoke(tmp_path) -> None:

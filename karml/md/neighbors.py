@@ -1,6 +1,6 @@
 """Neighbor-list factory for the driver's block-boundary refresh.
 
-The :class:`~mmml.md.drivers.JaxmdDriver` calls a ``neighbor_fn(real_pos, box)``
+The :class:`~karml.md.drivers.JaxmdDriver` calls a ``neighbor_fn(real_pos, box)``
 at each block boundary and routes the returned arrays into the hybrid energy
 (decision B — the driver owns the rebuild cadence, terms own their capacity).
 This module builds that callback for the intermolecular MM pair list that
@@ -17,8 +17,8 @@ from typing import Any, Callable, Mapping
 
 import numpy as np
 
-from mmml.md.energy.capacity import check_capacity, pair_capacity
-from mmml.md.system import MolecularSystem
+from karml.md.energy.capacity import check_capacity, pair_capacity
+from karml.md.system import MolecularSystem
 
 __all__ = ["make_intermolecular_neighbor_fn"]
 
@@ -39,13 +39,13 @@ def make_intermolecular_neighbor_fn(
     filtered by ``system.mol_id``; exclusions come from ``FFParams``.
 
     ``skin_A > 0`` builds the list at ``cutoff_A + skin_A`` and wraps the result
-    in :func:`mmml.md.neighbor_cache.with_verlet_skin`, so blocks that move every
+    in :func:`karml.md.neighbor_cache.with_verlet_skin`, so blocks that move every
     atom less than ``skin_A / 2`` reuse the list instead of paying a host
     rebuild. The extra pairs inside the skin are inert: ``mm_nonbonded`` zeroes
     every pair beyond ``ctofnb``. Default ``0.0`` keeps the previous
     rebuild-every-call behavior.
     """
-    from mmml.interfaces.jaxmdInterface.hybrid_energy import get_intermolecular_pairs
+    from karml.interfaces.jaxmdInterface.hybrid_energy import get_intermolecular_pairs
 
     mol_id = np.asarray(system.mol_id, dtype=np.int32)
     excluded = frozenset()
@@ -94,7 +94,7 @@ def make_intermolecular_neighbor_fn(
         return {"pair_i": pair_i, "pair_j": pair_j, "pair_mask": pair_mask}
 
     if skin > 0.0:
-        from mmml.md.neighbor_cache import with_verlet_skin
+        from karml.md.neighbor_cache import with_verlet_skin
 
         return with_verlet_skin(neighbor_fn, skin_A=skin)
 

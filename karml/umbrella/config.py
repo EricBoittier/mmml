@@ -6,7 +6,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Literal, Mapping, Sequence
 
-from mmml.md.restraints import (
+from karml.md.restraints import (
     AngleWall,
     BondRetentionWall,
     DihedralCV,
@@ -14,7 +14,7 @@ from mmml.md.restraints import (
     LinearDistanceCV,
     cv_from_spec,
 )
-from mmml.md.restraints.linear_distance import ReactionChannelRestraint
+from karml.md.restraints.linear_distance import ReactionChannelRestraint
 
 
 SeedMode = Literal["stretch", "tile", "frames"]
@@ -191,7 +191,7 @@ def _broadcast_k(k: float | Sequence[float], n: int) -> tuple[float, ...]:
 
 @dataclass(frozen=True)
 class UmbrellaConfig:
-    """Inputs for :func:`mmml.umbrella.sample.run_umbrella_nvt`."""
+    """Inputs for :func:`karml.umbrella.sample.run_umbrella_nvt`."""
 
     checkpoint: Path
     output_dir: Path
@@ -211,7 +211,7 @@ class UmbrellaConfig:
     """CV2 override; takes precedence over ``atom_k``/``atom_l``."""
     walls: tuple[Any, ...] = ()
     """Flat-bottom confinement restraints (see
-    :class:`~mmml.md.restraints.FlatBottomWall`). A reaction coordinate built as
+    :class:`~karml.md.restraints.FlatBottomWall`). A reaction coordinate built as
     a difference of distances does not bound the system -- a dissociated complex
     can satisfy the same ``xi`` -- and a fitted potential is typically unbounded
     below outside its training data, so the dissociated branch is downhill.
@@ -746,7 +746,7 @@ class UmbrellaConfig:
 
 @dataclass(frozen=True)
 class UmbrellaMbarConfig:
-    """Inputs for :func:`mmml.umbrella.mbar.run_umbrella_mbar`."""
+    """Inputs for :func:`karml.umbrella.mbar.run_umbrella_mbar`."""
 
     run_dir: Path
     checkpoint: Path | None = None

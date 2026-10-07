@@ -16,7 +16,7 @@ import numpy as np
 
 PackmolPlacement = Literal["cube", "sphere"]
 
-PACKMOL_PATH = Path("~/mmml/mmml/generate/packmol/packmol").expanduser()
+PACKMOL_PATH = Path("~/karml/karml/generate/packmol/packmol").expanduser()
 
 
 def _binary_runs_on_host(path: Path) -> bool:
@@ -48,14 +48,14 @@ def _packmol_cache_candidates() -> list[Path]:
 
     A ``uv tool`` install does not contain the gitignored Packmol executable.
     The rebuild script still installs one under ``PACKMOL_BUILD_DIR`` (default
-    ``~/.cache/mmml-packmol-build/<platform>/install/bin/packmol``).
+    ``~/.cache/karml-packmol-build/<platform>/install/bin/packmol``).
     """
     override = os.environ.get("PACKMOL_BUILD_DIR", "").strip()
     if override:
         roots = [Path(override).expanduser()]
     else:
         tag = f"{platform.system().lower()}-{platform.machine()}"
-        roots = [Path.home() / ".cache" / "mmml-packmol-build" / tag]
+        roots = [Path.home() / ".cache" / "karml-packmol-build" / tag]
     candidates: list[Path] = []
     for root in roots:
         candidates.append(root / "install" / "bin" / "packmol")
@@ -65,11 +65,11 @@ def _packmol_cache_candidates() -> list[Path]:
 
 
 def _packmol_checkout_candidates() -> list[Path]:
-    """``mmml/generate/packmol/packmol`` walking up from the working directory."""
+    """``karml/generate/packmol/packmol`` walking up from the working directory."""
     found: list[Path] = []
     here = Path.cwd()
     for _ in range(8):
-        found.append(here / "mmml" / "generate" / "packmol" / "packmol")
+        found.append(here / "karml" / "generate" / "packmol" / "packmol")
         if here.parent == here:
             break
         here = here.parent
@@ -77,10 +77,10 @@ def _packmol_checkout_candidates() -> list[Path]:
 
 
 def _packmol_candidates() -> list[Path]:
-    from mmml.paths import bundled_file
+    from karml.paths import bundled_file
 
     candidates: list[Path] = []
-    env = os.environ.get("MMML_PACKMOL", "").strip()
+    env = os.environ.get("KARML_PACKMOL", "").strip()
     if env:
         candidates.append(Path(env).expanduser())
     candidates.extend(
@@ -108,8 +108,8 @@ def packmol_executable() -> str:
         "packmol not found for this platform "
         f"(tried {tried}). A uv tool install does not ship this binary. "
         "From a source checkout run: bash scripts/rebuild_packmol.sh "
-        "(also installs ~/.cache/mmml-packmol-build/<platform>/install/bin/packmol). "
-        "Or set MMML_PACKMOL to the executable."
+        "(also installs ~/.cache/karml-packmol-build/<platform>/install/bin/packmol). "
+        "Or set KARML_PACKMOL to the executable."
     )
 
 
@@ -320,7 +320,7 @@ def emit_packmol_build_summary(
     elif cache_status:
         border = "cyan"
 
-    from mmml.utils.rich_report import emit_table
+    from karml.utils.rich_report import emit_table
 
     emit_table("Packmol", rows, border_style=border, quiet=quiet)
 
@@ -333,7 +333,7 @@ def execute_packmol_script(packmol_input: str, inp_path: Path) -> PackmolRunResu
     packmol_bin = packmol_executable()
     
     import time
-    from mmml.utils.rich_report import emit
+    from karml.utils.rich_report import emit
     emit("Running packmol geometry builder (this may take a few minutes)...")
     start_t = time.time()
     
@@ -357,7 +357,7 @@ def execute_packmol_script(packmol_input: str, inp_path: Path) -> PackmolRunResu
         error_message=parsed["error_message"],
     )
     if not result.success:
-        from mmml.utils.rich_report import emit_panel, is_verbose
+        from karml.utils.rich_report import emit_panel, is_verbose
 
         tail = _summarize_packmol_log_tail(result.log_text)
         emit_panel("Packmol failed", tail, border_style="red")
@@ -483,7 +483,7 @@ def packmol_center_for_cold_start(args) -> tuple[float, float, float]:
 def resolve_packmol_cube_side_from_args(args) -> float:
     """Cube edge (Å) for Packmol: inner cube sized below the simulation cell."""
     if getattr(args, "packmol_box_size", None) is not None:
-        from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import (
+        from karml.interfaces.pycharmmInterface.mlpot.box_sizing import (
             parse_composition_dict,
             resolve_initial_pbc_box_side,
             resolve_packmol_cube_side_for_sim_cell,
@@ -515,7 +515,7 @@ def resolve_packmol_cube_side_from_args(args) -> float:
             except ValueError:
                 pass
 
-    from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import (
+    from karml.interfaces.pycharmmInterface.mlpot.box_sizing import (
         parse_composition_dict,
         resolve_initial_pbc_box_side,
         resolve_packmol_box_padding_A,
@@ -644,7 +644,7 @@ def write_monomer_pdb_for_packmol(
                 f"atom_names length ({len(names)}) != coords rows ({coords_arr.shape[0]})"
             )
         lines = [
-            "REMARK   mmml packmol monomer (CHARMM atom names for PSF reordering)",
+            "REMARK   karml packmol monomer (CHARMM atom names for PSF reordering)",
             "CRYST1   200.000   200.000   200.000  90.00  90.00  90.00 P 1           1",
         ]
         for i, (name, xyz) in enumerate(zip(names, coords_arr), start=1):
@@ -816,7 +816,7 @@ def rewrite_packmol_pdb_resnames(
         )
 
     lines = [
-        "REMARK   mmml: Packmol coords with restored CGenFF residue names",
+        "REMARK   karml: Packmol coords with restored CGenFF residue names",
         "REMARK   (Packmol truncates 5-char RESN / embeds chain in col 22)",
     ]
     for i, ((name, resn, elem), resid, xyz) in enumerate(

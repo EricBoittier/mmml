@@ -18,8 +18,8 @@ if command -v module >/dev/null 2>&1; then
 fi
 
 # Resolve environment python and variables
-source "${REPO_ROOT}/scripts/resolve_mmml_env.sh"
-mmml_resolve_env "${REPO_ROOT}"
+source "${REPO_ROOT}/scripts/resolve_karml_env.sh"
+karml_resolve_env "${REPO_ROOT}"
 
 # Setup JAX CUDA variables
 if [[ -f "${REPO_ROOT}/scripts/setup_jax_cuda_env.sh" ]]; then
@@ -37,4 +37,4 @@ echo " CUDA_VISIBLE_DEVICES:   ${CUDA_VISIBLE_DEVICES}"
 echo " JAX_ENABLE_X64:         ${JAX_ENABLE_X64}"
 echo "=========================================================="
 
-exec "${MMML_PYTHON}" "${REPO_ROOT}/scripts/run_dimer_scan_campaign.py" "$@"
+exec "${KARML_PYTHON}" "${REPO_ROOT}/scripts/run_dimer_scan_campaign.py" "$@"

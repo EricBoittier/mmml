@@ -2,7 +2,7 @@
 
 import pytest
 
-from mmml.models.physnetjax.physnetjax.training.distill import (
+from karml.models.physnetjax.physnetjax.training.distill import (
     blend_component_loss,
     blend_regression_loss,
     parse_distill_targets,

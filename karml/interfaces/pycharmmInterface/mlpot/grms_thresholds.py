@@ -8,7 +8,7 @@ from typing import Any
 
 import numpy as np
 
-from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
     charmm_total_forces_kcalmol_A,
     forces_grms_kcalmol_A,
 )
@@ -145,11 +145,11 @@ def measure_monomer_grms_stats(
         hybrid_total = forces_grms_kcalmol_A(hybrid_forces_kcal)
         hybrid_fmax = atomic_fmax_kcalmol_A(hybrid_forces_kcal)
     elif mlpot_ctx is not None:
-        from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+        from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
             charmm_positions_angstrom,
             mlpot_spherical_forces_ev_angstrom,
         )
-        from mmml.interfaces.pycharmmInterface.mmml_calculator import ev2kcalmol
+        from karml.interfaces.pycharmmInterface.karml_calculator import ev2kcalmol
 
         pyCModel = getattr(mlpot_ctx, "pyCModel", None)
         if pyCModel is not None:
@@ -168,12 +168,12 @@ def measure_monomer_grms_stats(
                 hybrid_per = per_monomer_grms_from_forces(hybrid_f, atoms_per_list)
                 hybrid_total = forces_grms_kcalmol_A(hybrid_f)
                 hybrid_fmax = atomic_fmax_kcalmol_A(hybrid_f)
-                from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+                from karml.interfaces.pycharmmInterface.mlpot.setup import (
                     mlpot_skip_charmm_ener_force_before_first_sd,
                 )
 
                 if mlpot_skip_charmm_ener_force_before_first_sd(mlpot_ctx):
-                    from mmml.interfaces.pycharmmInterface.charmm_mpi import (
+                    from karml.interfaces.pycharmmInterface.charmm_mpi import (
                         recover_mpi_for_charmm_after_jax,
                     )
 

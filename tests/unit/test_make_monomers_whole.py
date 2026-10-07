@@ -4,7 +4,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from mmml.interfaces.pycharmmInterface.mmml_calculator import make_monomers_whole
+from karml.interfaces.pycharmmInterface.karml_calculator import make_monomers_whole
 
 L = 10.0
 CELL = jnp.eye(3) * L
@@ -52,8 +52,8 @@ def test_evaluate_hybrid_ev_invariant_to_atom_wrapping() -> None:
     """The host path (COM rewrap, pair lists, candidates) also sees rejoined molecules."""
     from types import SimpleNamespace
 
-    from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
-    from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import DecomposedMlpotCalculator
+    from karml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
+    from karml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import DecomposedMlpotCalculator
 
     def raw_geometry_energy(**kw):
         # In-molecule geometry straight from the positions the forward receives (no rejoin here).

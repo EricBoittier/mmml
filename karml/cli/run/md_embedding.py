@@ -1,4 +1,4 @@
-"""``mmml md-embedding`` — solvated peptide partial MLpot workflow."""
+"""``karml md-embedding`` — solvated peptide partial MLpot workflow."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from pathlib import Path
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="mmml md-embedding",
+        prog="karml md-embedding",
         description=(
             "Solvated-peptide MD embedding: train PhysNet on peptide NPZ, "
             "build CHARMM PEPT+TIP3 box, register partial MLpot (n_monomers=1). "
@@ -69,7 +69,7 @@ def build_parser() -> argparse.ArgumentParser:
     train.add_argument(
         "--simple-split",
         action="store_true",
-        help="Use shuffle split only (skip mmml fix-and-split manifest).",
+        help="Use shuffle split only (skip karml fix-and-split manifest).",
     )
     train.add_argument(
         "--no-plot",
@@ -162,7 +162,7 @@ def _load_config_overrides(path: Path | None) -> dict | None:
 
 
 def _cmd_train(args: argparse.Namespace) -> int:
-    from mmml.interfaces.pycharmmInterface.mlpot.embedding_workflow import run_train_phase
+    from karml.interfaces.pycharmmInterface.mlpot.embedding_workflow import run_train_phase
 
     overrides = _load_config_overrides(args.config)
     result = run_train_phase(
@@ -178,7 +178,7 @@ def _cmd_train(args: argparse.Namespace) -> int:
         use_fix_and_split=not args.simple_split,
         write_plots=not args.no_plot,
     )
-    from mmml.utils.rich_report import print_colored_json
+    from karml.utils.rich_report import print_colored_json
 
     print_colored_json(result.report)
     print(f"Wrote {result.manifest_path}")
@@ -186,17 +186,17 @@ def _cmd_train(args: argparse.Namespace) -> int:
 
 
 def _cmd_build(args: argparse.Namespace, argv: list[str]) -> int:
-    from mmml.interfaces.pycharmmInterface.charmm_mpi import (
-        maybe_rerun_mmml_under_mpirun,
+    from karml.interfaces.pycharmmInterface.charmm_mpi import (
+        maybe_rerun_karml_under_mpirun,
         prepare_serial_charmm_mpi_env,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.embedding_workflow import (
+    from karml.interfaces.pycharmmInterface.mlpot.embedding_workflow import (
         build_embedding_box,
     )
 
     prepare_serial_charmm_mpi_env()
     # Forward full argv so MPI re-launch keeps --n-waters / --charmm-sd-steps / …
-    rerun = maybe_rerun_mmml_under_mpirun(argv, subcommand="md-embedding")
+    rerun = maybe_rerun_karml_under_mpirun(argv, subcommand="md-embedding")
     if rerun is not None:
         return int(rerun)
 
@@ -221,17 +221,17 @@ def _cmd_build(args: argparse.Namespace, argv: list[str]) -> int:
 
 
 def _cmd_run(args: argparse.Namespace, argv: list[str]) -> int:
-    from mmml.interfaces.pycharmmInterface.charmm_mpi import (
-        maybe_rerun_mmml_under_mpirun,
+    from karml.interfaces.pycharmmInterface.charmm_mpi import (
+        maybe_rerun_karml_under_mpirun,
         prepare_serial_charmm_mpi_env,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.embedding_workflow import (
+    from karml.interfaces.pycharmmInterface.mlpot.embedding_workflow import (
         run_embedding_phase,
     )
 
     prepare_serial_charmm_mpi_env()
     # Forward full argv so MPI re-launch keeps --mini-nstep / --ml-charge / …
-    rerun = maybe_rerun_mmml_under_mpirun(argv, subcommand="md-embedding")
+    rerun = maybe_rerun_karml_under_mpirun(argv, subcommand="md-embedding")
     if rerun is not None:
         return int(rerun)
 

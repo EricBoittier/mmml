@@ -27,18 +27,18 @@ artifacts/nh3_ch3cl/umbrella_nc_{solvent}_prod/
 ## Prerequisites
 
 ```bash
-cd ~/mmml
+cd ~/karml
 ls examples/m/model_ext.json
 uv sync --extra gpu
 uv sync --extra mbar
-export CHARMM_LIB_DIR=${CHARMM_LIB_DIR:-$HOME/.cache/mmml-charmm-build/tier_56000000_nodomdec/lib}
+export CHARMM_LIB_DIR=${CHARMM_LIB_DIR:-$HOME/.cache/karml-charmm-build/tier_56000000_nodomdec/lib}
 ```
 
 ## Dry-run
 
 ```bash
 cd workflows/hybrid_umbrella_windows
-MMML_WORKFLOW_CONFIG=config.smoke.yaml bash scripts/snakemake_local.sh 2 -n
+KARML_WORKFLOW_CONFIG=config.smoke.yaml bash scripts/snakemake_local.sh 2 -n
 ```
 
 ## Studix GPU queue
@@ -51,14 +51,14 @@ Submit the Snakemake **controller from the login node** (not an interactive
 cd workflows/hybrid_umbrella_windows
 
 # Smoke: 3 TIP3 windows, up to 3 concurrent GPUs
-MMML_WORKFLOW_CONFIG=config.smoke.yaml \
+KARML_WORKFLOW_CONFIG=config.smoke.yaml \
   nohup bash scripts/snakemake_slurm.sh 3 > snakemake_gpu.log 2>&1 &
 
 # ACN production (default config.yaml): 30 windows, 8 concurrent
 nohup bash scripts/snakemake_slurm.sh 8 > snakemake_gpu.log 2>&1 &
 
 # TIP3 production
-MMML_WORKFLOW_CONFIG=config.tip3.yaml \
+KARML_WORKFLOW_CONFIG=config.tip3.yaml \
   nohup bash scripts/snakemake_slurm.sh 8 > snakemake_gpu.log 2>&1 &
 
 tail -f snakemake_gpu.log

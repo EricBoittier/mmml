@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Packmol cluster build + geometry validation (no MD).
 
-Uses the bundled mmml Packmol binary (``packmol_executable()``) and CHARMM
+Uses the bundled karml Packmol binary (``packmol_executable()``) and CHARMM
 monomer prep, then ``validate_cluster_geometry`` and optional MIC floor check.
 
 Usage:
@@ -85,13 +85,13 @@ def main() -> int:
     out_dir = cell_root / "cluster_build"
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    from mmml.interfaces.pycharmmInterface.packmol_placement import packmol_executable
+    from karml.interfaces.pycharmmInterface.packmol_placement import packmol_executable
 
     packmol_bin = packmol_executable()
     print(f"packmol: {packmol_bin}", flush=True)
 
-    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+    import karml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import (
         build_cluster_from_args_with_tag,
         use_packmol_placement,
         validate_cluster_geometry,
@@ -117,7 +117,7 @@ def main() -> int:
 
     mic_worst: float | None = None
     if args.mic_check:
-        from mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
+        from karml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
             assert_ml_safe_before_mlpot_registration,
         )
 
@@ -152,7 +152,7 @@ def main() -> int:
         box_size=float(cell.box_size),
     )
     print(f"Cluster validation OK -> {summary_path}", flush=True)
-    from mmml.utils.rich_report import print_colored_json
+    from karml.utils.rich_report import print_colored_json
 
     print_colored_json(summary)
     return 0

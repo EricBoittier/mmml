@@ -1,4 +1,4 @@
-"""``mmml md-system -h`` must not import JAX / heavy MLpot runtime modules."""
+"""``karml md-system -h`` must not import JAX / heavy MLpot runtime modules."""
 
 from __future__ import annotations
 
@@ -13,19 +13,19 @@ def test_md_system_module_import_does_not_load_jax():
     # Fresh attribute check in this process: if a prior test already imported jax,
     # skip the hard assertion and only check the md_system module itself is light.
     jax_already = "jax" in sys.modules
-    from mmml.cli.run import md_system
+    from karml.cli.run import md_system
 
     assert md_system.build_parser is not None
     if not jax_already:
         assert "jax" not in sys.modules
-        assert "mmml.interfaces.pycharmmInterface.mlpot.cli_common" not in sys.modules
+        assert "karml.interfaces.pycharmmInterface.mlpot.cli_common" not in sys.modules
 
 
 def test_md_system_help_does_not_import_jax_or_cli_common():
-    from mmml.cli.run import md_system
+    from karml.cli.run import md_system
 
     jax_before = "jax" in sys.modules
-    cli_common_before = "mmml.interfaces.pycharmmInterface.mlpot.cli_common" in sys.modules
+    cli_common_before = "karml.interfaces.pycharmmInterface.mlpot.cli_common" in sys.modules
     pandas_before = "pandas" in sys.modules
 
     buf = io.StringIO()
@@ -43,15 +43,15 @@ def test_md_system_help_does_not_import_jax_or_cli_common():
     if not jax_before:
         assert "jax" not in sys.modules
     if not cli_common_before:
-        assert "mmml.interfaces.pycharmmInterface.mlpot.cli_common" not in sys.modules
+        assert "karml.interfaces.pycharmmInterface.mlpot.cli_common" not in sys.modules
     if not pandas_before:
         assert "pandas" not in sys.modules
 
 
 def test_md_system_main_help_short_circuits(monkeypatch, capsys):
-    from mmml.cli.run import md_system
+    from karml.cli.run import md_system
 
-    monkeypatch.setattr(sys, "argv", ["mmml md-system", "--help"])
+    monkeypatch.setattr(sys, "argv", ["karml md-system", "--help"])
     with pytest.raises(SystemExit) as excinfo:
         md_system.main()
     assert excinfo.value.code == 0
@@ -65,7 +65,7 @@ def test_ml_dtypes_add_args_does_not_import_jax():
     import argparse
 
     jax_before = "jax" in sys.modules
-    from mmml.interfaces.pycharmmInterface.ml_dtypes import add_ml_compute_dtype_args
+    from karml.interfaces.pycharmmInterface.ml_dtypes import add_ml_compute_dtype_args
 
     if not jax_before:
         assert "jax" not in sys.modules

@@ -11,7 +11,7 @@ import pycharmm
 from rich.console import Console
 from rich.panel import Panel
 
-from mmml.interfaces.pycharmmInterface.import_pycharmm import (
+from karml.interfaces.pycharmmInterface.import_pycharmm import (
     coor,
     pycharmm_quiet,
     pycharmm_soft,
@@ -120,7 +120,7 @@ def run_two_residue_harmonic_sampling(
 
 def run_pycharmm_nbonds_minimize(args: Any) -> None:
     """Run PyCHARMM nbonds setup and ABNR minimization."""
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import reset_block
+    from karml.interfaces.pycharmmInterface.import_pycharmm import reset_block
 
     reset_block()
     pycharmm_soft()
@@ -204,7 +204,7 @@ def run_heat(
     show_frame: Optional[Callable[[Any, int, str], None]] = None,
 ) -> Any:
     """Run CHARMM heat phase."""
-    from mmml.interfaces.pycharmmInterface.pycharmmCommands import heat
+    from karml.interfaces.pycharmmInterface.pycharmmCommands import heat
 
     Console().print(Panel("Running heat phase", title="[bold cyan]CHARMM Heat[/bold cyan]", border_style="cyan"))
     return _run_charmm_phase(heat, atoms, args, show_frame=show_frame, phase_step=1)
@@ -216,7 +216,7 @@ def run_equilibration(
     show_frame: Optional[Callable[[Any, int, str], None]] = None,
 ) -> Any:
     """Run CHARMM equilibration phase."""
-    from mmml.interfaces.pycharmmInterface.pycharmmCommands import equi
+    from karml.interfaces.pycharmmInterface.pycharmmCommands import equi
 
     Console().print(Panel("Running equilibration", title="[bold cyan]CHARMM Equilibration[/bold cyan]", border_style="cyan"))
     return _run_charmm_phase(equi, atoms, args, show_frame=show_frame, phase_step=2)
@@ -228,7 +228,7 @@ def run_production(
     show_frame: Optional[Callable[[Any, int, str], None]] = None,
 ) -> Any:
     """Run CHARMM production phase."""
-    from mmml.interfaces.pycharmmInterface.pycharmmCommands import production
+    from karml.interfaces.pycharmmInterface.pycharmmCommands import production
 
     Console().print(Panel("Running production", title="[bold cyan]CHARMM Production[/bold cyan]", border_style="cyan"))
     return _run_charmm_phase(production, atoms, args, show_frame=show_frame, phase_step=3)
@@ -240,7 +240,7 @@ def run_dyna(
     ndcd: int = 0,
 ) -> Any:
     """Run CHARMM production phase."""
-    from mmml.interfaces.pycharmmInterface.pycharmmCommands import dyna
+    from karml.interfaces.pycharmmInterface.pycharmmCommands import dyna
     import numpy as np
     iseed = np.random.randint(1, 1000000)
     dyna = dyna.format(iseed=iseed, NDCD=ndcd)

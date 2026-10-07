@@ -13,10 +13,10 @@ from ase.calculators.calculator import Calculator, all_changes
 from ase.calculators.emt import EMT
 from ase.io import read, write
 
-from mmml.cli.__main__ import main as mmml_main
-from mmml.cli.misc.ic_scan import build_parser, main as ic_scan_main
-from mmml.cli.registry import command_by_name
-from mmml.ic_scan import (
+from karml.cli.__main__ import main as karml_main
+from karml.cli.misc.ic_scan import build_parser, main as ic_scan_main
+from karml.cli.registry import command_by_name
+from karml.ic_scan import (
     DegreeOfFreedom,
     IcScanConfig,
     ScanSpec,
@@ -163,7 +163,7 @@ def test_dihedral_mask_must_include_a4(structure_xyz: Path):
 
 
 def test_nma_omega_and_2d_methyl_product():
-    from mmml.ic_scan.topology import angles_match
+    from karml.ic_scan.topology import angles_match
 
     nma = Path(__file__).resolve().parents[1].parent / "examples" / "ic_scan" / "nma.xyz"
     if not nma.is_file():
@@ -254,7 +254,7 @@ def test_run_ic_scan_with_emt_and_roundtrip(structure_xyz: Path, tmp_path: Path)
 
 
 def test_plot_model_comparison(structure_xyz: Path, tmp_path: Path):
-    from mmml.ic_scan.plotting import plot_model_comparison
+    from karml.ic_scan.plotting import plot_model_comparison
 
     def _scan(tag: str):
         config = IcScanConfig(
@@ -314,12 +314,12 @@ def test_config_yaml_roundtrip(structure_xyz: Path, tmp_path: Path):
 def test_ic_scan_cli_registered_and_prepare_only(structure_xyz: Path, tmp_path: Path, monkeypatch, capsys):
     spec = command_by_name("ic-scan")
     assert spec is not None
-    assert spec.module == "mmml.cli.misc.ic_scan"
-    assert build_parser().prog == "mmml ic-scan"
+    assert spec.module == "karml.cli.misc.ic_scan"
+    assert build_parser().prog == "karml ic-scan"
 
-    monkeypatch.setattr("sys.argv", ["mmml", "ic-scan", "--help"])
+    monkeypatch.setattr("sys.argv", ["karml", "ic-scan", "--help"])
     with pytest.raises(SystemExit) as exc:
-        mmml_main()
+        karml_main()
     assert exc.value.code == 0
     assert "bond/angle/dihedral" in capsys.readouterr().out.lower()
 
@@ -401,7 +401,7 @@ def test_constrained_relax_requires_energy_evaluation(structure_xyz: Path):
 
 
 def test_fix_internals_constraint_active_dofs_only():
-    from mmml.ic_scan.relax import fix_internals_constraint
+    from karml.ic_scan.relax import fix_internals_constraint
 
     dofs = (
         DegreeOfFreedom("phi", "dihedral", (0, 1, 2, 3), (90.0,)),
@@ -415,8 +415,8 @@ def test_fix_internals_constraint_active_dofs_only():
 
 
 def test_constrained_relax_holds_dihedral_and_lowers_energy(structure_xyz: Path):
-    from mmml.ic_scan.relax import constrained_relax_atoms
-    from mmml.ic_scan.topology import angles_match
+    from karml.ic_scan.relax import constrained_relax_atoms
+    from karml.ic_scan.topology import angles_match
 
     atoms = read(structure_xyz)
     target = float(atoms.get_dihedral(0, 1, 2, 3))
@@ -542,7 +542,7 @@ def test_style_dihedral_scan_axes_uniform():
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
-    from mmml.ic_scan.plotting import (
+    from karml.ic_scan.plotting import (
         DIHEDRAL_AXIS_MAX_DEG,
         DIHEDRAL_AXIS_MIN_DEG,
         style_dihedral_scan_axes,

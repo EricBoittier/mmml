@@ -9,7 +9,7 @@ import pytest
 
 
 def test_build_pretreat_handoff_warns_restart_box_source(tmp_path: Path) -> None:
-    from mmml.interfaces.pycharmmInterface.mlpot.run_workflow import (
+    from karml.interfaces.pycharmmInterface.mlpot.run_workflow import (
         build_charmm_mm_pretreat_handoff_sections,
     )
 
@@ -38,23 +38,23 @@ def test_build_pretreat_handoff_warns_restart_box_source(tmp_path: Path) -> None
 
     with pytest.MonkeyPatch.context() as mp:
         mp.setattr(
-            "mmml.interfaces.pycharmmInterface.mlpot.run_workflow.charmm_grms",
+            "karml.interfaces.pycharmmInterface.mlpot.run_workflow.charmm_grms",
             lambda: 0.42,
         )
         mp.setattr(
-            "mmml.interfaces.pycharmmInterface.mlpot.pbc_env._read_charmm_box_sides_A",
+            "karml.interfaces.pycharmmInterface.mlpot.pbc_env._read_charmm_box_sides_A",
             lambda: (0.0, 0.0, 0.0),
         )
         mp.setattr(
-            "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.charmm_crystal_is_active",
+            "karml.interfaces.pycharmmInterface.mlpot.pbc_env.charmm_crystal_is_active",
             lambda **_: False,
         )
         mp.setattr(
-            "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.probe_charmm_cubic_box_side_A",
+            "karml.interfaces.pycharmmInterface.mlpot.pbc_env.probe_charmm_cubic_box_side_A",
             lambda **_: (None, None),
         )
         mp.setattr(
-            "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.resolve_mlpot_mic_box_side_A",
+            "karml.interfaces.pycharmmInterface.mlpot.pbc_env.resolve_mlpot_mic_box_side_A",
             lambda **kw: (28.0, "restart"),
         )
         def _fake_resolve(**kw):
@@ -65,11 +65,11 @@ def test_build_pretreat_handoff_warns_restart_box_source(tmp_path: Path) -> None
             return float(kw["fallback_side_A"]), "fallback"
 
         mp.setattr(
-            "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.resolve_charmm_cubic_box_side_A",
+            "karml.interfaces.pycharmmInterface.mlpot.pbc_env.resolve_charmm_cubic_box_side_A",
             _fake_resolve,
         )
         mp.setattr(
-            "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+            "karml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
             lambda: pos.copy(),
         )
         sections = build_charmm_mm_pretreat_handoff_sections(
@@ -88,7 +88,7 @@ def test_build_pretreat_handoff_warns_restart_box_source(tmp_path: Path) -> None
 
 
 def test_print_pretreat_handoff_panel_plain(capsys) -> None:
-    from mmml.interfaces.pycharmmInterface.mlpot.run_workflow import (
+    from karml.interfaces.pycharmmInterface.mlpot.run_workflow import (
         print_charmm_mm_pretreat_handoff_panel,
     )
 
@@ -98,15 +98,15 @@ def test_print_pretreat_handoff_panel_plain(capsys) -> None:
 
     with pytest.MonkeyPatch.context() as mp:
         mp.setattr(
-            "mmml.interfaces.pycharmmInterface.mlpot.run_workflow.charmm_grms",
+            "karml.interfaces.pycharmmInterface.mlpot.run_workflow.charmm_grms",
             lambda: 1.0,
         )
         mp.setattr(
-            "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+            "karml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
             lambda: pos.copy(),
         )
         mp.setattr(
-            "mmml.utils.rich_report.rich_enabled",
+            "karml.utils.rich_report.rich_enabled",
             lambda **_: False,
         )
         print_charmm_mm_pretreat_handoff_panel(

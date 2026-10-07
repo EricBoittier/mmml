@@ -11,7 +11,7 @@ import pytest
 
 _MOD_PATH = (
     Path(__file__).resolve().parents[2]
-    / "mmml"
+    / "karml"
     / "utils"
     / "monomer_internal_geometry.py"
 )
@@ -207,7 +207,7 @@ def test_unknown_residue_and_atom_count_mismatch_are_skipped():
 
 
 def test_minimize_report_flags_only_exact_zero_start_grms():
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmMmMinimizeReport
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmMmMinimizeReport
 
     broken = CharmmMmMinimizeReport(n_atoms=1962, ran=True, start_grms_kcalmol_A=0.0)
     assert broken.start_grms_is_exactly_zero
@@ -222,8 +222,8 @@ def test_minimize_report_flags_only_exact_zero_start_grms():
 
 def test_cluster_guard_warns_but_does_not_fail_on_zero_start_grms(capsys):
     """Healthy KEY_LIBRARY CHARMM builds report GRMS 0.0; that cannot gate a build."""
-    from mmml.cli.run.md_pbc_suite.cluster import assert_packmol_cluster_minimize_sane
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmMmMinimizeReport
+    from karml.cli.run.md_pbc_suite.cluster import assert_packmol_cluster_minimize_sane
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmMmMinimizeReport
 
     positions, atoms_per, residues = _cluster(3)
     assert_packmol_cluster_minimize_sane(
@@ -240,8 +240,8 @@ def test_cluster_guard_warns_but_does_not_fail_on_zero_start_grms(capsys):
 
 
 def test_cluster_guard_rejects_distorted_monomers():
-    from mmml.cli.run.md_pbc_suite.cluster import assert_packmol_cluster_minimize_sane
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmMmMinimizeReport
+    from karml.cli.run.md_pbc_suite.cluster import assert_packmol_cluster_minimize_sane
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmMmMinimizeReport
 
     positions, atoms_per, residues = _cluster(3)
     positions[1 * 6 + 4] = positions[2 * 6 + 5]
@@ -260,8 +260,8 @@ def test_cluster_guard_rejects_distorted_monomers():
 
 
 def test_cluster_guard_accepts_a_relaxed_cluster():
-    from mmml.cli.run.md_pbc_suite.cluster import assert_packmol_cluster_minimize_sane
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmMmMinimizeReport
+    from karml.cli.run.md_pbc_suite.cluster import assert_packmol_cluster_minimize_sane
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmMmMinimizeReport
 
     positions, atoms_per, residues = _cluster(5)
     rng = np.random.default_rng(3)
@@ -282,7 +282,7 @@ def test_cluster_guard_accepts_a_relaxed_cluster():
 
 def test_cluster_guard_warns_when_no_template_matches(capsys):
     """A check that silently covers nothing is the failure mode being prevented."""
-    from mmml.cli.run.md_pbc_suite.cluster import assert_packmol_cluster_minimize_sane
+    from karml.cli.run.md_pbc_suite.cluster import assert_packmol_cluster_minimize_sane
 
     positions, atoms_per, residues = _cluster(2)
     report = assert_packmol_cluster_minimize_sane(
@@ -297,7 +297,7 @@ def test_cluster_guard_warns_when_no_template_matches(capsys):
 
 
 def _write_cache_entry(entry, positions, atoms_per, residues):
-    from mmml.interfaces.pycharmmInterface import packmol_cache
+    from karml.interfaces.pycharmmInterface import packmol_cache
 
     packmol_cache.save_packmol_cluster_cache(
         entry,
@@ -319,7 +319,7 @@ def _write_cache_entry(entry, positions, atoms_per, residues):
 
 def test_corrupted_cache_entry_is_rejected_on_load(tmp_path):
     """A cache written by a broken build must not be handed downstream."""
-    from mmml.cli.run.md_pbc_suite.cluster import assert_packmol_cluster_minimize_sane
+    from karml.cli.run.md_pbc_suite.cluster import assert_packmol_cluster_minimize_sane
 
     positions, atoms_per, residues = _cluster(3)
     positions[1 * 6 + 4] = positions[2 * 6 + 5]
@@ -336,7 +336,7 @@ def test_corrupted_cache_entry_is_rejected_on_load(tmp_path):
 
 
 def test_healthy_cache_entry_round_trips(tmp_path):
-    from mmml.cli.run.md_pbc_suite.cluster import assert_packmol_cluster_minimize_sane
+    from karml.cli.run.md_pbc_suite.cluster import assert_packmol_cluster_minimize_sane
 
     positions, atoms_per, residues = _cluster(3)
     rng = np.random.default_rng(11)

@@ -10,8 +10,8 @@
 # Full SPICE-α packed training on one H200. Options pass through to the driver:
 #   sbatch scripts/spice_alpha/train_full_packed.sbatch OUT_DIR [--epochs 20 ...]
 set -euo pipefail
-REPO="${MMML_REPO:-$HOME/mmml_dev}"
-PY="${MMML_PYTHON:-$HOME/mmml_new/.venv/bin/python}"
+REPO="${KARML_REPO:-$HOME/karml_dev}"
+PY="${KARML_PYTHON:-$HOME/karml_new/.venv/bin/python}"
 RAGGED="${RAGGED:-$HOME/data/spicealpha/ragged}"
 cd "$REPO"
 export PYTHONPATH="$REPO" PYTHONUNBUFFERED=1 JAX_ENABLE_X64=0

@@ -1,4 +1,4 @@
-# `mmml kernnn-train`
+# `karml kernnn-train`
 
 Train KerNN kernel Softplus MLP (E/F).
 
@@ -6,13 +6,13 @@ Train KerNN kernel Softplus MLP (E/F).
 ## Usage
 
 ```bash
-mmml kernnn-train --help
+karml kernnn-train --help
 ```
 
 ## Options
 
 ```text
-usage: mmml kernnn-train [-h] [--data DATA] [--train-npz TRAIN_NPZ]
+usage: karml kernnn-train [-h] [--data DATA] [--train-npz TRAIN_NPZ]
                          [--valid-npz VALID_NPZ] [--test-npz TEST_NPZ]
                          [--workdir WORKDIR] [--ntrain NTRAIN] [--nvalid NVALID]
                          [--seed SEED] [--n-hidden N_HIDDEN]

@@ -7,7 +7,7 @@ from typing import Any, Optional, Sequence
 
 import numpy as np
 
-from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+from karml.interfaces.pycharmmInterface.mlpot.setup import (
     MlpotContext,
     register_mlpot,
 )
@@ -57,7 +57,7 @@ def register_mlpot_partial_mm(
             "registration (ML region + MM nonbonds)."
         )
 
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+    from karml.interfaces.pycharmmInterface.mlpot.setup import (
         select_by_resid,
         select_by_seg_id,
     )

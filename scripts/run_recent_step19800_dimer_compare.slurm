@@ -13,9 +13,9 @@ set -euo pipefail
 
 ROOT="${SLURM_SUBMIT_DIR:?}"
 cd "$ROOT"
-source "$ROOT/scripts/resolve_mmml_env.sh"
-mmml_resolve_env "$ROOT"
-export JAX_ENABLE_X64=1 MMML_ML_DTYPE=float64 XLA_PYTHON_CLIENT_PREALLOCATE=false
+source "$ROOT/scripts/resolve_karml_env.sh"
+karml_resolve_env "$ROOT"
+export JAX_ENABLE_X64=1 KARML_ML_DTYPE=float64 XLA_PYTHON_CLIENT_PREALLOCATE=false
 
 ORBAX="$ROOT/artifacts/spooky_so3lr/step-00019800"
 JSON="$ROOT/artifacts/spooky_so3lr/step-00019800_params.json"
@@ -25,21 +25,21 @@ OUT="$ROOT/results/dimer_scan_campaign/mbd_checkpoint_comparison_recent"
 mkdir -p "$OUT" "$ROOT/artifacts/diagnostics"
 
 if [[ ! -s "$JSON" ]]; then
-  "$MMML_PYTHON" -m mmml.cli.__main__ orbax-to-json "$ORBAX" -o "$JSON"
+  "$KARML_PYTHON" -m karml.cli.__main__ orbax-to-json "$ORBAX" -o "$JSON"
 fi
 cp "$PRIOR" "$OUT/scan_results.csv"
 
-"$MMML_PYTHON" scripts/run_dimer_scan_campaign.py \
+"$KARML_PYTHON" scripts/run_dimer_scan_campaign.py \
   --spookynet-checkpoint "$JSON" --spookynet-no-mbd \
   --spookynet-tag step19800 --skip-xtb --output-dir "$OUT"
-"$MMML_PYTHON" scripts/run_dimer_scan_campaign.py \
+"$KARML_PYTHON" scripts/run_dimer_scan_campaign.py \
   --spookynet-checkpoint "$JSON" --spookynet-mbd-checkpoint "$MBD" \
   --spookynet-tag step19800_mbd --skip-xtb --output-dir "$OUT"
 
-"$MMML_PYTHON" scripts/clean_dimer_scan_data.py \
+"$KARML_PYTHON" scripts/clean_dimer_scan_data.py \
   --input "$OUT/scan_results.csv" --output "$OUT/scan_results_clean.csv" \
   --audit "$OUT/rejected_points.csv"
-"$MMML_PYTHON" scripts/plot_2d_pes.py \
+"$KARML_PYTHON" scripts/plot_2d_pes.py \
   --csv "$OUT/scan_results_clean.csv" --output-dir "$OUT/pes_2d" --max-cols 4 \
   --backends spookynet_hybrid_step19800 spookynet_hybrid_step19800_mbd \
     spookynet_hybrid_muon_epoch1_mbd xtb_gfn2 \

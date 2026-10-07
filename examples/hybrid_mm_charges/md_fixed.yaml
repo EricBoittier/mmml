@@ -1,7 +1,7 @@
 # Mode A — fixed CGenFF charges in E_MM (default MD)
 #   q_MM = q_CGenFF
 #
-#   mmml md-system --config examples/hybrid_mm_charges/md_fixed.yaml --run-all
+#   karml md-system --config examples/hybrid_mm_charges/md_fixed.yaml --run-all
 #
 # Dimer vacuum smoke. Point checkpoint at a Mode A hybrid train (or any
 # charges=True / False checkpoint — Mode A ignores the charge head for E_MM).

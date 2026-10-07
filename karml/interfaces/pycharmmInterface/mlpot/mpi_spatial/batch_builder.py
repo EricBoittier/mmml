@@ -7,24 +7,24 @@ from typing import TYPE_CHECKING, Sequence, Union
 
 import numpy as np
 
-from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
-from mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.active_set import (
+from karml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
+from karml.interfaces.pycharmmInterface.mlpot.mpi_spatial.active_set import (
     build_rank_active_set,
 )
-from mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domain import (
+from karml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domain import (
     SpatialDomainGrid,
     halo_radius_from_cutoffs,
 )
-from mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.dedup import (
+from karml.interfaces.pycharmmInterface.mlpot.mpi_spatial.dedup import (
     canonical_dimer_owner_ranks,
 )
-from mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.active_set import (
+from karml.interfaces.pycharmmInterface.mlpot.mpi_spatial.active_set import (
     global_near_dimer_mask,
 )
-from mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domain import compute_monomer_coms
+from karml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domain import compute_monomer_coms
 
 if TYPE_CHECKING:
-    from mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domain import DomdecAlignedGrid
+    from karml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domain import DomdecAlignedGrid
 
 
 @dataclass(frozen=True)
@@ -120,7 +120,7 @@ def make_domdec_aligned_grid(
     inactive it falls back to ``n_ranks_fallback`` (pass ``mpi_size`` here),
     preserving the existing Tier 2 COM-slab behaviour.
     """
-    from mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domain import DomdecAlignedGrid
+    from karml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domain import DomdecAlignedGrid
 
     halo = halo_radius_from_cutoffs(cutoff_params, physnet_cutoff=physnet_cutoff)
     return DomdecAlignedGrid(

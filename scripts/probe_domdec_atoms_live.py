@@ -27,8 +27,8 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--psf",  required=True)
     p.add_argument("--crd",  required=True)
     p.add_argument("--box",  type=float, required=True, help="Cubic box side (Å)")
-    p.add_argument("--rtf",  default="", help="RTF file (default: MMML CGenFF)")
-    p.add_argument("--prm",  default="", help="PRM file (default: MMML CGenFF)")
+    p.add_argument("--rtf",  default="", help="RTF file (default: KARML CGenFF)")
+    p.add_argument("--prm",  default="", help="PRM file (default: KARML CGenFF)")
     p.add_argument("--ndir", type=int,   default=0,
                    help="NDIR along x (0 = auto from n_ranks)")
     p.add_argument("--cutnb",  type=float, default=14.0, help="Nonbond cutoff (Å)")
@@ -43,7 +43,7 @@ def main() -> None:
     args = parse_args()
 
     # ------------------------------------------------------------------ MPI
-    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+    import karml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
     import pycharmm.lingo as lingo
 
     try:
@@ -85,13 +85,13 @@ def main() -> None:
     pr(f"=== rank {rank}/{nranks}  NDIR {ndir} 1 1 ===")
 
     # ------------------------------------------------------------------ locate RTF/PRM
-    # Priority: --rtf/--prm CLI args > env vars > MMML data dir
+    # Priority: --rtf/--prm CLI args > env vars > KARML data dir
     import pathlib
-    import mmml as _mmml
+    import karml as _karml
 
-    _data = pathlib.Path(_mmml.__file__).parent / "data" / "charmm"
-    rtf = args.rtf or os.environ.get("MMML_RTF") or str(_data / "top_all36_cgenff.rtf")
-    prm = args.prm or os.environ.get("MMML_PRM") or str(_data / "par_all36_cgenff.prm")
+    _data = pathlib.Path(_karml.__file__).parent / "data" / "charmm"
+    rtf = args.rtf or os.environ.get("KARML_RTF") or str(_data / "top_all36_cgenff.rtf")
+    prm = args.prm or os.environ.get("KARML_PRM") or str(_data / "par_all36_cgenff.prm")
 
     pr(f"RTF : {rtf}")
     pr(f"PRM : {prm}")
@@ -133,7 +133,7 @@ crystal build cutoff {args.cutnb} noper 0
             lingo.charmm_script(f"faster on\nenergy {nb} -\n    {ewald}")
 
     # ------------------------------------------------------------------ probe
-    from mmml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domdec_atoms import (
+    from karml.interfaces.pycharmmInterface.mlpot.mpi_spatial.domdec_atoms import (
         domdec_summary,
         get_ghost_atom_count,
         get_ghost_atom_indices,

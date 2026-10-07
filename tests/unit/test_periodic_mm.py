@@ -8,7 +8,7 @@ from unittest import mock
 import numpy as np
 import pytest
 
-from mmml.interfaces.pycharmmInterface.mlpot.periodic_mm import (
+from karml.interfaces.pycharmmInterface.mlpot.periodic_mm import (
     assert_periodic_mm_box_side,
     build_periodic_mm_config,
     min_cubic_box_for_periodic_mm,
@@ -64,7 +64,7 @@ def test_build_periodic_mm_config_requires_external_coulomb_solver():
         lr_solver="mic",
     )
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.long_range_backend.pick_lr_solver",
+        "karml.interfaces.pycharmmInterface.long_range_backend.pick_lr_solver",
         return_value="mic",
     ):
         with pytest.raises(ValueError, match="nvalchemiops_pme"):
@@ -78,7 +78,7 @@ def test_build_periodic_mm_config_jax_pme():
         jax_pme_method="pme",
     )
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.long_range_backend.pick_lr_solver",
+        "karml.interfaces.pycharmmInterface.long_range_backend.pick_lr_solver",
         return_value="jax_pme",
     ):
         cfg = build_periodic_mm_config(args)
@@ -94,7 +94,7 @@ def test_build_periodic_mm_config_nvalchemiops_pme():
         jax_pme_method=None,
     )
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.long_range_backend.pick_lr_solver",
+        "karml.interfaces.pycharmmInterface.long_range_backend.pick_lr_solver",
         return_value="nvalchemiops_pme",
     ):
         cfg = build_periodic_mm_config(args)
@@ -119,7 +119,7 @@ def test_build_periodic_mm_config_charmm_vdw_flag():
         periodic_charmm_vdw=False,
     )
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.long_range_backend.pick_lr_solver",
+        "karml.interfaces.pycharmmInterface.long_range_backend.pick_lr_solver",
         return_value="scafacos",
     ):
         cfg = build_periodic_mm_config(args)
@@ -129,7 +129,7 @@ def test_build_periodic_mm_config_charmm_vdw_flag():
 
 def test_resolve_periodic_charmm_vdw_off_when_no_include_mm():
     """--no-include-mm means ML-only; CHARMM VDW is unconditionally off."""
-    from mmml.interfaces.pycharmmInterface.mlpot.periodic_mm import (
+    from karml.interfaces.pycharmmInterface.mlpot.periodic_mm import (
         resolve_periodic_charmm_vdw,
     )
 
@@ -153,7 +153,7 @@ def test_resolve_periodic_charmm_vdw_off_for_jax_mic():
     fire even when --periodic-charmm-vdw is explicitly present on the CLI
     (e.g. carried over from a periodic_external test run).
     """
-    from mmml.interfaces.pycharmmInterface.mlpot.periodic_mm import (
+    from karml.interfaces.pycharmmInterface.mlpot.periodic_mm import (
         resolve_periodic_charmm_vdw,
     )
 
@@ -173,7 +173,7 @@ def test_resolve_periodic_charmm_vdw_off_for_jax_mic():
 
 def test_resolve_periodic_charmm_vdw_on_for_periodic_external():
     """periodic_external uses CHARMM IMAGE as VDW backend — must stay True."""
-    from mmml.interfaces.pycharmmInterface.mlpot.periodic_mm import (
+    from karml.interfaces.pycharmmInterface.mlpot.periodic_mm import (
         resolve_periodic_charmm_vdw,
     )
 
@@ -206,7 +206,7 @@ def test_build_periodic_mm_config_ewald_omit_self():
         _cli_explicit=set(),
     )
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.long_range_backend.pick_lr_solver",
+        "karml.interfaces.pycharmmInterface.long_range_backend.pick_lr_solver",
         return_value="ewald",
     ):
         cfg = build_periodic_mm_config(args)
@@ -217,7 +217,7 @@ def test_build_periodic_mm_config_ewald_omit_self():
 
     args.ewald_omit_self = False
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.long_range_backend.pick_lr_solver",
+        "karml.interfaces.pycharmmInterface.long_range_backend.pick_lr_solver",
         return_value="ewald",
     ):
         cfg_full = build_periodic_mm_config(args)
@@ -226,7 +226,7 @@ def test_build_periodic_mm_config_ewald_omit_self():
 
 
 def test_periodic_mm_status_line_no_vdw():
-    from mmml.interfaces.pycharmmInterface.mlpot.periodic_mm import (
+    from karml.interfaces.pycharmmInterface.mlpot.periodic_mm import (
         PeriodicMmConfig,
         periodic_mm_status_line,
     )
@@ -241,8 +241,8 @@ def test_periodic_mm_status_line_no_vdw():
 
 
 def test_periodic_mm_external_adds_coulomb():
-    from mmml.interfaces.pycharmmInterface.mlpot.periodic_mm import PeriodicMmConfig
-    from mmml.interfaces.pycharmmInterface.mlpot.periodic_mm_external import (
+    from karml.interfaces.pycharmmInterface.mlpot.periodic_mm import PeriodicMmConfig
+    from karml.interfaces.pycharmmInterface.mlpot.periodic_mm_external import (
         add_periodic_coulomb_to_callback,
     )
 
@@ -250,10 +250,10 @@ def test_periodic_mm_external_adds_coulomb():
     cfg = PeriodicMmConfig(lr_solver="scafacos", scafacos_method="p2nfft")
     forces = np.zeros((2, 3))
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.periodic_mm_external.read_psf_charges",
+        "karml.interfaces.pycharmmInterface.mlpot.periodic_mm_external.read_psf_charges",
         return_value=np.array([1.0, -1.0]),
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.periodic_mm_external.compute_periodic_coulomb_kcalmol",
+        "karml.interfaces.pycharmmInterface.mlpot.periodic_mm_external.compute_periodic_coulomb_kcalmol",
         return_value=(2.5, np.ones((2, 3))),
     ):
         e, f = add_periodic_coulomb_to_callback(

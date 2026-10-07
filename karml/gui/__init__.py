@@ -1,9 +1,9 @@
 """
-MMML GUI - Molecular viewer for NPZ, ASE trajectory, and PDB files.
+KARML GUI - Molecular viewer for NPZ, ASE trajectory, and PDB files.
 
 Usage:
-    mmml gui --data-dir ./trajectories
-    mmml gui --file simulation.npz
+    karml gui --data-dir ./trajectories
+    karml gui --file simulation.npz
 """
 
 from .api import app, create_app

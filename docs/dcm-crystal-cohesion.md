@@ -27,7 +27,7 @@ from the paper above:
 | `pbcn_163gpa` | 2100015 | Pbcn | 3.924, 7.793, 9.335 | 293 K, 1.63 GPa | 4 |
 
 ```python
-from mmml.analysis.dcm_crystal import read_dcm_phase
+from karml.analysis.dcm_crystal import read_dcm_phase
 
 atoms = read_dcm_phase("pbcn_133gpa", rebuild_hydrogens=True)  # 20 atoms
 ```
@@ -47,11 +47,11 @@ with a sublimation enthalpy is a category error.
 The ambient-pressure phase is isostructural (Pbcn, Z = 4) and was determined by
 Kawaguchi, Tanaka, Takeuchi and Watanabé, *Bull. Chem. Soc. Jpn.* **46**, 62
 (1973) ([doi:10.1246/bcsj.46.62](https://doi.org/10.1246/bcsj.46.62)). It predates
-CIF deposition and has no openly licensed coordinates, so MMML records only its
+CIF deposition and has no openly licensed coordinates, so KARML records only its
 cell:
 
 ```python
-from mmml.analysis.dcm_crystal import KAWAGUCHI_AMBIENT_CELL
+from karml.analysis.dcm_crystal import KAWAGUCHI_AMBIENT_CELL
 
 KAWAGUCHI_AMBIENT_CELL.cell_lengths_A   # (4.249, 8.138, 9.492) at ~153 K
 ```
@@ -75,7 +75,7 @@ its carbon and chlorines are located to a few thousandths of an Ångström, the
 hydrogens follow from the heavy-atom frame plus two spectroscopic constants:
 
 ```python
-from mmml.analysis.dcm_crystal import rebuild_methylene_hydrogens
+from karml.analysis.dcm_crystal import rebuild_methylene_hydrogens
 
 fixed = rebuild_methylene_hydrogens(atoms)   # C-H 1.087 A, H-C-H 112 deg
 ```
@@ -99,7 +99,7 @@ Diffraction cannot measure that directly, so the authors argued it from contact
 compression and crystal habit. A force field can measure it:
 
 ```python
-from mmml.analysis.lattice_energy import decompose_lattice_energy_by_element_pair
+from karml.analysis.lattice_energy import decompose_lattice_energy_by_element_pair
 
 dec = decompose_lattice_energy_by_element_pair(
     fixed.get_positions(), fixed.get_atomic_numbers(), fixed.cell.array, cutoff_A=12.0
@@ -143,7 +143,7 @@ into charged fragments.
 held rigid at fixed fractional centroids and fixed orientation:
 
 ```python
-from mmml.analysis.lattice_energy import relax_cell_lengths
+from karml.analysis.lattice_energy import relax_cell_lengths
 
 relaxed = relax_cell_lengths(
     fixed.get_positions(), fixed.get_atomic_numbers(), fixed.cell.array,
@@ -222,13 +222,13 @@ Both `crystal_lattice_energy` and `relax_cell_lengths` accept `sigma_scale` and
 
 ## API
 
-- `mmml.analysis.dcm_crystal` — `DCM_CRYSTAL_PHASES`, `read_dcm_phase`,
+- `karml.analysis.dcm_crystal` — `DCM_CRYSTAL_PHASES`, `read_dcm_phase`,
   `rebuild_methylene_hydrogens`, `halogen_contacts`, `h_cl_contacts`,
   `classify_halogen_motif`, `KAWAGUCHI_AMBIENT_CELL`,
   `DCM_SUBLIMATION_REFERENCE`
-- `mmml.analysis.crystal_contacts` — `element_pair_contacts`,
+- `karml.analysis.crystal_contacts` — `element_pair_contacts`,
   `normalize_hydrogen_positions`, `Contact`
-- `mmml.analysis.lattice_energy` — `crystal_lattice_energy`,
+- `karml.analysis.lattice_energy` — `crystal_lattice_energy`,
   `decompose_lattice_energy_by_element_pair`, `relax_cell_lengths`,
   `sublimation_enthalpy_kcal_mol`
 

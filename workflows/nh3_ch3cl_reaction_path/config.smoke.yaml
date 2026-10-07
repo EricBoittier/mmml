@@ -1,5 +1,5 @@
 # Fast smoke matrix for pipeline validation on studix GPU.
-#   MMML_WORKFLOW_CONFIG=config.smoke.yaml bash scripts/snakemake_slurm.sh 4
+#   KARML_WORKFLOW_CONFIG=config.smoke.yaml bash scripts/snakemake_slurm.sh 4
 
 checkpoint: examples/m/model_ext.json
 example_dir: examples/m

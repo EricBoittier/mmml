@@ -68,7 +68,7 @@ Everything the terms need about the force field comes out of the PSF and the
 live CHARMM NONBONDED tables, via one dataclass:
 
 ```python
-# mmml/interfaces/pycharmmInterface/mm_system_energy.py
+# karml/interfaces/pycharmmInterface/mm_system_energy.py
 @dataclass(frozen=True, slots=True)
 class NonbondedSystemData:
     charges: np.ndarray          # per-atom partial charge   (from PSF)
@@ -281,16 +281,16 @@ flowchart LR
 ### Recommendations
 
 These are the accepted decisions; the sizing/overflow/dtype pieces are
-implemented in `mmml/md/energy/capacity.py`.
+implemented in `karml/md/energy/capacity.py`.
 
 1. **Size `MAX_ACTIVE_GROUPS` to the cutoff shell, not the box** *(accepted)*.
    Pick it from `(4/3)π r_c³ · ρ_solvent` plus headroom, and rebuild the active
    list from the neighbor list each step. This keeps `vdw_core` (and the ML dimer
    term) scaling ~linearly with system size. Use
-   `mmml.md.energy.shell_capacity(cutoff_A, number_density_per_A3, headroom=1.5)`.
+   `karml.md.energy.shell_capacity(cutoff_A, number_density_per_A3, headroom=1.5)`.
 2. **Set capacities with headroom and check for overflow** *(accepted)*. If real
    pairs exceed `MAX_PAIRS`, or active groups exceed capacity, you silently drop
-   interactions. `mmml.md.energy.check_capacity(n_required, capacity, name)`
+   interactions. `karml.md.energy.check_capacity(n_required, capacity, name)`
    raises `CapacityOverflow` (or warns) instead; `pad_indices(indices, capacity)`
    pads *and* guards in one call. Grow capacity (accept one recompile) rather
    than truncate.

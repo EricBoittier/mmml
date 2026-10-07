@@ -1,4 +1,4 @@
-# `mmml verify-esp-alignment`
+# `karml verify-esp-alignment`
 
 Verify ESP grid alignment in NPZ.
 
@@ -6,13 +6,13 @@ Verify ESP grid alignment in NPZ.
 ## Usage
 
 ```bash
-mmml verify-esp-alignment --help
+karml verify-esp-alignment --help
 ```
 
 ## Options
 
 ```text
-usage: mmml verify-esp-alignment [-h] -i INPUT [--sample SAMPLE]
+usage: karml verify-esp-alignment [-h] -i INPUT [--sample SAMPLE]
                                  [--n-points N_POINTS] [--basis BASIS] [--xc XC]
                                  [--grid-in-angstrom]
 
@@ -36,8 +36,8 @@ Other options:
 
 Verify esp-grid alignment at the data generation level. Recomputes ESP at grid
 points using PySCF and compares to stored values. If aligned: high correlation.
-If misaligned (bug in pyscf-evaluate): low correlation. Usage: mmml verify-esp-
-alignment -i 07_evaluated.npz mmml verify-esp-alignment -i 07_evaluated.npz
+If misaligned (bug in pyscf-evaluate): low correlation. Usage: karml verify-esp-
+alignment -i 07_evaluated.npz karml verify-esp-alignment -i 07_evaluated.npz
 --sample 0 --n-points 200
 ```
 

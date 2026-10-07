@@ -16,27 +16,27 @@ from ase.optimize import BFGS
 from ase.optimize.fire import FIRE
 from jax import random
 
-from mmml.cli.base import resolve_checkpoint_paths
-from mmml.cli.run.jaxmd_runner import (
+from karml.cli.base import resolve_checkpoint_paths
+from karml.cli.run.jaxmd_runner import (
     configure_jaxmd_dtype,
     set_up_nhc_sim_routine,
     summarize_jaxmd_recoveries,
 )
-from mmml.cli.run.summaries import save_calculator_summary_json
-from mmml.utils.geometry_checks import assert_no_intermonomer_atom_overlap
-from mmml.interfaces.pycharmmInterface.cutoffs import (
+from karml.cli.run.summaries import save_calculator_summary_json
+from karml.utils.geometry_checks import assert_no_intermonomer_atom_overlap
+from karml.interfaces.pycharmmInterface.cutoffs import (
     DEFAULT_ML_SWITCH_WIDTH,
     DEFAULT_MM_SWITCH_ON,
     DEFAULT_MM_SWITCH_WIDTH,
     handoff_widths_from_args,
 )
-from mmml.interfaces.pycharmmInterface.mm_energy_forces import (
+from karml.interfaces.pycharmmInterface.mm_energy_forces import (
     DEFAULT_JAX_MD_SKIN_DISTANCE_A,
     format_mm_pair_update_stats_summary,
     refresh_mm_pairs,
 )
-from mmml.interfaces.pycharmmInterface.mmml_calculator import CutoffParameters, setup_calculator
-from mmml.paths import default_meoh_template_pdb
+from karml.interfaces.pycharmmInterface.karml_calculator import CutoffParameters, setup_calculator
+from karml.paths import default_meoh_template_pdb
 
 from .ase import (
     _check_or_charmm_overlap_rescue,
@@ -167,7 +167,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Override learned-charge Coulomb erf damping sigma in Angstrom; set 0 to disable.",
     )
-    p.add_argument("--output-dir", type=Path, default=Path("artifacts/md_10mer_mmml_pbc_suite_jaxmd"))
+    p.add_argument("--output-dir", type=Path, default=Path("artifacts/md_10mer_karml_pbc_suite_jaxmd"))
     p.add_argument("--template-pdb", type=Path, default=default_meoh_template_pdb())
     p.add_argument("--n-molecules", type=int, default=10)
     p.add_argument(
@@ -285,7 +285,7 @@ def build_parser() -> argparse.ArgumentParser:
             "Refuse NVE unless JAX runs float64 (x64 + --ml-compute-dtype float64). "
             "Default: float32 NVE runs with a warning, the force-energy FD preflight "
             "is skipped (below float32 resolution) and the E_tot drift gate guards "
-            "conservation. Also MMML_NVE_REQUIRE_FLOAT64=1."
+            "conservation. Also KARML_NVE_REQUIRE_FLOAT64=1."
         ),
     )
     p.add_argument(
@@ -474,7 +474,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=2.0,
         help="Legacy Packmol distance tolerance in Å for explicit --packmol runs.",
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import add_box_sizing_args
+    from karml.interfaces.pycharmmInterface.mlpot.box_sizing import add_box_sizing_args
 
     add_box_sizing_args(p)
     p.add_argument(
@@ -529,7 +529,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument("--mm-switch-on", type=float, default=DEFAULT_MM_SWITCH_ON)
     # md_system forwards both of these to every backend unconditionally, so a
-    # parser that does not know them turns `mmml md-system` into argparse
+    # parser that does not know them turns `karml md-system` into argparse
     # exit 2 in the subprocess. Kept name-for-name with `run_sim`.
     p.add_argument(
         "--hybrid-hamiltonian",
@@ -593,7 +593,7 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="N",
         help=(
             "Parallel PhysNet chunks across N local GPUs (default 1; "
-            "or MMML_MLPOT_N_GPUS). Requires --ml-batch-size so work splits."
+            "or KARML_MLPOT_N_GPUS). Requires --ml-batch-size so work splits."
         ),
     )
     p.add_argument(
@@ -618,10 +618,10 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="DIR",
         help=(
             "Write a TensorBoard JAX profiler trace under DIR "
-            "(also MMML_JAX_PROFILER_DIR). Prefer short --ps."
+            "(also KARML_JAX_PROFILER_DIR). Prefer short --ps."
         ),
     )
-    from mmml.interfaces.pycharmmInterface.ml_dtypes import add_ml_compute_dtype_args
+    from karml.interfaces.pycharmmInterface.ml_dtypes import add_ml_compute_dtype_args
     add_ml_compute_dtype_args(p)
     p.add_argument("--pre-min-fmax", type=float, default=0.1)
     p.add_argument("--pre-min-steps", type=int, default=50)
@@ -745,7 +745,7 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["auto", "vesin", "cell_list", "jax_md"],
         default=None,
         help=(
-            "MM neighbor-list builder (default: MMML_MM_NL_BACKEND or auto→vesin). "
+            "MM neighbor-list builder (default: KARML_MM_NL_BACKEND or auto→vesin). "
             "jax_md uses device-side incremental lists when available."
         ),
     )
@@ -754,7 +754,7 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["auto", "cpu", "gpu"],
         default=None,
         help=(
-            "MM Vesin rebuild device (default: MMML_MM_NL_DEVICE or auto). "
+            "MM Vesin rebuild device (default: KARML_MM_NL_DEVICE or auto). "
             "auto/gpu use CuPy + vesin>=0.6.1 when JAX runs on a GPU; else cpu."
         ),
     )
@@ -832,7 +832,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--handoff-quality-gate",
         action=argparse.BooleanOptionalAction,
         default=False,
-        help="Evaluate initial MMML |F| on handoff and optionally pre-minimize.",
+        help="Evaluate initial KARML |F| on handoff and optionally pre-minimize.",
     )
     p.add_argument(
         "--handoff-quality-fmax-eVA",
@@ -947,12 +947,12 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
-    from mmml.utils.jax_gpu_warmup import apply_xla_cuda_timer_log_filter
+    from karml.utils.jax_gpu_warmup import apply_xla_cuda_timer_log_filter
 
     apply_xla_cuda_timer_log_filter()
     p = build_parser()
     args = p.parse_args(argv)
-    from mmml.cli.run.md_config import normalize_hybrid_assembly_flags
+    from karml.cli.run.md_config import normalize_hybrid_assembly_flags
 
     normalize_hybrid_assembly_flags(args)
     if args.free_space and args.ensemble == "npt":
@@ -963,20 +963,20 @@ def main(argv: list[str] | None = None) -> int:
 
     # NL backend/device are resolved via env inside mm_energy_forces / nl_gpu.
     if getattr(args, "mm_nl_backend", None):
-        os.environ["MMML_MM_NL_BACKEND"] = str(args.mm_nl_backend)
+        os.environ["KARML_MM_NL_BACKEND"] = str(args.mm_nl_backend)
     if getattr(args, "mm_nl_device", None):
-        os.environ["MMML_MM_NL_DEVICE"] = str(args.mm_nl_device)
-    if (os.environ.get("MMML_MM_NL_DEVICE") or "auto").strip().lower() in ("auto", "gpu"):
+        os.environ["KARML_MM_NL_DEVICE"] = str(args.mm_nl_device)
+    if (os.environ.get("KARML_MM_NL_DEVICE") or "auto").strip().lower() in ("auto", "gpu"):
         # Repair stale /usr/local/cuda→cuda-9.0 before the first CuPy JIT.
         try:
-            from mmml.interfaces.pycharmmInterface.nl_gpu import ensure_cupy_cuda_path
+            from karml.interfaces.pycharmmInterface.nl_gpu import ensure_cupy_cuda_path
 
             ensure_cupy_cuda_path()
         except Exception as exc:
             print(f"[jaxmd] CUDA_PATH repair skipped ({type(exc).__name__}: {exc})", flush=True)
 
     if getattr(args, "mlpot_profile", False):
-        from mmml.interfaces.pycharmmInterface.mlpot.ml_profile import (
+        from karml.interfaces.pycharmmInterface.mlpot.ml_profile import (
             enable_mlpot_profiling,
             reset_mlpot_profile_stats,
         )
@@ -986,11 +986,11 @@ def main(argv: list[str] | None = None) -> int:
 
     profiler_dir_raw = getattr(args, "jax_profiler_dir", None)
     if profiler_dir_raw is None:
-        env_prof = (os.environ.get("MMML_JAX_PROFILER_DIR") or "").strip()
+        env_prof = (os.environ.get("KARML_JAX_PROFILER_DIR") or "").strip()
         profiler_dir = Path(env_prof) if env_prof else None
     else:
         profiler_dir = Path(profiler_dir_raw).expanduser().resolve()
-        os.environ["MMML_JAX_PROFILER_DIR"] = str(profiler_dir)
+        os.environ["KARML_JAX_PROFILER_DIR"] = str(profiler_dir)
 
     out_dir = (Path.cwd() / args.output_dir.expanduser()).absolute()
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -999,9 +999,9 @@ def main(argv: list[str] | None = None) -> int:
         base_ckpt_dir, _ = resolve_checkpoint_paths(None)
     else:
         base_ckpt_dir, _ = resolve_checkpoint_paths(args.checkpoint.expanduser().resolve())
-    print(f"Using MMML checkpoint: {base_ckpt_dir}")
+    print(f"Using KARML checkpoint: {base_ckpt_dir}")
 
-    from mmml.cli.run.md_handoff import (
+    from karml.cli.run.md_handoff import (
         apply_handoff_geometry_to_atoms,
         ensure_psf_for_handoff_cluster,
         get_handoff_in,
@@ -1054,7 +1054,7 @@ def main(argv: list[str] | None = None) -> int:
         residue_labels=residue_labels,
         total_atoms=len(z),
     )
-    from mmml.cli.run.md_pbc_suite.ase import certified_box_geometry_requested
+    from karml.cli.run.md_pbc_suite.ase import certified_box_geometry_requested
 
     certified_geom = certified_box_geometry_requested(args)
     if (
@@ -1074,7 +1074,7 @@ def main(argv: list[str] | None = None) -> int:
     free_space = bool(args.free_space)
     auto_L = None
     if not free_space:
-        from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import (
+        from karml.interfaces.pycharmmInterface.mlpot.box_sizing import (
             resolve_suite_auto_box_side,
         )
 
@@ -1117,7 +1117,7 @@ def main(argv: list[str] | None = None) -> int:
     if free_space:
         if args.box_size is not None:
             print(
-                "md_10mer_mmml_pbc_suite_jaxmd: note: ignoring --box-size with --free-space "
+                "md_10mer_karml_pbc_suite_jaxmd: note: ignoring --box-size with --free-space "
                 f"({float(args.box_size):g} Å)."
             )
         r = np.asarray(r0, dtype=float) if keep_loaded_coords else r0 - r0.mean(axis=0)
@@ -1207,7 +1207,7 @@ def main(argv: list[str] | None = None) -> int:
             f"({minimization_summary.get('charmm_min_wall_s', 0.0):.3f} s)"
         )
 
-    from mmml.cli.run.jaxmd_runner import resolve_ensemble_jaxmd_update_interval
+    from karml.cli.run.jaxmd_runner import resolve_ensemble_jaxmd_update_interval
 
     # 0 / unset → ensemble auto (NVT batches more; NpT/NVE stay tighter).
     effective_update_interval = resolve_ensemble_jaxmd_update_interval(
@@ -1221,7 +1221,7 @@ def main(argv: list[str] | None = None) -> int:
     ep_scale = None
     sig_scale = None
     if do_mm:
-        from mmml.models.mm_lj_scales import resolve_md_lj_scales
+        from karml.models.mm_lj_scales import resolve_md_lj_scales
 
         scales_file = getattr(args, "mm_lj_scales_file", None)
         try:
@@ -1250,7 +1250,7 @@ def main(argv: list[str] | None = None) -> int:
     ep_scale = None
     sig_scale = None
     if do_mm:
-        from mmml.models.mm_lj_scales import resolve_md_lj_scales
+        from karml.models.mm_lj_scales import resolve_md_lj_scales
 
         scales_file = getattr(args, "mm_lj_scales_file", None)
         try:
@@ -1355,7 +1355,7 @@ def main(argv: list[str] | None = None) -> int:
     if not args.skip_jit_warmup:
         import jax.numpy as jnp
 
-        from mmml.utils.jax_gpu_warmup import warmup_hybrid_spherical_cutoff
+        from karml.utils.jax_gpu_warmup import warmup_hybrid_spherical_cutoff
 
         mm_pair_idx = None
         mm_pair_mask = None
@@ -1409,7 +1409,7 @@ def main(argv: list[str] | None = None) -> int:
         if initial_fmax_eVA > threshold:
             quality_gate_triggered = True
             msg = (
-                f"Handoff quality gate: initial MMML max|F|={initial_fmax_eVA:.4f} eV/Å "
+                f"Handoff quality gate: initial KARML max|F|={initial_fmax_eVA:.4f} eV/Å "
                 f"> threshold {threshold:.4f} eV/Å."
             )
             if action == "error":
@@ -1550,7 +1550,7 @@ def main(argv: list[str] | None = None) -> int:
             return fmax_after, True
 
         def _run_ase_bfgs_rescue(phase: str, *, traj_suffix: str, fmax_key: str, iter_key: str) -> float:
-            from mmml.cli.run.ase_minimize_log import (
+            from karml.cli.run.ase_minimize_log import (
                 attach_compact_ase_optimizer_log,
                 resolve_ase_optimizer_logfile,
             )
@@ -1583,7 +1583,7 @@ def main(argv: list[str] | None = None) -> int:
             return fmax
 
         def _run_ase_fire_rescue(phase: str, *, traj_suffix: str, fmax_key: str) -> float:
-            from mmml.cli.run.ase_minimize_log import (
+            from karml.cli.run.ase_minimize_log import (
                 attach_compact_ase_optimizer_log,
                 resolve_ase_optimizer_logfile,
             )
@@ -1635,8 +1635,8 @@ def main(argv: list[str] | None = None) -> int:
                 iter_key=f"{traj_suffix}_bfgs_iterations",
             )
 
-        def _run_mmml_after_charmm(phase: str, traj_suffix: str) -> float:
-            """Relax CHARMM coords on hybrid MMML: FIRE first, BFGS polish if soft."""
+        def _run_karml_after_charmm(phase: str, traj_suffix: str) -> float:
+            """Relax CHARMM coords on hybrid KARML: FIRE first, BFGS polish if soft."""
             order = str(getattr(args, "pre_min_ase_order", "fire-first"))
             if bool(getattr(args, "skip_bfgs", False)):
                 order = "fire-first"
@@ -1699,11 +1699,11 @@ def main(argv: list[str] | None = None) -> int:
             if not accepted:
                 return float(fmax_after)
             if fmax_after > args.pre_min_fmax:
-                return _run_mmml_after_charmm(phase_hybrid, traj_suffix)
+                return _run_karml_after_charmm(phase_hybrid, traj_suffix)
             return float(fmax_after)
 
         if ase_order == "bfgs-first":
-            from mmml.cli.run.ase_minimize_log import (
+            from karml.cli.run.ase_minimize_log import (
                 attach_compact_ase_optimizer_log,
                 resolve_ase_optimizer_logfile,
             )
@@ -1811,7 +1811,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         if fmin > args.max_fmax_after_min:
             if getattr(args, "mlpot_profile", False):
-                from mmml.interfaces.pycharmmInterface.mlpot.ml_profile import (
+                from karml.interfaces.pycharmmInterface.mlpot.ml_profile import (
                     maybe_log_mlpot_profile,
                     write_mlpot_profile_summary,
                 )
@@ -1867,7 +1867,7 @@ def main(argv: list[str] | None = None) -> int:
         max_step_displacement = float(
             np.max(np.linalg.norm(velocities_ang_ps, axis=1)) * dt_ps
         )
-        from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+        from karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
             MIN_VELOCITY_ASSIGNMENT_TEMP_K,
         )
 
@@ -1922,7 +1922,7 @@ def main(argv: list[str] | None = None) -> int:
                 f"Re-initializing velocities (Maxwell–Boltzmann); {reason}.",
                 flush=True,
             )
-        from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+        from karml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
             clamp_velocity_assignment_temp_k,
         )
 
@@ -1946,7 +1946,7 @@ def main(argv: list[str] | None = None) -> int:
                 f"implied T={float(metal_T):.1f} K, max|v|={vmax:.3g}. "
                 "Thermal metal |v| is O(0.1–1) at ~150–300 K; values O(10–100) "
                 "usually mean an erroneous ×1000 (Å/fs↔Å/ps) conversion. "
-                "Pull the latest mmml (ASE Maxwell–Boltzmann must not be ×1000)."
+                "Pull the latest karml (ASE Maxwell–Boltzmann must not be ×1000)."
             )
 
     policy_summary["velocity_policy"] = velocity_policy
@@ -2116,7 +2116,7 @@ def main(argv: list[str] | None = None) -> int:
     if getattr(args, "mlpot_profile", False):
         import sys
 
-        from mmml.interfaces.pycharmmInterface.mlpot.ml_profile import (
+        from karml.interfaces.pycharmmInterface.mlpot.ml_profile import (
             write_profile_git_metadata,
         )
 
@@ -2183,7 +2183,7 @@ def main(argv: list[str] | None = None) -> int:
                     out_atoms.set_velocities(vel_arr)
                 else:
                     print(
-                        "mmml jaxmd: skipping handoff velocities — shape "
+                        "karml jaxmd: skipping handoff velocities — shape "
                         f"{tuple(vel_arr.shape)} != ({len(out_atoms)}, 3).",
                         flush=True,
                     )
@@ -2205,7 +2205,7 @@ def main(argv: list[str] | None = None) -> int:
             )
         else:
             print(
-                "mmml jaxmd: skipping handoff write — final frame has non-finite coordinates "
+                "karml jaxmd: skipping handoff write — final frame has non-finite coordinates "
                 f"(status={run_status!r}).",
                 flush=True,
             )
@@ -2364,7 +2364,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         print(summary_line, flush=True)
     (out_dir / "suite_summary_jaxmd.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
-    from mmml.utils.rich_report import print_colored_json
+    from karml.utils.rich_report import print_colored_json
 
     print_colored_json(summary)
     for traj_path in traj_paths:
@@ -2408,7 +2408,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"[warning] Could not save handoff calculator_summary.json: {_e}")
 
     if getattr(args, "mlpot_profile", False):
-        from mmml.interfaces.pycharmmInterface.mlpot.ml_profile import (
+        from karml.interfaces.pycharmmInterface.mlpot.ml_profile import (
             maybe_log_mlpot_profile,
             write_mlpot_profile_summary,
         )

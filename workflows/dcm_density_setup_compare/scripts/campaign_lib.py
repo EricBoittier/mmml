@@ -50,7 +50,7 @@ def load_config(config_path: Path | str | None = None) -> dict[str, Any]:
 
 
 def default_checkpoint_path() -> Path:
-    """Bundled DES dimer PhysNet JSON when ``MMML_CKPT`` is unset."""
+    """Bundled DES dimer PhysNet JSON when ``KARML_CKPT`` is unset."""
     return repo_root() / "examples" / "ckpts_json" / "DESdimers_params.json"
 
 
@@ -61,19 +61,19 @@ def validate_checkpoint(path: Path) -> None:
         raise RuntimeError(
             f"Checkpoint path looks like a placeholder: {path}\n"
             "Set a real file, e.g.\n"
-            f"  export MMML_CKPT={default_checkpoint_path()}"
+            f"  export KARML_CKPT={default_checkpoint_path()}"
         )
     if not path.is_file():
         raise RuntimeError(
             f"Checkpoint not found: {path}\n"
-            "Export MMML_CKPT before launching Snakemake, e.g.\n"
-            f"  export MMML_CKPT={default_checkpoint_path()}"
+            "Export KARML_CKPT before launching Snakemake, e.g.\n"
+            f"  export KARML_CKPT={default_checkpoint_path()}"
         )
 
 
 def resolve_checkpoint(raw: str) -> Path:
-    if raw == "${MMML_CKPT}":
-        env = os.environ.get("MMML_CKPT", "").strip()
+    if raw == "${KARML_CKPT}":
+        env = os.environ.get("KARML_CKPT", "").strip()
         if env:
             path = Path(env).expanduser().resolve()
         else:
@@ -85,8 +85,8 @@ def resolve_checkpoint(raw: str) -> Path:
 
 
 def checkpoint_path_for_yaml(raw: str) -> str:
-    """Resolve ``${MMML_CKPT}`` when writing campaign YAML on the submit host."""
-    if str(raw).strip() == "${MMML_CKPT}":
+    """Resolve ``${KARML_CKPT}`` when writing campaign YAML on the submit host."""
+    if str(raw).strip() == "${KARML_CKPT}":
         return str(resolve_checkpoint(str(raw)))
     return str(os.path.expandvars(str(raw)))
 
@@ -1311,11 +1311,11 @@ def discover_heat_resume_restart(
     n_heat_segments: int = 1,
 ) -> Path | None:
     """Best on-disk ``.res`` for heat-only continuation under a PyCHARMM leg dir."""
-    from mmml.interfaces.pycharmmInterface.mlpot.artifact_paths import (
+    from karml.interfaces.pycharmmInterface.mlpot.artifact_paths import (
         geometry_baseline_res,
         stage_restart,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
+    from karml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
         discover_resume_restart,
     )
 
@@ -1340,7 +1340,7 @@ def build_heat_resume_campaign(
     leg_id: str | None = None,
 ) -> dict[str, Any]:
     """One-job campaign: heat-only from an existing ``.res`` (skip mini/prep ladder)."""
-    from mmml.interfaces.pycharmmInterface.mlpot.artifact_paths import model_psf
+    from karml.interfaces.pycharmmInterface.mlpot.artifact_paths import model_psf
 
     cell_cfg = cell_workflow_cfg(cfg, cell)
     init_id = leg_id or init_job_id(cell_cfg)
@@ -1516,7 +1516,7 @@ def warmup_mlpot_enabled(cfg: dict[str, Any]) -> bool:
 
 
 def warmup_atoms_per_monomer(cell: RunCell) -> int:
-    from mmml.interfaces.pycharmmInterface.mlpot.mlpot_limits import (
+    from karml.interfaces.pycharmmInterface.mlpot.mlpot_limits import (
         PBC_BURST_ML_ATOMS_PER_MONOMER,
     )
 
@@ -1530,8 +1530,8 @@ def warmup_atoms_per_monomer(cell: RunCell) -> int:
 
 
 def warmup_mlpot_argv(cfg: dict[str, Any], cell: RunCell) -> list[str]:
-    """Serial ``mmml warmup-mlpot-jax`` argv matching this cell's MLpot/JAX settings."""
-    from mmml.cli.run.warmup_mlpot_jax import resolve_warmup_do_mm_for_config
+    """Serial ``karml warmup-mlpot-jax`` argv matching this cell's MLpot/JAX settings."""
+    from karml.cli.run.warmup_mlpot_jax import resolve_warmup_do_mm_for_config
 
     cell_cfg = cell_workflow_cfg(cfg, cell)
     effective = merge_setup_into_config(cell_cfg, cell.setup_id)
@@ -1635,7 +1635,7 @@ def cell_from_tag(cfg: dict[str, Any], tag: str) -> RunCell:
             raise KeyError(
                 f"run tag {tag!r} is a prep sweep tag but prep_sweep.enabled is false "
                 f"in {default_workflow_config_path(run_tag=tag)}. "
-                "Set MMML_WORKFLOW_CONFIG=config.prep_sweep.yaml or use "
+                "Set KARML_WORKFLOW_CONFIG=config.prep_sweep.yaml or use "
                 "bash scripts/snakemake_prep_sweep.sh"
             )
         variant_ids = prep_sweep_variant_ids(cfg)

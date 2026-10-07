@@ -49,8 +49,8 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 
 def _build_cluster(composition: str, spacing: float) -> tuple[np.ndarray, np.ndarray, list[int]]:
-    from mmml.cli.run.md_pbc_suite.ase import _build_cluster_from_composition
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import parse_composition
+    from karml.cli.run.md_pbc_suite.ase import _build_cluster_from_composition
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import parse_composition
 
     return _build_cluster_from_composition(
         composition=parse_composition(composition),
@@ -60,8 +60,8 @@ def _build_cluster(composition: str, spacing: float) -> tuple[np.ndarray, np.nda
 
 def _charmm_energy_kcal(positions: np.ndarray) -> dict[str, float]:
     import pycharmm
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_energy_row
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_energy_row
+    from karml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
 
     sync_charmm_positions(positions)
     pycharmm.lingo.charmm_script("ENER")
@@ -81,7 +81,7 @@ def _ase_atoms(positions: np.ndarray, z: np.ndarray):
 
 
 def _xtb_energy_ev(atoms, cfg: dict[str, Any]) -> float:
-    from mmml.interfaces.qc_backends.xtb import XTBBackend
+    from karml.interfaces.qc_backends.xtb import XTBBackend
 
     xtb_cfg = cfg.get("xtb") or {}
     backend = XTBBackend(
@@ -94,7 +94,7 @@ def _xtb_energy_ev(atoms, cfg: dict[str, Any]) -> float:
 
 
 def _orca_mp2_energy_hartree(atoms, cfg: dict[str, Any], workdir: Path) -> float:
-    from mmml.interfaces.qc_backends.orca_qm import OrcaQMBackend
+    from karml.interfaces.qc_backends.orca_qm import OrcaQMBackend
 
     orca_cfg = cfg.get("orca_mp2") or {}
     backend = OrcaQMBackend(
@@ -176,9 +176,9 @@ def run_pair_scan(args: argparse.Namespace) -> Path:
         store["orca_mp2_energy_hartree"] = np.full((n1, n2), np.nan, dtype=np.float64)
         store["orca_mp2_energy_kcal"] = np.full((n1, n2), np.nan, dtype=np.float64)
 
-    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import pycharmm_quiet
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import setup_default_nbonds
+    import karml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+    from karml.interfaces.pycharmmInterface.import_pycharmm import pycharmm_quiet
+    from karml.interfaces.pycharmmInterface.mlpot.setup import setup_default_nbonds
 
     pycharmm_quiet()
     z, ref_pos, atoms_per = _build_cluster(pair.composition, spacing=spacing)
@@ -187,7 +187,7 @@ def run_pair_scan(args: argparse.Namespace) -> Path:
     ref_pos = np.asarray(ref_pos, dtype=np.float64)
     atoms_per = [int(x) for x in atoms_per]
 
-    from mmml.interfaces.pycharmmInterface.mlpot.trimer_scan import (
+    from karml.interfaces.pycharmmInterface.mlpot.trimer_scan import (
         distance_report,
         place_trimer,
     )

@@ -55,7 +55,7 @@ def write_orbax_shards(
     if not shards:
         raise ValueError("Dataset produced no examples")
     manifest = {
-        "format": "mmml-orbax-shards-v1",
+        "format": "karml-orbax-shards-v1",
         "dataset_kind": dataset_kind,
         "num_structures": total,
         "shard_size": shard_size,

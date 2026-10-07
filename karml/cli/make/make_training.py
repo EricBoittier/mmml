@@ -30,18 +30,18 @@ import jax
 
 import yaml
 
-# from mmml.models.physnetjax.physnetjax.models import model as model
-from mmml.models.physnetjax.defaults import JOINT_TRAINING_CATEGORY, resolve_hf_physnet_model
-from mmml.models.physnetjax.checkpoint_utils import (
+# from karml.models.physnetjax.physnetjax.models import model as model
+from karml.models.physnetjax.defaults import JOINT_TRAINING_CATEGORY, resolve_hf_physnet_model
+from karml.models.physnetjax.checkpoint_utils import (
     apply_checkpoint_architecture,
     load_physnet_checkpoint,
     print_bundled_physnet_models,
 )
-from mmml.models.physnetjax.physnetjax.models.model import EF
-from mmml.models.physnetjax.physnetjax.training.training import train_model
-from mmml.models.physnetjax.physnetjax.data.data import prepare_datasets
-from mmml.utils.model_checkpoint import normalize_flax_params_for_apply
-# from mmml.models.physnetjax.physnetjax.data.batches import prepare_batches_jit
+from karml.models.physnetjax.physnetjax.models.model import EF
+from karml.models.physnetjax.physnetjax.training.training import train_model
+from karml.models.physnetjax.physnetjax.data.data import prepare_datasets
+from karml.utils.model_checkpoint import normalize_flax_params_for_apply
+# from karml.models.physnetjax.physnetjax.data.batches import prepare_batches_jit
 
 import numpy as np
 
@@ -115,7 +115,7 @@ def build_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  mmml physnet-train \\
+  karml physnet-train \\
       --data output/energies_forces_dipoles_train.npz \\
       --ckpt-dir ./ckpts/ama_mp2 \\
       --tag ama_mp2 \\
@@ -123,11 +123,11 @@ Examples:
       --batch-size 32 --num-epochs 2000 \\
       --max-atomic-number 35
 
-  mmml physnet-train --config train.yaml
+  karml physnet-train --config train.yaml
 
 YAML keys match CLI flags (with optional aliases: train, output, max_epochs).
-See mmml/cli/misc/physnet_train.example.yaml for a template.
-See mmml/cli/misc/physnet_train_transfer.example.yaml for transfer learning / distillation.
+See karml/cli/misc/physnet_train.example.yaml for a template.
+See karml/cli/misc/physnet_train_transfer.example.yaml for transfer learning / distillation.
 See examples/hybrid_mm_charges/ for hybrid-mm + mm_charge_mode (fixed/latent/fixed_plus_latent).
         """,
     )
@@ -281,7 +281,7 @@ See examples/hybrid_mm_charges/ for hybrid-mm + mm_charge_mode (fixed/latent/fix
     # ml_switch_width / mm_switch_on / mm_switch_width / --no-complementary-handoff
     # come from the same helper the MD side uses, so the flags, defaults and
     # semantics cannot drift between training and deployment.
-    from mmml.interfaces.pycharmmInterface.cutoffs import add_handoff_cutoff_args
+    from karml.interfaces.pycharmmInterface.cutoffs import add_handoff_cutoff_args
 
     add_handoff_cutoff_args(parser)
     parser.add_argument(
@@ -296,7 +296,7 @@ See examples/hybrid_mm_charges/ for hybrid-mm + mm_charge_mode (fixed/latent/fix
             "mic: switched CGenFF LJ+Coulomb pairs. nvalchemiops_pme: full-box "
             "many-to-many PME on fixed CGenFF charges (no exclusions / no "
             "intra subtract; requires --pme-box-length and "
-            "mmml[nvalchemiops-pme]). ewald: same full-box/no-exclusion "
+            "karml[nvalchemiops-pme]). ewald: same full-box/no-exclusion "
             "Coulomb as nvalchemiops_pme, pure JAX (no external PME library, "
             "no CUDA requirement); requires --pme-box-length. With "
             "--mm-include-lj, COM-switched LJ is added beside the lattice "
@@ -594,7 +594,7 @@ See examples/hybrid_mm_charges/ for hybrid-mm + mm_charge_mode (fixed/latent/fix
             "units as the NPZ). Example for kcal/mol display when data are eV: "
             "'{\"energy\": 23.060549, \"forces\": 23.060549}'. Dipole units "
             "are not handled here — convert D/Dxyz before training (e.g. "
-            "mmml fix-and-split --dipole-in debye --dipole-out e-angstrom). "
+            "karml fix-and-split --dipole-in debye --dipole-out e-angstrom). "
             "See docs/UNITS_SUMMARY.md § physnet-train --conversion."
         ),
     )
@@ -1061,7 +1061,7 @@ def _build_hybrid_mm_config(args: argparse.Namespace, data_paths: list[str]) -> 
 
     import numpy as _np
 
-    from mmml.models.hybrid_energy import HYBRID_MM_BATCH_KEYS
+    from karml.models.hybrid_energy import HYBRID_MM_BATCH_KEYS
 
     if not data_paths:
         raise ValueError("--hybrid-mm requires --data")
@@ -1101,7 +1101,7 @@ def _build_hybrid_mm_config(args: argparse.Namespace, data_paths: list[str]) -> 
             type_frame_counts[type_idx] += _np.any(idx == type_idx, axis=1).sum()
     trainable_mask = type_frame_counts >= max(1, min_type_frames)
 
-    from mmml.models.mm_charge_mode import (
+    from karml.models.mm_charge_mode import (
         mm_charge_mode_needs_q_ml,
         resolve_hybrid_mm_charge_mode,
     )
@@ -1117,7 +1117,7 @@ def _build_hybrid_mm_config(args: argparse.Namespace, data_paths: list[str]) -> 
     pme_accuracy = float(getattr(args, "pme_accuracy", 1e-6) or 1e-6)
     pme_real_space_cutoff = None
     if lr_solver == "nvalchemiops_pme":
-        from mmml.interfaces.pycharmmInterface.long_range_backend import (
+        from karml.interfaces.pycharmmInterface.long_range_backend import (
             estimate_nvalchemiops_pme_real_space_cutoff,
             have_nvalchemiops_pme,
             warmup_nvalchemiops_pme_train_worker,
@@ -1126,7 +1126,7 @@ def _build_hybrid_mm_config(args: argparse.Namespace, data_paths: list[str]) -> 
         if not have_nvalchemiops_pme():
             raise ValueError(
                 "--lr-solver nvalchemiops_pme requires the nvalchemiops package "
-                "(install mmml[nvalchemiops-pme])."
+                "(install karml[nvalchemiops-pme])."
             )
         if pme_box_length is None or float(pme_box_length) <= 0.0:
             raise ValueError(
@@ -1332,7 +1332,7 @@ def _plot_training_metrics_from_run(
     log_loss: bool,
     tag: str,
 ) -> None:
-    from mmml.cli.misc.extract_checkpoint_metrics import (
+    from karml.cli.misc.extract_checkpoint_metrics import (
         collect_all_metrics,
         plot_training_metrics,
     )
@@ -1452,7 +1452,7 @@ def _maybe_unpad_dataset(data_path: str, natoms: Optional[int]) -> tuple[str, in
 
 def _load_physnet_npz_dict(path: str, natoms: int) -> dict:
     """Load one NPZ split into the dict format expected by train_model."""
-    from mmml.models.physnetjax.physnetjax.data.data import make_dicts, prepare_multiple_datasets
+    from karml.models.physnetjax.physnetjax.data.data import make_dicts, prepare_multiple_datasets
 
     data, keys, _, _ = prepare_multiple_datasets(
         jax.random.PRNGKey(0),
@@ -1534,7 +1534,7 @@ def main_loop(args):
             max_padded_atoms=natoms,
             debug=args.debug,
         )
-        from mmml.utils.model_checkpoint import physnet_constructor_kwargs
+        from karml.utils.model_checkpoint import physnet_constructor_kwargs
 
         model = EF(**physnet_constructor_kwargs(model_kwargs, EF))
         try:
@@ -1556,7 +1556,7 @@ def main_loop(args):
 
     hybrid_mm = _build_hybrid_mm_config(args, data_paths)
     if hybrid_mm is not None:
-        from mmml.models.hybrid_energy import HYBRID_MM_BATCH_KEYS
+        from karml.models.hybrid_energy import HYBRID_MM_BATCH_KEYS
 
         data_keys = tuple(data_keys) + tuple(
             k for k in HYBRID_MM_BATCH_KEYS if k not in data_keys
@@ -1564,7 +1564,7 @@ def main_loop(args):
 
     _frozen_scales = None
     if args.frozen_mm_lj_scales_sidecar:
-        from mmml.models.mm_lj_scales import load_mm_lj_scales_sidecar
+        from karml.models.mm_lj_scales import load_mm_lj_scales_sidecar
 
         _payload = load_mm_lj_scales_sidecar(Path(args.frozen_mm_lj_scales_sidecar))
         if _payload is None:
@@ -1586,7 +1586,7 @@ def main_loop(args):
     # (deadlock), and a spawn child often gets CUDA_ERROR_DEVICE_UNAVAILABLE after
     # the parent has already initialized CUDA.  Default isolate mode runs the
     # jitted train/eval steps on CPU while the PME pure_callback uses GPU.
-    from mmml.interfaces.pycharmmInterface.long_range_backend import (
+    from karml.interfaces.pycharmmInterface.long_range_backend import (
         nvalchemiops_pme_train_wants_cpu_steps,
     )
 
@@ -1601,7 +1601,7 @@ def main_loop(args):
     if _cpu_train:
         print(
             "nvalchemiops_pme: jit train/eval on CPU; PME callback on GPU "
-            "(set MMML_NVALCHEMIOPS_PME_ISOLATE=spawn to try a second-GPU worker).",
+            "(set KARML_NVALCHEMIOPS_PME_ISOLATE=spawn to try a second-GPU worker).",
             flush=True,
         )
 
@@ -1704,7 +1704,7 @@ def run_notebook(**kwargs):
     """Convenience entrypoint for notebooks.
 
     Example:
-        from mmml.cli import make_training
+        from karml.cli import make_training
 
         params, params_path = make_training.run_notebook(
             data="train.npz",

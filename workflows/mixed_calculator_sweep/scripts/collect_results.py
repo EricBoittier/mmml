@@ -70,7 +70,7 @@ def main() -> None:
         "",
         "Fluctuation/trend (not the bare endpoint delta `energy_drift_ev`) is the",
         "recommended read on conservation quality -- see "
-        "`mmml.md.results.energy_drift_metrics` and `docs/plotting-style-guide.md`.",
+        "`karml.md.results.energy_drift_metrics` and `docs/plotting-style-guide.md`.",
         "",
         "| setting | seed | system | status | frames | E0 (eV) | Efinal (eV) | "
         "fluctuation std (eV) | trend (eV/frame) | elapsed (s) |",

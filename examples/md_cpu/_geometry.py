@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 from ase.io import read as ase_read
 
-from mmml.paths import default_aco_template_pdb
+from karml.paths import default_aco_template_pdb
 
 ACO_ATOMS_PER_MONOMER = 10
 

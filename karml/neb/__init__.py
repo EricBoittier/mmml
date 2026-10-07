@@ -1,6 +1,6 @@
-"""ASE nudged elastic band (NEB) sampling with MMML calculators."""
+"""ASE nudged elastic band (NEB) sampling with KARML calculators."""
 
-from mmml.neb.config import NebConfig
-from mmml.neb.run import NebResult, run_neb
+from karml.neb.config import NebConfig
+from karml.neb.run import NebResult, run_neb
 
 __all__ = ["NebConfig", "NebResult", "run_neb"]

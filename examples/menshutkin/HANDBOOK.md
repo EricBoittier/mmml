@@ -10,7 +10,7 @@ Companion docs: [`README.md`](README.md) engineering record ·
 ## 0. Two things before anything else
 
 ```bash
-cd /mmhome/andreychev/mmml/mmml
+cd /mmhome/andreychev/karml/karml
 source examples/menshutkin/_env.sh
 ```
 
@@ -45,9 +45,9 @@ One job per GPU: each uses ~24.7 GB of 32.6 GB.
 | `examples/menshutkin/solute.py` | atom order, CV indices, `SOLVENTS` registry, model loading |
 | `examples/menshutkin/jaxmd_box.py` | box builder + solute LJ/charges |
 | `examples/menshutkin/_env.sh` | `MENSH_CKPT` and paths — **check what checkpoint this sets** |
-| `mmml/md/energy/terms/ml_mm_elec.py` | solute–solvent Coulomb, q(R), `charge_gradient[_scale]` |
-| `mmml/md/energy/terms/ml_mm_pol.py` | **induced polarisation**, `−½Σαᵢ\|Eᵢ\|²` |
-| `mmml/md/restraints/linear_distance.py` | walls incl. `ReactionChannelRestraint` |
+| `karml/md/energy/terms/ml_mm_elec.py` | solute–solvent Coulomb, q(R), `charge_gradient[_scale]` |
+| `karml/md/energy/terms/ml_mm_pol.py` | **induced polarisation**, `−½Σαᵢ\|Eᵢ\|²` |
+| `karml/md/restraints/linear_distance.py` | walls incl. `ReactionChannelRestraint` |
 | `artifacts/menshutkin/diag/` | all analysis (see §5) |
 
 ### Artifacts
@@ -76,12 +76,12 @@ export MENSH_DEVICE=cpu       # honoured by _env.sh
 an exported `JAX_PLATFORMS=cpu` was discarded and the job landed on
 `CUDA_VISIBLE_DEVICES=1` — a production GPU. `MENSH_DEVICE=cpu` now sets
 `JAX_PLATFORMS=cpu`, unsets `CUDA_VISIBLE_DEVICES`, **and** sets
-`MMML_MLPOT_DEVICE=cpu`.
+`KARML_MLPOT_DEVICE=cpu`.
 
 That last one is not optional and is not obvious. Anything invoked through the
-`mmml` CLI calls `apply_mlpot_jax_platform_env()`, which treats
+`karml` CLI calls `apply_mlpot_jax_platform_env()`, which treats
 `JAX_PLATFORMS=cpu` as a stale login-node export and *rewrites it to put CUDA
-first* unless `MMML_MLPOT_DEVICE=cpu`. The failure mode is silent: if
+first* unless `KARML_MLPOT_DEVICE=cpu`. The failure mode is silent: if
 `CUDA_VISIBLE_DEVICES` happens to be set, the job runs fine and quietly competes
 with production for the device.
 
@@ -108,7 +108,7 @@ recoverable from disk. See `_archive/gas_smoke_20260802/README`.
 ### A solvent, full range
 
 ```bash
-ssh gpu09 'cd /mmhome/andreychev/mmml/mmml && SOLVENT=cyclohexane \
+ssh gpu09 'cd /mmhome/andreychev/karml/karml && SOLVENT=cyclohexane \
   EMB=electrostatic TAG=dqdr GPU=0 XI_MAX=5.6 FINE_TO=1.6 PROD_PS=10 \
   nohup bash examples/menshutkin/run_solvated_production.sh \
   > artifacts/menshutkin/diag/full_cyclohexane_dqdr.log 2>&1 < /dev/null & echo $!'
@@ -133,7 +133,7 @@ cyclohexane ~8 h. A solvent with no cached box pays ~1 h of equilibration once.
 ### Status, any time
 
 ```bash
-ssh gpu09 /mmhome/andreychev/mmml/mmml/artifacts/menshutkin/diag/status.sh
+ssh gpu09 /mmhome/andreychev/karml/karml/artifacts/menshutkin/diag/status.sh
 ```
 
 Window counts for every run, last window of each, failures, and a 10-minute
@@ -142,7 +142,7 @@ history logged by `progress_log.sh`.
 ### Watch a run's gate
 
 ```bash
-ssh gpu09 'grep -E "^  w[0-9]" /mmhome/andreychev/mmml/mmml/artifacts/menshutkin/diag/<log>.log | tail'
+ssh gpu09 'grep -E "^  w[0-9]" /mmhome/andreychev/karml/karml/artifacts/menshutkin/diag/<log>.log | tail'
 ```
 
 `minr` must **fall** as ξ rises (the C–N bond forming). Flat near 2.25 while ξ
@@ -156,7 +156,7 @@ numbers.
 
 ```bash
 # the profile
-ssh gpu09 'cd /mmhome/andreychev/mmml/mmml && source examples/menshutkin/_env.sh >/dev/null 2>&1 \
+ssh gpu09 'cd /mmhome/andreychev/karml/karml && source examples/menshutkin/_env.sh >/dev/null 2>&1 \
   && JAX_PLATFORMS=cpu .venv/bin/python examples/menshutkin/08_solvated_mbar.py \
   --run-dir artifacts/menshutkin/pmf_full_cyclohexane/cyclohexane'
 
@@ -254,7 +254,7 @@ shape of the profile itself.
 
 | # | what | why it matters |
 |---|---|---|
-| **21** | **re-run the gas PMF** | two defects: no channel restraint (drifted 0.55–0.92 Å off-path at the TS) **and** the cutoff-8 model. Every solvent-effect number depends on it. `--wall-channel` is implemented; blocker is that the Orbax checkpoint will not load on CPU — export it once with `mmml orbax-to-json` |
+| **21** | **re-run the gas PMF** | two defects: no channel restraint (drifted 0.55–0.92 Å off-path at the TS) **and** the cutoff-8 model. Every solvent-effect number depends on it. `--wall-channel` is implemented; blocker is that the Orbax checkpoint will not load on CPU — export it once with `karml orbax-to-json` |
 | **22** | **dq/dR** | dropping it changes forces by **101 %** (measured against finite differences), so `mechanical-fluct` is non-conservative. Whether including it is *stable* is **untested** — my quick probe was invalid (it destabilised the known-good control too). `charge_gradient_scale` damping is implemented but unexercised. Test it through the real pipeline: `--embedding electrostatic` **without** `--freeze-charge-forces`, which the launcher currently adds and which silently defeats dq/dR entirely |
 | **—** | **cyclohexane** | the apolar limit (Turan 33.9 vs gas 35.8). Makes the trend a trend |
 | 18 | wall-position sensitivity | |

@@ -8,7 +8,7 @@ campaign hypothesis, not a current validation result. [evidence: solvent_burst_d
 DCM and ACO remain supported
 for targeted diagnostics, but are excluded from the default campaign because
 their current dimer PES validation fails. Each matrix cell runs one in-process
-`mmml md-system --run-all` campaign:
+`karml md-system --run-all` campaign:
 
 1. **PyCHARMM init** — MLpot mini + gentle segmented heat (overlap rescue + bonded-MM repair)
 2. **PyCHARMM equi** — 5 × 10 ps NPT equilibration segments (50 ps total)
@@ -24,12 +24,12 @@ Sibling workflows: [dcm_heat_scaling](../dcm_heat_scaling/) (long heat-only scre
 
 ```bash
 # Default checkpoint is set in config.yaml (DESdimers_params.json).
-# Optional override when config uses ${MMML_CKPT}:
-# export MMML_CKPT=/path/to/DESdimers_params.json
+# Optional override when config uses ${KARML_CKPT}:
+# export KARML_CKPT=/path/to/DESdimers_params.json
 export JAX_ENABLE_X64=1   # optional; job_shell defaults to 1
 ```
 
-- GPU JAX (`uv sync --extra gpu`) or cluster env with `jax` + `mmml`
+- GPU JAX (`uv sync --extra gpu`) or cluster env with `jax` + `karml`
 - `packmol` on PATH (cube placement inside 32 Å box)
 - `snakemake` and [`snakemake-executor-plugin-slurm`](https://snakemake.github.io/snakemake-plugin-catalog/plugins/executor/slurm.html) for cluster submission
 
@@ -86,7 +86,7 @@ Set `output_root` to an absolute path outside the repo if you prefer (e.g. `/mmh
 
 ## Cleanup strategy (`cleanup_strategy` in config.yaml)
 
-When geometry or handoff quality breaks, mmml already runs a hybrid recovery ladder. The workflow maps YAML to those hooks:
+When geometry or handoff quality breaks, karml already runs a hybrid recovery ladder. The workflow maps YAML to those hooks:
 
 | Step | YAML block | When it runs |
 |------|------------|--------------|
@@ -217,7 +217,7 @@ Default runtime: **48 h** per job (`slurm_runtime_min: 2880`). Adjust in `config
 
 ## Resume
 
-Each cell uses `mmml md-system --resume`, which skips legs whose output dirs already have valid handoffs. Re-run a single cell:
+Each cell uses `karml md-system --resume`, which skips legs whose output dirs already have valid handoffs. Re-run a single cell:
 
 ```bash
 bash scripts/job_shell.sh DCM 30

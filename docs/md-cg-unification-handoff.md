@@ -1,7 +1,7 @@
 # Handoff: finishing the `md-system` / `cg_jaxmd` unification
 
 **Purpose:** everything a fresh session needs to complete the remaining work on
-the `mmml/md/` unified MD stack. Read this together with
+the `karml/md/` unified MD stack. Read this together with
 [the design doc](md-cg-unification-design.md) (§0 is the live status; §11 is the
 granular checklist).
 
@@ -13,7 +13,7 @@ running status.
 
 ## 1. What is DONE (built, committed, unit-tested)
 
-The whole shared stack exists in `mmml/md/` and runs end-to-end from a
+The whole shared stack exists in `karml/md/` and runs end-to-end from a
 `RunConfig`:
 
 ```
@@ -22,16 +22,16 @@ config ─lowering→ RunConfig ─assemble→ builder → HybridEnergy ─auto�
 
 | Piece | Module | Tests |
 |---|---|---|
-| Topology / FF state (`MolecularSystem`, `FFParams`) | `mmml/md/system.py` | `test_md_package_seams.py`, `test_md_builders.py` |
-| Config (`RunConfig`, `EnsembleSpec`) | `mmml/md/config.py` | seams |
-| Energy terms (all 6) | `mmml/md/energy/terms/` | `test_md_energy_terms.py`, `test_md_mm_nonbonded.py`, `test_md_ml_terms.py` |
-| Capacity / dtype policy | `mmml/md/energy/capacity.py` | `test_md_capacity.py` |
-| Builders + FF bridge | `mmml/md/builders/` | `test_md_builders.py` |
-| Driver incl. **NPT** | `mmml/md/drivers/jaxmd.py` | `test_md_jaxmd_driver.py` |
-| Assembly glue | `mmml/md/assemble.py` | `test_md_assemble.py` |
-| Lowering adapters | `mmml/md/lowering.py` | `test_md_lowering.py` |
-| Neighbor-list factory | `mmml/md/neighbors.py` | `test_md_neighbors.py` |
-| Rigid-body `Sampler` (MC) | `mmml/md/samplers/rigid.py` | `test_md_samplers.py` |
+| Topology / FF state (`MolecularSystem`, `FFParams`) | `karml/md/system.py` | `test_md_package_seams.py`, `test_md_builders.py` |
+| Config (`RunConfig`, `EnsembleSpec`) | `karml/md/config.py` | seams |
+| Energy terms (all 6) | `karml/md/energy/terms/` | `test_md_energy_terms.py`, `test_md_mm_nonbonded.py`, `test_md_ml_terms.py` |
+| Capacity / dtype policy | `karml/md/energy/capacity.py` | `test_md_capacity.py` |
+| Builders + FF bridge | `karml/md/builders/` | `test_md_builders.py` |
+| Driver incl. **NPT** | `karml/md/drivers/jaxmd.py` | `test_md_jaxmd_driver.py` |
+| Assembly glue | `karml/md/assemble.py` | `test_md_assemble.py` |
+| Lowering adapters | `karml/md/lowering.py` | `test_md_lowering.py` |
+| Neighbor-list factory | `karml/md/neighbors.py` | `test_md_neighbors.py` |
+| Rigid-body `Sampler` (MC) | `karml/md/samplers/rigid.py` | `test_md_samplers.py` |
 | Cross-platform `libcharmm` loader | `pycharmm/lib.py` | `test_md_pycharmm_lib_loader.py` |
 
 The six energy terms: `ml_intra`, `ml_pep_water`, `mm_nonbonded`, `vdw_core`,
@@ -39,7 +39,7 @@ The six energy terms: `ml_intra`, `ml_pep_water`, `mm_nonbonded`, `vdw_core`,
 against the `cg_jaxmd` originals / the reference nonbonded / the example ML
 checkpoint (`examples/sppoky-epoch-0010_params.json`).
 
-Full `mmml/md` package unit suite (the tests above + `test_cg_jaxmd_unified.py`,
+Full `karml/md` package unit suite (the tests above + `test_cg_jaxmd_unified.py`,
 §2a): **102 tests, all green** (running the whole `tests/unit/test_md_*.py` glob,
 which also includes pre-existing legacy `md-system` tests unrelated to this
 package, gives 324 passed / 1 skipped — also green, no regressions).
@@ -75,10 +75,10 @@ in design doc §0):
 1. `JaxmdDriver`'s fixed-box NVE/NVT/FIRE path silently wrapped real-space (Å)
    positions as fractional coordinates (`space.periodic_general` defaults to
    `fractional_coordinates=True`), causing instant divergence on the first
-   integration step. Fixed in `mmml/md/drivers/jaxmd.py`.
+   integration step. Fixed in `karml/md/drivers/jaxmd.py`.
 2. `assemble_and_run`'s auto-wired neighbor list didn't exclude peptide-water
    pairs from `mm_nonbonded` when `ml_pep_water` was active, double-counting
-   that interaction. Fixed in `mmml/md/assemble.py` (checks
+   that interaction. Fixed in `karml/md/assemble.py` (checks
    `"ml_pep_water" in config.terms`).
 
 **Gotcha for the next session:** CHARMM has persistent global state across
@@ -94,10 +94,10 @@ neighbor_fn yourself — otherwise the auto-wiring (only triggered
 `if driver is None`) is skipped and `mm_nonbonded`'s host pair-build path will
 raise `TracerArrayConversionError` under jit.
 
-### 2b. `mmml/cli/run/md_system.py --backend jaxmd` swap — DONE (opt-in flag)
+### 2b. `karml/cli/run/md_system.py --backend jaxmd` swap — DONE (opt-in flag)
 
-**`--jaxmd-unified`** on `mmml md-system --backend jaxmd` routes through
-`mmml/cli/run/md_system_unified.py`: `runconfig_from_md_system_args(args)` →
+**`--jaxmd-unified`** on `karml md-system --backend jaxmd` routes through
+`karml/cli/run/md_system_unified.py`: `runconfig_from_md_system_args(args)` →
 `assemble_and_run(...)`, instead of the legacy `md_pbc_suite/jaxmd.py` inline
 loop. It is **opt-in** (`main()` in `md_system.py` checks
 `getattr(args, "jaxmd_unified", False)` right before `build_command`/
@@ -110,7 +110,7 @@ than silently diverging — see `check_md_system_args_supported`). Validated
 end-to-end via the real CLI for both `pbc_nve` and `pbc_nvt`:
 
 ```bash
-mmml md-system --backend jaxmd --jaxmd-unified \
+karml md-system --backend jaxmd --jaxmd-unified \
   --setup pbc_nve --composition "TIP3:4" --box-size 15.0 \
   --checkpoint examples/sppoky-epoch-0010_params.json \
   --dt-fs 1.0 --ps 0.01 --seed 6
@@ -185,14 +185,14 @@ hardware.
 
 - **Python:** use `.venv/bin/python` (jax 0.10.2, jax-md installed).
 - **CHARMM:** `libcharmm.dylib` lives at `setup/charmm/`. `pycharmm/lib.py`
-  auto-discovers it, but exporting `CHARMM_LIB_DIR=/Users/ericboittier/mmml/setup/charmm`
+  auto-discovers it, but exporting `CHARMM_LIB_DIR=/Users/ericboittier/karml/setup/charmm`
   is the safe belt-and-braces for test runs.
 - **Run the md suite:**
   ```bash
-  export CHARMM_LIB_DIR=/Users/ericboittier/mmml/setup/charmm
+  export CHARMM_LIB_DIR=/Users/ericboittier/karml/setup/charmm
   .venv/bin/python -m pytest tests/unit/test_md_*.py -p no:cacheprovider -q
   ```
-- **Lint:** `.venv/bin/python -m ruff check mmml/md/`
+- **Lint:** `.venv/bin/python -m ruff check karml/md/`
 - **Docs preview:** `.venv/bin/mkdocs serve -a 127.0.0.1:8000` (the design +
   decomposition pages are in the nav).
 
@@ -200,18 +200,18 @@ hardware.
 
 ## 4. Conventions / gotchas (don't relearn these the hard way)
 
-1. **Import-lightness is a hard invariant.** `import mmml.md` must NOT pull in
+1. **Import-lightness is a hard invariant.** `import karml.md` must NOT pull in
    jax/ASE/CHARMM. Heavy imports live *inside* `make()` / `run()` / factory
    functions, never at module top. There is a test asserting this
    (`test_md_package_seams.py`); keep it green.
-2. **Term registration is lazy.** Terms register when `mmml.md.energy.terms` is
+2. **Term registration is lazy.** Terms register when `karml.md.energy.terms` is
    imported. `build_hybrid_energy` imports it; standalone `available_terms()`
    tests must import it first.
 3. **jit rules for terms** (see `docs/hybrid-mlmm-decomposition.md` §6): static
    shapes, pad don't resize, `mask`-multiply not boolean-index, clamp masked
    distances before `sqrt`/`1/r`, close over constants in `make()`.
 4. **Dtype policy:** all float math is float64; only indices (`int32`) and masks
-   (`int8`) are low precision. Constants in `mmml/md/energy/capacity.py`.
+   (`int8`) are low precision. Constants in `karml/md/energy/capacity.py`.
 5. **Box-aware terms:** `mm_nonbonded`, `vdw_core`, `smd` accept an optional
    `box` kwarg (threaded by the driver for NPT). Non-PBC terms ignore it via
    `**kwargs`. Don't break this — NPT depends on it.
@@ -244,7 +244,7 @@ hardware.
 
 1. ~~`cg_jaxmd` entrypoint swap~~ — done (§2a), as `examples/cg_jaxmd_unified.py`.
 2. ~~`md_system --backend jaxmd` swap~~ — done (§2b), as the opt-in
-   `--jaxmd-unified` flag / `mmml/cli/run/md_system_unified.py`. Only the
+   `--jaxmd-unified` flag / `karml/cli/run/md_system_unified.py`. Only the
    packmol composition builder is wired; extending to pyxtal/template-PDB/
    handoff and eventually retiring the legacy inline loop remains open.
 3. RDF validation of rigid sampling (§2c).

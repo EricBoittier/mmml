@@ -13,7 +13,7 @@ Tiers
 -----
 0 ``load``      checkpoint parses; config present; params non-degenerate.
 1 ``dataset``   held-out error via ``scripts/evaluate_so3lr_spooky_extxyz.py``.
-2 ``physics``   ``mmml mode-check`` -- finite-difference forces, X-H stretch,
+2 ``physics``   ``karml mode-check`` -- finite-difference forces, X-H stretch,
                 vibrations, kick stability.
 3 ``smoothness`` rigid dimer scan (``scripts/scan_hybrid_dimer.py``) screened by
                 ``scripts/check_spurious_minima.py`` for extra minima or a
@@ -230,7 +230,7 @@ def tier_physics(
     dest = out / "mode_check" / ckpt.stem
     rc, why = _run(
         [
-            sys.executable, "-m", "mmml.cli.__main__", "mode-check",
+            sys.executable, "-m", "karml.cli.__main__", "mode-check",
             "--checkpoint", str(ckpt),
             "--composition", composition,
             "--checks", checks,
@@ -333,12 +333,12 @@ def main() -> int:
     p.add_argument("--tiers", default=",".join(TIERS), help=f"subset of {','.join(TIERS)}")
     p.add_argument(
         "--test-extxyz",
-        default=os.environ.get("MMML_TEST_EXTXYZ"),
+        default=os.environ.get("KARML_TEST_EXTXYZ"),
         help="comma-separated .extxyz test sets; each is evaluated separately "
              "and reported separately (never averaged together)",
     )
-    p.add_argument("--cache-dir", default=os.environ.get("MMML_EVAL_CACHE_DIR"))
-    p.add_argument("--dimer-npz", default=os.environ.get("MMML_DIMER_NPZ"))
+    p.add_argument("--cache-dir", default=os.environ.get("KARML_EVAL_CACHE_DIR"))
+    p.add_argument("--dimer-npz", default=os.environ.get("KARML_DIMER_NPZ"))
     p.add_argument("--composition", default="TIP3:2", help="system for mode-check")
     p.add_argument("--mode-checks", default="minimize,fd,bond-scan,vibrations,kick")
     p.add_argument("--resids", default="DCM,ACO")

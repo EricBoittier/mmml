@@ -12,8 +12,8 @@ import pytest
 # Spoof hybrid eval compiles on CPU; avoid GPU OOM in agent/CI sessions.
 os.environ.setdefault("JAX_PLATFORMS", "cpu")
 
-from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
-from mmml.interfaces.pycharmmInterface.mlpot.jax_mm_spoof import (
+from karml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
+from karml.interfaces.pycharmmInterface.mlpot.jax_mm_spoof import (
     build_jax_mm_spoof_batch_apply,
     build_minimal_chain_bonded_evaluator,
     jax_mm_spoof_enabled,
@@ -66,7 +66,7 @@ def test_jax_mm_spoof_batch_apply_monomer_and_dimer() -> None:
 
 def test_jax_mm_spoof_batch_apply_heterogeneous_sizes() -> None:
     """3+6 dimers must not be confused with a 6-atom monomer (N alone is ambiguous)."""
-    from mmml.interfaces.pycharmmInterface.mlpot.jax_mm_spoof import (
+    from karml.interfaces.pycharmmInterface.mlpot.jax_mm_spoof import (
         resolve_monomer_bonded_evaluators,
     )
 
@@ -99,7 +99,7 @@ def test_jax_mm_spoof_batch_apply_heterogeneous_sizes() -> None:
 
 
 def test_setup_calculator_jax_mm_spoof_heterogeneous() -> None:
-    from mmml.interfaces.pycharmmInterface.mmml_calculator import setup_calculator
+    from karml.interfaces.pycharmmInterface.karml_calculator import setup_calculator
 
     per = [3, 6, 3, 6]
     n_monomers = len(per)
@@ -127,7 +127,7 @@ def test_setup_calculator_jax_mm_spoof_heterogeneous() -> None:
         return fake_mm_fn
 
     with patch(
-        "mmml.interfaces.pycharmmInterface.mmml_calculator.build_mm_energy_forces_fn",
+        "karml.interfaces.pycharmmInterface.karml_calculator.build_mm_energy_forces_fn",
         side_effect=fake_build_mm,
     ):
         factory = setup_calculator(
@@ -171,7 +171,7 @@ def test_setup_calculator_jax_mm_spoof_heterogeneous() -> None:
 
 
 def test_soft_repulsion_finite_near_contact() -> None:
-    from mmml.interfaces.pycharmmInterface.mlpot.jax_mm_spoof import (
+    from karml.interfaces.pycharmmInterface.mlpot.jax_mm_spoof import (
         _inter_monomer_soft_repulsion,
     )
 
@@ -189,7 +189,7 @@ def test_soft_repulsion_finite_near_contact() -> None:
 
 
 def test_setup_calculator_jax_mm_spoof_hybrid_eval() -> None:
-    from mmml.interfaces.pycharmmInterface.mmml_calculator import setup_calculator
+    from karml.interfaces.pycharmmInterface.karml_calculator import setup_calculator
 
     n_mono = 5
     n_monomers = 4
@@ -212,7 +212,7 @@ def test_setup_calculator_jax_mm_spoof_hybrid_eval() -> None:
         return fake_mm_fn
 
     with patch(
-        "mmml.interfaces.pycharmmInterface.mmml_calculator.build_mm_energy_forces_fn",
+        "karml.interfaces.pycharmmInterface.karml_calculator.build_mm_energy_forces_fn",
         side_effect=fake_build_mm,
     ):
         factory = setup_calculator(
@@ -261,12 +261,12 @@ def test_spoof_psf_monomer_matches_cgenff_bonded_components() -> None:
 
     from jax_md.mm_forcefields.io.charmm import parse_pdb_simple
 
-    from mmml.interfaces.pycharmmInterface.cgenff_bonded import bonded_energy_and_forces
-    from mmml.interfaces.pycharmmInterface.cgenff_topology import (
+    from karml.interfaces.pycharmmInterface.cgenff_bonded import bonded_energy_and_forces
+    from karml.interfaces.pycharmmInterface.cgenff_topology import (
         filter_bonded_topology_for_mm,
         load_cgenff_bonded_from_psf,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.jax_mm_spoof import (
+    from karml.interfaces.pycharmmInterface.mlpot.jax_mm_spoof import (
         load_monomer_bonded_components_from_psf,
         load_monomer_bonded_evaluator_from_psf,
     )
@@ -331,12 +331,12 @@ def test_spoof_dcm_box_sum_matches_full_bonded_components() -> None:
     """Sum of per-monomer spoof bonded terms equals full-box CGenFF bonded (no soft)."""
     from pathlib import Path
 
-    from mmml.interfaces.pycharmmInterface.cgenff_bonded import bonded_energy_and_forces
-    from mmml.interfaces.pycharmmInterface.cgenff_topology import load_cgenff_bonded_from_psf
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+    from karml.interfaces.pycharmmInterface.cgenff_bonded import bonded_energy_and_forces
+    from karml.interfaces.pycharmmInterface.cgenff_topology import load_cgenff_bonded_from_psf
+    from karml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         read_crd_coordinates,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.jax_mm_spoof import (
+    from karml.interfaces.pycharmmInterface.mlpot.jax_mm_spoof import (
         _monomer_bonded_fn_from_psf,
     )
 

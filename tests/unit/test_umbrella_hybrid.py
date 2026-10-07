@@ -7,8 +7,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from mmml.umbrella.config import UmbrellaConfig
-from mmml.umbrella.hybrid import (
+from karml.umbrella.config import UmbrellaConfig
+from karml.umbrella.hybrid import (
     bind_hybrid_atom_names,
     find_atom_index_by_name,
     merge_ml_region_mol_id,
@@ -17,8 +17,8 @@ from mmml.umbrella.hybrid import (
     stretch_antisymmetric_seed_mic,
     stretch_distance_seed_mic,
 )
-from mmml.umbrella.io import load_snapshots, save_snapshots
-from mmml.umbrella.mbar import fill_u_kln
+from karml.umbrella.io import load_snapshots, save_snapshots
+from karml.umbrella.mbar import fill_u_kln
 
 
 def test_resolve_ml_region_indices():
@@ -28,7 +28,7 @@ def test_resolve_ml_region_indices():
 
 
 def test_resolve_ml_region_accepts_truncated_ch3cl_alias():
-    from mmml.md.ml_region import resolve_ml_region_indices
+    from karml.md.ml_region import resolve_ml_region_indices
 
     resnames = ["AMM1", "AMM1", "CH3C", "CH3C", "TIP3"]
     idx = resolve_ml_region_indices(resnames, ("AMM1", "CH3CL"))
@@ -36,7 +36,7 @@ def test_resolve_ml_region_accepts_truncated_ch3cl_alias():
 
 
 def test_resolve_ml_region_rejects_partial_match():
-    from mmml.md.ml_region import resolve_ml_region_indices
+    from karml.md.ml_region import resolve_ml_region_indices
 
     with pytest.raises(ValueError, match="missing residues"):
         resolve_ml_region_indices(["AMM1", "AMM1", "TIP3"], ("AMM1", "CH3CL"))
@@ -99,7 +99,7 @@ def test_bind_hybrid_atom_names_builds_difference_cv():
 
 
 def test_stretch_antisymmetric_seed_mic_targets_xi():
-    from mmml.md.restraints import LinearDistanceCV
+    from karml.md.restraints import LinearDistanceCV
 
     # C=0, Cl=1, N=2 along x; ξ = r(CCl) - r(CN) = 1.8 - 2.8 = -1.0
     r0 = np.zeros((3, 3), dtype=np.float64)
@@ -114,7 +114,7 @@ def test_stretch_antisymmetric_seed_mic_targets_xi():
 
 
 def test_select_lowest_energy_frames_tolerates_all_nan_window():
-    from mmml.umbrella.sample import select_lowest_energy_frames
+    from karml.umbrella.sample import select_lowest_energy_frames
 
     pos = np.zeros((2, 3, 2, 3), dtype=np.float64)
     ene = np.array([[1.0, 0.5, 2.0], [np.nan, np.nan, np.nan]], dtype=np.float64)
@@ -242,8 +242,8 @@ def test_mbar_fill_u_kln_uses_stored_unbiased_energies():
 
 
 def test_run_umbrella_nvt_dispatches_hybrid(monkeypatch):
-    from mmml.umbrella import sample as sample_mod
-    from mmml.umbrella.sample import UmbrellaResult
+    from karml.umbrella import sample as sample_mod
+    from karml.umbrella.sample import UmbrellaResult
 
     called = {}
 
@@ -259,7 +259,7 @@ def test_run_umbrella_nvt_dispatches_hybrid(monkeypatch):
         )
 
     monkeypatch.setattr(
-        "mmml.umbrella.hybrid.run_umbrella_hybrid_nvt",
+        "karml.umbrella.hybrid.run_umbrella_hybrid_nvt",
         fake_hybrid,
     )
     cfg = UmbrellaConfig(

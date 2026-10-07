@@ -1,4 +1,4 @@
-"""Component-level tests for :mod:`mmml.analysis.lattice_energy`.
+"""Component-level tests for :mod:`karml.analysis.lattice_energy`.
 
 ``test_lattice_energy.py`` anchors the assembled Ewald sum on the rock-salt
 Madelung constant. It does not touch the pieces that surround that sum -- the
@@ -16,7 +16,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from mmml.analysis.lattice_energy import (
+from karml.analysis.lattice_energy import (
     GAS_CONSTANT_KCAL_MOL_K,
     GPA_A3_TO_KCAL_MOL,
     KCAL_MOL_TO_KJ_MOL,
@@ -34,7 +34,7 @@ from mmml.analysis.lattice_energy import (
     periodic_coulomb_energy,
     sublimation_enthalpy_kcal_mol,
 )
-from mmml.models.cgenff_mm import COULOMB_CONSTANT, sigma_to_rmin_half
+from karml.models.cgenff_mm import COULOMB_CONSTANT, sigma_to_rmin_half
 
 
 def _cell_of(positions, mol_id, *, cell, charges=None, type_idx=None, z=None):

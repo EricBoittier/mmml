@@ -1,30 +1,30 @@
 # PyCHARMM, JAX, and CPU Threading
 
 This note explains why a CPU `md-system` run can show `OMP_NUM_THREADS=8` in the
-MMML setup panel while `htop` still appears to show one busy thread.
+KARML setup panel while `htop` still appears to show one busy thread.
 
-The short version: `MMML_MPI_NP=1` creates one MPI rank. Inside that rank, CHARMM,
+The short version: `KARML_MPI_NP=1` creates one MPI rank. Inside that rank, CHARMM,
 JAX/XLA, BLAS, and NumExpr may each use their own thread pools, but only when the
 active code path reaches a parallel region large enough to use them. The setting
 permits multithreading; it does not force every MD phase to use all cores.
 
 ## Launch Chain
 
-When `libcharmm.so` is MPI-linked, `mmml md-system` may re-exec itself under the
+When `libcharmm.so` is MPI-linked, `karml md-system` may re-exec itself under the
 matching OpenMPI launcher. That is why the process list shows `orterun -np 1`.
 
 ```mermaid
 flowchart TD
   userShell["User shell"]
-  firstPython["Initial mmml python"]
+  firstPython["Initial karml python"]
   mpiCheck["Detect MPI-linked libcharmm"]
   orterun["orterun -np 1"]
-  rankPython["Rank 0 mmml python"]
+  rankPython["Rank 0 karml python"]
   pycharmm["PyCHARMM and libcharmm"]
   mlpot["MLpot callback"]
   jax["JAX and XLA CPU backend"]
 
-  userShell -->|"mmml md-system"| firstPython
+  userShell -->|"karml md-system"| firstPython
   firstPython --> mpiCheck
   mpiCheck -->|"needs MPI bootstrap"| orterun
   orterun -->|"one MPI rank"| rankPython
@@ -81,10 +81,10 @@ The runtime dashboard reports the variables that allow these pools to use more
 threads:
 
 - `OMP_NUM_THREADS`: OpenMP thread cap seen by CHARMM and OpenMP libraries.
-- `MMML_CHARMM_OMP_THREADS`: MMML's CHARMM OpenMP pin.
+- `KARML_CHARMM_OMP_THREADS`: KARML's CHARMM OpenMP pin.
 - `MKL_NUM_THREADS`, `OPENBLAS_NUM_THREADS`, `NUMEXPR_NUM_THREADS`: numeric
   library thread caps.
-- `MMML_JAX_COMPILE_THREADS`: MMML's temporary compile-context thread budget.
+- `KARML_JAX_COMPILE_THREADS`: KARML's temporary compile-context thread budget.
 - `XLA_FLAGS`: XLA CPU thread-pool hints, such as
   `--xla_cpu_multi_thread_eigen=true intra_op_parallelism_threads=8`.
 - `JAX_PLATFORMS`: selected JAX backend, usually `cpu` or `gpu`.
@@ -120,7 +120,7 @@ sequenceDiagram
   participant C as CHARMM
   participant J as JAX
 
-  S->>P: mmml md-system --charmm-omp-threads 8
+  S->>P: karml md-system --charmm-omp-threads 8
   P->>P: set thread env defaults
   P->>M: re-exec with orterun -np 1
   M->>R: start rank 0
@@ -138,12 +138,12 @@ The `JAX compile-time thread env=8` log line belongs to the compile or factory
 context. It is not a promise that every later dynamics step will show eight busy
 threads.
 
-## Current MMML Controls
+## Current KARML Controls
 
 For a CPU experiment:
 
 ```bash
-mmml md-system --config md_system.yaml --charmm-omp-threads 8
+karml md-system --config md_system.yaml --charmm-omp-threads 8
 ```
 
 Equivalent YAML:
@@ -152,24 +152,24 @@ Equivalent YAML:
 charmm_omp_threads: 8
 ```
 
-When explicit, MMML sets or defaults:
+When explicit, KARML sets or defaults:
 
 ```bash
-MMML_CHARMM_OMP_THREADS=8
+KARML_CHARMM_OMP_THREADS=8
 OMP_NUM_THREADS=8
 MKL_NUM_THREADS=8
 OPENBLAS_NUM_THREADS=8
 NUMEXPR_NUM_THREADS=8
-MMML_JAX_COMPILE_THREADS=8
-MMML_NO_JAX_COMPILE_THREADS=0
+KARML_JAX_COMPILE_THREADS=8
+KARML_NO_JAX_COMPILE_THREADS=0
 ```
 
-If you export a library-specific value first, MMML preserves it:
+If you export a library-specific value first, KARML preserves it:
 
 ```bash
 export MKL_NUM_THREADS=2
 export OPENBLAS_NUM_THREADS=4
-mmml md-system --config md_system.yaml --charmm-omp-threads 8
+karml md-system --config md_system.yaml --charmm-omp-threads 8
 ```
 
 ## How To Inspect Threads
@@ -191,7 +191,7 @@ In `htop`:
 Check the effective env of the rank process:
 
 ```bash
-tr '\0' '\n' < /proc/$pid/environ | grep -E 'OMP|MKL|OPENBLAS|NUMEXPR|JAX|XLA|MMML_MLPOT'
+tr '\0' '\n' < /proc/$pid/environ | grep -E 'OMP|MKL|OPENBLAS|NUMEXPR|JAX|XLA|KARML_MLPOT'
 ```
 
 The `/proc` command is Linux-specific and works on the cluster, not macOS.
@@ -225,7 +225,7 @@ Practical levers:
 - Increase `charmm_omp_threads` and benchmark, but measure by stage.
 - Keep the JAX compilation cache enabled to avoid repeated compile cost.
 - Adjust `ml_batch_size` and `ml_max_active_dimers` to reduce per-step ML work.
-- Try `MMML_MPI_NP>1` plus `--ml-spatial-mpi` only as an experimental scaling
+- Try `KARML_MPI_NP>1` plus `--ml-spatial-mpi` only as an experimental scaling
   path for ML work, not as a drop-in replacement for OpenMP.
 - Profile with `--mlpot-profile` to distinguish CHARMM time, callback time,
   compile time, and JAX execution time.
@@ -243,7 +243,7 @@ If `Runtime threads` shows 8 but `htop` shows one busy thread:
 ```bash
 for t in 1 2 4 8 16; do
   out="artifacts/omp${t}"
-  mmml md-system --config md_system.yaml \
+  karml md-system --config md_system.yaml \
     --charmm-omp-threads "$t" \
     --output-dir "$out" \
     --mlpot-profile

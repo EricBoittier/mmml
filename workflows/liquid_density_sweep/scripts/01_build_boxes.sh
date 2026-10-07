@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Step 1 — MM-only box construction + certification for the whole matrix.
 #
-# `mmml liquid-box` packs with Packmol, MC-equalizes density, then relaxes with
+# `karml liquid-box` packs with Packmol, MC-equalizes density, then relaxes with
 # CHARMM SD/ABNR. It writes model.psf / model.crd / box.json / REPORT.md and is
 # pure MM, so it needs no checkpoint and no GPU. Run it first: if a cell cannot
 # be built at MM level it will certainly not run with ML/MM on top.
@@ -23,7 +23,7 @@ for solvent in $SOLVENTS; do
 
     echo
     echo "--- ${solvent}:${n}  ρ=${rho} g/cm³ (${frac}×bulk)  L=${BOX_SIZE} Å ---"
-    run_cmd mmml liquid-box \
+    run_cmd karml liquid-box \
       --composition "${solvent}:${n}" \
       --box-size "$BOX_SIZE" \
       --target-density-g-cm3 "$rho" \
@@ -40,9 +40,9 @@ Built boxes land in artifacts/boxes/<tag>/ (model.psf, model.crd, box.json,
 REPORT.md). Check REPORT.md for the achieved density and minimisation health
 before spending GPU time on the ML/MM runs.
 
-Equivalent parametric form (mmml derives N from the known bulk density instead
+Equivalent parametric form (karml derives N from the known bulk density instead
 of the table in common.sh):
 
-  mmml liquid-box --composition DCM:1 --box-auto count --box-size 28 \
+  karml liquid-box --composition DCM:1 --box-auto count --box-size 28 \
     --bulk-density-fraction 0.75 -o artifacts/boxes/dcm_f075_l28
 EOF

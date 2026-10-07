@@ -12,8 +12,8 @@ import jax.numpy as jnp
 import numpy as np
 import orbax.checkpoint as ocp
 
-from mmml.data.orbax_shards import read_manifest
-from mmml.models.multipoles import irrep_blocks_to_traceless
+from karml.data.orbax_shards import read_manifest
+from karml.models.multipoles import irrep_blocks_to_traceless
 
 
 BOHR_TO_ANGSTROM = 0.529177210903

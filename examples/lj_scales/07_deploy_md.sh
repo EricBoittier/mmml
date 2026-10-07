@@ -75,7 +75,7 @@ if [[ "${LJ_JOINT}" != "1" ]]; then
   if [[ "${LJ_MD_PROD:-0}" == "1" ]]; then
     OUT_DIR="${LJ_ARTIFACTS_DIR}/liquid_dcm_prod"
   fi
-  uv run mmml md-system \
+  uv run karml md-system \
     --config "${DCM_CAMPAIGN_YAML}" \
     --run-all \
     --checkpoint "${CKPT}" \
@@ -127,7 +127,7 @@ PY
 )"
   echo "--- ${resid}: composition=${comp}  box=${box_dir}  out=${out_root}"
   mkdir -p "${out_root}"
-  uv run mmml md-system \
+  uv run karml md-system \
     --config "${JOINT_CAMPAIGN_YAML}" \
     --run-all \
     --checkpoint "${CKPT}" \

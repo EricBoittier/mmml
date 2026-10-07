@@ -17,7 +17,7 @@
 # parallel with the queued GPU fits.
 set -uo pipefail
 
-REPO="${MMML_REPO:-$HOME/mmml}"
+REPO="${KARML_REPO:-$HOME/karml}"
 cd "$REPO" || exit 1
 source .venv/bin/activate 2>/dev/null
 export UV_NO_SYNC=1 UV_OFFLINE=1
@@ -45,7 +45,7 @@ build() {
   local out="$OUT_ROOT/${resid,,}"
   echo "=== ${resid}  L=${L} A  T=${temp} K  rho_target=${rho} g/cm3 -> ${out}"
   mkdir -p "$out"
-  uv run mmml liquid-box \
+  uv run karml liquid-box \
     --composition "${resid}:1" \
     --box-auto count \
     --box-size "$L" \

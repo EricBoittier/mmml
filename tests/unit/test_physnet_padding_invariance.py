@@ -16,8 +16,8 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from mmml.models.physnetjax.physnetjax.models.model import PhysNet
-from mmml.models.physnetjax.physnetjax.models.spooky_model import SpookyPhysNet
+from karml.models.physnetjax.physnetjax.models.model import PhysNet
+from karml.models.physnetjax.physnetjax.models.spooky_model import SpookyPhysNet
 
 NA, NREAL = 10, 4
 

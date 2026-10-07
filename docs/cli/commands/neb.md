@@ -1,4 +1,4 @@
-# `mmml neb`
+# `karml neb`
 
 Nudged elastic band (NEB) path sampling with PhysNet.
 
@@ -6,13 +6,13 @@ Nudged elastic band (NEB) path sampling with PhysNet.
 ## Usage
 
 ```bash
-mmml neb --help
+karml neb --help
 ```
 
 ## Options
 
 ```text
-usage: mmml neb [-h] [--config CONFIG] [--checkpoint CHECKPOINT]
+usage: karml neb [-h] [--config CONFIG] [--checkpoint CHECKPOINT]
                 [--calculator {physnet,kernnn}] [--initial INITIAL]
                 [--final FINAL] [--output-dir OUTPUT_DIR] [--n-images N_IMAGES]
                 [--fmax FMAX] [--climb | --no-climb]
@@ -23,14 +23,14 @@ usage: mmml neb [-h] [--config CONFIG] [--checkpoint CHECKPOINT]
                 [--max-steps MAX_STEPS] [--plot | --no-plot] [--overwrite]
                 [--pair I,J]
 
-Nudged elastic band (NEB) path sampling with a PhysNet / MMML checkpoint as the
+Nudged elastic band (NEB) path sampling with a PhysNet / KARML checkpoint as the
 ASE calculator.
 
 Input & configuration:
   --config CONFIG       YAML/JSON NebConfig; CLI flags override file values when
                         set
   --checkpoint CHECKPOINT
-                        PhysNet / KerNN / MMML checkpoint
+                        PhysNet / KerNN / KARML checkpoint
 
 Scientific model:
   --calculator {physnet,kernnn}
@@ -71,7 +71,7 @@ Other options:
                         (repeatable). Default for 9-atom NH3–CH3Cl: 1,2 (N–C)
                         and 0,2 (Cl–C).
 
-CLI adapter for ASE NEB sampling with an MMML PhysNet checkpoint. Usage: mmml
+CLI adapter for ASE NEB sampling with an KARML PhysNet checkpoint. Usage: karml
 neb \ --checkpoint examples/m/kl.json \ --initial examples/m/neb/reag_0_opt.xyz
 \ --final examples/m/neb/prod_0_opt.xyz \ --output-dir artifacts/nh3_ch3cl/neb \
 --n-images 11 --fmax 0.05

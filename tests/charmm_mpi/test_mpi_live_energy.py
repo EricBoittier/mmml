@@ -9,7 +9,7 @@ from tests.conftest import can_import_pycharmm
 
 def _under_mpirun() -> bool:
     try:
-        from mmml.interfaces.pycharmmInterface.charmm_mpi import _under_mpirun as under
+        from karml.interfaces.pycharmmInterface.charmm_mpi import _under_mpirun as under
 
         return bool(under())
     except Exception:
@@ -25,14 +25,14 @@ pytestmark = [
         not _under_mpirun(),
         reason=(
             "requires mpirun; use "
-            "MMML_MPI_NP=1 ./scripts/mmml-charmm-mpirun.sh pytest tests/charmm_mpi/test_mpi_live_energy.py"
+            "KARML_MPI_NP=1 ./scripts/karml-charmm-mpirun.sh pytest tests/charmm_mpi/test_mpi_live_energy.py"
         ),
     ),
 ]
 
 
 def test_mpi_rank_size_under_mpirun():
-    from mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
+    from karml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
 
     rank, size = mpi_rank_size()
     assert 0 <= rank < max(1, size)
@@ -40,7 +40,7 @@ def test_mpi_rank_size_under_mpirun():
 
 
 def test_mpi_check_cli_under_mpirun():
-    from mmml.cli.run.mpi_check import main, run_mpi_check
+    from karml.cli.run.mpi_check import main, run_mpi_check
 
     report = run_mpi_check(prelaunch=True)
     if not report.ok:
@@ -52,7 +52,7 @@ def test_mpi_check_cli_under_mpirun():
 
 
 def test_tip3_energy_finite_under_mpirun(tip3_charmm_ff):
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_grms_after_ener_force
+    from karml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_grms_after_ener_force
 
     grms = charmm_grms_after_ener_force(silent=True)
     assert grms >= 0.0

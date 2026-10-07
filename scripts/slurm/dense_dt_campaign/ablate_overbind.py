@@ -54,9 +54,9 @@ def quat_to_matrix(q: np.ndarray) -> np.ndarray:
 
 
 def _load_model(checkpoint: Path, pad: int, *, es_off: bool):
-    from mmml.cli.misc.physnet_evaluate import _load_physnet_checkpoint
-    from mmml.utils.model_checkpoint import build_physnet_from_config
-    from mmml.models.physnetjax.physnetjax.models.model import PhysNet as StandardEF
+    from karml.cli.misc.physnet_evaluate import _load_physnet_checkpoint
+    from karml.utils.model_checkpoint import build_physnet_from_config
+    from karml.models.physnetjax.physnetjax.models.model import PhysNet as StandardEF
     import json as _json
 
     path, params, model = _load_physnet_checkpoint(checkpoint, pad, use_ema=True)
@@ -94,8 +94,8 @@ def run_scan(
 ) -> dict:
     import jax
     import jax.numpy as jnp
-    from mmml.models.hybrid_energy import HYBRID_MM_BATCH_KEYS, hybrid_forward
-    from mmml.models.physnetjax.physnetjax.data.batches import prepare_batches_jit
+    from karml.models.hybrid_energy import HYBRID_MM_BATCH_KEYS, hybrid_forward
+    from karml.models.physnetjax.physnetjax.data.batches import prepare_batches_jit
 
     out_dir.mkdir(parents=True, exist_ok=True)
     n_mono = 5
@@ -230,7 +230,7 @@ def run_scan(
         if bi % 20 == 0:
             print(f"  [{tag}] batch {bi}/{len(batches)}", flush=True)
 
-    from mmml.analysis.dimer_scans import (
+    from karml.analysis.dimer_scans import (
         DEFAULT_ORIENT_MIN_CONTACT_A,
         intermolecular_min_distance,
     )
@@ -336,7 +336,7 @@ def plot_compare(summaries: list[dict], out_dir: Path, baseline_csv: Path | None
         if "contact_ok" in d.columns:
             d = d[d["contact_ok"]]
         elif "dmin_A" in d.columns:
-            from mmml.analysis.dimer_scans import DEFAULT_ORIENT_MIN_CONTACT_A
+            from karml.analysis.dimer_scans import DEFAULT_ORIENT_MIN_CONTACT_A
 
             d = d[d["dmin_A"] >= DEFAULT_ORIENT_MIN_CONTACT_A]
         return d.groupby("r_A")["E_int_kcal"].mean()

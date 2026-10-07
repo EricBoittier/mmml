@@ -7,11 +7,11 @@ import argparse
 import numpy as np
 import pytest
 
-from mmml.interfaces.pycharmmInterface.mlpot.mlpot_batch_policy import (
+from karml.interfaces.pycharmmInterface.mlpot.mlpot_batch_policy import (
     DEFAULT_MLPOT_MM_SKIN_A,
     resolve_mlpot_mm_skin_A,
 )
-from mmml.interfaces.pycharmmInterface.mm_energy_forces import (
+from karml.interfaces.pycharmmInterface.mm_energy_forces import (
     max_displacement_since_build_A,
     neighbor_pair_cache_should_reuse,
 )
@@ -101,7 +101,7 @@ def test_verlet_list_stays_complete_under_mic_reuse():
 
 
 def test_resolve_mlpot_mm_skin(monkeypatch):
-    monkeypatch.delenv("MMML_MLPOT_MM_SKIN_A", raising=False)
+    monkeypatch.delenv("KARML_MLPOT_MM_SKIN_A", raising=False)
     assert resolve_mlpot_mm_skin_A(None) == DEFAULT_MLPOT_MM_SKIN_A
     args = argparse.Namespace(jax_md_skin_distance=0.25)
     # Parser default (not explicit) does not override the MLpot default.
@@ -109,5 +109,5 @@ def test_resolve_mlpot_mm_skin(monkeypatch):
     args._cli_explicit = {"jax_md_skin_distance"}
     args.jax_md_skin_distance = 0.4
     assert resolve_mlpot_mm_skin_A(args) == pytest.approx(0.4)
-    monkeypatch.setenv("MMML_MLPOT_MM_SKIN_A", "0.8")
+    monkeypatch.setenv("KARML_MLPOT_MM_SKIN_A", "0.8")
     assert resolve_mlpot_mm_skin_A(args) == pytest.approx(0.8)

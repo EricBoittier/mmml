@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from mmml.dimer_scan import DimerScanConfig, run_dimer_scan
+from karml.dimer_scan import DimerScanConfig, run_dimer_scan
 
 
 def _distance_grid(value: str) -> tuple[float, ...]:
@@ -25,7 +25,7 @@ def _distance_grid(value: str) -> tuple[float, ...]:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="mmml dimer-scan",
+        prog="karml dimer-scan",
         description="Run a reproducible rigid 1D dimer energy/force scan.",
     )
     parser.add_argument(

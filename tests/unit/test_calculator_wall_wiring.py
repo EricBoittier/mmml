@@ -16,7 +16,7 @@ import pytest
 
 
 def test_calculator_exposes_the_wall_flag_and_defaults_on():
-    from mmml.interfaces.pycharmmInterface.mmml_calculator import setup_calculator
+    from karml.interfaces.pycharmmInterface.karml_calculator import setup_calculator
 
     sig = inspect.signature(setup_calculator)
     assert "short_range_wall" in sig.parameters
@@ -25,8 +25,8 @@ def test_calculator_exposes_the_wall_flag_and_defaults_on():
 
 def test_calculator_imports_the_shared_wall_not_a_copy():
     """Single source of truth: training and MD must evaluate the same function."""
-    import mmml.interfaces.pycharmmInterface.mmml_calculator as calc
-    from mmml.models.short_range_wall import pair_wall_energy
+    import karml.interfaces.pycharmmInterface.karml_calculator as calc
+    from karml.models.short_range_wall import pair_wall_energy
 
     assert calc.pair_wall_energy is pair_wall_energy
 
@@ -39,7 +39,7 @@ def test_wall_is_not_gated_on_doMM():
     """
     src = inspect.getsource(
         __import__(
-            "mmml.interfaces.pycharmmInterface.mmml_calculator", fromlist=["x"]
+            "karml.interfaces.pycharmmInterface.karml_calculator", fromlist=["x"]
         ).setup_calculator
     )
     i_wall = src.index("if short_range_wall:")
@@ -53,8 +53,8 @@ def test_wall_energy_matches_training_for_a_close_contact():
     """The number the calculator adds must equal training's wall term."""
     import jax.numpy as jnp
 
-    from mmml.models.cgenff_mm import monomer_centroids  # noqa: F401  (import sanity)
-    from mmml.models.short_range_wall import (
+    from karml.models.cgenff_mm import monomer_centroids  # noqa: F401  (import sanity)
+    from karml.models.short_range_wall import (
         inter_monomer_wall_energy,
         pair_wall_energy,
     )

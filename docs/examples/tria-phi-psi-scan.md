@@ -3,7 +3,7 @@
 A complete classroom / workshop path on **trialanine (TRIA)**: constrained
 Ramachandran energy maps (gas then solvent), then **gas-phase dihedral umbrella**
 sampling for a 1D φ (or ψ) PMF. Example files live under
-[`examples/tria_phi_psi_scan/`](https://github.com/EricBoittier/mmml/blob/main/examples/tria_phi_psi_scan/).
+[`examples/tria_phi_psi_scan/`](https://github.com/EricBoittier/karml/blob/main/examples/tria_phi_psi_scan/).
 
 Related background:
 
@@ -49,8 +49,8 @@ flowchart TD
   C --> D[Per φ/ψ: inject peptide<br/>water SD → joint CONS DIHE]
   D --> E[gas_vs_solvent.png]
   B --> F[Export seeds for φ or ψ]
-  F --> G[mmml umbrella-sample<br/>DihedralCV packed_ml]
-  G --> H[mmml umbrella-mbar → PMF]
+  F --> G[karml umbrella-sample<br/>DihedralCV packed_ml]
+  G --> H[karml umbrella-mbar → PMF]
 ```
 
 Solvent stage builds Packmol **once**, then swaps peptide coordinates. Rebuilding
@@ -62,9 +62,9 @@ handful of cycles.
 ## 0. Environment (scicore / PyCHARMM node)
 
 ```bash
-cd ~/mmml
+cd ~/karml
 # CHARMM + CGenFF paths as usual (CHARMM_LIB_DIR / CHARMM_HOME)
-export MMML_CKPT="${MMML_CKPT:-examples/sppoky-epoch-0010_params.json}"
+export KARML_CKPT="${KARML_CKPT:-examples/sppoky-epoch-0010_params.json}"
 OUT=artifacts/tria_phi_psi_scan
 ```
 
@@ -89,7 +89,7 @@ uv run python scripts/plot_tria_phi_psi_gas_solvent.py --demo \
 
 ```bash
 uv run python scripts/scan_trialanine_phi_psi_pes.py \
-  --checkpoint "$MMML_CKPT" \
+  --checkpoint "$KARML_CKPT" \
   --phi=-180:180:60 --psi=-180:180:60 \
   --out "$OUT/gas" \
   --mm-sd-steps 50 --mm-abnr-steps 50 \
@@ -157,10 +157,10 @@ uv run python scripts/export_tria_phi_umbrella_seeds.py \
   --cv phi --n-windows 7 \
   -o "$OUT/gas/umbrella_phi_seeds.npz"
 
-uv run mmml umbrella-sample \
+uv run karml umbrella-sample \
   --config examples/tria_phi_psi_scan/yaml/umbrella_phi_gas_smoke.yaml
 
-uv run mmml umbrella-mbar --run-dir "$OUT/umbrella_phi_gas_smoke"
+uv run karml umbrella-mbar --run-dir "$OUT/umbrella_phi_gas_smoke"
 
 uv run python scripts/plot_tria_dihedral_umbrella_pmf.py \
   --run-dir "$OUT/umbrella_phi_gas_smoke" \
@@ -207,7 +207,7 @@ that matches the chemistry.
 Example: alanine dipeptide artifacts:
 
 ```bash
-./scripts/mmml-charmm-mpirun.sh python scripts/examples/charmm_build_protein_alad.py \
+./scripts/karml-charmm-mpirun.sh python scripts/examples/charmm_build_protein_alad.py \
   -o artifacts/alad_charmm
 # → alad.pdb, alad.psf
 ```
@@ -216,7 +216,7 @@ Longer protein-toppar sequence (sketch):
 
 ```python
 from pycharmm import generate, ic, read, settings
-from mmml.interfaces.pycharmmInterface.protein_charmm_build import protein_toppar_paths
+from karml.interfaces.pycharmmInterface.protein_charmm_build import protein_toppar_paths
 
 toppar = protein_toppar_paths()
 settings.set_verbosity(0)

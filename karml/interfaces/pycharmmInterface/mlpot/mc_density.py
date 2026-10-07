@@ -7,17 +7,17 @@ from typing import Any
 
 import numpy as np
 
-from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import (
+from karml.interfaces.pycharmmInterface.mlpot.box_sizing import (
     SOLVENT_BULK_PROPS,
     parse_composition_dict,
     resolve_target_density_g_cm3,
     total_mass_g_for_composition,
 )
-from mmml.utils.geometry_checks import (
+from karml.utils.geometry_checks import (
     find_worst_intermonomer_overlap,
     wrap_monomers_primary_cell,
 )
-from mmml.utils.intermonomer_geometry import resolve_mc_min_intermonomer_distance_A
+from karml.utils.intermonomer_geometry import resolve_mc_min_intermonomer_distance_A
 
 
 @dataclass(frozen=True)

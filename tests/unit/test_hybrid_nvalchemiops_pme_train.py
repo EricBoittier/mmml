@@ -10,7 +10,7 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from mmml.models.hybrid_energy import HybridMMConfig, hybrid_forward
+from karml.models.hybrid_energy import HybridMMConfig, hybrid_forward
 
 jax.config.update("jax_enable_x64", True)
 
@@ -101,7 +101,7 @@ def test_hybrid_mm_config_nvalchemiops_honors_include_lj_and_requires_box():
 
 
 def test_build_hybrid_mm_config_cli_nvalchemiops(tmp_path):
-    from mmml.cli.make.make_training import _build_hybrid_mm_config
+    from karml.cli.make.make_training import _build_hybrid_mm_config
 
     path = tmp_path / "d.npz"
     np.savez(
@@ -138,7 +138,7 @@ def test_build_hybrid_mm_config_cli_nvalchemiops(tmp_path):
         cutoff=6.0,
     )
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.long_range_backend.have_nvalchemiops_pme",
+        "karml.interfaces.pycharmmInterface.long_range_backend.have_nvalchemiops_pme",
         return_value=True,
     ):
         with pytest.raises(ValueError, match="pme-box-length"):
@@ -146,13 +146,13 @@ def test_build_hybrid_mm_config_cli_nvalchemiops(tmp_path):
 
     args.pme_box_length = 28.0
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.long_range_backend.have_nvalchemiops_pme",
+        "karml.interfaces.pycharmmInterface.long_range_backend.have_nvalchemiops_pme",
         return_value=True,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.long_range_backend.estimate_nvalchemiops_pme_real_space_cutoff",
+        "karml.interfaces.pycharmmInterface.long_range_backend.estimate_nvalchemiops_pme_real_space_cutoff",
         return_value=9.0,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.long_range_backend.warmup_nvalchemiops_pme_train_worker",
+        "karml.interfaces.pycharmmInterface.long_range_backend.warmup_nvalchemiops_pme_train_worker",
     ):
         cfg = _build_hybrid_mm_config(args, [str(path)])
     assert cfg["lr_solver"] == "nvalchemiops_pme"
@@ -163,7 +163,7 @@ def test_build_hybrid_mm_config_cli_nvalchemiops(tmp_path):
 
 
 def test_build_hybrid_mm_config_requires_package(tmp_path):
-    from mmml.cli.make.make_training import _build_hybrid_mm_config
+    from karml.cli.make.make_training import _build_hybrid_mm_config
 
     path = tmp_path / "d.npz"
     np.savez(
@@ -191,7 +191,7 @@ def test_build_hybrid_mm_config_requires_package(tmp_path):
         mm_include_lj=True,
     )
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.long_range_backend.have_nvalchemiops_pme",
+        "karml.interfaces.pycharmmInterface.long_range_backend.have_nvalchemiops_pme",
         return_value=False,
     ):
         with pytest.raises(ValueError, match="nvalchemiops"):
@@ -200,7 +200,7 @@ def test_build_hybrid_mm_config_requires_package(tmp_path):
 
 def _analytic_pair_coulomb_kcal(pos, charges, **kwargs):
     """Smooth stand-in for PME: sum_{i<j} k q_i q_j / r (kcal/mol)."""
-    from mmml.interfaces.pycharmmInterface.long_range_backend import CHARMM_COULOMB_KCAL
+    from karml.interfaces.pycharmmInterface.long_range_backend import CHARMM_COULOMB_KCAL
 
     q = jnp.asarray(charges).reshape(-1)
     n = pos.shape[0]
@@ -234,7 +234,7 @@ def test_hybrid_nvalchemiops_path_fd_force_energy_with_analytic_stub():
         )
 
     with mock.patch(
-        "mmml.models.nvalchemiops_hybrid_coulomb.nvalchemiops_pme_coulomb_energy_jax",
+        "karml.models.nvalchemiops_hybrid_coulomb.nvalchemiops_pme_coulomb_energy_jax",
         side_effect=_analytic_pair_coulomb_kcal,
     ):
         out = _fwd()
@@ -253,7 +253,7 @@ def test_hybrid_nvalchemiops_path_fd_force_energy_with_analytic_stub():
             b = dict(batch)
             b["R"] = jnp.asarray(p)
             with mock.patch(
-                "mmml.models.nvalchemiops_hybrid_coulomb.nvalchemiops_pme_coulomb_energy_jax",
+                "karml.models.nvalchemiops_hybrid_coulomb.nvalchemiops_pme_coulomb_energy_jax",
                 side_effect=_analytic_pair_coulomb_kcal,
             ):
                 return float(
@@ -291,7 +291,7 @@ def test_nvalchemiops_path_independent_of_lj_tables():
     eps_hi = jnp.array([10.0, 10.0], dtype=jnp.float64)
 
     with mock.patch(
-        "mmml.models.nvalchemiops_hybrid_coulomb.nvalchemiops_pme_coulomb_energy_jax",
+        "karml.models.nvalchemiops_hybrid_coulomb.nvalchemiops_pme_coulomb_energy_jax",
         side_effect=_analytic_pair_coulomb_kcal,
     ):
         e0 = hybrid_forward(
@@ -326,7 +326,7 @@ def test_nvalchemiops_path_independent_of_lj_tables():
 
 
 def _nval_pme_runtime_ok() -> bool:
-    from mmml.interfaces.pycharmmInterface.long_range_backend import (
+    from karml.interfaces.pycharmmInterface.long_range_backend import (
         have_nvalchemiops_pme,
         nvalchemiops_pme_coulomb_energy_jax,
     )
@@ -352,7 +352,7 @@ def _nval_pme_runtime_ok() -> bool:
 
 @pytest.mark.skipif(not _nval_pme_runtime_ok(), reason="nvalchemiops PME runtime unavailable")
 def test_real_nvalchemiops_pme_energy_fd_conserves():
-    from mmml.interfaces.pycharmmInterface.long_range_backend import (
+    from karml.interfaces.pycharmmInterface.long_range_backend import (
         nvalchemiops_pme_coulomb_energy_jax,
     )
 
@@ -385,7 +385,7 @@ def test_real_nvalchemiops_pme_energy_fd_conserves():
 
 def test_full_box_pme_keeps_intra_monomer_coulomb():
     """Full-box many-to-many: single monomer still contributes E_PME (no subtract)."""
-    from mmml.models.nvalchemiops_hybrid_coulomb import (
+    from karml.models.nvalchemiops_hybrid_coulomb import (
         hybrid_nvalchemiops_pme_coulomb_energy,
     )
 
@@ -394,7 +394,7 @@ def test_full_box_pme_keeps_intra_monomer_coulomb():
     q = jnp.array([0.5, -0.5], dtype=jnp.float64)
 
     with mock.patch(
-        "mmml.models.nvalchemiops_hybrid_coulomb.nvalchemiops_pme_coulomb_energy_jax",
+        "karml.models.nvalchemiops_hybrid_coulomb.nvalchemiops_pme_coulomb_energy_jax",
         side_effect=_analytic_pair_coulomb_kcal,
     ):
         e = hybrid_nvalchemiops_pme_coulomb_energy(
@@ -406,14 +406,14 @@ def test_full_box_pme_keeps_intra_monomer_coulomb():
             **KW,
         )
     # Analytic pair Coulomb for this dimer: k * (0.5)*(-0.5) / 1.0
-    from mmml.interfaces.pycharmmInterface.long_range_backend import CHARMM_COULOMB_KCAL
+    from karml.interfaces.pycharmmInterface.long_range_backend import CHARMM_COULOMB_KCAL
 
     assert float(e) == pytest.approx(CHARMM_COULOMB_KCAL * (-0.25), rel=1e-10)
 
 
 def test_full_box_pme_ignores_com_switch_kwargs():
     """COM MM taper is not applied (matches untapered MD many-to-many Ewald)."""
-    from mmml.models.nvalchemiops_hybrid_coulomb import (
+    from karml.models.nvalchemiops_hybrid_coulomb import (
         hybrid_nvalchemiops_pme_coulomb_energy,
     )
 
@@ -425,7 +425,7 @@ def test_full_box_pme_ignores_com_switch_kwargs():
     q = jnp.array([0.5, -0.5, -0.5, 0.5], dtype=jnp.float64)
 
     with mock.patch(
-        "mmml.models.nvalchemiops_hybrid_coulomb.nvalchemiops_pme_coulomb_energy_jax",
+        "karml.models.nvalchemiops_hybrid_coulomb.nvalchemiops_pme_coulomb_energy_jax",
         side_effect=_analytic_pair_coulomb_kcal,
     ) as pme:
         e_near = hybrid_nvalchemiops_pme_coulomb_energy(
@@ -457,7 +457,7 @@ def test_full_box_pme_ignores_com_switch_kwargs():
 def test_cli_exposes_lr_solver_flags():
     import inspect
 
-    from mmml.cli.make import make_training
+    from karml.cli.make import make_training
 
     src = inspect.getsource(make_training)
     assert '"--lr-solver"' in src
@@ -466,42 +466,42 @@ def test_cli_exposes_lr_solver_flags():
 
 
 def test_nvalchemiops_pme_eval_defaults_to_gpu(monkeypatch):
-    from mmml.interfaces.pycharmmInterface import long_range_backend as lrb
+    from karml.interfaces.pycharmmInterface import long_range_backend as lrb
 
-    monkeypatch.delenv("MMML_NVALCHEMIOPS_PME_DEVICE", raising=False)
+    monkeypatch.delenv("KARML_NVALCHEMIOPS_PME_DEVICE", raising=False)
     assert lrb.nvalchemiops_pme_device_name() == "gpu"
-    monkeypatch.setenv("MMML_NVALCHEMIOPS_PME_DEVICE", "cpu")
+    monkeypatch.setenv("KARML_NVALCHEMIOPS_PME_DEVICE", "cpu")
     assert lrb.nvalchemiops_pme_device_name() == "cpu"
 
 
 def test_nvalchemiops_pme_train_isolate_defaults_cpu_train(monkeypatch):
-    from mmml.interfaces.pycharmmInterface import long_range_backend as lrb
+    from karml.interfaces.pycharmmInterface import long_range_backend as lrb
 
-    monkeypatch.delenv("MMML_NVALCHEMIOPS_PME_ISOLATE", raising=False)
+    monkeypatch.delenv("KARML_NVALCHEMIOPS_PME_ISOLATE", raising=False)
     assert lrb.nvalchemiops_pme_train_isolate_mode() == "cpu_train"
     assert lrb.nvalchemiops_pme_train_wants_cpu_steps() is True
     assert lrb.nvalchemiops_pme_train_isolate_enabled() is True
-    monkeypatch.setenv("MMML_NVALCHEMIOPS_PME_ISOLATE", "1")
+    monkeypatch.setenv("KARML_NVALCHEMIOPS_PME_ISOLATE", "1")
     assert lrb.nvalchemiops_pme_train_isolate_mode() == "cpu_train"
-    monkeypatch.setenv("MMML_NVALCHEMIOPS_PME_ISOLATE", "spawn")
+    monkeypatch.setenv("KARML_NVALCHEMIOPS_PME_ISOLATE", "spawn")
     assert lrb.nvalchemiops_pme_train_isolate_mode() == "spawn"
     assert lrb.nvalchemiops_pme_train_wants_cpu_steps() is False
-    monkeypatch.setenv("MMML_NVALCHEMIOPS_PME_ISOLATE", "0")
+    monkeypatch.setenv("KARML_NVALCHEMIOPS_PME_ISOLATE", "0")
     assert lrb.nvalchemiops_pme_train_isolate_mode() == "off"
     assert lrb.nvalchemiops_pme_train_isolate_enabled() is False
 
 
 def test_nvalchemiops_pme_worker_cuda_visible_override(monkeypatch):
-    from mmml.interfaces.pycharmmInterface import long_range_backend as lrb
+    from karml.interfaces.pycharmmInterface import long_range_backend as lrb
 
-    monkeypatch.setenv("MMML_NVALCHEMIOPS_PME_WORKER_GPU", "1")
+    monkeypatch.setenv("KARML_NVALCHEMIOPS_PME_WORKER_GPU", "1")
     assert lrb.nvalchemiops_pme_worker_cuda_visible() == "1"
 
 
 def test_nvalchemiops_pme_worker_cuda_visible_picks_last_gpu(monkeypatch):
-    from mmml.interfaces.pycharmmInterface import long_range_backend as lrb
+    from karml.interfaces.pycharmmInterface import long_range_backend as lrb
 
-    monkeypatch.delenv("MMML_NVALCHEMIOPS_PME_WORKER_GPU", raising=False)
+    monkeypatch.delenv("KARML_NVALCHEMIOPS_PME_WORKER_GPU", raising=False)
     with mock.patch.object(
         lrb, "_physical_nvidia_gpu_indices", return_value=["0", "1"]
     ):
@@ -511,9 +511,9 @@ def test_nvalchemiops_pme_worker_cuda_visible_picks_last_gpu(monkeypatch):
 def test_nvalchemiops_pme_eval_context_errors_without_gpu(monkeypatch):
     import jax
 
-    from mmml.interfaces.pycharmmInterface import long_range_backend as lrb
+    from karml.interfaces.pycharmmInterface import long_range_backend as lrb
 
-    monkeypatch.setenv("MMML_NVALCHEMIOPS_PME_DEVICE", "gpu")
+    monkeypatch.setenv("KARML_NVALCHEMIOPS_PME_DEVICE", "gpu")
     with mock.patch.object(jax, "devices", side_effect=RuntimeError("no gpu")):
         with pytest.raises(RuntimeError, match="CUDA GPU"):
             with lrb.nvalchemiops_pme_eval_context():
@@ -523,22 +523,22 @@ def test_nvalchemiops_pme_eval_context_errors_without_gpu(monkeypatch):
 def test_nvalchemiops_pme_eval_context_yields_device(monkeypatch):
     import jax
 
-    from mmml.interfaces.pycharmmInterface import long_range_backend as lrb
+    from karml.interfaces.pycharmmInterface import long_range_backend as lrb
 
-    monkeypatch.setenv("MMML_NVALCHEMIOPS_PME_DEVICE", "cpu")
+    monkeypatch.setenv("KARML_NVALCHEMIOPS_PME_DEVICE", "cpu")
     with lrb.nvalchemiops_pme_eval_context() as device:
         assert device == jax.devices("cpu")[0]
 
 
 def test_nvalchemiops_pme_energy_jittable_with_force_vjp(monkeypatch):
     """Train path must survive jit + value_and_grad (no NL concretization)."""
-    from mmml.interfaces.pycharmmInterface.long_range_backend import (
+    from karml.interfaces.pycharmmInterface.long_range_backend import (
         CHARMM_COULOMB_KCAL,
         nvalchemiops_pme_coulomb_energy_jax,
     )
 
     # In-process mock path (spawn worker would not see the patch).
-    monkeypatch.setenv("MMML_NVALCHEMIOPS_PME_ISOLATE", "0")
+    monkeypatch.setenv("KARML_NVALCHEMIOPS_PME_ISOLATE", "0")
 
     pos0 = jnp.array([[0.0, 0.0, 0.0], [2.0, 0.0, 0.0]], dtype=jnp.float64)
     chg = jnp.array([1.0, -1.0], dtype=jnp.float64)
@@ -556,7 +556,7 @@ def test_nvalchemiops_pme_energy_jittable_with_force_vjp(monkeypatch):
         return e, np.stack([f0, f1], axis=0)
 
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.long_range_backend._nvalchemiops_pme_energy_forces_for_train_callback",
+        "karml.interfaces.pycharmmInterface.long_range_backend._nvalchemiops_pme_energy_forces_for_train_callback",
         side_effect=_concrete,
     ):
         def e_fn(p):
@@ -581,9 +581,9 @@ def test_nvalchemiops_pme_energy_jittable_with_force_vjp(monkeypatch):
 
 
 def test_train_callback_uses_isolated_path_when_spawn(monkeypatch):
-    from mmml.interfaces.pycharmmInterface import long_range_backend as lrb
+    from karml.interfaces.pycharmmInterface import long_range_backend as lrb
 
-    monkeypatch.setenv("MMML_NVALCHEMIOPS_PME_ISOLATE", "spawn")
+    monkeypatch.setenv("KARML_NVALCHEMIOPS_PME_ISOLATE", "spawn")
     called = {}
 
     def _isolated(pos, chg, **kwargs):
@@ -607,9 +607,9 @@ def test_train_callback_uses_isolated_path_when_spawn(monkeypatch):
 
 
 def test_train_callback_uses_concrete_path_for_cpu_train(monkeypatch):
-    from mmml.interfaces.pycharmmInterface import long_range_backend as lrb
+    from karml.interfaces.pycharmmInterface import long_range_backend as lrb
 
-    monkeypatch.setenv("MMML_NVALCHEMIOPS_PME_ISOLATE", "cpu_train")
+    monkeypatch.setenv("KARML_NVALCHEMIOPS_PME_ISOLATE", "cpu_train")
     called = {}
 
     def _concrete(pos, chg, **kwargs):

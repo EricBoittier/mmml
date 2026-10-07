@@ -3,7 +3,7 @@ from typing import Tuple, Union
 
 import ase
 import numpy as np
-from mmml.data.units import (
+from karml.data.units import (
     HARTREE_BOHR_TO_EV_ANGSTROM,
     subtract_atom_refs,
     units_from_npz,

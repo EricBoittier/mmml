@@ -1,4 +1,4 @@
-"""Categorized ``mmml md-system -h`` / ``-hN`` / ``--help-all``."""
+"""Categorized ``karml md-system -h`` / ``-hN`` / ``--help-all``."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ import io
 
 import pytest
 
-from mmml.cli.md_system_help import (
+from karml.cli.md_system_help import (
     MD_SYSTEM_HELP_CATEGORIES,
     _CORE_DESTS,
     category_titles,
@@ -18,7 +18,7 @@ from mmml.cli.md_system_help import (
     iter_categorized_actions,
     parse_help_mode,
 )
-from mmml.cli.run import md_system
+from karml.cli.run import md_system
 
 
 def test_parse_help_mode_tokens():
@@ -162,7 +162,7 @@ def test_build_parser_halias_matches_number(capsys):
 def test_main_help_short_circuits_to_index(monkeypatch, capsys):
     import sys
 
-    monkeypatch.setattr(sys, "argv", ["mmml md-system", "-h"])
+    monkeypatch.setattr(sys, "argv", ["karml md-system", "-h"])
     with pytest.raises(SystemExit) as excinfo:
         md_system.main()
     assert excinfo.value.code == 0

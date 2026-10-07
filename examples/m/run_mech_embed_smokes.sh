@@ -39,7 +39,7 @@ run_campaign() {
     return 0
   fi
   echo "=== md-system --config ${cfg} --run-all ==="
-  uv run mmml md-system --config "${cfg}" --run-all
+  uv run karml md-system --config "${cfg}" --run-all
 }
 
 for sol in ${SOLVENTS}; do

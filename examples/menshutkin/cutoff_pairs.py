@@ -53,7 +53,7 @@ def make_cutoff_pair_fn(system, cutoff_A: float = 12.0, *,
     """
     import jax.numpy as jnp
 
-    from mmml.md.neighbors import make_intermolecular_neighbor_fn
+    from karml.md.neighbors import make_intermolecular_neighbor_fn
 
     probe = make_intermolecular_neighbor_fn(system, cutoff_A=cutoff_A)
     n_real = int(np.asarray(probe(np.asarray(system.R), None)["pair_mask"]).sum())
