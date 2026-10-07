@@ -43,6 +43,8 @@ results/
 outputs/
 out/
 artifacts/
+# PET-OMOL weights are ~110 MB (over GitHub's 100 MB limit). Generate with save_upet.
+/pet-omol-*.pt
 # Scratch run output. Repo scripts write here (scripts/run_tip3_box_pressure_opt.sh,
 # scripts/analyze_water_nve_h5.py, ...) and the results kept getting committed:
 # 720 files / 168 MB are already tracked. This stops it growing; untracking what
