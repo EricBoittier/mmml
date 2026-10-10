@@ -1711,6 +1711,11 @@ def load_handoff_from_npz(path: Path, *, frame: int = 0) -> MdHandoffState:
   meta_raw = data.get("metadata")
   if meta_raw is None and "metadata.json" in data.files:
     meta_raw = data["metadata.json"]
+  if isinstance(meta_raw, np.ndarray) and meta_raw.shape == () and meta_raw.dtype.kind in "US":
+    # save_handoff_npz writes json.dumps(meta) -> a 0-d unicode array, not str.
+    # Dropping it lost velocity_units=jaxmd_metal, so the auto heuristic read
+    # JAX-MD velocities as CHARMM AKMA (T/23) and re-drew Maxwell-Boltzmann.
+    meta_raw = meta_raw.item()
   if isinstance(meta_raw, np.ndarray) and meta_raw.dtype == object:
     meta = dict(meta_raw.item()) if meta_raw.shape == () else {}
   elif isinstance(meta_raw, (str, bytes)):
