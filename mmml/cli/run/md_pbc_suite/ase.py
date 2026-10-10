@@ -386,7 +386,9 @@ def _build_cluster_psf_topology_only(
     _reset_pycharmm_system()
     prepare_charmm_vacuum()
     _read_cgenff_toppar()
-    read.sequence_string(sequence)
+    from mmml.interfaces.pycharmmInterface.charmm_sequence import read_sequence_chunked
+
+    read_sequence_chunked(read, sequence)
     gen.new_segment(seg_name="CLST", setup_ic=True)
     from mmml.interfaces.pycharmmInterface.nbonds_config import ic_prm_fill
 
@@ -426,7 +428,9 @@ def _build_cluster_psf_from_composition(
     _reset_pycharmm_system()
     prepare_charmm_vacuum()
     _read_cgenff_toppar()
-    read.sequence_string(sequence)
+    from mmml.interfaces.pycharmmInterface.charmm_sequence import read_sequence_chunked
+
+    read_sequence_chunked(read, sequence)
     gen.new_segment(seg_name="CLST", setup_ic=True)
     from mmml.interfaces.pycharmmInterface.nbonds_config import ic_prm_fill
 
