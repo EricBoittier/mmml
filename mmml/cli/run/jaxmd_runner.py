@@ -657,11 +657,14 @@ def run_jaxmd_fire_with_dt_backoff(
     for stage_idx, dt_ps in enumerate(dt_schedule):
         dt_ps = float(dt_ps)
         stage_start_f = best_max_f
+        # fire_descent integrates with the supplied masses in jax-md metal units, whose time
+        # unit is 1/unit['time'] ps: convert, or FIRE steps are ~98x too short and barely move.
+        _dt_md = dt_ps * float(jax_md.units.metal_unit_system()["time"])
         init_fn, step_fn = jax_md.minimize.fire_descent(
             force_fn,
             shift_fn,
-            dt_start=dt_ps,
-            dt_max=dt_ps,
+            dt_start=_dt_md,
+            dt_max=_dt_md,
         )
         step_fn = jit(step_fn)
         if nl_refresh_fn is not None:
