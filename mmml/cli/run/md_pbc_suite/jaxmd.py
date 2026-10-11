@@ -627,6 +627,18 @@ def build_parser() -> argparse.ArgumentParser:
                    help="Verlet skin (A) of the molecule-pair lists (default 1.0).")
     p.add_argument("--jaxmd-molpair-cap-margin", dest="molpair_cap_margin", type=float, default=1.15,
                    help="List capacities = initial counts x margin + 64 (default 1.15; overflow regrows).")
+    p.add_argument(
+        "--ml-dimer-cap-auto",
+        dest="ml_dimer_cap_auto",
+        type=float,
+        default=0.0,
+        metavar="MARGIN",
+        help=(
+            "Size the sparse ML dimer cap from the start geometry: active dimers "
+            "(centroid < active radius) x MARGIN + 64, overriding --ml-max-active-dimers "
+            "(e.g. 1.12). Padded slots cost full PhysNet work. 0 = off (default)."
+        ),
+    )
     p.add_argument("--jaxmd-block-steps", dest="jaxmd_block_steps", type=int, default=0,
                    help="Fast path: MD steps per jitted call (default: --steps-per-recording).")
     p.add_argument(
@@ -1244,6 +1256,29 @@ def main(argv: list[str] | None = None) -> int:
         use_pbc=not free_space,
     )
     effective_skin = float(max(0.0, args.jax_md_skin_distance))
+
+    _cap_auto = float(getattr(args, "ml_dimer_cap_auto", 0.0) or 0.0)
+    if _cap_auto > 0.0 and not free_space:
+        from mmml.interfaces.pycharmmInterface.mlpot.mlpot_sparse_dimer_policy import (
+            sparse_dimer_active_radius,
+        )
+        from mmml.interfaces.pycharmmInterface.mm_molpair import (
+            auto_ml_dimer_cap,
+            count_dimers_within,
+        )
+
+        _r_act = sparse_dimer_active_radius(
+            mm_on, ml_w, margin=float(os.environ.get("MMML_ML_DIMER_ACTIVE_MARGIN") or 0.0)
+        )
+        _n_act = count_dimers_within(atoms.get_positions(), monomer_offsets, float(L), _r_act)
+        _n_tot = n_molecules * (n_molecules - 1) // 2
+        _cap = auto_ml_dimer_cap(_n_act, _cap_auto, _n_tot)
+        print(
+            f"[ml-cap] auto sparse ML dimer cap: {_n_act} active (< {_r_act:.2f} A) x {_cap_auto:g} + 64 "
+            f"-> {_cap} (was {getattr(args, 'ml_max_active_dimers', None)})",
+            flush=True,
+        )
+        args.ml_max_active_dimers = _cap
 
     do_mm = bool(getattr(args, "include_mm", True))
     ep_scale = None

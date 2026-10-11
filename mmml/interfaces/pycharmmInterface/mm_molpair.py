@@ -127,9 +127,14 @@ def build_topology(
 # Small helpers (same MIC arithmetic as pbc_utils_jax.mic_displacements_batched)
 # ---------------------------------------------------------------------------
 def _cell3(box: Array) -> Array:
-    from mmml.interfaces.pycharmmInterface.mm_energy_forces import _box_to_cell_3x3
-
-    return _box_to_cell_3x3(jnp.asarray(box))
+    """Box (scalar, (3,) or (3, 3)) -> 3x3 cell (static-shape version of
+    mm_energy_forces._box_to_cell_3x3)."""
+    b = jnp.asarray(box)
+    if b.ndim == 2:
+        return b
+    if b.ndim == 1 and b.shape[0] == 3:
+        return jnp.diag(b)
+    return jnp.diag(jnp.broadcast_to(b.reshape(-1)[0], (3,)))
 
 
 def _mic(d: Array, cell: Array, inv: Array) -> Array:
@@ -519,3 +524,30 @@ def ml_dimer_buckets(
             r_com=jnp.where(kv, r[ks], jnp.inf),
         )
     return out, overflow
+
+
+def count_dimers_within(positions, monomer_offsets, box_L: float, radius_A: float) -> int:
+    """Host count of dimers with centroid MIC distance < ``radius_A`` (cubic box).
+
+    Molecules are made whole around their first atom first (as the calculator
+    does), so the centroids match the in-graph ones.
+    """
+    pos = np.asarray(positions, dtype=np.float64)
+    off = np.asarray(monomer_offsets, dtype=np.int64)
+    L = float(box_L)
+    com = np.empty((len(off) - 1, 3))
+    for m in range(len(off) - 1):
+        x = pos[off[m] : off[m + 1]]
+        d = x - x[0]
+        x = x - L * np.round(d / L)
+        com[m] = x.mean(axis=0)
+    d = com[None, :, :] - com[:, None, :]
+    d -= L * np.round(d / L)
+    r2 = np.sum(d * d, axis=-1)
+    iu = np.triu_indices(len(com), k=1)
+    return int(np.sum(r2[iu] < radius_A**2))
+
+
+def auto_ml_dimer_cap(n_active: int, margin: float, n_dimers: int, pad: int = 64) -> int:
+    """Sparse-ML slot cap from a measured active count: ``ceil(n * margin) + pad``."""
+    return int(min(n_dimers, int(np.ceil(n_active * float(margin))) + int(pad)))
