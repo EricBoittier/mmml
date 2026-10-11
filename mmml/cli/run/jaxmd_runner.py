@@ -1940,6 +1940,12 @@ def set_up_nhc_sim_routine(
     # dt must be in ps: args.timestep is fs, 1 fs = 0.001 ps
     dt_fs = args.timestep
     dt = dt_fs * 0.001
+    # jax-md integrators take dt (and thermostat/barostat tau) in the unit system's own time
+    # unit. For metal units that unit is 1/unit['time'] ps (~10.18 fs), so dt in ps must be
+    # multiplied by unit['time']. Passing dt in ps directly made every step 98x too short
+    # (0.5 fs requested -> 0.0051 fs integrated). ``dt`` stays in ps for bookkeeping.
+    _time_unit = float(unit['time'])
+    dt_md = dt * _time_unit
     # NPT: neighbor list must be updated frequently (box changes every step).
     # Using 1000 steps with a stale neighbor list causes wrong forces → NaN.
     steps_per_recording = (
@@ -2052,7 +2058,7 @@ def set_up_nhc_sim_routine(
         # Metal: energy=eV, V=Å³ → pressure in eV/Å³. 1 bar = unit['pressure'] eV/Å³; 1 atm = 1.01325 bar.
         pressure = jnp.array(p_atm * BAR_PER_ATM * unit['pressure'], dtype=jnp.float32)
         # Barostat tau: 10000*dt (2.5 ps at 0.25 fs) avoids NaN from aggressive box scaling
-        barostat_tau = getattr(args, 'nhc_barostat_tau', 10000.0) * dt
+        barostat_tau = getattr(args, 'nhc_barostat_tau', 10000.0) * dt_md
         nhc_chain_length = getattr(args, 'nhc_chain_length', 3)
         nhc_chain_steps = getattr(args, 'nhc_chain_steps', 2)
         nhc_sy_steps = getattr(args, 'nhc_sy_steps', 3)
@@ -2099,14 +2105,14 @@ def set_up_nhc_sim_routine(
         init_fn, apply_fn = simulate.npt_nose_hoover(
             npt_energy_fn,
             shift,
-            dt=dt,
+            dt=dt_md,
             pressure=pressure,
             kT=kT,
             barostat_kwargs=default_nhc_kwargs(as_jaxmd_dtype(barostat_tau), nhc_kwargs),
-            thermostat_kwargs=default_nhc_kwargs(as_jaxmd_dtype(nhc_tau * dt), nhc_kwargs),
+            thermostat_kwargs=default_nhc_kwargs(as_jaxmd_dtype(nhc_tau * dt_md), nhc_kwargs),
         )
         c.print(Panel(
-            f"pressure={p_atm:.2f} atm | barostat_tau={barostat_tau:.6f} ps | thermostat tau={nhc_tau * dt:.6f} ps",
+            f"pressure={p_atm:.2f} atm | barostat_tau={barostat_tau / _time_unit:.6f} ps | thermostat tau={nhc_tau * dt:.6f} ps",
             title="[bold]NPT Nose-Hoover[/bold]",
             border_style="green",
         ))
@@ -2121,9 +2127,9 @@ def set_up_nhc_sim_routine(
             'sy_steps': nhc_sy_steps,
         }
         init_fn, apply_fn = simulate.nvt_nose_hoover(
-            wrapped_force_fn, shift, dt=dt, kT=kT,
+            wrapped_force_fn, shift, dt=dt_md, kT=kT,
             thermostat_kwargs=default_nhc_kwargs(
-                as_jaxmd_dtype(nhc_tau * dt), nhc_kwargs
+                as_jaxmd_dtype(nhc_tau * dt_md), nhc_kwargs
             ),
         )
         c.print(Panel(
@@ -2132,11 +2138,11 @@ def set_up_nhc_sim_routine(
             border_style="green",
         ))
     else:  # nve
-        init_fn, apply_fn = simulate.nve(wrapped_force_fn, shift, dt)
+        init_fn, apply_fn = simulate.nve(wrapped_force_fn, shift, dt_md)
     # No-op unless --rigid-water; interleaved RATTLE for NVE. See mmml.md.constraints.
     apply_fn = maybe_wrap_rigid_water(
         apply_fn, args, n_monomers, monomer_offsets, force_fn=wrapped_force_fn,
-        shift_fn=shift, dt=dt, box=getattr(args, "cell", None),
+        shift_fn=shift, dt=dt_md, box=getattr(args, "cell", None),
         ensemble=str(getattr(args, "ensemble", "nve")), console=c,
     )
     apply_fn = jit(apply_fn)
@@ -3351,7 +3357,7 @@ def set_up_nhc_sim_routine(
                     return 0, np.stack([pos0]), None
         # velocity = momentum / mass; position update = R + dt * v (half-step in VV)
         vel = state.momentum / state.mass
-        disp_first = dt * vel
+        disp_first = dt_md * vel
         t_vel = Table(title="First-step kinematics")
         t_vel.add_column("Property", style="cyan")
         t_vel.add_column("Value", style="white")
@@ -3377,7 +3383,7 @@ def set_up_nhc_sim_routine(
                 npt_pair_mask=npt_pair_mask,
                 npt_pressure=npt_pressure,
                 unit=unit,
-                dt=dt,
+                dt=dt_md,
                 kT=kT,
                 grad=grad,
             )
@@ -4040,7 +4046,7 @@ def set_up_nhc_sim_routine(
                                     )
                                 )
                                 init_fn, apply_fn = simulate.nve(
-                                    wrapped_force_fn, shift, dt_new
+                                    wrapped_force_fn, shift, dt_new * _time_unit
                                 )
                                 apply_fn = jit(apply_fn)
                                 sim = _bind_sim(apply_fn)
