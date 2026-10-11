@@ -54,7 +54,9 @@ def pair_displacements(
         # Same map as solve(cell.T, dR.T).T; 1/L on cubic, one inv otherwise.
         # Callers must pass the current NPT cell each evaluation.
         cell_in = jnp.asarray(cell)
-        dtype = jnp.promote_types(dR.dtype, cell_in.dtype)
+        # Stay in the coordinate dtype: a float64 cell (x64 on) must not promote
+        # the float32 model to float64 (1/64 rate on GeForce GPUs).
+        dtype = dR.dtype
         dR = dR.astype(dtype)
         cell_m = cell_in.astype(dtype)
         dS = dR @ cell_inverse(cell_m)
@@ -114,6 +116,11 @@ def radial_spherical_basis(
         radial_fn=radial_fn,
         cutoff_fn=functools.partial(e3x.nn.smooth_cutoff, cutoff=float(cutoff)),
     )
+    # e3x builds its spherical-harmonic coefficient matrices as float64 numpy
+    # constants; under JAX_ENABLE_X64 they promote a float32 basis (and with it
+    # every message-passing tensor downstream) to float64, which runs at 1/64
+    # rate on GeForce GPUs. Keep the basis in the displacement dtype.
+    basis = basis.astype(basis_displacements.dtype)
     if edge_gate is not None:
         basis = basis * edge_gate.astype(basis.dtype).reshape(
             -1, *([1] * (basis.ndim - 1))

@@ -140,6 +140,10 @@ def json_tree_to_jax_params(obj: Any, *, dtype=None) -> Any:
                 arr = arr.astype(np_target, copy=False)
             return jnp.asarray(arr, dtype=target)
         return [json_tree_to_jax_params(item, dtype=target) for item in obj]
+    # Loaders may already hand back numpy/JAX arrays (float64 from JSON): cast
+    # those too, or float64 weights promote the whole float32 model to float64.
+    if isinstance(obj, (np.ndarray, jnp.ndarray)) and np.issubdtype(np.asarray(obj).dtype, np.floating):
+        return jnp.asarray(np.asarray(obj).astype(np_target, copy=False), dtype=target)
     return obj
 
 

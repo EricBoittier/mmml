@@ -2283,7 +2283,7 @@ def setup_calculator(
             "ml_eval_chunks",
         ],
     )
-    def spherical_cutoff_calculator(
+    def _spherical_cutoff_calculator_impl(
         positions: Array,  # Shape: (n_atoms, 3)
         atomic_numbers: Array,  # Shape: (n_atoms,)
         n_monomers: int,
@@ -2658,6 +2658,48 @@ def setup_calculator(
                 outputs.get("ml_n_active_dimers", -1), dtype=jnp.int32
             ),
         )
+
+    # float32 ML/MM under JAX_ENABLE_X64: numpy float64 constants (e3x spherical
+    # harmonics / Clebsch-Gordan tables, the PBC cell, CGenFF parameters, Python
+    # float literals) otherwise promote the float32 calculator to float64 -- the
+    # whole PhysNet batch and MM pair loop then run at the 1/64 FP64 rate of
+    # GeForce GPUs. Trace the calculator with x64 disabled when the inputs are
+    # float32 (positions and box). float64 inputs (NVE, NpT fd64 virial, the
+    # CHARMM callback's float64 box) keep the float64 path unchanged.
+    # MMML_ML_F32_NO_X64=0 restores the old (promoted) behaviour.
+    _f32_trace_no_x64 = (
+        jnp.dtype(ml_jnp_dtype) == jnp.dtype(jnp.float32)
+        and (os.environ.get("MMML_ML_F32_NO_X64") or "1").strip().lower()
+        not in ("0", "false", "no", "off")
+    )
+
+    _ml_matmul_precision = (os.environ.get("MMML_ML_MATMUL_PRECISION") or "highest").strip().lower()
+    if _ml_matmul_precision == "default":
+        _ml_matmul_precision = None
+
+    def _is_f32(x) -> bool:
+        if x is None:
+            return True
+        dt = getattr(x, "dtype", None)
+        return dt is not None and jnp.dtype(dt) == jnp.dtype(jnp.float32)
+
+    def spherical_cutoff_calculator(*args, **kwargs) -> ModelOutput:
+        positions = kwargs["positions"] if "positions" in kwargs else (args[0] if args else None)
+        if (
+            _f32_trace_no_x64
+            and bool(jax.config.read("jax_enable_x64"))
+            and _is_f32(positions)
+            and _is_f32(kwargs.get("box"))
+        ):
+            # DEFAULT matmul precision on Ampere+ is TF32 (10-bit mantissa): PhysNet
+            # energies were off by ~3e-3 eV per dimer (~2 eV on a 1092-water box)
+            # and forces by ~4e-3 eV/A. Use true float32 unless overridden
+            # (MMML_ML_MATMUL_PRECISION=default|tensorfloat32|bfloat16_3x|highest).
+            with jax.enable_x64(False), jax.default_matmul_precision(_ml_matmul_precision):
+                return _spherical_cutoff_calculator_impl(*args, **kwargs)
+        return _spherical_cutoff_calculator_impl(*args, **kwargs)
+
+    spherical_cutoff_calculator.__doc__ = _spherical_cutoff_calculator_impl.__doc__
 
     def get_ML_energy_fn(
         atomic_numbers: Array,  # Shape: (n_atoms,)
