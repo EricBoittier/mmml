@@ -1860,13 +1860,11 @@ def setup_calculator(
                 "zbl", "zbl_cuton", "zbl_cutoff", "charges", "efa", "use_energy_bias")}
             _fcfg["n_res"] = int(MODEL.n_refinement_blocks)
             _fprec = (os.environ.get("MMML_ML_FUSED_PRECISION") or "fp32").strip().lower()
-            _fused_by_n = {}
-
             def _dense_physnet(R, Z):  # noqa: F811 - same signature as make_dense_apply
+                # Built per trace (no cross-trace cache): the fused fn casts params
+                # inside the trace, so caching it leaks tracers into later traces.
                 n = int(R.shape[1])
-                if n not in _fused_by_n:
-                    _fused_by_n[n] = make_physnet_fused(_fcfg, params, n, precision=_fprec)
-                E, F_ = _fused_by_n[n](R, Z)
+                E, F_ = make_physnet_fused(_fcfg, params, n, precision=_fprec)(R, Z)
                 return E, F_
         elif _ml_kernel != "e3x" and dense_supported(MODEL):
             _dense_physnet = make_dense_apply(MODEL, params)
