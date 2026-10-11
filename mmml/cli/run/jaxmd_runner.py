@@ -1433,6 +1433,113 @@ def _add_psf_angle_restraints(args, positions, energy_fn, force_fn):
     return energy_with_restraints, force_with_restraints, restraint_energy_fn
 
 
+def _molpair_fast_requested(args) -> bool:
+    return bool(getattr(args, "molpair_mm", False))
+
+
+class _MolPairFast:
+    """Fast MM tail + on-device Verlet lists for set_up_nhc_sim_routine (NVT/NVE, cubic PBC).
+
+    The hybrid calculator runs with doMM=False / include_wall=False and the
+    sparse-ML candidate list from the device NL; MM (LJ + Coulomb, switched) and
+    the short-range wall come from :class:`mm_molpair.MolPairMM`.
+    """
+
+    def __init__(self, args, calc, update_fn, monomer_offsets, atomic_numbers, R, box):
+        from mmml.interfaces.pycharmmInterface.mm_molpair import MolPairMM, MolPairNL, build_topology
+
+        spec = calc.get_mm_molpair_spec() if hasattr(calc, "get_mm_molpair_spec") else None
+        if spec is None:
+            raise RuntimeError(
+                "--jaxmd-molpair-mm needs the jax_mic dynamic MM pair path (PBC, include_mm); "
+                "no molpair spec was exported by the MM builder"
+            )
+        mode = str(getattr(args, "mm_charge_mode", None) or "fixed").lower()
+        if mode not in ("fixed", "none", "psf", "a"):
+            raise RuntimeError(f"--jaxmd-molpair-mm supports mm_charge_mode=fixed only (got {mode})")
+        self.MolPairNL = MolPairNL
+        self.calc = calc
+        self.box = box
+        self.topo = build_topology(np.asarray(monomer_offsets), np.asarray(atomic_numbers))
+        self.use_cand = bool(getattr(calc, "ml_sparse_dimers_active", False))
+        self.mp = MolPairMM(
+            spec,
+            self.topo,
+            skin_A=float(getattr(args, "molpair_skin", 1.0) or 1.0),
+            ml_active_radius_A=(calc.ml_dimer_active_radius if self.use_cand else None),
+            include_wall=bool(getattr(calc, "short_range_wall", True)),
+            cap_margin=float(getattr(args, "molpair_cap_margin", 1.15) or 1.15),
+        )
+        self._whole = lambda p: calc.make_monomers_whole(p, box)
+        Rw = jax.jit(self._whole)(jnp.asarray(R, dtype=jnp.float32))
+        self.mp.size_caps(Rw, box)
+        self.nl0 = self.mp.build(Rw, box)
+
+    def whole(self, pos):
+        return self._whole(pos)
+
+    def is_nl(self, x) -> bool:
+        return isinstance(x, self.MolPairNL)
+
+    def nl_for(self, pos, nl):
+        """Valid list at ``pos`` (traceable). A list passed in is refreshed if stale."""
+        pw = self.whole(pos)
+        if self.is_nl(nl):
+            return self.mp.maybe_update(pw, self.box, nl, guard=0.0)
+        from mmml.interfaces.pycharmmInterface.mm_molpair import MolPairCaps
+
+        caps = MolPairCaps(mm=tuple(2 * c for c in self.mp.caps.mm), ml=2 * self.mp.caps.ml)
+        return self.mp._build_impl(pw, self.box, caps, jnp.asarray(False), jnp.asarray(0, jnp.int32))
+
+    def evaluate(self, atomic_numbers, positions, nl, n_monomers, cutoff_params, debug):
+        nl = self.nl_for(positions, nl)
+        out = self.calc(
+            atomic_numbers=atomic_numbers,
+            positions=positions,
+            n_monomers=n_monomers,
+            cutoff_params=cutoff_params,
+            doML=True,
+            doMM=False,
+            doML_dimer=True,
+            debug=debug,
+            box=self.box,
+            include_wall=False,
+            ml_dimer_candidates=(nl.ml_cand if self.use_cand else None),
+        )
+        mp = self.mp
+
+        def _e(p):
+            e_mm, e_wall, e_vdw, e_el = mp.energy_terms(self.whole(p), self.box, nl)
+            return e_mm + e_wall, (e_mm, e_wall, e_vdw, e_el)
+
+        (e_tot, (e_mm, e_wall, e_vdw, e_el)), g = jax.value_and_grad(_e, has_aux=True)(positions)
+        f = (-g).astype(out.forces.dtype)
+        e_add = e_tot.astype(jnp.asarray(out.energy).dtype)
+        return out._replace(
+            energy=out.energy + e_add,
+            forces=out.forces + f,
+            hybrid_energy=out.hybrid_energy + e_add,
+            mm_E=e_mm,
+            mm_F=-g,
+            mm_vdw_E=e_vdw,
+            mm_elec_E=e_el,
+            wall_E=e_wall,
+        )
+
+    def update_carry(self, pos, nl):
+        return self.mp.maybe_update(self.whole(pos), self.box, nl)
+
+    def grow(self, pos, nl):
+        """Host: bigger capacities after an overflow, fresh list at ``pos``."""
+        from mmml.interfaces.pycharmmInterface.mm_molpair import MolPairCaps
+
+        old = self.mp.caps
+        floor = MolPairCaps(mm=tuple(int(1.3 * c) + 64 for c in old.mm), ml=int(1.3 * old.ml) + 64)
+        Rw = jax.jit(self.whole)(pos)
+        self.mp.size_caps(Rw, self.box, floor=floor)
+        return self.mp.build(Rw, self.box)
+
+
 def set_up_nhc_sim_routine(
     atoms,
     args,
@@ -1459,6 +1566,8 @@ def set_up_nhc_sim_routine(
     T = args.temperature
     Si_mass = as_jaxmd_dtype(Si_mass)
 
+    _fast_cell = [None]  # _MolPairFast once the MM fn exists (built below)
+
     @jax.jit
     def evaluate_energies_and_forces(
         atomic_numbers,
@@ -1467,6 +1576,12 @@ def set_up_nhc_sim_routine(
         mm_pair_mask=None,
         box=None,
     ):
+        if _fast_cell[0] is not None:
+            # Molecule-pair MM + device Verlet list (mm_pair_idx carries the
+            # MolPairNL in fast mode; anything else -> fresh list in-graph).
+            return _fast_cell[0].evaluate(
+                atomic_numbers, positions, mm_pair_idx, n_monomers, CUTOFF_PARAMS, args.debug
+            )
         return spherical_cutoff_calculator(
             atomic_numbers=atomic_numbers,
             positions=positions,
@@ -1535,6 +1650,25 @@ def set_up_nhc_sim_routine(
     box_nl = np.array([L_cell, L_cell, L_cell], dtype=np.float64) if L_cell else None
     pbc_box_nl = box_nl  # Capture for run_sim PBC minimization (avoids UnboundLocalError from later box_nl assignments)
 
+    if update_fn is not None and use_pbc and _molpair_fast_requested(args):
+        if args.ensemble not in ("nvt", "nve"):
+            raise ValueError("--jaxmd-molpair-mm supports NVT/NVE (fixed cubic cell) only")
+        _fast_cell[0] = _MolPairFast(
+            args, spherical_cutoff_calculator, update_fn, monomer_offsets,
+            atoms.get_atomic_numbers(), R, box_init,
+        )
+        _fmp = _fast_cell[0].mp
+        print(
+            f"[molpair] MM tail: molecule-pair blocks, buckets={_fmp.topo.buckets} "
+            f"caps={list(_fmp.caps.mm)} (counts={[int(x) for x in np.asarray(_fast_cell[0].nl0.counts)]}), "
+            f"ML candidates cap={_fmp.caps.ml} (count={int(_fast_cell[0].nl0.ml_count)}, "
+            f"used={_fast_cell[0].use_cand}), r_list={_fmp.r_mm_list:.2f} A, skin={_fmp.skin:.2f} A, "
+            f"wall fused={_fmp.include_wall}",
+            flush=True,
+        )
+        # The atom-pair list is not used again: no host rebuilds in the loop.
+        update_fn = None
+        pair_idx, pair_mask = _fast_cell[0].nl0, None
     if update_fn is not None and use_pbc:
         if getattr(args, "debug", False):
             print("[nbr] Initial neighbor list update (PBC)")
@@ -1819,6 +1953,11 @@ def set_up_nhc_sim_routine(
         jax_md_update_interval=getattr(args, "jax_md_update_interval", None),
         ensemble=getattr(args, "ensemble", None),
     )
+    if _fast_cell[0] is not None:
+        # Lists refresh on device: one jitted call per recording block.
+        _blk = int(getattr(args, "jaxmd_block_steps", 0) or 0) or int(steps_per_recording)
+        steps_per_loop_call = max(d for d in range(1, min(_blk, int(steps_per_recording)) + 1)
+                                  if int(steps_per_recording) % d == 0)
 
     kT = as_jaxmd_dtype(T * unit['temperature'])
     jax.random.PRNGKey(0)
@@ -1854,6 +1993,22 @@ def set_up_nhc_sim_routine(
             return lax.fori_loop(0, steps_per_loop_call, step_fn, state)
 
         return _sim
+
+    def _bind_sim_fast(apply_fn_local):
+        """Fast path: carry (state, MolPairNL); lists rebuilt on device when stale."""
+        fast = _fast_cell[0]
+
+        @jit
+        def _sim_fast(state, nl):
+            def body(i, carry):
+                s, n = carry
+                n = fast.update_carry(s.position, n)
+                s_new = cast_carry_like(normalize_jaxmd_state(apply_fn_local(s, neighbor=(n, None))), s)
+                return (s_new, n)
+
+            return lax.fori_loop(0, steps_per_loop_call, body, (state, nl))
+
+        return _sim_fast
 
     # Select integrator based on ensemble
     if args.ensemble == "npt" and use_pbc:
@@ -1962,6 +2117,7 @@ def set_up_nhc_sim_routine(
     )
     apply_fn = jit(apply_fn)
     sim = _bind_sim(apply_fn)
+    sim_fast = _bind_sim_fast(apply_fn) if _fast_cell[0] is not None else None
 
     def run_sim(
         key,
@@ -2492,6 +2648,11 @@ def set_up_nhc_sim_routine(
         current_neighbors = None
         if use_pbc and update_fn is not None:
             current_neighbors = (_pbc_state["pair_idx"], _pbc_state["pair_mask"])
+        fast_nl = None
+        if _fast_cell[0] is not None:
+            fast_nl = _fast_cell[0].nl0
+            current_neighbors = (fast_nl, None)
+            _fast_stats = {"overflow_regrows": 0}
 
         if args.ensemble == "npt" and use_pbc:
             # NPT: positions in fractional coords; wrap md_pos into cell first, then convert to fractional
@@ -3448,6 +3609,18 @@ def set_up_nhc_sim_routine(
                         _pbc_state["pair_mask"] = nvt_neighbors[1]
                         current_neighbors = nvt_neighbors
                         state = sim(state, neighbor=current_neighbors)
+                    elif fast_nl is not None:
+                        state_prev, nl_prev_builds = state, int(fast_nl.n_builds)
+                        state, fast_nl = sim_fast(state, fast_nl)
+                        # One host read per block: did a capacity overflow?
+                        while bool(fast_nl.overflow):
+                            _fast_stats["overflow_regrows"] += 1
+                            fast_nl = _fast_cell[0].grow(state_prev.position, fast_nl)
+                            c.print(f"[molpair] list capacity overflow: regrown caps={list(_fast_cell[0].mp.caps.mm)} "
+                                    f"ml={_fast_cell[0].mp.caps.ml}; redoing block")
+                            state, fast_nl = sim_fast(state_prev, fast_nl)
+                        current_neighbors = (fast_nl, None)
+                        _pbc_state["pair_idx"] = fast_nl
                     else:
                         state = sim(state, neighbor=current_neighbors)
                     steps_done += steps_per_loop_call

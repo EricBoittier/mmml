@@ -1873,6 +1873,53 @@ def apply_mm_charge_scale(charges: np.ndarray, charge_scale: float | None) -> np
     return np.asarray(charges, dtype=np.float64) * s
 
 
+MM_LJ_ALL_TYPES_ENV = "MMML_MM_LJ_ALL_TYPES"
+
+
+def resolve_mm_lj_all_types(flag: Optional[bool] = None) -> bool:
+    """Explicit flag wins; else ``MMML_MM_LJ_ALL_TYPES`` (1/true/on); default False."""
+    if flag is not None:
+        return bool(flag)
+    env = (os.environ.get(MM_LJ_ALL_TYPES_ENV) or "").strip().lower()
+    return env in ("1", "true", "yes", "on")
+
+
+def fill_missing_lj_from_charmm(
+    atc: Sequence[str],
+    atc_epsilons: np.ndarray,
+    atc_rmins: np.ndarray,
+    cgenff_params_dict: dict,
+) -> Tuple[np.ndarray, np.ndarray, dict]:
+    """Per-type LJ for types absent from the CGenFF prm, read from CHARMM.
+
+    CHARMM's per-atom ``epsilon``/``vdwr`` (Rmin/2) hold whatever parameter
+    files were read (``toppar_water_ions`` TIP3P OT/HT, extra prm streams).
+    Types present in the CGenFF prm keep the parsed values (bit-identical to the
+    historical path). Returns ``(eps, rmin_half, {type: (eps, rmin_half)})``.
+    """
+    import pycharmm.param as param
+    import pycharmm.psf as psf
+
+    eps = np.array(atc_epsilons, dtype=np.float64).copy()
+    rmin = np.array(atc_rmins, dtype=np.float64).copy()
+    iac = np.asarray(psf.get_iac(), dtype=np.int64)
+    if iac.size == 0:
+        return eps, rmin, {}
+    e_atom = np.asarray(param.get_epsilon(), dtype=np.float64)
+    r_atom = np.asarray(param.get_vdwr(), dtype=np.float64)
+    filled: dict = {}
+    for k, t in enumerate(iac):
+        if t < 0 or t >= len(atc):
+            continue
+        name = atc[t]
+        if name in cgenff_params_dict or name in filled:
+            continue
+        eps[t] = e_atom[k]
+        rmin[t] = r_atom[k]
+        filled[name] = (float(e_atom[k]), float(r_atom[k]))
+    return eps, rmin, filled
+
+
 def build_mm_energy_forces_fn(
     R: np.ndarray,
     *,
@@ -1921,6 +1968,7 @@ def build_mm_energy_forces_fn(
     ewald_include_intra: bool = True,
     include_lj: bool = False,
     mm_extent_margin_A: float = DEFAULT_MM_EXTENT_MARGIN_A,
+    lj_all_types: Optional[bool] = None,
 ) -> Any:
     """Build MM energy/forces function with switching.
 
@@ -1933,6 +1981,12 @@ def build_mm_energy_forces_fn(
     ``mm_include_lj: true``. Default False preserves Coulomb-only ewald MD.
 
     Args:
+        lj_all_types: When True, atom types with no LJ line in
+            ``par_all36_cgenff.prm`` (e.g. TIP3P ``OT``/``HT`` from
+            ``toppar_water_ions``) take epsilon/Rmin/2 from the parameters CHARMM
+            actually loaded (``pycharmm.param.get_epsilon/get_vdwr``). Default
+            (None) reads ``MMML_MM_LJ_ALL_TYPES``; unset/0 keeps the historical
+            CGenFF-file-only LJ (water then has epsilon = 0 in the MM tail).
         mm_extent_margin_A: Added to the initial max atom-to-centroid distance to
             size the PBC pair list (``resolve_mm_pair_list_cutoff_A``). Pair-list
             rebuilds raise ``ValueError`` if a molecule grows past extent + margin.
@@ -2040,6 +2094,17 @@ def build_mm_energy_forces_fn(
     atc_rmins = np.array([cgenff_params_dict.get(_, (0.0, 0.0))[1] for _ in atc])
     atc_qs = np.array([cgenff_params_dict_q.get(_, 0.0) for _ in atc])
 
+    _lj_all = resolve_mm_lj_all_types(lj_all_types)
+    if _lj_all:
+        atc_epsilons, atc_rmins, _lj_filled = fill_missing_lj_from_charmm(
+            atc, atc_epsilons, atc_rmins, cgenff_params_dict
+        )
+        if _lj_filled:
+            print(
+                "[mm] lj_all_types: LJ from CHARMM for types missing in CGenFF prm: "
+                + ", ".join(f"{k}(eps={v[0]:.4f}, rmin/2={v[1]:.4f})" for k, v in sorted(_lj_filled.items())),
+                flush=True,
+            )
     if ep_scale is None:
         ep_scale = np.ones_like(atc_epsilons)
     if sig_scale is None:
@@ -3397,6 +3462,24 @@ def build_mm_energy_forces_fn(
 
         update_mm_pairs.get_stats = _get_pair_update_stats
         update_mm_pairs.fractional_coordinates = bool(fractional_coordinates)
+        # Per-atom parameters + switching of exactly this MM tail, for the
+        # molecule-pair kernel (mm_molpair.MolPairMM) used by the fast jax-md loop.
+        update_mm_pairs.molpair_spec = dict(
+            q=np.asarray(jax.device_get(q_per_system)),
+            rmin_half=np.asarray(jax.device_get(rmins_per_system)),
+            eps=np.asarray(jax.device_get(epsilons_per_system)),
+            lambda_monomer=np.asarray(lambda_monomer, dtype=np.float64),
+            monomer_offsets=np.asarray(_offsets_np),
+            mm_switch_on=float(mm_switch_on),
+            mm_switch_width=float(mm_switch_width),
+            ml_switch_width=float(ml_switch_width),
+            complementary_handoff=bool(complementary_handoff),
+            mm_r_min=None if mm_r_min is None else float(mm_r_min),
+            hybrid_hamiltonian=hybrid_hamiltonian,
+            use_jax_pme=bool(_use_jax_pme_coulomb or _use_jax_pme_dispersion),
+            use_smooth_mic=bool(_use_smooth_mic),
+            lj_all_types=bool(_lj_all),
+        )
         # jax-pme moves Coulomb/dispersion off the pair list, so the pair split would
         # not be the MM the hybrid evaluates; routing keeps its numpy fallback there.
         update_mm_pairs.mm_eterm_split = None if _use_jax_pme_coulomb else mm_eterm_split_dynamic

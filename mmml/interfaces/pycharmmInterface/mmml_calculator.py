@@ -2281,6 +2281,7 @@ def setup_calculator(
             "debug",
             "use_mm_charges_override",
             "ml_eval_chunks",
+            "include_wall",
         ],
     )
     def _spherical_cutoff_calculator_impl(
@@ -2301,6 +2302,7 @@ def setup_calculator(
         mm_charges_override: Optional[Array] = None,
         ml_eval_chunks: Optional[int] = None,
         ml_dimer_candidates: Optional[Array] = None,
+        include_wall: bool = True,
     ) -> ModelOutput:
         """Calculates energy and forces using combined ML/MM potential.
         
@@ -2548,7 +2550,7 @@ def setup_calculator(
         # Short-range inter-monomer wall. Deliberately NOT gated on doMM: the MM
         # taper switching the LJ wall off at close range is exactly the hole this
         # fills. Zero above WALL_R_ON, so it is a no-op in the sampled region.
-        if short_range_wall:
+        if short_range_wall and include_wall:
             wall_E, wall_dE = jax.value_and_grad(
                 lambda p: _short_range_wall_energy(p, mic_pbc_cell)
             )(positions)
@@ -4139,6 +4141,20 @@ def setup_calculator(
             configured_spherical_cutoff.ml_chunk_layout = _ml_chunk_layout
             configured_spherical_cutoff.dimer_centroid_nl = _make_dimer_centroid_nl(
                 doML and doML_dimer and cutoff_params is not None
+            )
+            # Hooks for the molecule-pair MM fast path (mm_molpair / jaxmd_runner).
+            configured_spherical_cutoff.get_mm_molpair_spec = lambda: getattr(
+                _cached_update_mm_pairs[0], "molpair_spec", None
+            )
+            configured_spherical_cutoff.short_range_wall = bool(short_range_wall)
+            configured_spherical_cutoff.ml_dimer_active_radius = (
+                float(_dimer_active_radius) if _dimer_active_radius is not None else None
+            )
+            configured_spherical_cutoff.ml_sparse_dimers_active = bool(
+                ml_sparse_dimers and _max_active_dimers < n_dimers_total
+            )
+            configured_spherical_cutoff.make_monomers_whole = (
+                lambda pos, cell: make_monomers_whole(pos, cell, _monomer_anchor_idx)
             )
 
             def get_update_fn(positions, cutoff_params_arg, box=None):

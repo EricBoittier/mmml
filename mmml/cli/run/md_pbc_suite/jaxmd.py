@@ -604,6 +604,32 @@ def build_parser() -> argparse.ArgumentParser:
         help="Sparse ML dimer slot cap (PBC default is density-aware with floor max(4005, 6*n_monomers))."
     )
     p.add_argument(
+        "--mm-lj-all-types",
+        action="store_true",
+        help=(
+            "MM tail LJ for every atom type CHARMM loaded (TIP3P OT/HT from "
+            "toppar_water_ions included). Default off = historical CGenFF-prm-only LJ, "
+            "where water has epsilon=0. Same as MMML_MM_LJ_ALL_TYPES=1."
+        ),
+    )
+    p.add_argument(
+        "--jaxmd-molpair-mm",
+        dest="molpair_mm",
+        action="store_true",
+        help=(
+            "Fast NVT/NVE path: MM tail as molecule-pair blocks (fused LJ+Coulomb+wall, "
+            "same switched physics), MM pair list and sparse-ML dimer candidates as "
+            "on-device Verlet lists rebuilt only when a centroid moved > skin/2, one "
+            "jitted call per recording block."
+        ),
+    )
+    p.add_argument("--jaxmd-molpair-skin", dest="molpair_skin", type=float, default=1.0,
+                   help="Verlet skin (A) of the molecule-pair lists (default 1.0).")
+    p.add_argument("--jaxmd-molpair-cap-margin", dest="molpair_cap_margin", type=float, default=1.15,
+                   help="List capacities = initial counts x margin + 64 (default 1.15; overflow regrows).")
+    p.add_argument("--jaxmd-block-steps", dest="jaxmd_block_steps", type=int, default=0,
+                   help="Fast path: MD steps per jitted call (default: --steps-per-recording).")
+    p.add_argument(
         "--mlpot-profile",
         action="store_true",
         help=(
@@ -960,6 +986,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.box_size is not None and args.box_size <= 0:
         raise ValueError("--box-size must be positive")
     configure_jaxmd_dtype(getattr(args, "ml_compute_dtype", None))
+    if getattr(args, "mm_lj_all_types", False):
+        os.environ["MMML_MM_LJ_ALL_TYPES"] = "1"
 
     # NL backend/device are resolved via env inside mm_energy_forces / nl_gpu.
     if getattr(args, "mm_nl_backend", None):
@@ -2090,6 +2118,10 @@ def main(argv: list[str] | None = None) -> int:
         psf_angle_restraints_no_urey=bool(
             getattr(args, "psf_angle_restraints_no_urey", False)
         ),
+        molpair_mm=bool(getattr(args, "molpair_mm", False)),
+        molpair_skin=float(getattr(args, "molpair_skin", 1.0)),
+        molpair_cap_margin=float(getattr(args, "molpair_cap_margin", 1.15)),
+        jaxmd_block_steps=int(getattr(args, "jaxmd_block_steps", 0) or 0),
     )
     run_sim = set_up_nhc_sim_routine(
         atoms=atoms,
