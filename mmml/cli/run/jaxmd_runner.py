@@ -2010,6 +2010,30 @@ def set_up_nhc_sim_routine(
 
         return _sim_fast
 
+    def _bind_sim_fast_dense(apply_fn_local, stride):
+        """Fast path that also returns float32 (positions, velocities) every ``stride`` steps,
+        stacked on device, so dense trajectories cost one host transfer per jitted call."""
+        fast = _fast_cell[0]
+        n_sub = steps_per_loop_call // stride
+
+        @jit
+        def _sim_fast_dense(state, nl):
+            def body(i, carry):
+                s, n = carry
+                n = fast.update_carry(s.position, n)
+                s_new = cast_carry_like(normalize_jaxmd_state(apply_fn_local(s, neighbor=(n, None))), s)
+                return (s_new, n)
+
+            def sub(carry, _):
+                carry = lax.fori_loop(0, stride, body, carry)
+                s = carry[0]
+                return carry, (s.position.astype(jnp.float32), (s.momentum / s.mass).astype(jnp.float32))
+
+            carry, frames = lax.scan(sub, (state, nl), None, length=n_sub)
+            return carry, frames
+
+        return _sim_fast_dense
+
     # Select integrator based on ensemble
     if args.ensemble == "npt" and use_pbc:
         if update_fn is None:
@@ -2118,6 +2142,18 @@ def set_up_nhc_sim_routine(
     apply_fn = jit(apply_fn)
     sim = _bind_sim(apply_fn)
     sim_fast = _bind_sim_fast(apply_fn) if _fast_cell[0] is not None else None
+    _dense_stride = int(getattr(args, "jaxmd_dense_stride", 0) or 0)
+    sim_fast_dense = None
+    if _dense_stride > 0:
+        if _fast_cell[0] is None:
+            c.print("[dense] --jaxmd-dense-stride needs the molecule-pair fast path (--jaxmd-molpair-mm, NVT/NVE); ignored")
+            _dense_stride = 0
+        elif steps_per_loop_call % _dense_stride != 0:
+            raise ValueError(f"--jaxmd-dense-stride {_dense_stride} must divide the steps per jitted call ({steps_per_loop_call})")
+        else:
+            sim_fast_dense = _bind_sim_fast_dense(apply_fn, _dense_stride)
+            c.print(f"[dense] keeping positions+velocities every {_dense_stride} steps "
+                    f"({steps_per_loop_call // _dense_stride} frames per jitted call)")
 
     def run_sim(
         key,
@@ -3573,6 +3609,7 @@ def set_up_nhc_sim_routine(
                 e = float(wrapped_energy_fn(st.position, neighbor=current_neighbors))
             return bool(np.isfinite(e))
 
+        _dense_buf = []
         try:
             for i in range(total_records):
                 steps_done = 0
@@ -3611,14 +3648,22 @@ def set_up_nhc_sim_routine(
                         state = sim(state, neighbor=current_neighbors)
                     elif fast_nl is not None:
                         state_prev, nl_prev_builds = state, int(fast_nl.n_builds)
-                        state, fast_nl = sim_fast(state, fast_nl)
+                        if sim_fast_dense is not None:
+                            (state, fast_nl), _dframes = sim_fast_dense(state, fast_nl)
+                        else:
+                            state, fast_nl = sim_fast(state, fast_nl)
                         # One host read per block: did a capacity overflow?
                         while bool(fast_nl.overflow):
                             _fast_stats["overflow_regrows"] += 1
                             fast_nl = _fast_cell[0].grow(state_prev.position, fast_nl)
                             c.print(f"[molpair] list capacity overflow: regrown caps={list(_fast_cell[0].mp.caps.mm)} "
                                     f"ml={_fast_cell[0].mp.caps.ml}; redoing block")
-                            state, fast_nl = sim_fast(state_prev, fast_nl)
+                            if sim_fast_dense is not None:
+                                (state, fast_nl), _dframes = sim_fast_dense(state_prev, fast_nl)
+                            else:
+                                state, fast_nl = sim_fast(state_prev, fast_nl)
+                        if sim_fast_dense is not None:
+                            _dense_buf.append(jax.device_get(_dframes))
                         current_neighbors = (fast_nl, None)
                         _pbc_state["pair_idx"] = fast_nl
                     else:
@@ -4211,6 +4256,12 @@ def set_up_nhc_sim_routine(
                     report_kw["com_dist_A"] = com_dist_report
                     report_kw["flat_bottom_E_eV"] = e_fb_report
                 hdf5_reporter.report(**report_kw)
+                if sim_fast_dense is not None and _dense_buf:
+                    _dp = np.concatenate([f[0] for f in _dense_buf]); _dv = np.concatenate([f[1] for f in _dense_buf])
+                    np.savez(f"{args.output_prefix}_dense_{i:05d}.npz", positions=_dp, velocities=_dv,
+                             dt_frame_ps=float(_dense_stride) * float(dt),
+                             first_step=int(md_steps_completed - steps_per_recording + _dense_stride))
+                    _dense_buf.clear()
 
                 # Stop on numerical instability (NaN, Inf, or energy blow-up to 0)
                 if not np.isfinite(e_pot) or not np.isfinite(temp):
