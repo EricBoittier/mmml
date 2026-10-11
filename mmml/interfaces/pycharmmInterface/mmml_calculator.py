@@ -1837,6 +1837,40 @@ def setup_calculator(
         and max_monomer_atoms < max_atoms
         and not (_jax_mm_spoof_mode or _kernnn_mode or _metatomic_mode or is_spooky_model or _needs_ml_mm_charges)
     )
+    # Dense per-system PhysNet ((B, n, n) tensors instead of a flat edge list +
+    # segment_sum); same weights and math. MMML_ML_DENSE=0 restores MODEL.apply.
+    _dense_physnet = None
+    if (
+        (os.environ.get("MMML_ML_DENSE") or "1").strip().lower() not in ("0", "false", "no", "off")
+        and not (_jax_mm_spoof_mode or _kernnn_mode or _metatomic_mode or is_spooky_model
+                 or _needs_ml_mm_charges or _non_physnet_ml)
+    ):
+        from mmml.models.physnetjax.physnetjax.models.dense_physnet import (
+            dense_supported,
+            make_dense_apply,
+        )
+
+        _ml_kernel = (os.environ.get("MMML_ML_KERNEL") or "dense").strip().lower()
+        if _ml_kernel == "fused":
+            # Pallas/Triton fused per-fragment kernel (E + analytic F in-kernel).
+            from mmml.models.physnetjax.physnetjax.models.physnet_fused import make_physnet_fused
+
+            _fcfg = {k: getattr(MODEL, k) for k in (
+                "features", "max_degree", "num_iterations", "num_basis_functions", "cutoff",
+                "zbl", "zbl_cuton", "zbl_cutoff", "charges", "efa", "use_energy_bias")}
+            _fcfg["n_res"] = int(MODEL.n_refinement_blocks)
+            _fprec = (os.environ.get("MMML_ML_FUSED_PRECISION") or "fp32").strip().lower()
+            _fused_by_n = {}
+
+            def _dense_physnet(R, Z):  # noqa: F811 - same signature as make_dense_apply
+                n = int(R.shape[1])
+                if n not in _fused_by_n:
+                    _fused_by_n[n] = make_physnet_fused(_fcfg, params, n, precision=_fprec)
+                E, F_ = _fused_by_n[n](R, Z)
+                return E, F_
+        elif _ml_kernel != "e3x" and dense_supported(MODEL):
+            _dense_physnet = make_dense_apply(MODEL, params)
+    setup_rows.append(("ml_kernel", (os.environ.get("MMML_ML_KERNEL") or "dense") if _dense_physnet is not None else "e3x"))
     _ml_chunk_layout = _resolve_ml_chunk_layout(
         ml_sparse_dimers, _max_active_dimers, n_dimers_total, ml_batch_size,
         n_monomers, _jax_mm_spoof_mode, _kernnn_mode, _metatomic_mode, ml_gpu_count,
@@ -2999,6 +3033,23 @@ def setup_calculator(
             )
             return {"energy": jnp.concatenate([e_m, e_d]), "forces": jnp.concatenate([f_m, f_d])}
 
+        def _dense_batch_apply(atomic_numbers: Array, positions: Array) -> Dict[str, Array]:
+            """Dense PhysNet: monomer rows at their own padding, dimer rows at max_atoms."""
+            R3 = positions.reshape(_effective_batch_size, max_atoms, 3)
+            Z2 = atomic_numbers.reshape(_effective_batch_size, max_atoms)
+            nm = 0 if use_spatial else n_monomers
+            parts_e, parts_f = [], []
+            if nm > 0:
+                e_m, f_m = _dense_physnet(R3[:nm, :max_monomer_atoms], Z2[:nm, :max_monomer_atoms])
+                f_m = jnp.pad(f_m, ((0, 0), (0, max_atoms - max_monomer_atoms), (0, 0)))
+                parts_e.append(e_m); parts_f.append(f_m)
+            if _effective_batch_size > nm:
+                e_d, f_d = _dense_physnet(R3[nm:], Z2[nm:])
+                parts_e.append(e_d); parts_f.append(f_d)
+            e = jnp.concatenate(parts_e)
+            f = jnp.concatenate(parts_f).reshape(-1, 3)
+            return {"energy": e, "forces": f}
+
         def apply_model(
             atomic_numbers: Array,  # Shape: (batch_size * num_atoms,)
             positions: Array,  # Shape: (batch_size * num_atoms, 3)
@@ -3022,6 +3073,8 @@ def setup_calculator(
                 return metatomic_zero_fragment_output(
                     positions, dtype=ml_jnp_dtype
                 )
+            if _dense_physnet is not None:
+                return _dense_batch_apply(atomic_numbers, positions)
             if _do_chunked and use_sparse and _monomers_own_pad:
                 return _apply_monomers_own_pad(atomic_numbers, positions)
             if _do_chunked:
