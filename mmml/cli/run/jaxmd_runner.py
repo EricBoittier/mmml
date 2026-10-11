@@ -3619,6 +3619,23 @@ def set_up_nhc_sim_routine(
             return bool(np.isfinite(e))
 
         _dense_buf = []
+        import collections as _collections
+        _crash_n = int(getattr(args, "jaxmd_crash_buffer", 0) or 0) if sim_fast_dense is not None else 0
+        _crash_ring = _collections.deque(maxlen=max(_crash_n, 1))
+
+        def _dump_crash(reason):
+            """Write the ring of recent dense blocks (+ the current, unflushed one) for post-mortem."""
+            if not _crash_n:
+                return
+            blocks = list(_crash_ring) + ([(np.concatenate([f[0] for f in _dense_buf]),
+                                            np.concatenate([f[1] for f in _dense_buf]), -1)] if _dense_buf else [])
+            if not blocks:
+                return
+            out = f"{args.output_prefix}_crash_dump.npz"
+            np.savez(out, positions=np.concatenate([b[0] for b in blocks]), velocities=np.concatenate([b[1] for b in blocks]),
+                     block_first_step=np.array([b[2] for b in blocks]), frames_per_block=np.array([len(b[0]) for b in blocks]),
+                     dt_frame_ps=float(_dense_stride) * float(dt), reason=str(reason))
+            c.print(f"[crash-dump] wrote {out} ({sum(len(b[0]) for b in blocks)} frames, {reason})")
         try:
             for i in range(total_records):
                 steps_done = 0
@@ -4267,9 +4284,12 @@ def set_up_nhc_sim_routine(
                 hdf5_reporter.report(**report_kw)
                 if sim_fast_dense is not None and _dense_buf:
                     _dp = np.concatenate([f[0] for f in _dense_buf]); _dv = np.concatenate([f[1] for f in _dense_buf])
-                    np.savez(f"{args.output_prefix}_dense_{i:05d}.npz", positions=_dp, velocities=_dv,
-                             dt_frame_ps=float(_dense_stride) * float(dt),
-                             first_step=int(md_steps_completed - steps_per_recording + _dense_stride))
+                    _fs = int(md_steps_completed - steps_per_recording + _dense_stride)
+                    if _crash_n:
+                        _crash_ring.append((_dp, _dv, _fs))
+                    else:
+                        np.savez(f"{args.output_prefix}_dense_{i:05d}.npz", positions=_dp, velocities=_dv,
+                                 dt_frame_ps=float(_dense_stride) * float(dt), first_step=_fs)
                     _dense_buf.clear()
 
                 # Stop on numerical instability (NaN, Inf, or energy blow-up to 0)
@@ -4277,6 +4297,7 @@ def set_up_nhc_sim_routine(
                     run_status = "error"
                     run_error = f"numerical instability at step {steps}"
                     print(f"Numerical instability at step {steps}; stopping.")
+                    _dump_crash(run_error)
                     if len(nhc_positions) > 1:
                         nhc_positions = nhc_positions[:-1]
                         if is_npt:
@@ -4289,6 +4310,7 @@ def set_up_nhc_sim_routine(
                         f"{energy_initial:.4f} eV: > {JAXMD_EPOT_BLOWUP_RISE_EV_PER_ATOM} eV/atom)"
                     )
                     c.print(Panel(f"{run_error}; stopping.", title="[bold red]Error[/bold red]", border_style="red"))
+                    _dump_crash(run_error)
                     if len(nhc_positions) > 1:
                         nhc_positions = nhc_positions[:-1]
                         if is_npt:
@@ -4302,6 +4324,10 @@ def set_up_nhc_sim_routine(
             run_status = "error"
             run_error = f"{type(exc).__name__}: {exc}"
             c.print(Panel(f"{run_error}\nSaving partial trajectory data.", title="[bold red]JAX-MD error[/bold red]", border_style="red"))
+            try:
+                _dump_crash(run_error)
+            except Exception as _dexc:
+                c.print(f"[crash-dump] failed: {_dexc}")
         finally:
             try:
                 hdf5_reporter.close()

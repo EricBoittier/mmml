@@ -645,6 +645,10 @@ def build_parser() -> argparse.ArgumentParser:
                    help=("Fast path: also keep positions and velocities every N steps, collected on device "
                          "inside the jitted loop and written once per recording block to "
                          "<prefix>_dense_<record>.npz (for IR/VDOS). 0 = off (default)."))
+    p.add_argument("--jaxmd-crash-buffer", dest="jaxmd_crash_buffer", type=int, default=0,
+                   help=("With --jaxmd-dense-stride: keep only the last N recording blocks of dense frames in memory "
+                         "(no per-record files) and write them to <prefix>_crash_dump.npz if the run stops on "
+                         "an instability or error. 0 = off (default)."))
     p.add_argument(
         "--mlpot-profile",
         action="store_true",
@@ -2162,6 +2166,7 @@ def main(argv: list[str] | None = None) -> int:
         molpair_cap_margin=float(getattr(args, "molpair_cap_margin", 1.15)),
         jaxmd_block_steps=int(getattr(args, "jaxmd_block_steps", 0) or 0),
         jaxmd_dense_stride=int(getattr(args, "jaxmd_dense_stride", 0) or 0),
+        jaxmd_crash_buffer=int(getattr(args, "jaxmd_crash_buffer", 0) or 0),
     )
     run_sim = set_up_nhc_sim_routine(
         atoms=atoms,
