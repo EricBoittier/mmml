@@ -25,9 +25,14 @@ def mean_squared_loss(
     forces_target: jnp.ndarray,
     forces_weight: float,
     atomic_mask: jnp.ndarray,
+    sample_weight=None,
+    batch_segments=None,
 ) -> float:
     """
     Calculate the mean squared loss for energy and forces predictions.
+
+    Optional ``sample_weight`` (per structure, shape (B,)) reweights each structure's energy and force terms
+    (weighted means; ``batch_segments`` maps atoms to structures).
 
     Computes weighted sum of energy and force losses using L2 loss.
     Forces loss is normalized by the number of valid atoms.
@@ -54,6 +59,14 @@ def mean_squared_loss(
     float
         Combined mean squared loss for energy and forces
     """
+    if sample_weight is not None and batch_segments is not None:
+        w = sample_weight.reshape(-1).astype(energy_prediction.dtype)
+        el = optax.l2_loss(energy_prediction.flatten(), energy_target.flatten())
+        energy_loss = jnp.sum(w * el) / jnp.maximum(jnp.sum(w), 1e-12)
+        wa = w[batch_segments] * atomic_mask.reshape(-1)
+        fl = optax.l2_loss(forces_prediction.reshape(-1, 3), forces_target.reshape(-1, 3)).sum(-1)
+        forces_loss = jnp.sum(wa * fl) / jnp.maximum(jnp.sum(wa), 1e-12)
+        return energy_weight * energy_loss + forces_weight * forces_loss
     energy_loss = jnp.mean(
         optax.l2_loss(energy_prediction.flatten(), energy_target.flatten())
     )

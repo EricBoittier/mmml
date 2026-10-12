@@ -229,6 +229,8 @@ else:
                         forces_weight=forces_weight,
                         energy_weight=energy_weight,
                         atomic_mask=batch["atom_mask"],
+                        sample_weight=batch.get("W"),
+                        batch_segments=batch.get("batch_segments"),
                     )
                 return loss, (output["energy"], output["forces"])
 

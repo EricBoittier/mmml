@@ -1553,6 +1553,8 @@ def main_loop(args):
         data_keys = tuple(data_keys_list)
     else:
         data_keys = ('R', 'Z', 'F', "N", 'E', 'D', 'batch_segments')
+    if "W" not in data_keys:
+        data_keys = tuple(data_keys) + ("W",)  # optional per-structure loss weights (used only if the npz has W)
 
     hybrid_mm = _build_hybrid_mm_config(args, data_paths)
     if hybrid_mm is not None:

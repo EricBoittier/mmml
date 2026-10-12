@@ -147,6 +147,10 @@ def prepare_multiple_datasets(
         dataN = np.concatenate([dataset["N"] for dataset in datasets])[not_failed]
         data.append(dataN.reshape(shape[0], 1))
         keys.append("N")
+    if "W" in datasets[0].keys():  # optional per-structure loss weight
+        dataW = np.concatenate([np.asarray(dataset["W"], dtype=np.float32).reshape(-1) for dataset in datasets])
+        data.append(dataW.reshape(shape[0]))
+        keys.append("W")
     if "Q" in datasets[0].keys():
         dataQ = np.concatenate([dataset["Q"] for dataset in datasets])[not_failed]
         data.append(np.asarray(dataQ, dtype=np.float64).reshape(shape[0], 1))
