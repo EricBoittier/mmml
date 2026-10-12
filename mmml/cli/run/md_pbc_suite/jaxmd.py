@@ -1346,7 +1346,7 @@ def main(argv: list[str] | None = None) -> int:
             "--mm-lj-scales-file."
         )
 
-    factory = setup_calculator(
+    _setup_kw = dict(
         ATOMS_PER_MONOMER=atoms_per_list,
         N_MONOMERS=n_molecules,
         ml_switch_width=ml_w,
@@ -1395,6 +1395,13 @@ def main(argv: list[str] | None = None) -> int:
         hybrid_hamiltonian=getattr(args, "hybrid_hamiltonian", "handoff"),
         shared_cutoff=getattr(args, "shared_cutoff", None),
     )
+    # Alchemical decoupling (MMML_ALCH, mmml.md.alchemy): the tagged molecule's hybrid interaction is scaled by
+    # lambda_ml through lambda_monomer; a second calculator with a different lambda for it gives W = dH/dlambda_ml.
+    from mmml.md.alchemy import lambda_monomer_for, spec_from_env
+    _alch = spec_from_env()
+    if _alch is not None:
+        _setup_kw["lambda_monomer"] = lambda_monomer_for(n_molecules, _alch)
+    factory = setup_calculator(**_setup_kw)
     cutoff = CutoffParameters(
         ml_switch_width=ml_w,
         mm_switch_on=mm_on,
@@ -1402,7 +1409,7 @@ def main(argv: list[str] | None = None) -> int:
         hybrid_hamiltonian=getattr(args, "hybrid_hamiltonian", "handoff"),
         shared_cutoff=getattr(args, "shared_cutoff", None),
     )
-    calc_result = factory(
+    _factory_kw = dict(
         atomic_numbers=z,
         atomic_positions=atoms.get_positions(),
         n_monomers=n_molecules,
@@ -1416,6 +1423,14 @@ def main(argv: list[str] | None = None) -> int:
         force_conversion_factor=1.0,
         verbose=False,
     )
+    calc_result = factory(**_factory_kw)
+    if _alch is not None:
+        _lam_ref = 0.0 if float(_alch["lambda_ml"]) >= 0.5 else 1.0
+        _kw_b = dict(_setup_kw, lambda_monomer=lambda_monomer_for(n_molecules, _alch, _lam_ref))
+        _res_b = setup_calculator(**_kw_b)(**_factory_kw)
+        args._alch_calc_ref = (_res_b[1], _lam_ref, _res_b[2] if len(_res_b) == 3 else None)
+        print(f"[alchemy] molecule {_alch['molecule']}: lambda_ml={_alch['lambda_ml']} lambda_elec={_alch['lambda_elec']} "
+              f"lambda_vdw={_alch['lambda_vdw']} alpha={_alch['alpha']}; reference calculator lambda_ml={_lam_ref}")
     if len(calc_result) == 3:
         calc, spherical_cutoff_calculator, get_update_fn = calc_result
     else:
@@ -2167,6 +2182,7 @@ def main(argv: list[str] | None = None) -> int:
         jaxmd_block_steps=int(getattr(args, "jaxmd_block_steps", 0) or 0),
         jaxmd_dense_stride=int(getattr(args, "jaxmd_dense_stride", 0) or 0),
         jaxmd_crash_buffer=int(getattr(args, "jaxmd_crash_buffer", 0) or 0),
+        _alch_calc_ref=getattr(args, "_alch_calc_ref", None),
     )
     run_sim = set_up_nhc_sim_routine(
         atoms=atoms,

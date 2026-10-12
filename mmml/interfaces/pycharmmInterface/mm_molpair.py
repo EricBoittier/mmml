@@ -393,14 +393,15 @@ class MolPairMM:
             d = xb[:, None, :, :] - xa[:, :, None, :]  # (P, na, nb, 3)  r_j - r_i
             d = _mic(d, cell, inv)
             r = jnp.sqrt(jnp.maximum(jnp.sum(d * d, axis=-1), 1e-22))
+            lam = self._lam[ma] * self._lam[mb]  # (P,)
             if self.include_wall:
                 rw = jnp.maximum(r, 1e-6)
                 inside = rw < self.wall_r_on
                 dw = jnp.where(inside, self.wall_r_on - rw, 0.0)
                 ew = jnp.where(inside, self.wall_k * dw**3 / rw, 0.0)
-                e_wall = e_wall + jnp.sum(jnp.where(valid[:, None, None], ew, 0.0))
+                # the wall belongs to the pair interaction: it scales with lambda like ML and MM (alchemy)
+                e_wall = e_wall + jnp.sum(jnp.where(valid[:, None, None], ew * lam[:, None, None], 0.0))
             rs = jax.nn.softplus(20.0 * (r - 0.6)) / 20.0 + 0.6
-            lam = self._lam[ma] * self._lam[mb]  # (P,)
             qq = q[ia][:, :, None] * q[ib][:, None, :]
             rm = self._rm[ia][:, :, None] + self._rm[ib][:, None, :]
             ep = (self._ep[ia][:, :, None] * self._ep[ib][:, None, :]) ** 0.5

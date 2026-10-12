@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import time
 from pathlib import Path
@@ -1570,6 +1571,7 @@ def set_up_nhc_sim_routine(
     Si_mass = as_jaxmd_dtype(Si_mass)
 
     _fast_cell = [None]  # _MolPairFast once the MM fn exists (built below)
+    _alch_ref_fast = [None]  # alchemy: reference-lambda hybrid (mmml.md.alchemy), fast path only
 
     @jax.jit
     def evaluate_energies_and_forces(
@@ -1660,6 +1662,13 @@ def set_up_nhc_sim_routine(
             args, spherical_cutoff_calculator, update_fn, monomer_offsets,
             atoms.get_atomic_numbers(), R, box_init,
         )
+        if getattr(args, "_alch_calc_ref", None) is not None:
+            if args._alch_calc_ref[2] is not None:
+                args._alch_calc_ref[2](R, CUTOFF_PARAMS)   # builds the reference calculator's MM pair spec
+            _alch_ref_fast[0] = _MolPairFast(
+                args, args._alch_calc_ref[0], None, monomer_offsets,
+                atoms.get_atomic_numbers(), R, box_init,
+            )
         _fmp = _fast_cell[0].mp
         print(
             f"[molpair] MM tail: molecule-pair blocks, buckets={_fmp.topo.buckets} "
@@ -1931,6 +1940,31 @@ def set_up_nhc_sim_routine(
         wrapped_energy_fn = jit(lambda position, **kw: _base_E(position, **kw) + _pol_E(position, kw.get("box")).astype(jnp.float32))
         wrapped_force_fn = jit(lambda position, **kw: _base_F(position, **kw) - as_jaxmd_dtype(_pol_grad(position, kw.get("box"))))
         c.print(f"\\[polarization] many-body induced-dipole term ON ({_pol_path}); E_pol(start) = {float(_pol_E(jnp.asarray(atoms.get_positions()))):.4f} eV")
+
+    # Optional alchemical decoupling of one molecule (MMML_ALCH, see mmml.md.alchemy): the hybrid already scales the
+    # molecule's interaction by lambda_ml (lambda_monomer); add (1 - lambda_ml) * soft-core MM(lambda_elec, lambda_vdw).
+    from mmml.md.alchemy import spec_from_env as _alch_spec_from_env
+    _alch = _alch_spec_from_env()
+    _alch_E = _alch_states = _alch_dl = None
+    if _alch is not None:
+        if not (use_pbc and args.ensemble in ("nvt", "nve")):
+            raise ValueError("MMML_ALCH needs a periodic NVT/NVE run")
+        if _alch_ref_fast[0] is None:
+            raise ValueError("MMML_ALCH needs the fast molecule-pair path (--jaxmd-molpair-mm)")
+        from mmml.md.alchemy import make_alch_mm
+        _alch_E, _alch_states = make_alch_mm(spherical_cutoff_calculator.get_mm_molpair_spec(), float(args.cell),
+                                             molecule=int(_alch["molecule"]), alpha=float(_alch["alpha"]))
+        _ak = 1.0 - float(_alch["lambda_ml"]); _ae, _av = float(_alch["lambda_elec"]), float(_alch["lambda_vdw"])
+        _alch_G = jax.grad(lambda R: _alch_E(R, _ae, _av))
+        _alch_dl = jit(jax.grad(lambda ev, R: _alch_E(R, ev[0], ev[1])))
+        _base_E2, _base_F2 = wrapped_energy_fn, wrapped_force_fn
+        wrapped_energy_fn = jit(lambda position, **kw: _base_E2(position, **kw) + _ak * _alch_E(position, _ae, _av).astype(jnp.float32))
+        wrapped_force_fn = jit(lambda position, **kw: _base_F2(position, **kw) - _ak * as_jaxmd_dtype(_alch_G(position)))
+        _alch_ref_eval = jit(lambda pos: _alch_ref_fast[0].evaluate(
+            jnp.asarray(atomic_numbers), pos, None, n_monomers, CUTOFF_PARAMS, False).energy)
+        _alch_rows = {"t_ps": [], "E_dyn": [], "E_ref": [], "W": [], "U_states": [], "dU_dle": [], "dU_dlv": [], "U_cur": []}
+        c.print(f"\\[alchemy] molecule {_alch['molecule']} lambda_ml={_alch['lambda_ml']} lambda_elec={_ae} lambda_vdw={_av} "
+                f"alpha={_alch['alpha']}; U_sc(start) = {float(_alch_E(jnp.asarray(atoms.get_positions()), _ae, _av)):.4f} eV")
 
     # Shift and displacement for minimization and simulation
     # Minimization: energy/force use Cartesian (MIC). Use space.periodic when PBC so positions
@@ -3874,6 +3908,20 @@ def set_up_nhc_sim_routine(
                         e_pot += float(_pol_E(space.transform(_box_rep, state.position), _box_rep))
                     else:
                         e_pot += float(_pol_E(state.position))
+                # Alchemy: W = dH_hybrid/dlambda_ml from the reference-lambda calculator, soft-core MM at all states.
+                if _alch is not None:
+                    _pr = state.position
+                    _ed = float(out_dyn.energy); _er = float(_alch_ref_eval(_pr))
+                    _W = (_ed - _er) / (float(_alch["lambda_ml"]) - float(args._alch_calc_ref[1]))
+                    _Uc = float(_alch_E(_pr, _ae, _av)); e_pot += _ak * _Uc
+                    _dl = np.asarray(_alch_dl(jnp.asarray([_ae, _av]), _pr))
+                    for _k, _v in (("t_ps", time_ps), ("E_dyn", _ed), ("E_ref", _er), ("W", _W),
+                                   ("U_states", np.asarray(_alch_states(_pr))), ("dU_dle", _dl[0]), ("dU_dlv", _dl[1]), ("U_cur", _Uc)):
+                        _alch_rows[_k].append(_v)
+                    from mmml.md.alchemy import STATES as _ASTATES
+                    np.savez(f"{args.output_prefix}_alch.npz", **{k: np.asarray(v) for k, v in _alch_rows.items()},
+                             states=np.asarray(_ASTATES), spec=json.dumps(_alch), lambda_ref=float(args._alch_calc_ref[1]),
+                             temperature=float(args.temperature))
                 e_wall_report = float(getattr(out_dyn, "wall_E", float("nan")))
                 if use_flat_bottom:
                     com_dist_report = float(out_dyn.com_dist)
