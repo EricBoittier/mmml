@@ -1930,7 +1930,7 @@ def set_up_nhc_sim_routine(
         # minimisation / diagnostics (all ensembles); NpT dynamics adds the term in _npt_*_of_real with box_eff
         wrapped_energy_fn = jit(lambda position, **kw: _base_E(position, **kw) + _pol_E(position, kw.get("box")).astype(jnp.float32))
         wrapped_force_fn = jit(lambda position, **kw: _base_F(position, **kw) - as_jaxmd_dtype(_pol_grad(position, kw.get("box"))))
-        c.print(f"[polarization] many-body induced-dipole term ON ({_pol_path}); E_pol(start) = {float(_pol_E(jnp.asarray(atoms.get_positions()))):.4f} eV")
+        c.print(f"\\[polarization] many-body induced-dipole term ON ({_pol_path}); E_pol(start) = {float(_pol_E(jnp.asarray(atoms.get_positions()))):.4f} eV")
 
     # Shift and displacement for minimization and simulation
     # Minimization: energy/force use Cartesian (MIC). Use space.periodic when PBC so positions
@@ -3867,6 +3867,13 @@ def set_up_nhc_sim_routine(
                     if is_npt:
                         _pos_rep = space.transform(simulate.npt_box(state), state.position)
                     e_pot += float(_psf_angle_energy_fn(as_jaxmd_dtype(_pos_rep)))
+                # Same for the optional many-body polarisation term (in the forces, not in the hybrid output).
+                if _pol_E is not None:
+                    if is_npt:
+                        _box_rep = simulate.npt_box(state)
+                        e_pot += float(_pol_E(space.transform(_box_rep, state.position), _box_rep))
+                    else:
+                        e_pot += float(_pol_E(state.position))
                 e_wall_report = float(getattr(out_dyn, "wall_E", float("nan")))
                 if use_flat_bottom:
                     com_dist_report = float(out_dyn.com_dist)
