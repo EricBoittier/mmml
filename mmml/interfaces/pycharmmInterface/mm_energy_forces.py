@@ -2086,7 +2086,7 @@ def build_mm_energy_forces_fn(
 
     cgenff_params_dict = {}
     for p in open(CGENFF_PRM).readlines():
-        if len(p) > 5 and len(p.split()) > 4 and p.split()[1] == "0.0" and p[0] != "!":
+        if len(p) > 5 and len(p.split()) >= 4 and p.split()[1] == "0.0" and p[0] != "!":  # >= 4: OT/HT lines have no comment
             res, _, ep, sig = p.split()[:4]
             cgenff_params_dict[res] = (float(ep), float(sig))
 
