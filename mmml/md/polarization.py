@@ -44,7 +44,7 @@ def _switch(r, r_on, r_off):
     return 0.5 * (1 + jnp.cos(jnp.pi * x))
 
 
-def _upol_dense(R, alpha, q, mol, a, L, taper, n_iter):
+def _upol_dense(R, alpha, q, mol, a, L, taper, n_iter, tag=None, lam=1.0):
     d = R[:, None, :] - R[None, :, :]
     if L is not None:
         d = d - L * jnp.round(d / L)
@@ -53,6 +53,8 @@ def _upol_dense(R, alpha, q, mol, a, L, taper, n_iter):
     inter = (mol[:, None] != mol[None, :]).astype(R.dtype)
     if taper is not None:
         inter = inter * _switch(r, taper[0], taper[1])
+    if tag is not None:   # alchemy: interactions between the tagged molecule and the rest scale with lam
+        inter = inter * jnp.where(tag[:, None] != tag[None, :], lam, 1.0)
     u = r / (alpha[:, None] * alpha[None, :]) ** (1 / 6)
     e = jnp.exp(-a * u**3); l3 = 1 - e; l5 = 1 - (1 + a * u**3) * e
     E0 = jnp.einsum("ij,ijk->ik", inter * q[None, :] * l3 / r**3, d)
@@ -68,7 +70,10 @@ def _upol_dense(R, alpha, q, mol, a, L, taper, n_iter):
     return -0.5 * KC * jnp.sum(mu * E0)
 
 
-def make_pol_energy_fn(Z, box_L, params_json, r_on=4.5, r_off=6.0, taper=(9.0, 12.0), n_iter=12, pair_cap=None):
+def make_pol_energy_fn(Z, box_L, params_json, r_on=4.5, r_off=6.0, taper=(9.0, 12.0), n_iter=12, pair_cap=None,
+                       tagged=None, lam=1.0):
+    """energy(R, box=None, lam=None) in eV. tagged: molecule index whose coupling to the rest (permanent field both ways and
+    dipole-dipole) scales with lam (alchemical decoupling; lam=None -> the constructor's lam). tagged=None: no scaling."""
     par = json.load(open(params_json))
     alpha_t = jnp.asarray([par["alpha_A3"][k] for k in NAMES]); a = float(par["thole_a"])
     types, q, mol, table = _molecules(Z)
@@ -77,6 +82,9 @@ def make_pol_energy_fn(Z, box_L, params_json, r_on=4.5, r_off=6.0, taper=(9.0, 1
     # pair gathering: index n = dummy atom (q = 0, far away)
     tab = np.where(table < 0, n, table); tabj = jnp.asarray(tab)
     alpha_x = jnp.concatenate([alpha, jnp.ones(1)]); q_x = jnp.concatenate([qj, jnp.zeros(1)])
+    tag = None if tagged is None else jnp.asarray(np.asarray(mol) == int(tagged))
+    tag_x = None if tag is None else jnp.concatenate([tag, jnp.zeros(1, bool)])
+    lam0 = float(lam)
     mass = np.where(np.array(Z) == 1, 1.008, np.where(np.array(Z) == 6, 12.011, 15.999))
     K = int(pair_cap or 10 * n_mol)
     iu = np.triu_indices(n_mol, 1)
@@ -99,11 +107,12 @@ def make_pol_energy_fn(Z, box_L, params_json, r_on=4.5, r_off=6.0, taper=(9.0, 1
             X = X[:, :1] + (X - X[:, :1]) - L * jnp.round((X - X[:, :1]) / L)
         return jnp.sum(X * m[..., None], 1) / jnp.sum(m, 1)[:, None], X
 
-    def energy(R, box=None):
+    def energy(R, box=None, lam=None):
+        lam = lam0 if lam is None else lam
         R = jnp.asarray(R); L = _L(box)
         if L is not None:
             L = L.astype(R.dtype)
-        e_sys = _upol_dense(R, alpha.astype(R.dtype), qj.astype(R.dtype), molj, a, L, taper if L is not None else None, n_iter)
+        e_sys = _upol_dense(R, alpha.astype(R.dtype), qj.astype(R.dtype), molj, a, L, taper if L is not None else None, n_iter, tag, lam)
         C, X = com(R, L)
         dc = C[iu[0]] - C[iu[1]]
         if L is not None:
@@ -123,7 +132,11 @@ def make_pol_energy_fn(Z, box_L, params_json, r_on=4.5, r_off=6.0, taper=(9.0, 1
         far = 1000.0 + 50.0 * jnp.arange(12)[None, :, None] * jnp.array([1.0, 0.7, 0.3])
         Rp = jnp.where(pad[..., None], far, Rp)
         mp = jnp.where(pad, 2.0 + jnp.arange(12)[None, :], mp)
-        ep = jax.vmap(lambda r_, a_, q_, m_: _upol_dense(r_, a_, q_, m_, a, None, None, n_iter))(Rp, ai, qp, mp)
+        if tag is None:
+            ep = jax.vmap(lambda r_, a_, q_, m_: _upol_dense(r_, a_, q_, m_, a, None, None, n_iter))(Rp, ai, qp, mp)
+        else:
+            tp = jnp.concatenate([tag_x[tabj[i]], tag_x[tabj[j]]], 1)
+            ep = jax.vmap(lambda r_, a_, q_, m_, t_: _upol_dense(r_, a_, q_, m_, a, None, None, n_iter, t_, lam))(Rp, ai, qp, mp, tp)
         return e_sys - jnp.sum(s * ep)
 
     return jax.jit(energy)

@@ -1933,7 +1933,11 @@ def set_up_nhc_sim_routine(
     _pol_E = _pol_grad = None
     if _pol_path and use_pbc:
         from mmml.md.polarization import make_pol_energy_fn
-        _pol_E = make_pol_energy_fn(np.asarray(atomic_numbers), float(args.cell), _pol_path)
+        from mmml.md.alchemy import spec_from_env as _pol_alch_spec
+        _pa = _pol_alch_spec()   # alchemy: the tagged molecule's dipole coupling follows lambda_ml
+        _pol_E = make_pol_energy_fn(np.asarray(atomic_numbers), float(args.cell), _pol_path,
+                                    tagged=None if _pa is None else int(_pa["molecule"]),
+                                    lam=1.0 if _pa is None else float(_pa["lambda_ml"]))
         _pol_grad = jax.grad(_pol_E)  # d/dR at fixed box; NpT adds E/F in _npt_*_of_real with the current box
         _base_E, _base_F = wrapped_energy_fn, wrapped_force_fn
         # minimisation / diagnostics (all ensembles); NpT dynamics adds the term in _npt_*_of_real with box_eff
@@ -3915,6 +3919,10 @@ def set_up_nhc_sim_routine(
                     _W = (_ed - _er) / (float(_alch["lambda_ml"]) - float(args._alch_calc_ref[1]))
                     _Uc = float(_alch_E(_pr, _ae, _av)); e_pot += _ak * _Uc
                     _dl = np.asarray(_alch_dl(jnp.asarray([_ae, _av]), _pr))
+                    if _pol_E is not None:   # dipole energy at the stage-1 lambdas (not linear in lambda) + dE/dlambda
+                        from mmml.md.alchemy import S1_ML as _AS1
+                        _alch_rows.setdefault("Upol_S1", []).append(np.asarray([float(_pol_E(_pr, None, _l)) for _l in _AS1]))
+                        _alch_rows.setdefault("dUpol_dl", []).append(float(jax.grad(lambda _l: _pol_E(_pr, None, _l))(float(_alch["lambda_ml"]))))
                     for _k, _v in (("t_ps", time_ps), ("E_dyn", _ed), ("E_ref", _er), ("W", _W),
                                    ("U_states", np.asarray(_alch_states(_pr))), ("dU_dle", _dl[0]), ("dU_dlv", _dl[1]), ("U_cur", _Uc)):
                         _alch_rows[_k].append(_v)
