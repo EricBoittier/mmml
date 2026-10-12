@@ -35,6 +35,12 @@ S2_ELEC = [1.0, 0.75, 0.5, 0.25, 0.0]
 S2_VDW = [1.0, 0.95, 0.9, 0.8, 0.7, 0.6, 0.5, 0.45, 0.4, 0.35, 0.3, 0.25, 0.2, 0.15, 0.1, 0.05, 0.0]
 STATES = ([(l, 1.0, 1.0) for l in S1_ML] + [(0.0, e, 1.0) for e in S2_ELEC[1:]]
           + [(0.0, 0.0, v) for v in S2_VDW[1:]])          # 26 states, index 5 = (0, 1, 1) joins S1 and S2
+# v2 (MMML_ALCH_SCHEDULE=v2): denser soft-core LJ (stage-2 overlap was 0.02-0.04 between 0.6 and 0.1 with v1)
+S2_VDW_V2 = [1.0, 0.95, 0.9, 0.85, 0.8, 0.75, 0.7, 0.65, 0.6, 0.55, 0.5, 0.45, 0.4, 0.35, 0.3, 0.25, 0.2, 0.15,
+             0.12, 0.09, 0.06, 0.03, 0.0]
+if os.environ.get("MMML_ALCH_SCHEDULE", "v1").lower() == "v2":
+    STATES = ([(l, 1.0, 1.0) for l in S1_ML] + [(0.0, e, 1.0) for e in S2_ELEC[1:]]
+              + [(0.0, 0.0, v) for v in S2_VDW_V2[1:]])  # 32 states
 
 
 def spec_from_env():
