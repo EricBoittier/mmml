@@ -59,10 +59,17 @@ def make_alch_mm(molpair_spec, box_L, molecule=0, alpha=0.5, r_on=9.0, r_off=12.
     rmh = np.asarray(molpair_spec["rmin_half"], np.float64).reshape(-1)[:n_at]
     eps = np.abs(np.asarray(molpair_spec["eps"], np.float64).reshape(-1)[:n_at])
     mol = np.repeat(np.arange(len(off) - 1), np.diff(off))
-    print(f"[alchemy] MM params: n_atoms={n_at} q[t]={np.round(np.asarray(molpair_spec['q']).reshape(-1)[:6], 3).tolist()} "
-          f"eps[:6]={np.round(np.asarray(molpair_spec['eps']).reshape(-1)[:6], 4).tolist()} "
-          f"rmin_half[:6]={np.round(np.asarray(molpair_spec['rmin_half']).reshape(-1)[:6], 4).tolist()} "
-          f"shapes q{np.shape(molpair_spec['q'])} eps{np.shape(molpair_spec['eps'])} nonzero eps {int(np.count_nonzero(eps))}", flush=True)
+    # The hybrid reads LJ from the CGenFF prm only: TIP3P types (OT, HT) are absent there and come out with eps = 0
+    # unless MMML_MM_LJ_ALL_TYPES=1. The decoupling term needs real repulsion, so missing TIP3P LJ is filled with the
+    # CHARMM values (toppar_water_ions: OT eps -0.1521, Rmin/2 1.7682; HT eps -0.046, Rmin/2 0.2245), identified by charge.
+    q_all = np.asarray(molpair_spec["q"], np.float64).reshape(-1)[:n_at]
+    eps = eps.copy(); rmh = rmh.copy()
+    ot = (eps == 0) & np.isclose(q_all, -0.834); ht = (eps == 0) & np.isclose(q_all, 0.417)
+    eps[ot], rmh[ot] = 0.1521, 1.7682
+    eps[ht], rmh[ht] = 0.046, 0.2245
+    if ot.any() or ht.any():
+        print(f"[alchemy] soft-core LJ: filled TIP3P CHARMM LJ for {int(ot.sum())} OT + {int(ht.sum())} HT atoms "
+              f"(eps = 0 in the hybrid's CGenFF-only table); {int((eps == 0).sum())} atoms still without LJ", flush=True)
     t_idx = np.arange(off[molecule], off[molecule + 1]); o_idx = np.setdiff1d(np.arange(n_at), t_idx)
     L = float(box_L)
     # pair parameters (tagged atoms x other atoms), constants
