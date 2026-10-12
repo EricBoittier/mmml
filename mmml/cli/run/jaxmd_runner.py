@@ -1918,6 +1918,20 @@ def set_up_nhc_sim_routine(
                 box=_pbc_state["box"],
             )
 
+    # Optional many-body polarisation term (prototype; MMML_POL_PARAMS=<params.json>): Thole induced dipoles on the
+    # fixed MM charges minus the ML-range pair polarisation, see mmml.md.polarization. NVT/NVE/NpT (orthorhombic).
+    _pol_path = os.environ.get("MMML_POL_PARAMS")
+    _pol_E = _pol_grad = None
+    if _pol_path and use_pbc:
+        from mmml.md.polarization import make_pol_energy_fn
+        _pol_E = make_pol_energy_fn(np.asarray(atomic_numbers), float(args.cell), _pol_path)
+        _pol_grad = jax.grad(_pol_E)  # d/dR at fixed box; NpT adds E/F in _npt_*_of_real with the current box
+        _base_E, _base_F = wrapped_energy_fn, wrapped_force_fn
+        # minimisation / diagnostics (all ensembles); NpT dynamics adds the term in _npt_*_of_real with box_eff
+        wrapped_energy_fn = jit(lambda position, **kw: _base_E(position, **kw) + _pol_E(position, kw.get("box")).astype(jnp.float32))
+        wrapped_force_fn = jit(lambda position, **kw: _base_F(position, **kw) - as_jaxmd_dtype(_pol_grad(position, kw.get("box"))))
+        c.print(f"[polarization] many-body induced-dipole term ON ({_pol_path}); E_pol(start) = {float(_pol_E(jnp.asarray(atoms.get_positions()))):.4f} eV")
+
     # Shift and displacement for minimization and simulation
     # Minimization: energy/force use Cartesian (MIC). Use space.periodic when PBC so positions
     # stay in box; avoids coordinate mismatch (fractional shift + Cartesian energy → oscillation).
@@ -2081,16 +2095,22 @@ def set_up_nhc_sim_routine(
                 mm_pair_mask=pair_mask,
                 box=box_eff,
             )
-            return result.energy.reshape(-1)[0]
+            e = result.energy.reshape(-1)[0]
+            if _pol_E is not None:
+                e = e + _pol_E(real_pos, box_eff).astype(e.dtype)
+            return e
 
         def _npt_force_of_real(real_pos, box_eff, neighbor):
             pair_idx, pair_mask = neighbor if neighbor is not None else (None, None)
-            return jax_md_force_fn(
+            f = jax_md_force_fn(
                 real_pos,
                 mm_pair_idx=pair_idx,
                 mm_pair_mask=pair_mask,
                 box=box_eff,
             )
+            if _pol_E is not None:
+                f = f - _pol_grad(real_pos, box_eff).astype(f.dtype)
+            return f
 
         # ``perturbation`` is jax-md's LINEAR strain (box -> box * p); see
         # make_npt_energy_fn. It used to be applied as p**(1/3), which made
