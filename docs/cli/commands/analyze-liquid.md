@@ -13,10 +13,10 @@ karml analyze-liquid --help
 
 ```text
 usage: karml analyze-liquid [-h] (--campaign-dir CAMPAIGN_DIR | --h5 H5)
-                           -o OUTPUT_DIR [--box-size BOX_SIZE]
-                           [--solvent SOLVENT] [--prefer-run PREFER_RUN]
-                           [--stride STRIDE] [--max-frames MAX_FRAMES]
-                           [--r-max R_MAX] [--no-plots]
+                            -o OUTPUT_DIR [--box-size BOX_SIZE]
+                            [--solvent SOLVENT] [--prefer-run PREFER_RUN]
+                            [--stride STRIDE] [--max-frames MAX_FRAMES]
+                            [--r-max R_MAX] [--no-plots]
 
 Analyze neat-liquid jaxmd / campaign trajectories (density, RDF, MSD, plots).
 Examples: karml analyze-liquid --campaign-dir artifacts/lj_scales/liquid_dcm -o

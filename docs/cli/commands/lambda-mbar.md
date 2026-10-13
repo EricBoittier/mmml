@@ -13,10 +13,10 @@ karml lambda-mbar --help
 
 ```text
 usage: karml lambda-mbar [-h] --run-dir RUN_DIR [--checkpoint CHECKPOINT]
-                        [--temperature-K TEMPERATURE_K]
-                        [--couple-residues COUPLE_RESIDUES]
-                        [--ml-cutoff ML_CUTOFF] [--mm-switch-on MM_SWITCH_ON]
-                        [--mm-cutoff MM_CUTOFF] [--mbar-verbose] [--no-plots]
+                         [--temperature-K TEMPERATURE_K]
+                         [--couple-residues COUPLE_RESIDUES]
+                         [--ml-cutoff ML_CUTOFF] [--mm-switch-on MM_SWITCH_ON]
+                         [--mm-cutoff MM_CUTOFF] [--mbar-verbose] [--no-plots]
 
 MBAR analysis for a completed lambda-dynamics run. Reads lambda_ti_snapshots.npz
 from --run-dir and updates lambda_ti_summary.json.

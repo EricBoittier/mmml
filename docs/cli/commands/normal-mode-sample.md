@@ -12,10 +12,11 @@ karml normal-mode-sample --help
 ## Options
 
 ```text
-usage: karml normal-mode-sample [-h] -i INPUT [-o OUTPUT] [--amplitude AMPLITUDE]
-                               [--amplitudes AMPLITUDES [AMPLITUDES ...]]
-                               [--freq-min FREQ_MIN] [--include-equilibrium]
-                               [--samples-per-mode {1,2}] [--max-samples N]
+usage: karml normal-mode-sample [-h] -i INPUT [-o OUTPUT]
+                                [--amplitude AMPLITUDE]
+                                [--amplitudes AMPLITUDES [AMPLITUDES ...]]
+                                [--freq-min FREQ_MIN] [--include-equilibrium]
+                                [--samples-per-mode {1,2}] [--max-samples N]
 
 Sample geometries along vibrational modes from pyscf-dft harmonic output.
 

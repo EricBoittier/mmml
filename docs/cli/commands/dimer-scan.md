@@ -13,19 +13,19 @@ karml dimer-scan --help
 
 ```text
 usage: karml dimer-scan [-h] [--config CONFIG]
-                       [--calculator {physnet,spookynet,mbd,multipoles,efield,kernnn,metatomic,xtb,dftb3-d4,pyscf}]
-                       [--checkpoint CHECKPOINT]
-                       [--calculator-config CALCULATOR_CONFIG] [--method METHOD]
-                       [--basis BASIS] [--xc XC] [--electric-field EX EY EZ]
-                       [--slako-dir SLAKO_DIR]
-                       [--calculator-workdir CALCULATOR_WORKDIR]
-                       [--calculator-executable CALCULATOR_EXECUTABLE]
-                       [--multipole-force-step ANGSTROM]
-                       [--distance START:STOP:STEP]
-                       [--energy-definition {interaction,total}]
-                       [--charge CHARGE] [--spin SPIN] [--seed SEED]
-                       [--allow-partial] [--overwrite] --output OUTPUT
-                       [RESIDUE ...]
+                        [--calculator {physnet,spookynet,mbd,multipoles,efield,kernnn,metatomic,xtb,dftb3-d4,pyscf}]
+                        [--checkpoint CHECKPOINT]
+                        [--calculator-config CALCULATOR_CONFIG]
+                        [--method METHOD] [--basis BASIS] [--xc XC]
+                        [--electric-field EX EY EZ] [--slako-dir SLAKO_DIR]
+                        [--calculator-workdir CALCULATOR_WORKDIR]
+                        [--calculator-executable CALCULATOR_EXECUTABLE]
+                        [--multipole-force-step ANGSTROM]
+                        [--distance START:STOP:STEP]
+                        [--energy-definition {interaction,total}]
+                        [--charge CHARGE] [--spin SPIN] [--seed SEED]
+                        [--allow-partial] [--overwrite] --output OUTPUT
+                        [RESIDUE ...]
 
 Run a reproducible rigid 1D dimer energy/force scan.
 

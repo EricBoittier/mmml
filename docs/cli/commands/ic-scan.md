@@ -25,7 +25,7 @@ karml ic-scan --help
 
 ```text
 usage: karml ic-scan [-h] --config CONFIG [--prepare-only] [--allow-partial]
-                    [--overwrite] --output OUTPUT
+                     [--overwrite] --output OUTPUT
 
 Prepare and optionally evaluate bond/angle/dihedral scans from a config that
 defines DoFs, grids, and 1D or N-D scan combinations.

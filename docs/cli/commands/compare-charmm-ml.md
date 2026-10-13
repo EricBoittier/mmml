@@ -12,10 +12,11 @@ karml compare-charmm-ml --help
 ## Options
 
 ```text
-usage: karml compare-charmm-ml [-h] --checkpoint CHECKPOINT --valid-efd VALID_EFD
-                              --valid-esp VALID_ESP --pdb PDB
-                              [--n-samples N_SAMPLES] [--out-dir OUT_DIR]
-                              [--cutoff CUTOFF] [--subtract-atom-energies]
+usage: karml compare-charmm-ml [-h] --checkpoint CHECKPOINT
+                               --valid-efd VALID_EFD --valid-esp VALID_ESP
+                               --pdb PDB [--n-samples N_SAMPLES]
+                               [--out-dir OUT_DIR] [--cutoff CUTOFF]
+                               [--subtract-atom-energies]
 
 Compare CHARMM vs ML dipoles and ESPs
 

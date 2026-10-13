@@ -13,12 +13,12 @@ karml mpi-launch --help
 
 ```text
 usage: karml mpi-launch [-h] [--mpi-ranks MPI_RANKS]
-                       [--jax-mode {cpu-threaded,gpu-single,gpu-per-rank,rank0,spatial}]
-                       [--jax-cpu-threads JAX_CPU_THREADS]
-                       [--charmm-omp-threads CHARMM_OMP_THREADS]
-                       [--preset {single,cpu,spatial}] [--strict-resources]
-                       [--dry-run]
-                       ...
+                        [--jax-mode {cpu-threaded,gpu-single,gpu-per-rank,rank0,spatial}]
+                        [--jax-cpu-threads JAX_CPU_THREADS]
+                        [--charmm-omp-threads CHARMM_OMP_THREADS]
+                        [--preset {single,cpu,spatial}] [--strict-resources]
+                        [--dry-run]
+                        ...
 
 Launch CHARMM/OpenMPI with an independent JAX device/thread policy. When invoked
 through 'uv run', the active uv interpreter is used on every rank.

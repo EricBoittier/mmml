@@ -77,17 +77,19 @@ karml build-crystal --help
 
 ```text
 usage: karml build-crystal [-h] [--literature PRESET] [--from-cif PATH]
-                          [--residue NAME] [--monomer-pdb PATH]
-                          [--min-box-side ANG] [--box-size ANG] [--write-charmm]
-                          [-m SPEC] [--stoichiometry Z [Z ...]]
-                          [--z Z_VALUES [Z_VALUES ...]] [--dim {0,1,2,3}]
-                          [--spg SPACE_GROUP] [--factor FACTOR]
-                          [--target-density-g-cm3 RHO] [--seed SEED]
-                          [--attempts ATTEMPTS] [--no-resort]
-                          [--supercell NX,NY,NZ] -o OUTPUT [--format OUT_FORMAT]
-                          [--optimize] [--optimizer {bfgs,fire,lbfgs}]
-                          [--fmax FMAX] [--max-opt-steps MAX_OPT_STEPS]
-                          [--fix-cell] [--emt] [--quiet-opt]
+                           [--residue NAME] [--monomer-pdb PATH]
+                           [--min-box-side ANG] [--box-size ANG]
+                           [--write-charmm] [-m SPEC]
+                           [--stoichiometry Z [Z ...]]
+                           [--z Z_VALUES [Z_VALUES ...]] [--dim {0,1,2,3}]
+                           [--spg SPACE_GROUP] [--factor FACTOR]
+                           [--target-density-g-cm3 RHO] [--seed SEED]
+                           [--attempts ATTEMPTS] [--no-resort]
+                           [--supercell NX,NY,NZ] -o OUTPUT
+                           [--format OUT_FORMAT] [--optimize]
+                           [--optimizer {bfgs,fire,lbfgs}] [--fmax FMAX]
+                           [--max-opt-steps MAX_OPT_STEPS] [--fix-cell] [--emt]
+                           [--quiet-opt]
 
 Build molecular crystals: literature CIF + make-res (CHARMM names) or PyXtal
 random placement with space-group symmetry.

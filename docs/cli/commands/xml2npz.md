@@ -13,10 +13,10 @@ karml xml2npz --help
 
 ```text
 usage: karml xml2npz [-h] -o OUTPUT [--padding PADDING] [--no-variables]
-                    [--first-geometry] [--recursive] [--validate]
-                    [--no-validate] [--strict] [--summary SUMMARY] [--quiet]
-                    [--verbose] [--continue-on-error] [--max-files MAX_FILES]
-                    inputs [inputs ...]
+                     [--first-geometry] [--recursive] [--validate]
+                     [--no-validate] [--strict] [--summary SUMMARY] [--quiet]
+                     [--verbose] [--continue-on-error] [--max-files MAX_FILES]
+                     inputs [inputs ...]
 
 Convert Molpro XML files to standardized NPZ format
 
@@ -49,11 +49,11 @@ Other options:
 
 Examples: # Convert single file karml xml2npz output.xml -o data.npz # Convert
 multiple files karml xml2npz file1.xml file2.xml file3.xml -o dataset.npz #
-Convert all XML files in directory karml xml2npz molpro_outputs/ -o dataset.npz #
-Recursive search karml xml2npz data/ -o dataset.npz --recursive # With validation
-and summary karml xml2npz inputs/*.xml -o data.npz --validate --summary
-summary.json # Adjust padding for larger molecules karml xml2npz inputs/*.xml -o
-data.npz --padding 100
+Convert all XML files in directory karml xml2npz molpro_outputs/ -o dataset.npz
+# Recursive search karml xml2npz data/ -o dataset.npz --recursive # With
+validation and summary karml xml2npz inputs/*.xml -o data.npz --validate
+--summary summary.json # Adjust padding for larger molecules karml xml2npz
+inputs/*.xml -o data.npz --padding 100
 ```
 
 

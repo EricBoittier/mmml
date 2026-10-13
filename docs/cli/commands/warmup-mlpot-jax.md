@@ -13,22 +13,22 @@ karml warmup-mlpot-jax --help
 
 ```text
 usage: karml warmup-mlpot-jax [-h] [--checkpoint CHECKPOINT]
-                             [--n-monomers N_MONOMERS]
-                             [--atoms-per-monomer ATOMS_PER_MONOMER]
-                             [--box-side BOX_SIDE] [--spacing SPACING]
-                             [--ml-batch-size ML_BATCH_SIZE]
-                             [--ml-gpu-count ML_GPU_COUNT]
-                             [--ml-max-active-dimers N]
-                             [--hybrid-hamiltonian {handoff,shared_cutoff}]
-                             [--shared-cutoff SHARED_CUTOFF]
-                             [--ml-switch-width ML_SWITCH_WIDTH]
-                             [--mm-switch-on MM_SWITCH_ON]
-                             [--mm-switch-width MM_SWITCH_WIDTH]
-                             [--no-complementary-handoff]
-                             [--mm-pair-source {jax,charmm_callback}] [--do-mm]
-                             [--compile-threads COMPILE_THREADS]
-                             [--allow-under-mpirun] [--dry-run] [--quiet]
-                             [--verbose]
+                              [--n-monomers N_MONOMERS]
+                              [--atoms-per-monomer ATOMS_PER_MONOMER]
+                              [--box-side BOX_SIDE] [--spacing SPACING]
+                              [--ml-batch-size ML_BATCH_SIZE]
+                              [--ml-gpu-count ML_GPU_COUNT]
+                              [--ml-max-active-dimers N]
+                              [--hybrid-hamiltonian {handoff,shared_cutoff}]
+                              [--shared-cutoff SHARED_CUTOFF]
+                              [--ml-switch-width ML_SWITCH_WIDTH]
+                              [--mm-switch-on MM_SWITCH_ON]
+                              [--mm-switch-width MM_SWITCH_WIDTH]
+                              [--no-complementary-handoff]
+                              [--mm-pair-source {jax,charmm_callback}] [--do-mm]
+                              [--compile-threads COMPILE_THREADS]
+                              [--allow-under-mpirun] [--dry-run] [--quiet]
+                              [--verbose]
 
 Warm up MLpot PhysNet JAX compilation in serial Python (multithreaded XLA).
 Populates JAX_COMPILATION_CACHE_DIR for faster later runs under mpirun. Does not
@@ -101,15 +101,16 @@ Other options:
   --do-mm               Include MM pair path in warmup (closer to production
                         hybrid)
 
-Examples: export KARML_CKPT=/path/to/DESdimers_params.json karml warmup-mlpot-jax
---n-monomers 20 --ml-batch-size 128 # Match DCM:60 liquid workflow (resilient
-preset cutoffs + sparse dimer cap): karml warmup-mlpot-jax --checkpoint
-"$KARML_CKPT" --n-monomers 60 \ --atoms-per-monomer 5 --box-side 32 --ml-batch-
-size 64 --ml-gpu-count 1 \ --ml-max-active-dimers 1770 --mm-switch-on 6.0 --mm-
-switch-width 4.0 \ --ml-switch-width 1.0 --do-mm # Then under MPI: KARML_MPI_NP=2
-KARML_MLPOT_SPATIAL_MPI=1 ./scripts/karml-charmm-mpirun.sh md-system ... Do
-**not** run under mpirun (compile threads are disabled there by design). Clear
-stale launcher env if needed: unset OMPI_COMM_WORLD_SIZE PMI_SIZE PMIX_SIZE
+Examples: export KARML_CKPT=/path/to/DESdimers_params.json karml warmup-mlpot-
+jax --n-monomers 20 --ml-batch-size 128 # Match DCM:60 liquid workflow
+(resilient preset cutoffs + sparse dimer cap): karml warmup-mlpot-jax
+--checkpoint "$KARML_CKPT" --n-monomers 60 \ --atoms-per-monomer 5 --box-side 32
+--ml-batch-size 64 --ml-gpu-count 1 \ --ml-max-active-dimers 1770 --mm-switch-on
+6.0 --mm-switch-width 4.0 \ --ml-switch-width 1.0 --do-mm # Then under MPI:
+KARML_MPI_NP=2 KARML_MLPOT_SPATIAL_MPI=1 ./scripts/karml-charmm-mpirun.sh md-
+system ... Do **not** run under mpirun (compile threads are disabled there by
+design). Clear stale launcher env if needed: unset OMPI_COMM_WORLD_SIZE PMI_SIZE
+PMIX_SIZE
 ```
 
 

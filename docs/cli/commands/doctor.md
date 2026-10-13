@@ -13,7 +13,7 @@ karml doctor --help
 
 ```text
 usage: karml doctor [-h] [--json] [--require-gpu] [--mpi]
-                   [--checkpoint CHECKPOINT] [--strict]
+                    [--checkpoint CHECKPOINT] [--strict]
 
 Check that this machine can run KARML (Python, JAX, CHARMM, Packmol).
 

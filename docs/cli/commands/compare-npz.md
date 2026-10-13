@@ -12,12 +12,13 @@ karml compare-npz --help
 ## Options
 
 ```text
-usage: karml compare-npz [-h] [--reference REFERENCE] [--predictions PREDICTIONS]
-                        [--checkpoint CHECKPOINT] [--data DATA] [-o OUTPUT_DIR]
-                        [--max-frames MAX_FRAMES] [--stride STRIDE]
-                        [--cutoff CUTOFF] [--use-dcmnet-dipole]
-                        [--energy-unit ENERGY_UNIT] [--force-unit FORCE_UNIT]
-                        [--no-plots] [--save-predictions]
+usage: karml compare-npz [-h] [--reference REFERENCE]
+                         [--predictions PREDICTIONS] [--checkpoint CHECKPOINT]
+                         [--data DATA] [-o OUTPUT_DIR] [--max-frames MAX_FRAMES]
+                         [--stride STRIDE] [--cutoff CUTOFF]
+                         [--use-dcmnet-dipole] [--energy-unit ENERGY_UNIT]
+                         [--force-unit FORCE_UNIT] [--no-plots]
+                         [--save-predictions]
 
 Compare reference and model NPZ data (metrics + plots).
 

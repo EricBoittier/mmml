@@ -13,12 +13,13 @@ karml extract-checkpoint-metrics --help
 
 ```text
 usage: karml extract-checkpoint-metrics [-h] -o OUTPUT [--log-loss] [--quiet]
-                                       [--stride STRIDE]
-                                       [--max-epochs MAX_EPOCHS]
-                                       [--metrics-json METRICS_JSON] [--ef-only]
-                                       [--plot-style {dark,editorial_cm,editorial_dejavu_sans,editorial_dejavu_serif,editorial_stix,google,icml,mpl_classic,nature,science,tron,xmgrace}]
-                                       [--individual-dir INDIVIDUAL_DIR]
-                                       checkpoint_dir
+                                        [--stride STRIDE]
+                                        [--max-epochs MAX_EPOCHS]
+                                        [--metrics-json METRICS_JSON]
+                                        [--ef-only]
+                                        [--plot-style {dark,editorial_cm,editorial_dejavu_sans,editorial_dejavu_serif,editorial_stix,google,icml,mpl_classic,nature,science,tron,xmgrace}]
+                                        [--individual-dir INDIVIDUAL_DIR]
+                                        checkpoint_dir
 
 Extract and plot training metrics from Orbax checkpoints
 

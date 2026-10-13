@@ -16,16 +16,16 @@ karml run-pycharmm --help
 
 ```text
 usage: karml run-pycharmm [-h] --pdbfile PDBFILE [--cell CELL]
-                         [--skip-setup-energy-show]
-                         [--pycharmm-minimize/--no-pycharmm-minimize | --no-pycharmm-minimize/--no-pycharmm-minimize]
-                         [--pycharmm-minimize-steps N]
-                         [--two-residue-sampling | --no-two-residue-sampling]
-                         [--two-residue-restraint-force K]
-                         [--two-residue-restraint-r0 ANGSTROM]
-                         [--two-residue-sampling-steps N]
-                         [--two-residue-restraint-resid1 TWO_RESIDUE_RESTRAINT_RESID1]
-                         [--two-residue-restraint-resid2 TWO_RESIDUE_RESTRAINT_RESID2]
-                         [--view-braille]
+                          [--skip-setup-energy-show]
+                          [--pycharmm-minimize/--no-pycharmm-minimize | --no-pycharmm-minimize/--no-pycharmm-minimize]
+                          [--pycharmm-minimize-steps N]
+                          [--two-residue-sampling | --no-two-residue-sampling]
+                          [--two-residue-restraint-force K]
+                          [--two-residue-restraint-r0 ANGSTROM]
+                          [--two-residue-sampling-steps N]
+                          [--two-residue-restraint-resid1 TWO_RESIDUE_RESTRAINT_RESID1]
+                          [--two-residue-restraint-resid2 TWO_RESIDUE_RESTRAINT_RESID2]
+                          [--view-braille]
 
 Pure PyCHARMM: heating and equilibration only (no MM/ML)
 

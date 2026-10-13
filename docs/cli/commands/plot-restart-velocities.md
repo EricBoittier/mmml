@@ -13,11 +13,11 @@ karml plot-restart-velocities --help
 
 ```text
 usage: karml plot-restart-velocities [-h] [--stem STEM]
-                                    [--z-threshold Z_THRESHOLD]
-                                    [--output OUTPUT] [--dt-ps DT_PS]
-                                    [--no-infer-velocities]
-                                    [--max-outliers MAX_OUTLIERS] [--quiet]
-                                    directory
+                                     [--z-threshold Z_THRESHOLD]
+                                     [--output OUTPUT] [--dt-ps DT_PS]
+                                     [--no-infer-velocities]
+                                     [--max-outliers MAX_OUTLIERS] [--quiet]
+                                     directory
 
 Plot |v| distributions from CHARMM restart files (heat.NNNN.res) and flag
 velocity outliers.

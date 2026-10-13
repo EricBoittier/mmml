@@ -13,11 +13,11 @@ karml make-box --help
 
 ```text
 usage: karml make-box [-h] [--n N] [--res RES] [--side_length SIDE_LENGTH]
-                     [--pdb PDB] [--solvent SOLVENT] [--density DENSITY]
-                     [--packmol-region {box,sphere}]
-                     [--packmol-tolerance PACKMOL_TOLERANCE]
-                     [--packmol-nloop PACKMOL_NLOOP]
-                     [--fill-fraction FILL_FRACTION] [--no-packmol-pbc]
+                      [--pdb PDB] [--solvent SOLVENT] [--density DENSITY]
+                      [--packmol-region {box,sphere}]
+                      [--packmol-tolerance PACKMOL_TOLERANCE]
+                      [--packmol-nloop PACKMOL_NLOOP]
+                      [--fill-fraction FILL_FRACTION] [--no-packmol-pbc]
 
 Pack a solute into a periodic box (vacuum copies or explicit solvent). Stages
 --pdb to pdb/initial.pdb when given, then runs Packmol + CHARMM.
@@ -25,8 +25,8 @@ Pack a solute into a periodic box (vacuum copies or explicit solvent). Stages
 Input & configuration:
   --pdb PDB             Solute PDB (CGenFF residue/atom names). Copied to
                         pdb/initial.pdb before Packmol. When omitted,
-                        pdb/initial.pdb must already exist (e.g. from karml make-
-                        res).
+                        pdb/initial.pdb must already exist (e.g. from karml
+                        make-res).
 
 Scientific model:
   --density DENSITY     Solvent (or neat liquid) density in kg/m³. Built-in for

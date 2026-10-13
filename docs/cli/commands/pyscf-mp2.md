@@ -13,8 +13,8 @@ karml pyscf-mp2 --help
 
 ```text
 usage: karml pyscf-mp2 [-h] --mol MOL [--output OUTPUT] [--basis BASIS]
-                      [--spin SPIN] [--charge CHARGE] [--energy] [--gradient]
-                      [--gradient-fd] [--fd-step ANG] [--log_file LOG_FILE]
+                       [--spin SPIN] [--charge CHARGE] [--energy] [--gradient]
+                       [--gradient-fd] [--fd-step ANG] [--log_file LOG_FILE]
 
 GPU-accelerated MP2 calculations
 

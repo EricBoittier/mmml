@@ -13,11 +13,11 @@ karml npz2traj --help
 
 ```text
 usage: karml npz2traj [-h] -o OUTPUT [--max-structures MAX_STRUCTURES]
-                     [--stride STRIDE] [--start START] [--ase-units] [--psf PSF]
-                     [--resnames RESNAMES] [--split-resnames SPLIT_RESNAMES]
-                     [--dt-ps DT_PS] [--steps-per-frame STEPS_PER_FRAME]
-                     [--quiet]
-                     input
+                      [--stride STRIDE] [--start START] [--ase-units]
+                      [--psf PSF] [--resnames RESNAMES]
+                      [--split-resnames SPLIT_RESNAMES] [--dt-ps DT_PS]
+                      [--steps-per-frame STEPS_PER_FRAME] [--quiet]
+                      input
 
 Convert KARML NPZ datasets to ASE trajectories with energy, forces, dipole,
 charges, and extra fields attached for GUI inspection.

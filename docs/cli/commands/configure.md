@@ -22,9 +22,9 @@ karml configure --help
 
 ```text
 usage: karml configure [-h] [--non-interactive] [--list-presets]
-                      [--preset {cpu-spatial-mpi-mini,cpu-dense-liquid-prep,cpu-md-benchmark,cpu-heat-scaling-smoke,cpu-nve-cutoff-sweep,qm-physnet-pipeline}]
-                      [-o OUTPUT_DIR]
-                      [--workflow {md-single,md-campaign,physnet-train,snakemake-md,interaction-policy,preset-menu}]
+                       [--preset {cpu-spatial-mpi-mini,cpu-dense-liquid-prep,cpu-md-benchmark,cpu-heat-scaling-smoke,cpu-nve-cutoff-sweep,qm-physnet-pipeline}]
+                       [-o OUTPUT_DIR]
+                       [--workflow {md-single,md-campaign,physnet-train,snakemake-md,interaction-policy,preset-menu}]
 
 Interactive, multiple-choice setup for md-system YAML, PhysNet training configs,
 Snakemake workflow scaffolding, and bundled cpu_tests presets.

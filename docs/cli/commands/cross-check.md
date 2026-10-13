@@ -13,14 +13,14 @@ karml cross-check --help
 
 ```text
 usage: karml cross-check [-h] [-c CONFIG] [-i STRUCTURES] [-o OUTPUT_DIR]
-                        [--reference-npz REFERENCE_NPZ] [--reference REFERENCE]
-                        [--backend BACKEND_NAMES] [--checkpoint CHECKPOINT]
-                        [--functional FUNCTIONAL] [--basis BASIS]
-                        [--max-frames MAX_FRAMES] [--stride STRIDE]
-                        [--charge CHARGE] [--spin SPIN]
-                        [--multiplicity MULTIPLICITY] [--no-plots]
-                        [--no-save-backend-npz] [--orca-template ORCA_TEMPLATE]
-                        [--molpro-template MOLPRO_TEMPLATE]
+                         [--reference-npz REFERENCE_NPZ] [--reference REFERENCE]
+                         [--backend BACKEND_NAMES] [--checkpoint CHECKPOINT]
+                         [--functional FUNCTIONAL] [--basis BASIS]
+                         [--max-frames MAX_FRAMES] [--stride STRIDE]
+                         [--charge CHARGE] [--spin SPIN]
+                         [--multiplicity MULTIPLICITY] [--no-plots]
+                         [--no-save-backend-npz] [--orca-template ORCA_TEMPLATE]
+                         [--molpro-template MOLPRO_TEMPLATE]
 
 Supplementary QC cross-check (PySCF, ORCA QM, xTB, Molpro, ML).
 
@@ -77,8 +77,8 @@ Run supplementary QC cross-checks against a reference (PySCF, ORCA QM, xTB,
 Molpro, ML). Examples -------- From YAML config: karml cross-check -c
 cross_check.example.yaml CLI flags (minimal smoke): karml cross-check -i
 sampled.npz --reference-npz ref.npz \ --backend ml --checkpoint epoch.pkl -o
-validation/ karml cross-check -i water.xyz --reference pyscf --backend xtb --max-
-frames 1
+validation/ karml cross-check -i water.xyz --reference pyscf --backend xtb
+--max-frames 1
 ```
 
 

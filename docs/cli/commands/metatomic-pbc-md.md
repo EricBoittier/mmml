@@ -25,17 +25,17 @@ karml metatomic-pbc-md --help
 
 ```text
 usage: karml metatomic-pbc-md [-h] [--checkpoint CHECKPOINT] [--residue RESIDUE]
-                             [--monomer-xyz MONOMER_XYZ] [--box-size BOX_SIZE]
-                             [--initial-structure INITIAL_STRUCTURE]
-                             [--target-density-g-cm3 TARGET_DENSITY_G_CM3]
-                             [--n-molecules N_MOLECULES]
-                             [--temperature TEMPERATURE] [--dt-fs DT_FS]
-                             [--n-steps N_STEPS] [--seed SEED]
-                             [--ensemble {nve,nvt}] [--friction FRICTION]
-                             [--minimize-steps MINIMIZE_STEPS]
-                             [--minimize-fmax MINIMIZE_FMAX]
-                             [--log-every LOG_EVERY] [--traj-every TRAJ_EVERY]
-                             [--output-dir OUTPUT_DIR] [--json-out JSON_OUT]
+                              [--monomer-xyz MONOMER_XYZ] [--box-size BOX_SIZE]
+                              [--initial-structure INITIAL_STRUCTURE]
+                              [--target-density-g-cm3 TARGET_DENSITY_G_CM3]
+                              [--n-molecules N_MOLECULES]
+                              [--temperature TEMPERATURE] [--dt-fs DT_FS]
+                              [--n-steps N_STEPS] [--seed SEED]
+                              [--ensemble {nve,nvt}] [--friction FRICTION]
+                              [--minimize-steps MINIMIZE_STEPS]
+                              [--minimize-fmax MINIMIZE_FMAX]
+                              [--log-every LOG_EVERY] [--traj-every TRAJ_EVERY]
+                              [--output-dir OUTPUT_DIR] [--json-out JSON_OUT]
 
 CHARMM-free metatomic ASE MD in a cubic liquid box. Default: 32 Å ethanol at
 experimental density, 300 K, 0.5 fs.

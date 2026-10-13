@@ -13,8 +13,8 @@ karml verify-esp-alignment --help
 
 ```text
 usage: karml verify-esp-alignment [-h] -i INPUT [--sample SAMPLE]
-                                 [--n-points N_POINTS] [--basis BASIS] [--xc XC]
-                                 [--grid-in-angstrom]
+                                  [--n-points N_POINTS] [--basis BASIS]
+                                  [--xc XC] [--grid-in-angstrom]
 
 Verify esp-grid alignment in evaluated NPZ (data generation check).
 

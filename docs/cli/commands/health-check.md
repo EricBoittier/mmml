@@ -13,10 +13,11 @@ karml health-check --help
 
 ```text
 usage: karml health-check [-h] [--only CHECK [CHECK ...]]
-                         [--skip CHECK [CHECK ...]] [--live]
-                         [--checkpoint CHECKPOINT] [--live-residue LIVE_RESIDUE]
-                         [--live-n-molecules LIVE_N_MOLECULES] [--require-gpu]
-                         [--json] [--strict] [--prelaunch] [--tier2]
+                          [--skip CHECK [CHECK ...]] [--live]
+                          [--checkpoint CHECKPOINT]
+                          [--live-residue LIVE_RESIDUE]
+                          [--live-n-molecules LIVE_N_MOLECULES] [--require-gpu]
+                          [--json] [--strict] [--prelaunch] [--tier2]
 
 Validate KARML interface health before PyCHARMM / MLpot jobs: imports, JAX
 devices, libcharmm, MLpot symbols, Packmol, checkpoint, MPI.
@@ -54,9 +55,9 @@ check --require-gpu # Under the MPI launcher (recommended on MPI-linked
 libcharmm): KARML_MPI_NP=1 ./scripts/karml-charmm-mpirun.sh health-check
 --require-gpu --strict # Include live MLpot registration + CHARMM ENER on DCM:2:
 KARML_MPI_NP=1 ./scripts/karml-charmm-mpirun.sh health-check --live --checkpoint
-"$KARML_CKPT" # Smallest liquid-DCM density smoke (after modules + CHARMM build):
-karml liquid-box --composition DCM:20 --target-density-g-cm3 1.326 \ --profile
-standard -o boxes/dcm20 --charmm-sd-steps 50 --charmm-abnr-steps 50
+"$KARML_CKPT" # Smallest liquid-DCM density smoke (after modules + CHARMM
+build): karml liquid-box --composition DCM:20 --target-density-g-cm3 1.326 \
+--profile standard -o boxes/dcm20 --charmm-sd-steps 50 --charmm-abnr-steps 50
 KARML_MPI_NP=1 ./scripts/karml-charmm-mpirun.sh md-system \ --from-psf
 boxes/dcm20/model.psf --from-crd boxes/dcm20/model.crd \ --checkpoint
 "$KARML_CKPT" --md-stages mini --mini-nstep 20 --no-echeck --quiet Checks: core,

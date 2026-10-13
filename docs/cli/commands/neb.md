@@ -13,15 +13,15 @@ karml neb --help
 
 ```text
 usage: karml neb [-h] [--config CONFIG] [--checkpoint CHECKPOINT]
-                [--calculator {physnet,kernnn}] [--initial INITIAL]
-                [--final FINAL] [--output-dir OUTPUT_DIR] [--n-images N_IMAGES]
-                [--fmax FMAX] [--climb | --no-climb]
-                [--interpolate {idpp,linear}] [--optimizer {BFGS,FIRE,MDMin}]
-                [--neb-method {improvedtangent,aseneb,eb,spline,string}]
-                [--spring-k SPRING_K]
-                [--shared-calculator | --no-shared-calculator]
-                [--max-steps MAX_STEPS] [--plot | --no-plot] [--overwrite]
-                [--pair I,J]
+                 [--calculator {physnet,kernnn}] [--initial INITIAL]
+                 [--final FINAL] [--output-dir OUTPUT_DIR] [--n-images N_IMAGES]
+                 [--fmax FMAX] [--climb | --no-climb]
+                 [--interpolate {idpp,linear}] [--optimizer {BFGS,FIRE,MDMin}]
+                 [--neb-method {improvedtangent,aseneb,eb,spline,string}]
+                 [--spring-k SPRING_K]
+                 [--shared-calculator | --no-shared-calculator]
+                 [--max-steps MAX_STEPS] [--plot | --no-plot] [--overwrite]
+                 [--pair I,J]
 
 Nudged elastic band (NEB) path sampling with a PhysNet / KARML checkpoint as the
 ASE calculator.

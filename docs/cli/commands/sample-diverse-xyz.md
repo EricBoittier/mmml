@@ -13,10 +13,10 @@ karml sample-diverse-xyz --help
 
 ```text
 usage: karml sample-diverse-xyz [-h] -n N [-o OUTPUT] [--seed SEED]
-                               [--species SPECIES] [--r-cut R_CUT]
-                               [--n-max N_MAX] [--l-max L_MAX] [--sigma SIGMA]
-                               [-v]
-                               inputs [inputs ...]
+                                [--species SPECIES] [--r-cut R_CUT]
+                                [--n-max N_MAX] [--l-max L_MAX] [--sigma SIGMA]
+                                [-v]
+                                inputs [inputs ...]
 
 Save top-N diverse structures from XYZ files to sampled.npz (SOAP space).
 

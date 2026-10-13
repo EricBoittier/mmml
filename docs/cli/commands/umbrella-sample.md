@@ -13,43 +13,43 @@ karml umbrella-sample --help
 
 ```text
 usage: karml umbrella-sample [-h] [--config CONFIG] [--checkpoint CHECKPOINT]
-                            [--model {physnet,kernnn}]
-                            [--engine {packed_ml,hybrid_jaxmd}]
-                            [--structure STRUCTURE] [--from-psf FROM_PSF]
-                            [--from-pdb FROM_PDB] [--from-crd FROM_CRD]
-                            [--composition COMPOSITION] [--box-size BOX_SIZE]
-                            [--ml-resnames ML_RESNAMES]
-                            [--atom-name-i ATOM_NAME_I]
-                            [--atom-name-j ATOM_NAME_J] [--lr-solver LR_SOLVER]
-                            [--structure-index STRUCTURE_INDEX]
-                            [--seed-mode {stretch,tile,frames}]
-                            [--output-dir OUTPUT_DIR] [--atoms ATOMS]
-                            [--atoms2 ATOMS2] [--cv-difference CV_DIFFERENCE]
-                            [--cv2-difference CV2_DIFFERENCE]
-                            [--wall-angle A,V,C,THETA_MIN[,K]]
-                            [--wall-min-bond A,B,C,D,R_MAX[,K]]
-                            [--wall-sum WALL_SUM] [--wall-channel WALL_CHANNEL]
-                            [--targets TARGETS] [--targets-y TARGETS_Y]
-                            [--xi-min XI_MIN] [--xi-max XI_MAX]
-                            [--n-windows N_WINDOWS] [--yi-min YI_MIN]
-                            [--yi-max YI_MAX] [--n-windows-y N_WINDOWS_Y]
-                            [--k K_EV_A2] [--ky K_Y_EV_A2]
-                            [--move-with MOVE_WITH] [--move-with2 MOVE_WITH2]
-                            [--invert-with INVERT_WITH]
-                            [--equilibration-steps EQUILIBRATION_STEPS]
-                            [--max-seed-force MAX_SEED_FORCE]
-                            [--relax-seed-steps RELAX_SEED_STEPS]
-                            [--relax-seed-fmax RELAX_SEED_FMAX]
-                            [--thermostat {langevin,nose-hoover}]
-                            [--langevin-gamma LANGEVIN_GAMMA]
-                            [--max-window-temp MAX_WINDOW_TEMP_K]
-                            [--replica-exchange] [--rex-freq REX_FREQ]
-                            [--temperature TEMPERATURE_K]
-                            [--timestep TIMESTEP_FS] [--nsteps NSTEPS]
-                            [--printfreq PRINTFREQ] [--savefreq SAVEFREQ]
-                            [--seed SEED] [--no-ema] [--overwrite] [--resume]
-                            [--no-resume-failed] [--windows WINDOWS]
-                            [--write-window-xyz]
+                             [--model {physnet,kernnn}]
+                             [--engine {packed_ml,hybrid_jaxmd}]
+                             [--structure STRUCTURE] [--from-psf FROM_PSF]
+                             [--from-pdb FROM_PDB] [--from-crd FROM_CRD]
+                             [--composition COMPOSITION] [--box-size BOX_SIZE]
+                             [--ml-resnames ML_RESNAMES]
+                             [--atom-name-i ATOM_NAME_I]
+                             [--atom-name-j ATOM_NAME_J] [--lr-solver LR_SOLVER]
+                             [--structure-index STRUCTURE_INDEX]
+                             [--seed-mode {stretch,tile,frames}]
+                             [--output-dir OUTPUT_DIR] [--atoms ATOMS]
+                             [--atoms2 ATOMS2] [--cv-difference CV_DIFFERENCE]
+                             [--cv2-difference CV2_DIFFERENCE]
+                             [--wall-angle A,V,C,THETA_MIN[,K]]
+                             [--wall-min-bond A,B,C,D,R_MAX[,K]]
+                             [--wall-sum WALL_SUM] [--wall-channel WALL_CHANNEL]
+                             [--targets TARGETS] [--targets-y TARGETS_Y]
+                             [--xi-min XI_MIN] [--xi-max XI_MAX]
+                             [--n-windows N_WINDOWS] [--yi-min YI_MIN]
+                             [--yi-max YI_MAX] [--n-windows-y N_WINDOWS_Y]
+                             [--k K_EV_A2] [--ky K_Y_EV_A2]
+                             [--move-with MOVE_WITH] [--move-with2 MOVE_WITH2]
+                             [--invert-with INVERT_WITH]
+                             [--equilibration-steps EQUILIBRATION_STEPS]
+                             [--max-seed-force MAX_SEED_FORCE]
+                             [--relax-seed-steps RELAX_SEED_STEPS]
+                             [--relax-seed-fmax RELAX_SEED_FMAX]
+                             [--thermostat {langevin,nose-hoover}]
+                             [--langevin-gamma LANGEVIN_GAMMA]
+                             [--max-window-temp MAX_WINDOW_TEMP_K]
+                             [--replica-exchange] [--rex-freq REX_FREQ]
+                             [--temperature TEMPERATURE_K]
+                             [--timestep TIMESTEP_FS] [--nsteps NSTEPS]
+                             [--printfreq PRINTFREQ] [--savefreq SAVEFREQ]
+                             [--seed SEED] [--no-ema] [--overwrite] [--resume]
+                             [--no-resume-failed] [--windows WINDOWS]
+                             [--write-window-xyz]
 
 Batched distance umbrella sampling with a PhysNet / SpookyNet checkpoint via
 JAX-MD NVT Nose-Hoover.
@@ -254,9 +254,9 @@ examples/m/kl.json \ --structure examples/m/neb/reag_0_opt.xyz \ --atoms 2,1
 --atoms 0,2 --atoms2 1,2 \ --move-with2 1,3,4,5 --invert-with 6,7,8 \ --xi-min
 1.8 --xi-max 3.0 --n-windows 4 \ --yi-min 1.8 --yi-max 3.0 --n-windows-y 4 \ --k
 10 --ky 10 -o out/umbrella2d --overwrite # NPZ (R, Z) or PDB also work; --seed-
-mode frames uses consecutive frames as windows karml umbrella-sample --checkpoint
-ckpt.json --structure data.npz \ --atoms 0,1 --targets 1.8,2.0,2.2 --seed-mode
-frames -o out/umb
+mode frames uses consecutive frames as windows karml umbrella-sample
+--checkpoint ckpt.json --structure data.npz \ --atoms 0,1 --targets 1.8,2.0,2.2
+--seed-mode frames -o out/umb
 ```
 
 ## Visual examples

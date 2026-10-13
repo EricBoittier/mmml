@@ -13,12 +13,12 @@ karml pyscf-evaluate --help
 
 ```text
 usage: karml pyscf-evaluate [-h] -i INPUT [-o OUTPUT] [--basis BASIS] [--xc XC]
-                           [--spin SPIN] [--charge CHARGE] [--no-energy]
-                           [--no-gradient] [--no-dipole] [--esp]
-                           [--esp-cpu-fallback] [--polarizability] [--EF]
-                           [--efield Ex,Ey,Ez] [--efield-sigma EFIELD_SIGMA]
-                           [--add-random-noise SIGMA] [--seed SEED]
-                           [--no-efield-include-nuclear-energy]
+                            [--spin SPIN] [--charge CHARGE] [--no-energy]
+                            [--no-gradient] [--no-dipole] [--esp]
+                            [--esp-cpu-fallback] [--polarizability] [--EF]
+                            [--efield Ex,Ey,Ez] [--efield-sigma EFIELD_SIGMA]
+                            [--add-random-noise SIGMA] [--seed SEED]
+                            [--no-efield-include-nuclear-energy]
 
 Evaluate geometries with pyscf-dft (energy, forces, dipoles, ESP).
 
@@ -71,13 +71,14 @@ Other options:
 CLI to evaluate sampled geometries with pyscf-dft (energy, forces, dipoles,
 ESP). Runs all geometries in one process (same GPU context) for speed. Input:
 NPZ with R (n_samples, n_atoms, 3), Z, N (e.g. from normal-mode-sample) Output:
-NPZ with R, Z, N, E, F, Dxyz, esp, esp_grid (if --esp), Ef (if --EF) Usage: karml
-pyscf-evaluate -i out/06_sampled.npz -o out/07_evaluated.npz karml pyscf-evaluate
--i out/06_sampled.npz -o out/07_evaluated.npz --esp karml pyscf-evaluate -i
-traj.npz -o out.npz --EF karml pyscf-evaluate -i traj.npz -o out.npz --EF
---efield 0,0,0.01 karml pyscf-evaluate -i traj.npz -o out.npz --efield=-0.01,0,0
-karml pyscf-evaluate -i traj.npz -o out.npz --EF --no-efield-include-nuclear-
-energy karml pyscf-evaluate -i traj.npz -o out.npz --add-random-noise 0.1
+NPZ with R, Z, N, E, F, Dxyz, esp, esp_grid (if --esp), Ef (if --EF) Usage:
+karml pyscf-evaluate -i out/06_sampled.npz -o out/07_evaluated.npz karml pyscf-
+evaluate -i out/06_sampled.npz -o out/07_evaluated.npz --esp karml pyscf-
+evaluate -i traj.npz -o out.npz --EF karml pyscf-evaluate -i traj.npz -o out.npz
+--EF --efield 0,0,0.01 karml pyscf-evaluate -i traj.npz -o out.npz
+--efield=-0.01,0,0 karml pyscf-evaluate -i traj.npz -o out.npz --EF --no-efield-
+include-nuclear-energy karml pyscf-evaluate -i traj.npz -o out.npz --add-random-
+noise 0.1
 ```
 
 

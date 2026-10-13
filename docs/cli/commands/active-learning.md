@@ -13,8 +13,8 @@ karml active-learning --help
 
 ```text
 usage: karml active-learning [-h] -i TRAJ [TRAJ ...] [-o OUTPUT] [--max-temp K]
-                            [--stride STRIDE] [--max-frames N]
-                            [--no-temp-filter]
+                             [--stride STRIDE] [--max-frames N]
+                             [--no-temp-filter]
 
 Extract frames from MD trajectories for active learning (pyscf-evaluate input).
 

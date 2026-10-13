@@ -13,20 +13,20 @@ karml pet-box-dataset --help
 
 ```text
 usage: karml pet-box-dataset [-h] --checkpoint CHECKPOINT --out-dir OUT_DIR
-                            [--seeds SEEDS] [--residue RESIDUE]
-                            [--monomer-xyz MONOMER_XYZ] [--box-size BOX_SIZE]
-                            [--n-molecules N_MOLECULES]
-                            [--target-density-g-cm3 TARGET_DENSITY_G_CM3]
-                            [--temperatures TEMPERATURES] [--dt-fs DT_FS]
-                            [--friction FRICTION] [--fire-steps FIRE_STEPS]
-                            [--fire-every FIRE_EVERY] [--fire-fmax FIRE_FMAX]
-                            [--md-steps MD_STEPS] [--md-every MD_EVERY]
-                            [--com-jitter-frac COM_JITTER_FRAC]
-                            [--max-force MAX_FORCE]
-                            [--max-bond-stretch MAX_BOND_STRETCH]
-                            [--max-damaged-fraction MAX_DAMAGED_FRACTION]
-                            [--min-intermolecular MIN_INTERMOLECULAR]
-                            [--energy-outlier ENERGY_OUTLIER]
+                             [--seeds SEEDS] [--residue RESIDUE]
+                             [--monomer-xyz MONOMER_XYZ] [--box-size BOX_SIZE]
+                             [--n-molecules N_MOLECULES]
+                             [--target-density-g-cm3 TARGET_DENSITY_G_CM3]
+                             [--temperatures TEMPERATURES] [--dt-fs DT_FS]
+                             [--friction FRICTION] [--fire-steps FIRE_STEPS]
+                             [--fire-every FIRE_EVERY] [--fire-fmax FIRE_FMAX]
+                             [--md-steps MD_STEPS] [--md-every MD_EVERY]
+                             [--com-jitter-frac COM_JITTER_FRAC]
+                             [--max-force MAX_FORCE]
+                             [--max-bond-stretch MAX_BOND_STRETCH]
+                             [--max-damaged-fraction MAX_DAMAGED_FRACTION]
+                             [--min-intermolecular MIN_INTERMOLECULAR]
+                             [--energy-outlier ENERGY_OUTLIER]
 
 Many-seed periodic PET dataset: random packing, FIRE intermediates and Langevin
 NVT frames, labelled with the driving model (extxyz).

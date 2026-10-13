@@ -13,12 +13,12 @@ karml unwrap-traj --help
 
 ```text
 usage: karml unwrap-traj [-h] -o OUTPUT [--format {auto,traj,xyz,extxyz,dcd}]
-                        [--fast] [--index INDEX] [--cell CELL]
-                        [--group-size GROUP_SIZE] [--n-groups N_GROUPS]
-                        [--no-molecules] [--reference REFERENCE]
-                        [--coord-key COORD_KEY] [--numbers-key NUMBERS_KEY]
-                        [--cell-key CELL_KEY] [--quiet]
-                        input
+                         [--fast] [--index INDEX] [--cell CELL]
+                         [--group-size GROUP_SIZE] [--n-groups N_GROUPS]
+                         [--no-molecules] [--reference REFERENCE]
+                         [--coord-key COORD_KEY] [--numbers-key NUMBERS_KEY]
+                         [--cell-key CELL_KEY] [--quiet]
+                         input
 
 Unwrap periodic ASE trajectories or HDF5 coordinate files.
 

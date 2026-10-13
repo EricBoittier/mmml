@@ -13,26 +13,27 @@ karml fix-and-split --help
 
 ```text
 usage: karml fix-and-split [-h] [--coords-in {auto,bohr,angstrom}]
-                          [--coords-out {angstrom,bohr,same}]
-                          [--energy-in {hartree,ev}]
-                          [--energy-out {ev,hartree,same}]
-                          [--force-in {hartree-bohr,ev-angstrom}]
-                          [--force-out {ev-angstrom,hartree-bohr,same}]
-                          [--dipole-in {debye,e-angstrom}]
-                          [--dipole-out {e-angstrom,debye,same}]
-                          [--grid-coords-in {auto,bohr,angstrom,index}]
-                          [--grid-coords-out {angstrom,bohr,same}]
-                          [--preserve-units] --efd FILE [FILE ...] [--grid GRID]
-                          --output-dir OUTPUT_DIR [--train-frac TRAIN_FRAC]
-                          [--valid-frac VALID_FRAC] [--test-frac TEST_FRAC]
-                          [--seed SEED] [--cube-spacing CUBE_SPACING]
-                          [--skip-validation] [--atomic-ref SCHEME]
-                          [--atomic-ref-units {hartree,ev}] [--n-grid-points N]
-                          [--esp-sd-sigma N] [--esp-max-abs-kcal-mol X]
-                          [--min-dist-to-atoms Å] [--quiet] [--flip-forces]
-                          [--energy-scale X] [--zscale-energies]
-                          [--force-scale X] [--dipole-scale X]
-                          [--efield-scale X] [--esp-scale X] [--charge-scale X]
+                           [--coords-out {angstrom,bohr,same}]
+                           [--energy-in {hartree,ev}]
+                           [--energy-out {ev,hartree,same}]
+                           [--force-in {hartree-bohr,ev-angstrom}]
+                           [--force-out {ev-angstrom,hartree-bohr,same}]
+                           [--dipole-in {debye,e-angstrom}]
+                           [--dipole-out {e-angstrom,debye,same}]
+                           [--grid-coords-in {auto,bohr,angstrom,index}]
+                           [--grid-coords-out {angstrom,bohr,same}]
+                           [--preserve-units] --efd FILE [FILE ...]
+                           [--grid GRID] --output-dir OUTPUT_DIR
+                           [--train-frac TRAIN_FRAC] [--valid-frac VALID_FRAC]
+                           [--test-frac TEST_FRAC] [--seed SEED]
+                           [--cube-spacing CUBE_SPACING] [--skip-validation]
+                           [--atomic-ref SCHEME]
+                           [--atomic-ref-units {hartree,ev}] [--n-grid-points N]
+                           [--esp-sd-sigma N] [--esp-max-abs-kcal-mol X]
+                           [--min-dist-to-atoms Å] [--quiet] [--flip-forces]
+                           [--energy-scale X] [--zscale-energies]
+                           [--force-scale X] [--dipole-scale X]
+                           [--efield-scale X] [--esp-scale X] [--charge-scale X]
 
 Fix units and create train/valid/test splits from molecular NPZ data
 
@@ -133,24 +134,25 @@ Unit conversion:
 Examples: # Basic usage with default 8:1:1 split (with grid) karml fix-and-split
 --efd data.npz --grid grids.npz --output-dir ./training_data # Without grid data
 (EFD only) karml fix-and-split --efd data.npz --output-dir ./training_data #
-Custom split ratios karml fix-and-split --efd data.npz --grid grids.npz --output-
-dir ./training_data \ --train-frac 0.7 --valid-frac 0.15 --test-frac 0.15 #
-Different cube spacing (e.g., 0.5 Bohr) karml fix-and-split --efd data.npz --grid
-grids.npz --output-dir ./training_data \ --cube-spacing 0.5 # Skip validation
-for speed karml fix-and-split --efd data.npz --output-dir ./training_data \
---skip-validation # Concatenate multiple NPZ files (e.g. extend training set
-with MD samples) karml fix-and-split --efd train.npz md_evaluated.npz --output-
-dir ./splits_extended # NPZ has raw PySCF gradient in F (not forces): negate
-before converting to eV/Å karml fix-and-split --efd raw.npz --output-dir ./out
---flip-forces # Correct a systematic factor after normal conversion (e.g.
-duplicate unit fix upstream) karml fix-and-split --efd data.npz --output-dir
-./out --energy-scale 0.5 --force-scale 1.0 # Z-scale energies with training-set
-statistics and save the mean/std karml fix-and-split --efd data.npz --output-dir
-./out --zscale-energies # Already in training units (eV, eV/Å, e·Å, Å): split
-only karml fix-and-split --efd data.npz -o ./splits --preserve-units # Explicit:
-PySCF Hartree/Bohr in, ASE units out (same as default) karml fix-and-split --efd
-pyscf.npz -o ./out \ --energy-in hartree --energy-out ev \ --force-in hartree-
-bohr --force-out ev-angstrom \ --dipole-in debye --dipole-out e-angstrom
+Custom split ratios karml fix-and-split --efd data.npz --grid grids.npz
+--output-dir ./training_data \ --train-frac 0.7 --valid-frac 0.15 --test-frac
+0.15 # Different cube spacing (e.g., 0.5 Bohr) karml fix-and-split --efd
+data.npz --grid grids.npz --output-dir ./training_data \ --cube-spacing 0.5 #
+Skip validation for speed karml fix-and-split --efd data.npz --output-dir
+./training_data \ --skip-validation # Concatenate multiple NPZ files (e.g.
+extend training set with MD samples) karml fix-and-split --efd train.npz
+md_evaluated.npz --output-dir ./splits_extended # NPZ has raw PySCF gradient in
+F (not forces): negate before converting to eV/Å karml fix-and-split --efd
+raw.npz --output-dir ./out --flip-forces # Correct a systematic factor after
+normal conversion (e.g. duplicate unit fix upstream) karml fix-and-split --efd
+data.npz --output-dir ./out --energy-scale 0.5 --force-scale 1.0 # Z-scale
+energies with training-set statistics and save the mean/std karml fix-and-split
+--efd data.npz --output-dir ./out --zscale-energies # Already in training units
+(eV, eV/Å, e·Å, Å): split only karml fix-and-split --efd data.npz -o ./splits
+--preserve-units # Explicit: PySCF Hartree/Bohr in, ASE units out (same as
+default) karml fix-and-split --efd pyscf.npz -o ./out \ --energy-in hartree
+--energy-out ev \ --force-in hartree-bohr --force-out ev-angstrom \ --dipole-in
+debye --dipole-out e-angstrom
 ```
 
 ## Visual examples

@@ -13,11 +13,11 @@ karml physnet-md --help
 
 ```text
 usage: karml physnet-md [-h] --checkpoint CHECKPOINT (--structure STRUCTURE |
-                       --data DATA) [-o OUTPUT_DIR] [--temperature TEMPERATURE]
-                       [--timestep TIMESTEP] [--nsteps-ase NSTEPS_ASE]
-                       [--nsteps-jaxmd NSTEPS_JAXMD] [--printfreq PRINTFREQ]
-                       [--skip-jaxmd] [--n-replicas B]
-                       [--use-ema | --no-use-ema]
+                        --data DATA) [-o OUTPUT_DIR] [--temperature TEMPERATURE]
+                        [--timestep TIMESTEP] [--nsteps-ase NSTEPS_ASE]
+                        [--nsteps-jaxmd NSTEPS_JAXMD] [--printfreq PRINTFREQ]
+                        [--skip-jaxmd] [--n-replicas B]
+                        [--use-ema | --no-use-ema]
 
 PhysNet MD sampling with ASE and JAX-MD.
 

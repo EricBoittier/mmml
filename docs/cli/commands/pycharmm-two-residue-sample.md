@@ -13,14 +13,14 @@ karml pycharmm-two-residue-sample --help
 
 ```text
 usage: karml pycharmm-two-residue-sample [-h] --pdbfile PDBFILE [--cell CELL]
-                                        [--skip-setup-energy-show]
-                                        [--pycharmm-minimize-steps N]
-                                        [--output-pdb OUTPUT_PDB]
-                                        [--two-residue-restraint-force K]
-                                        [--two-residue-restraint-r0 ANGSTROM]
-                                        [--two-residue-sampling-steps N]
-                                        [--two-residue-restraint-resid1 TWO_RESIDUE_RESTRAINT_RESID1]
-                                        [--two-residue-restraint-resid2 TWO_RESIDUE_RESTRAINT_RESID2]
+                                         [--skip-setup-energy-show]
+                                         [--pycharmm-minimize-steps N]
+                                         [--output-pdb OUTPUT_PDB]
+                                         [--two-residue-restraint-force K]
+                                         [--two-residue-restraint-r0 ANGSTROM]
+                                         [--two-residue-sampling-steps N]
+                                         [--two-residue-restraint-resid1 TWO_RESIDUE_RESTRAINT_RESID1]
+                                         [--two-residue-restraint-resid2 TWO_RESIDUE_RESTRAINT_RESID2]
 
 Set up a two-residue CHARMM system and run restrained sampling.
 

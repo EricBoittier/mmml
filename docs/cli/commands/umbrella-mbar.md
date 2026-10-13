@@ -13,8 +13,8 @@ karml umbrella-mbar --help
 
 ```text
 usage: karml umbrella-mbar [-h] --run-dir RUN_DIR [--checkpoint CHECKPOINT]
-                          [--temperature-K TEMPERATURE_K] [--mbar-verbose]
-                          [--ml-batch-size ML_BATCH_SIZE]
+                           [--temperature-K TEMPERATURE_K] [--mbar-verbose]
+                           [--ml-batch-size ML_BATCH_SIZE]
 
 MBAR analysis for a completed umbrella-sample run. Reads umbrella_snapshots.npz
 from --run-dir and updates umbrella_summary.json.

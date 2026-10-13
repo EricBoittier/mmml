@@ -28,17 +28,17 @@ karml pet-interaction-pes --help
 
 ```text
 usage: karml pet-interaction-pes [-h] [--checkpoint CHECKPOINT]
-                                [--from-json FROM_JSON] [--water-xyz WATER_XYZ]
-                                [--ethanol-xyz ETHANOL_XYZ]
-                                [--include-acetone | --no-include-acetone]
-                                [--r-min ANGSTROM] [--r-max ANGSTROM]
-                                [--n-r N_R] [--r-2d-min ANGSTROM]
-                                [--r-2d-max ANGSTROM] [--n-r-2d N_R_2D]
-                                [--n-theta N_THETA] [--theta-min DEG]
-                                [--theta-max DEG] [--n-r-trimer N_R_TRIMER]
-                                [--surface-system SURFACE_SYSTEM]
-                                [--output-dir OUTPUT_DIR] [--json-out JSON_OUT]
-                                [--prefix PREFIX]
+                                 [--from-json FROM_JSON] [--water-xyz WATER_XYZ]
+                                 [--ethanol-xyz ETHANOL_XYZ]
+                                 [--include-acetone | --no-include-acetone]
+                                 [--r-min ANGSTROM] [--r-max ANGSTROM]
+                                 [--n-r N_R] [--r-2d-min ANGSTROM]
+                                 [--r-2d-max ANGSTROM] [--n-r-2d N_R_2D]
+                                 [--n-theta N_THETA] [--theta-min DEG]
+                                 [--theta-max DEG] [--n-r-trimer N_R_TRIMER]
+                                 [--surface-system SURFACE_SYSTEM]
+                                 [--output-dir OUTPUT_DIR] [--json-out JSON_OUT]
+                                 [--prefix PREFIX]
 
 Rigid OH···O interaction slices/surfaces and trimer many-body leftover for a
 metatomic PET checkpoint (CHARMM-free single points).

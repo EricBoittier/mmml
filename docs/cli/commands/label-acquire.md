@@ -13,7 +13,7 @@ karml label-acquire --help
 
 ```text
 usage: karml label-acquire [-h] --config CONFIG [--output OUTPUT]
-                          [{prepare-pool,fingerprint-models,extract,fit-pca,select,label,train-eval,report,all}]
+                           [{prepare-pool,fingerprint-models,extract,fit-pca,select,label,train-eval,report,all}]
 
 Compare structure-selection methods for acquiring expensive reference labels.
 Teacher potentials are cheap surrogates, not ground truth. Use the Snakemake

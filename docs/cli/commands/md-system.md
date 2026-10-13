@@ -31,8 +31,8 @@ Full help (all categories). Short index: -h One category: -hN or -halias (see
 1. Core setup, composition & ensemble  (-hcore):
   --setup {free_nve,free_nvt,free_thermalize,pbc_nve,pbc_nvt,pbc_thermalize,pbc_npt,lambda_ti,pycharmm_minimize,pycharmm_full,all}
                         Simulation setup preset. lambda_ti: alchemical TI with
-                        CHARMM+KARML minimization per λ window (--lambda-md-mode,
-                        --backend ase|jaxmd); karml lambda-mbar afterward.
+                        CHARMM+KARML minimization per λ window (--lambda-md-
+                        mode, --backend ase|jaxmd); karml lambda-mbar afterward.
                         pycharmm_minimize: CHARMM MLpot SD only (--backend
                         pycharmm). pycharmm_full: mini → heat → NVE → equi →
                         prod (--backend pycharmm). pbc_* with --backend
@@ -848,7 +848,8 @@ Full help (all categories). Short index: -h One category: -hN or -halias (see
   --bfgs-log-every N    Compact BFGS/FIRE log every N steps (default: ~10 lines
                         per run).
   --charmm-pre-minimize, --no-charmm-pre-minimize
-                        lambda_ti: CHARMM SD/ABNR before KARML BFGS (default on).
+                        lambda_ti: CHARMM SD/ABNR before KARML BFGS (default
+                        on).
   --calculator-pre-minimize, --no-calculator-pre-minimize
                         lambda_ti: KARML-calculator BFGS after CHARMM (default
                         on).
@@ -919,8 +920,8 @@ Full help (all categories). Short index: -h One category: -hN or -halias (see
                         when unset). Increase if you see 'MM Pair List
                         Truncated' during MLpot mini/MD.
   --ml-spatial-mpi      pycharmm: per-rank spatial ML decomposition when MPI
-                        size>1 (PBC only; or KARML_MLPOT_SPATIAL_MPI=1). Use with
-                        KARML_MPI_NP>1 and --ml-gpu-count 1.
+                        size>1 (PBC only; or KARML_MLPOT_SPATIAL_MPI=1). Use
+                        with KARML_MPI_NP>1 and --ml-gpu-count 1.
   --charmm-omp-threads N
                         pycharmm: set KARML_CHARMM_OMP_THREADS before MPI-linked
                         CHARMM bootstrap (default 1; CPU performance experiment
@@ -938,9 +939,9 @@ Full help (all categories). Short index: -h One category: -hN or -halias (see
                         lambda_ti: ML cutoff (Å).
   --ml-switch-width, --ml-cutoff-distance ML_SWITCH_WIDTH
                         COM-distance width (Å) of the ML→MM handoff for
-                        pycharmm/KARML; ML is fully on below mm_switch_on - width
-                        and reaches zero at mm_switch_on (default: 1.5). Does
-                        not affect lambda_ti (see --ml-cutoff).
+                        pycharmm/KARML; ML is fully on below mm_switch_on -
+                        width and reaches zero at mm_switch_on (default: 1.5).
+                        Does not affect lambda_ti (see --ml-cutoff).
   --mm-switch-on MM_SWITCH_ON
                         COM handoff distance (Å); ML→0 / MM→1 at this separation
                         (default: 6).
@@ -974,8 +975,9 @@ Full help (all categories). Short index: -h One category: -hN or -halias (see
                         jax-pme real-space cutoff in Å (default 6.0).
   --jax-pme-dispersion, --no-jax-pme-dispersion
                         pycharmm jax_mic + jax_pme: include reciprocal r^-6 LJ
-                        dispersion (default: env KARML_JAX_PME_DISPERSION or on).
-                        Use --no-jax-pme-dispersion for Coulomb-only long range.
+                        dispersion (default: env KARML_JAX_PME_DISPERSION or
+                        on). Use --no-jax-pme-dispersion for Coulomb-only long
+                        range.
   --scafacos-method SCAFACOS_METHOD
                         ScaFaCoS fcs_init method when --lr-solver=scafacos
                         (default: ewald).
@@ -1073,8 +1075,8 @@ Full help (all categories). Short index: -h One category: -hN or -halias (see
   --no-stationary       lambda_ti: skip Stationary/ZeroRotation on velocity init
                         (with --no-fix-com, COM can translate).
   --skip-jit-warmup     Skip JIT/XLA warmup. jaxmd/ase: generic XLA GPU compile
-                        and pre-MD hybrid KARML eval; lambda_ti: skip first KARML
-                        energy eval per window; pycharmm: skip serial auto
+                        and pre-MD hybrid KARML eval; lambda_ti: skip first
+                        KARML energy eval per window; pycharmm: skip serial auto
                         warmup-mlpot-jax before CHARMM MLpot.
   --auto-warmup-mlpot-jax, --no-auto-warmup-mlpot-jax
                         pycharmm: run serial warmup-mlpot-jax before MPI/CHARMM
@@ -1299,6 +1301,27 @@ Full help (all categories). Short index: -h One category: -hN or -halias (see
                         monomers plus switched dimer interaction).
                         'whole_system' is one evaluation on the ML selection
                         (all-ML USER term).
+  --charge CHARGE       Total charge for a metatomic model. HEME defaults to −2,
+                        or 0 with neutralizing --counterions in the same
+                        evaluation.
+  --spin-multiplicity SPIN_MULTIPLICITY
+                        Spin multiplicity 2S+1 for a metatomic model. HEME with
+                        no axial ligand defaults to 3.
+  --counterions COUNTERIONS
+                        Protein ion that neutralizes the solute. SOD on HEME
+                        adds two sodiums, one on each carboxylate.
+  --mm-region {none,propionates,his93}
+                        propionates: keep the heme tails and counterions as MM
+                        and cap the CAA–CBA and CAD–CBD cuts with ghost
+                        hydrogens in PET. his93: MbCO protein stays MM; PET sees
+                        the His93 imidazole, heme, and CO, with one ghost
+                        hydrogen on CB–CG.
+  --ml-cut ML_CUT       YAML file describing an ML/MM cut: ml_atoms, ghost-
+                        hydrogen links, charge, and spin_multiplicity. Replaces
+                        --mm-region.
+  --mbco-crd MBCO_CRD   CHARMM card coordinates for --residue MBCO. Default is
+                        setup/charmm/test/data/mbco_au_q0.crd (crystal waters,
+                        no box). Sulfate in that file is omitted.
   --bonded-intra-damp-onset BONDED_INTRA_DAMP_ONSET
                         Enable the bonded_intra damping guard: taper the ML
                         dimer interaction to zero as either monomer's CGenFF
@@ -1317,8 +1340,8 @@ Full help (all categories). Short index: -h One category: -hN or -halias (see
                         KARML_MM_NL_BACKEND or auto→vesin).
   --mm-nl-device {auto,cpu,gpu}
                         MM Vesin pair-list rebuild device (default:
-                        KARML_MM_NL_DEVICE or auto: GPU when CuPy + a JAX GPU are
-                        present, else cpu).
+                        KARML_MM_NL_DEVICE or auto: GPU when CuPy + a JAX GPU
+                        are present, else cpu).
   --nhc-tau MULT        jaxmd: Nose–Hoover thermostat coupling multiplier (tau =
                         nhc_tau * dt; default 100 in the jaxmd suite).
   --nhc-barostat-tau MULT

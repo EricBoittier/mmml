@@ -13,11 +13,11 @@ karml prepare-mm-dataset --help
 
 ```text
 usage: karml prepare-mm-dataset [-h] [--config CONFIG] [-i DATA] [-o OUTPUT]
-                               [--prm-path PRM_PATH] [--rtf-path RTF_PATH]
-                               [--num-workers NUM_WORKERS]
-                               [--max-structures MAX_STRUCTURES]
-                               [--no-mm-baseline] [--strict]
-                               [--save-config SAVE_CONFIG] [--quiet]
+                                [--prm-path PRM_PATH] [--rtf-path RTF_PATH]
+                                [--num-workers NUM_WORKERS]
+                                [--max-structures MAX_STRUCTURES]
+                                [--no-mm-baseline] [--strict]
+                                [--save-config SAVE_CONFIG] [--quiet]
 
 Assign CGenFF atom types / charges to a dimer training NPZ.
 

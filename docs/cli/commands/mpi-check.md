@@ -12,7 +12,8 @@ karml mpi-check --help
 ## Options
 
 ```text
-usage: karml mpi-check [-h] [--json] [--strict] [--prelaunch] [--tier2] [--tier3]
+usage: karml mpi-check [-h] [--json] [--strict] [--prelaunch] [--tier2]
+                       [--tier3]
 
 Validate OpenMPI / CHARMM / mpi4py setup for PyCHARMM MLpot runs.
 

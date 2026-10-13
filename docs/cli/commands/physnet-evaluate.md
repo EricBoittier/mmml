@@ -13,12 +13,12 @@ karml physnet-evaluate --help
 
 ```text
 usage: karml physnet-evaluate [-h] --checkpoint CHECKPOINT --data DATA
-                             [-o OUTPUT_DIR] [--natoms NATOMS]
-                             [--batch-size BATCH_SIZE] [--seed SEED]
-                             [--num-samples NUM_SAMPLES]
-                             [--subtract-atom-energies] [--subtract-mean]
-                             [--plots] [--no-save-npz]
-                             [--use-ema | --no-use-ema]
+                              [-o OUTPUT_DIR] [--natoms NATOMS]
+                              [--batch-size BATCH_SIZE] [--seed SEED]
+                              [--num-samples NUM_SAMPLES]
+                              [--subtract-atom-energies] [--subtract-mean]
+                              [--plots] [--no-save-npz]
+                              [--use-ema | --no-use-ema]
 
 Evaluate PhysNetJAX checkpoint on NPZ (energies, forces, dipoles).
 

@@ -13,17 +13,17 @@ karml pyscf-dft --help
 
 ```text
 usage: karml pyscf-dft [-h] --mol MOL [--output OUTPUT] [--log_file LOG_FILE]
-                      [--monomer_a MONOMER_A] [--monomer_b MONOMER_B]
-                      [--basis BASIS] [--xc XC] [--spin SPIN] [--charge CHARGE]
-                      [--energy] [--optimize] [--gradient] [--hessian]
-                      [--harmonic] [--thermo] [--interaction] [--dens_esp]
-                      [--ir] [--shielding] [--polarizability] [--ir-efield]
-                      [--efield-points EFIELD_POINTS]
-                      [--efield-fd-axis EFIELD_FD_AXIS] [--efield-scf]
-                      [--efield-scf-no-forces]
-                      [--efield-dipole-unit EFIELD_DIPOLE_UNIT]
-                      [--no-efield-include-nuclear-energy]
-                      [--save_option SAVE_OPTION]
+                       [--monomer_a MONOMER_A] [--monomer_b MONOMER_B]
+                       [--basis BASIS] [--xc XC] [--spin SPIN] [--charge CHARGE]
+                       [--energy] [--optimize] [--gradient] [--hessian]
+                       [--harmonic] [--thermo] [--interaction] [--dens_esp]
+                       [--ir] [--shielding] [--polarizability] [--ir-efield]
+                       [--efield-points EFIELD_POINTS]
+                       [--efield-fd-axis EFIELD_FD_AXIS] [--efield-scf]
+                       [--efield-scf-no-forces]
+                       [--efield-dipole-unit EFIELD_DIPOLE_UNIT]
+                       [--no-efield-include-nuclear-energy]
+                       [--save_option SAVE_OPTION]
 
 Scientific model:
   --basis BASIS

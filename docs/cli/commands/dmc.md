@@ -66,11 +66,11 @@ karml dmc --help
 
 ```text
 usage: karml dmc [-h] --natm NATM --nwalker NWALKER --stepsize STEPSIZE
-                --nstep NSTEP --eqstep EQSTEP --alpha ALPHA [--fbohr {0,1}]
-                --checkpoint CHECKPOINT [--model {physnet,kernnn}]
-                [--max-batch MAX_BATCH] [--minimize-fmax MINIMIZE_FMAX]
-                [--minimize-steps MINIMIZE_STEPS] [--random-sigma RANDOM_SIGMA]
-                [--seed SEED] -i INPUT [--output-dir OUTPUT_DIR]
+                 --nstep NSTEP --eqstep EQSTEP --alpha ALPHA [--fbohr {0,1}]
+                 --checkpoint CHECKPOINT [--model {physnet,kernnn}]
+                 [--max-batch MAX_BATCH] [--minimize-fmax MINIMIZE_FMAX]
+                 [--minimize-steps MINIMIZE_STEPS] [--random-sigma RANDOM_SIGMA]
+                 [--seed SEED] -i INPUT [--output-dir OUTPUT_DIR]
 
 Diffusion Monte Carlo with PhysNetJax energies (batched walker evaluation via
 jax.vmap).

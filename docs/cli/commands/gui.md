@@ -13,9 +13,9 @@ karml gui --help
 
 ```text
 usage: karml gui [-h] [--data-dir DATA_DIR | --file FILE] [--port PORT]
-                [--host HOST] [--dev] [--no-browser]
-                [--model-params MODEL_PARAMS] [--model-config MODEL_CONFIG]
-                [--enable-runner] [--runner-cwd RUNNER_CWD]
+                 [--host HOST] [--dev] [--no-browser]
+                 [--model-params MODEL_PARAMS] [--model-config MODEL_CONFIG]
+                 [--enable-runner] [--runner-cwd RUNNER_CWD]
 
 Start the KARML molecular viewer server
 
@@ -51,13 +51,13 @@ Other options:
                         Working directory that runner jobs launch from (default:
                         --data-dir or cwd)
 
-Examples: # Use current directory as data dir; load files from file browser karml
-gui # Serve all molecular files from a specific directory karml gui --data-dir
-./trajectories # Pre-load a single file karml gui --file simulation.npz # Custom
-port karml gui --data-dir ./data --port 8080 # Development mode (React dev server
-handles frontend) karml gui --data-dir ./data --dev Supported file formats: -
-.npz : KARML NPZ format (R, Z, E, F, D, etc.) - .traj : ASE trajectory files -
-.pdb : PDB protein/molecule files
+Examples: # Use current directory as data dir; load files from file browser
+karml gui # Serve all molecular files from a specific directory karml gui
+--data-dir ./trajectories # Pre-load a single file karml gui --file
+simulation.npz # Custom port karml gui --data-dir ./data --port 8080 #
+Development mode (React dev server handles frontend) karml gui --data-dir ./data
+--dev Supported file formats: - .npz : KARML NPZ format (R, Z, E, F, D, etc.) -
+.traj : ASE trajectory files - .pdb : PDB protein/molecule files
 ```
 
 

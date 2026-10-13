@@ -13,15 +13,17 @@ karml pes-design --help
 
 ```text
 usage: karml pes-design [-h] --input INPUT --output OUTPUT
-                       [--report-dir REPORT_DIR] --n-select N_SELECT
-                       [--descriptor {pair-rdf,soap,combined}] [--cutoff CUTOFF]
-                       [--rdf-bins RDF_BINS] [--type-hash-bins TYPE_HASH_BINS]
-                       [--pca-components PCA_COMPONENTS]
-                       [--prior-precision PRIOR_PRECISION]
-                       [--uncertainty-power UNCERTAINTY_POWER]
-                       [--temperatures TEMPERATURES]
-                       [--min-distance MIN_DISTANCE] [--max-force MAX_FORCE]
-                       [--max-relative-energy MAX_RELATIVE_ENERGY] [--seed SEED]
+                        [--report-dir REPORT_DIR] --n-select N_SELECT
+                        [--descriptor {pair-rdf,soap,combined}]
+                        [--cutoff CUTOFF] [--rdf-bins RDF_BINS]
+                        [--type-hash-bins TYPE_HASH_BINS]
+                        [--pca-components PCA_COMPONENTS]
+                        [--prior-precision PRIOR_PRECISION]
+                        [--uncertainty-power UNCERTAINTY_POWER]
+                        [--temperatures TEMPERATURES]
+                        [--min-distance MIN_DISTANCE] [--max-force MAX_FORCE]
+                        [--max-relative-energy MAX_RELATIVE_ENERGY]
+                        [--seed SEED]
 
 Select a physical, Bayesian D-optimal, descriptor-diverse PES subset and
 validate it against equally sized random sampling.

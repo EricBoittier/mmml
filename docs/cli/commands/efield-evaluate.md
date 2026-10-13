@@ -13,18 +13,18 @@ karml efield-evaluate --help
 
 ```text
 usage: karml efield-evaluate [-h] [--params PARAMS] [--config CONFIG]
-                            [--data DATA] [--test-npz TEST_NPZ]
-                            [--output-dir OUTPUT_DIR] [--batch-size BATCH_SIZE]
-                            [--num-test NUM_TEST] [--model-config MODEL_CONFIG]
-                            [--features FEATURES] [--max-degree MAX_DEGREE]
-                            [--num-iterations NUM_ITERATIONS]
-                            [--num-basis-functions NUM_BASIS_FUNCTIONS]
-                            [--cutoff CUTOFF]
-                            [--max-atomic-number MAX_ATOMIC_NUMBER]
-                            [--electrostatics-damping-sigma ELECTROSTATICS_DAMPING_SIGMA]
-                            [--save-output-npz] [--output-h5 PATH]
-                            [--rot-augment]
-                            [--rot-perturbation ROT_PERTURBATION]
+                             [--data DATA] [--test-npz TEST_NPZ]
+                             [--output-dir OUTPUT_DIR] [--batch-size BATCH_SIZE]
+                             [--num-test NUM_TEST] [--model-config MODEL_CONFIG]
+                             [--features FEATURES] [--max-degree MAX_DEGREE]
+                             [--num-iterations NUM_ITERATIONS]
+                             [--num-basis-functions NUM_BASIS_FUNCTIONS]
+                             [--cutoff CUTOFF]
+                             [--max-atomic-number MAX_ATOMIC_NUMBER]
+                             [--electrostatics-damping-sigma ELECTROSTATICS_DAMPING_SIGMA]
+                             [--save-output-npz] [--output-h5 PATH]
+                             [--rot-augment]
+                             [--rot-perturbation ROT_PERTURBATION]
 
 Evaluate trained model
 
