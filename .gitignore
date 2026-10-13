@@ -377,3 +377,4 @@ benchmarks/env/
 benchmarks/results/benchmarks.json
 benchmarks/results/*/machine.json
 charmm.tar
+mmml/generate/packmol/packmol
