@@ -64,9 +64,10 @@ def _upol_dense(R, alpha, q, mol, a, L, taper, n_iter, tag=None, lam=1.0):
         dm = jnp.einsum("ijk,jk->ij", d, mu)
         return jnp.einsum("ij,ijk->ik", w5 * dm, d) - jnp.einsum("ij,jk->ik", w3, mu)
 
-    mu = alpha[:, None] * E0
-    for _ in range(n_iter):
-        mu = alpha[:, None] * (E0 + Tmu(mu))
+    # Jacobi iterations as a fori_loop over a rematerialised body: reverse mode then stores only the (n, 3) dipoles per
+    # iteration instead of every n x n intermediate (several GB at ~2,600 atoms); same arithmetic.
+    body = jax.checkpoint(lambda _, mu: alpha[:, None] * (E0 + Tmu(mu)))
+    mu = jax.lax.fori_loop(0, n_iter, body, alpha[:, None] * E0)
     return -0.5 * KC * jnp.sum(mu * E0)
 
 
