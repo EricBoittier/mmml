@@ -165,6 +165,22 @@ class PolEwald:
         mu = jax.lax.stop_gradient(mu)
         return KC * U(mu, R)
 
+    def solve_dipoles(self, R, tol=1e-6, max_iter=60):
+        """Converged induced dipoles (e A) at R, as used by system_energy_scf (no gradient)."""
+        Rs = jax.lax.stop_gradient(jnp.asarray(R))
+        al = self.alpha.astype(Rs.dtype)[:, None]
+        geo = self._pairs(Rs); exc = self._excl(Rs)
+        rho_q = jnp.fft.rfftn(self.p3m.mesh_charges(Rs, self.q.astype(Rs.dtype)))
+        gU = jax.grad(lambda m: self.u_mu_only(m, Rs, geo, exc, rho_q))
+        E0 = -gU(jnp.zeros_like(Rs)); A = lambda m: m / al + gU(m) + E0
+        x = al * E0; r = E0 - A(x); z = al * r; b2 = jnp.sum(E0 * E0)
+        c0 = (0, x, r, z, jnp.sum(r * z))
+        def cond(c): return (c[0] < max_iter) & (jnp.sum(c[2] * c[2]) > tol * tol * b2)
+        def step(c):
+            k, x, r, p, rz = c; Ap = A(p); a = rz / jnp.sum(p * Ap); x = x + a * p; r = r - a * Ap; z = al * r; rz2 = jnp.sum(r * z)
+            return k + 1, x, r, z + (rz2 / rz) * p, rz2
+        return jax.lax.while_loop(cond, step, c0)[1]
+
     def system_energy(self, R):
         """Periodic induced-dipole energy (eV)."""
         geo = self._pairs(R); exc = self._excl(R)
