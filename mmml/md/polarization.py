@@ -71,10 +71,41 @@ def _upol_dense(R, alpha, q, mol, a, L, taper, n_iter, tag=None, lam=1.0):
     return -0.5 * KC * jnp.sum(mu * E0)
 
 
+def _upol_sparse(R, alpha, q, mol, a, L, taper, n_iter, idx, tag=None, lam=1.0):
+    """_upol_dense restricted to the neighbour pairs idx (n, K; padded with n) within taper[1]: same energy, since the
+    taper sets every interaction beyond taper[1] to zero. Memory and work O(n K) instead of O(n^2)."""
+    n = R.shape[0]
+    valid = idx < n
+    j = jnp.where(valid, idx, 0)
+    d = R[:, None, :] - R[j]                                     # (n, K, 3), r_i - r_j as in the dense kernel
+    d = d - L * jnp.round(d / L)
+    r2 = jnp.sum(d * d, -1)
+    inter = (valid & (mol[:, None] != mol[j])).astype(R.dtype)
+    r = jnp.sqrt(jnp.where(inter > 0, r2, 1.0))
+    inter = inter * _switch(r, taper[0], taper[1])
+    if tag is not None:
+        inter = inter * jnp.where(tag[:, None] != tag[j], lam, 1.0)
+    u = r / (alpha[:, None] * alpha[j]) ** (1 / 6)
+    e = jnp.exp(-a * u**3); l3 = 1 - e; l5 = 1 - (1 + a * u**3) * e
+    E0 = jnp.einsum("ik,ikc->ic", inter * q[j] * l3 / r**3, d)
+    w3 = inter * l3 / r**3; w5 = inter * 3 * l5 / r**5
+
+    def Tmu(mu):
+        mj = mu[j]                                                # (n, K, 3)
+        dm = jnp.sum(d * mj, -1)
+        return jnp.einsum("ik,ikc->ic", w5 * dm, d) - jnp.einsum("ik,ikc->ic", w3, mj)
+
+    body = jax.checkpoint(lambda _, mu: alpha[:, None] * (E0 + Tmu(mu)))
+    mu = jax.lax.fori_loop(0, n_iter, body, alpha[:, None] * E0)
+    return -0.5 * KC * jnp.sum(mu * E0)
+
+
 def make_pol_energy_fn(Z, box_L, params_json, r_on=4.5, r_off=6.0, taper=(9.0, 12.0), n_iter=12, pair_cap=None,
-                       tagged=None, lam=1.0):
+                       tagged=None, lam=1.0, neighbor_R=None, capacity_multiplier=1.3, system_term=True):
     """energy(R, box=None, lam=None) in eV. tagged: molecule index whose coupling to the rest (permanent field both ways and
-    dipole-dipole) scales with lam (alchemical decoupling; lam=None -> the constructor's lam). tagged=None: no scaling."""
+    dipole-dipole) scales with lam (alchemical decoupling; lam=None -> the constructor's lam). tagged=None: no scaling.
+    neighbor_R: positions to size an atom-pair neighbour list (cutoff taper[1]) for the system term -> O(n K) instead of
+    O(n^2); fixed box only (NVT/NVE): the box argument is then ignored. The list is rebuilt on every call."""
     par = json.load(open(params_json))
     alpha_t = jnp.asarray([par["alpha_A3"][k] for k in NAMES]); a = float(par["thole_a"])
     types, q, mol, table = _molecules(Z)
@@ -108,12 +139,28 @@ def make_pol_energy_fn(Z, box_L, params_json, r_on=4.5, r_off=6.0, taper=(9.0, 1
             X = X[:, :1] + (X - X[:, :1]) - L * jnp.round((X - X[:, :1]) / L)
         return jnp.sum(X * m[..., None], 1) / jnp.sum(m, 1)[:, None], X
 
+    nfn = nbrs0 = None
+    if neighbor_R is not None and pbc:
+        from jax_md import partition, space
+        disp, _ = space.periodic(float(box_L))
+        nfn = partition.neighbor_list(disp, float(box_L), float(taper[1]), dr_threshold=0.0,
+                                      capacity_multiplier=float(capacity_multiplier), format=partition.Dense)
+        R0 = jnp.asarray(neighbor_R, jnp.float32); R0 = R0 - float(box_L) * jnp.floor(R0 / float(box_L))
+        nbrs0 = nfn.allocate(R0)
+
     def energy(R, box=None, lam=None):
         lam = lam0 if lam is None else lam
         R = jnp.asarray(R); L = _L(box)
         if L is not None:
             L = L.astype(R.dtype)
-        e_sys = _upol_dense(R, alpha.astype(R.dtype), qj.astype(R.dtype), molj, a, L, taper if L is not None else None, n_iter, tag, lam)
+        if not system_term:     # pair-subtraction term only (the caller supplies the system term, e.g. pol_ewald)
+            e_sys = jnp.zeros((), R.dtype)
+        elif nfn is not None:
+            Rw = R - L0.astype(R.dtype) * jnp.floor(R / L0.astype(R.dtype))
+            nb = nfn.update(Rw, nbrs0)
+            e_sys = _upol_sparse(R, alpha.astype(R.dtype), qj.astype(R.dtype), molj, a, L0.astype(R.dtype), taper, n_iter, nb.idx, tag, lam)
+        else:
+            e_sys = _upol_dense(R, alpha.astype(R.dtype), qj.astype(R.dtype), molj, a, L, taper if L is not None else None, n_iter, tag, lam)
         C, X = com(R, L)
         dc = C[iu[0]] - C[iu[1]]
         if L is not None:
@@ -140,4 +187,11 @@ def make_pol_energy_fn(Z, box_L, params_json, r_on=4.5, r_off=6.0, taper=(9.0, 1
             ep = jax.vmap(lambda r_, a_, q_, m_, t_: _upol_dense(r_, a_, q_, m_, a, None, None, n_iter, t_, lam))(Rp, ai, qp, mp, tp)
         return e_sys - jnp.sum(s * ep)
 
-    return jax.jit(energy)
+    f = jax.jit(energy)
+    if nfn is not None:   # host-side capacity check: overflow(R) -> True if the list would drop neighbours
+        f_over = jax.jit(lambda R: nfn.update(jnp.asarray(R) - L0 * jnp.floor(jnp.asarray(R) / L0), nbrs0).did_buffer_overflow)
+        try:
+            f.overflow = f_over
+        except AttributeError:
+            pass
+    return f

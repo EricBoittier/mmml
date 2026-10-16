@@ -1953,15 +1953,36 @@ def set_up_nhc_sim_routine(
         from mmml.md.polarization import make_pol_energy_fn
         from mmml.md.alchemy import spec_from_env as _pol_alch_spec
         _pa = _pol_alch_spec()   # alchemy: the tagged molecule's dipole coupling follows lambda_ml
-        _pol_E = make_pol_energy_fn(np.asarray(atomic_numbers), float(args.cell), _pol_path,
-                                    tagged=None if _pa is None else int(_pa["molecule"]),
-                                    lam=1.0 if _pa is None else float(_pa["lambda_ml"]))
+        # neighbour-list system term (exact, O(n K)): default for fixed boxes >= 36 A, where it is faster than the dense
+        # O(n^2) kernel (RTX 3090: 1.25x at 38 A, 2.5x at 50 A, equal at 30 A); MMML_POL_SPARSE=1/0 forces it on/off
+        _ps = os.environ.get("MMML_POL_SPARSE", "auto").strip().lower()
+        _pol_sparse = (args.ensemble in ("nvt", "nve")) and (
+            _ps in ("1", "true", "yes") or (_ps == "auto" and float(args.cell) >= 36.0))
+        if _ps in ("1", "true", "yes") and not _pol_sparse:
+            raise ValueError("MMML_POL_SPARSE=1 needs a fixed box (NVT/NVE)")
+        # MMML_POL_EWALD=1: dipolar P3M (no 9-12 A taper; real space 7.5 A) with converged PCG dipoles and variational
+        # (Hellmann-Feynman) forces -- 2-5x faster than the dense kernel; fixed cubic box, no alchemy
+        _pol_ew = os.environ.get("MMML_POL_EWALD", "0").strip().lower() in ("1", "true", "yes")
+        if _pol_ew:
+            if args.ensemble not in ("nvt", "nve") or _pa is not None:
+                raise ValueError("MMML_POL_EWALD needs a fixed box (NVT/NVE) and no alchemy")
+            from mmml.md.pol_ewald import make_pol_ewald_energy_fn
+            _pol_E = make_pol_ewald_energy_fn(np.asarray(atomic_numbers), float(args.cell), _pol_path,
+                                              np.asarray(atoms.get_positions()), scf=True)
+            _pol_sparse = True   # overflow check below
+        else:
+            _pol_E = make_pol_energy_fn(np.asarray(atomic_numbers), float(args.cell), _pol_path,
+                                        tagged=None if _pa is None else int(_pa["molecule"]),
+                                        lam=1.0 if _pa is None else float(_pa["lambda_ml"]),
+                                        neighbor_R=np.asarray(atoms.get_positions()) if _pol_sparse else None)
+        if _pol_sparse and hasattr(_pol_E, "overflow") and bool(_pol_E.overflow(jnp.asarray(atoms.get_positions(), jnp.float32))):
+            raise RuntimeError("polarization neighbour list overflows at the start positions")
         _pol_grad = jax.grad(_pol_E)  # d/dR at fixed box; NpT adds E/F in _npt_*_of_real with the current box
         _base_E, _base_F = wrapped_energy_fn, wrapped_force_fn
         # minimisation / diagnostics (all ensembles); NpT dynamics adds the term in _npt_*_of_real with box_eff
         wrapped_energy_fn = jit(lambda position, **kw: _base_E(position, **kw) + _pol_E(position, kw.get("box")).astype(jnp.float32))
         wrapped_force_fn = jit(lambda position, **kw: _base_F(position, **kw) - as_jaxmd_dtype(_pol_grad(position, kw.get("box"))))
-        c.print(f"\\[polarization] many-body induced-dipole term ON ({_pol_path}); E_pol(start) = {float(_pol_E(jnp.asarray(atoms.get_positions()))):.4f} eV")
+        c.print(f"\\[polarization] {'Ewald/P3M + SCF' if _pol_ew else ('neighbour-list' if _pol_sparse else 'dense')} kernel; many-body induced-dipole term ON ({_pol_path}); E_pol(start) = {float(_pol_E(jnp.asarray(atoms.get_positions()))):.4f} eV")
 
     # Optional alchemical decoupling of one molecule (MMML_ALCH, see mmml.md.alchemy): the hybrid already scales the
     # molecule's interaction by lambda_ml (lambda_monomer); add (1 - lambda_ml) * soft-core MM(lambda_elec, lambda_vdw).
