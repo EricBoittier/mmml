@@ -1446,11 +1446,16 @@ def _ewald_opts(box):
     opts = {"box_L": float(L[0] if L.size in (1, 3) else np.asarray(box).reshape(3, 3)[0, 0])}
     if v != "1":
         for kv in v.split(","):
-            k, x = kv.split("="); opts[k.strip()] = float(x)
+            k, x = kv.split("="); k = k.strip(); x = x.strip()
+            opts[k] = x if k == "coulomb" else float(x)   # coulomb=handoff (default) | full (LR-consistent students)
     if "mesh" not in opts:   # ~0.95 A spacing, FFT-friendly
         opts["mesh"] = int(next(n for n in (16, 20, 24, 30, 32, 36, 40, 48, 50, 60, 64, 72, 80, 96) if opts["box_L"] / n <= 0.96))
     print(f"[ewald] P3M MM Coulomb: L={opts['box_L']:.3f} A, mesh={int(opts['mesh'])}, order={int(opts.get('order', 5))}, "
           f"beta={opts.get('beta', 0.40)}", flush=True)
+    if opts.get("coulomb", "handoff") == "full":
+        print("[ewald] coulomb=full: full Coulomb on every intermolecular pair; use only with a student trained on PET minus "
+              "bare Coulomb (prod/lr_consistent/make_lr_targets.py)", flush=True)
+        return opts
     print("[ewald] WARNING: with the water/methanol students the hybrid orders ferroelectrically under tin-foil Ewald "
           "(box dipole -> ~90 % alignment within picoseconds): the ML dimers do not supply the near-neighbour Coulomb "
           "penalty that this term removes. Diagnostic use only; monitor M = sum q r.", flush=True)

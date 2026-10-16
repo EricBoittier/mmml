@@ -452,7 +452,12 @@ class MolPairMM:
                 if r_min is not None:
                     h = h * (R >= float(r_min)).astype(h.dtype)
                 rr = jnp.where(valid[:, None, None], r, 1.0)
-                ker = jax.scipy.special.erfc(self.p3m.beta * rr) - (1.0 - h)[:, None, None]
+                if self.ewald.get("coulomb", "handoff") == "full":
+                    # long-range-consistent students (trained on PET minus bare Coulomb): every intermolecular pair
+                    # carries the full Coulomb, ML pairs included -> only the Ewald real-space kernel here
+                    ker = jax.scipy.special.erfc(self.p3m.beta * rr)
+                else:
+                    ker = jax.scipy.special.erfc(self.p3m.beta * rr) - (1.0 - h)[:, None, None]
                 blk = COULOMB_K * jnp.sum(qq * ker / rr, axis=(1, 2))
                 e_el = e_el + jnp.sum(jnp.where(valid, blk, 0.0))
         if self.ewald is not None:   # mesh, self and intramolecular-exclusion terms (whole molecules)
