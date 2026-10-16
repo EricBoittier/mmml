@@ -182,7 +182,7 @@ class HDF5Reporter:
         self._total_frames = 0  # frames already flushed to disk
 
         # Open the file and create the datasets.
-        self._h5: h5py.File = h5py.File(self._path, mode=mode)
+        self._h5: h5py.File = h5py.File(self._path, mode=mode, libver="latest")  # dense attribute storage: atomic_numbers of >16k atoms exceeds the 64 KB object-header limit
 
         if attrs is not None:
             for k, v in attrs.items():
