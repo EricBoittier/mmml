@@ -1467,11 +1467,18 @@ def _molpair_fast_requested(args) -> bool:
 
 
 class _MolPairFast:
-    """Fast MM tail + on-device Verlet lists for set_up_nhc_sim_routine (NVT/NVE, cubic PBC).
+    """Fast MM tail + on-device Verlet lists for set_up_nhc_sim_routine (NVT/NVE/NpT, orthorhombic PBC).
 
     The hybrid calculator runs with doMM=False / include_wall=False and the
     sparse-ML candidate list from the device NL; MM (LJ + Coulomb, switched) and
     the short-range wall come from :class:`mm_molpair.MolPairMM`.
+
+    Every method takes the cell as an optional argument (default: the cell the
+    lists were sized with). Under the NpT barostat the caller passes the current
+    (or strained) box: the molecule-pair lists hold centroids in real space, so a
+    box change shows up as a centroid displacement and the usual skin/2 criterion
+    (``MolPairMM.maybe_update``) triggers the in-graph rebuild -- no host rebuild
+    on every cell change as the atom-pair path needs.
     """
 
     def __init__(self, args, calc, update_fn, monomer_offsets, atomic_numbers, R, box):
@@ -1500,29 +1507,34 @@ class _MolPairFast:
             cap_margin=float(getattr(args, "molpair_cap_margin", 1.15) or 1.15),
             ewald=_ewald_opts(box),
         )
-        self._whole = lambda p: calc.make_monomers_whole(p, box)
-        Rw = jax.jit(self._whole)(jnp.asarray(R, dtype=jnp.float32))
+        self._whole = lambda p, b: calc.make_monomers_whole(p, b)
+        Rw = jax.jit(self._whole)(jnp.asarray(R, dtype=jnp.float32), box)
         self.mp.size_caps(Rw, box)
         self.nl0 = self.mp.build(Rw, box)
 
-    def whole(self, pos):
-        return self._whole(pos)
+    def _box(self, box):
+        return self.box if box is None else box
+
+    def whole(self, pos, box=None):
+        return self._whole(pos, self._box(box))
 
     def is_nl(self, x) -> bool:
         return isinstance(x, self.MolPairNL)
 
-    def nl_for(self, pos, nl):
-        """Valid list at ``pos`` (traceable). A list passed in is refreshed if stale."""
-        pw = self.whole(pos)
+    def nl_for(self, pos, nl, box=None):
+        """Valid list at ``pos`` in ``box`` (traceable). A list passed in is refreshed if stale."""
+        box = self._box(box)
+        pw = self.whole(pos, box)
         if self.is_nl(nl):
-            return self.mp.maybe_update(pw, self.box, nl, guard=0.0)
+            return self.mp.maybe_update(pw, box, nl, guard=0.0)
         from mmml.interfaces.pycharmmInterface.mm_molpair import MolPairCaps
 
         caps = MolPairCaps(mm=tuple(2 * c for c in self.mp.caps.mm), ml=2 * self.mp.caps.ml)
-        return self.mp._build_impl(pw, self.box, caps, jnp.asarray(False), jnp.asarray(0, jnp.int32))
+        return self.mp._build_impl(pw, box, caps, jnp.asarray(False), jnp.asarray(0, jnp.int32))
 
-    def evaluate(self, atomic_numbers, positions, nl, n_monomers, cutoff_params, debug):
-        nl = self.nl_for(positions, nl)
+    def evaluate(self, atomic_numbers, positions, nl, n_monomers, cutoff_params, debug, box=None):
+        box = self._box(box)
+        nl = self.nl_for(positions, nl, box)
         out = self.calc(
             atomic_numbers=atomic_numbers,
             positions=positions,
@@ -1532,14 +1544,14 @@ class _MolPairFast:
             doMM=False,
             doML_dimer=True,
             debug=debug,
-            box=self.box,
+            box=box,
             include_wall=False,
             ml_dimer_candidates=(nl.ml_cand if self.use_cand else None),
         )
         mp = self.mp
 
         def _e(p):
-            e_mm, e_wall, e_vdw, e_el = mp.energy_terms(self.whole(p), self.box, nl)
+            e_mm, e_wall, e_vdw, e_el = mp.energy_terms(self.whole(p, box), box, nl)
             return e_mm + e_wall, (e_mm, e_wall, e_vdw, e_el)
 
         (e_tot, (e_mm, e_wall, e_vdw, e_el)), g = jax.value_and_grad(_e, has_aux=True)(positions)
@@ -1556,18 +1568,20 @@ class _MolPairFast:
             wall_E=e_wall,
         )
 
-    def update_carry(self, pos, nl):
-        return self.mp.maybe_update(self.whole(pos), self.box, nl)
+    def update_carry(self, pos, nl, box=None):
+        box = self._box(box)
+        return self.mp.maybe_update(self.whole(pos, box), box, nl)
 
-    def grow(self, pos, nl):
-        """Host: bigger capacities after an overflow, fresh list at ``pos``."""
+    def grow(self, pos, nl, box=None):
+        """Host: bigger capacities after an overflow, fresh list at ``pos`` (real coordinates)."""
         from mmml.interfaces.pycharmmInterface.mm_molpair import MolPairCaps
 
+        box = self._box(box)
         old = self.mp.caps
         floor = MolPairCaps(mm=tuple(int(1.3 * c) + 64 for c in old.mm), ml=int(1.3 * old.ml) + 64)
-        Rw = jax.jit(self.whole)(pos)
-        self.mp.size_caps(Rw, self.box, floor=floor)
-        return self.mp.build(Rw, self.box)
+        Rw = jax.jit(self.whole)(pos, box)
+        self.mp.size_caps(Rw, box, floor=floor)
+        return self.mp.build(Rw, box)
 
 
 def set_up_nhc_sim_routine(
@@ -1611,7 +1625,7 @@ def set_up_nhc_sim_routine(
             # Molecule-pair MM + device Verlet list (mm_pair_idx carries the
             # MolPairNL in fast mode; anything else -> fresh list in-graph).
             return _fast_cell[0].evaluate(
-                atomic_numbers, positions, mm_pair_idx, n_monomers, CUTOFF_PARAMS, args.debug
+                atomic_numbers, positions, mm_pair_idx, n_monomers, CUTOFF_PARAMS, args.debug, box=box
             )
         return spherical_cutoff_calculator(
             atomic_numbers=atomic_numbers,
@@ -1682,8 +1696,8 @@ def set_up_nhc_sim_routine(
     pbc_box_nl = box_nl  # Capture for run_sim PBC minimization (avoids UnboundLocalError from later box_nl assignments)
 
     if update_fn is not None and use_pbc and _molpair_fast_requested(args):
-        if args.ensemble not in ("nvt", "nve"):
-            raise ValueError("--jaxmd-molpair-mm supports NVT/NVE (fixed cubic cell) only")
+        if args.ensemble not in ("nvt", "nve", "npt"):
+            raise ValueError("--jaxmd-molpair-mm supports NVT/NVE/NpT (orthorhombic cell) only")
         _fast_cell[0] = _MolPairFast(
             args, spherical_cutoff_calculator, update_fn, monomer_offsets,
             atoms.get_atomic_numbers(), R, box_init,
@@ -2102,16 +2116,27 @@ def set_up_nhc_sim_routine(
 
         return _sim
 
-    def _bind_sim_fast(apply_fn_local):
-        """Fast path: carry (state, MolPairNL); lists rebuilt on device when stale."""
+    def _bind_sim_fast(apply_fn_local, npt_pressure=None):
+        """Fast path: carry (state, MolPairNL); lists rebuilt on device when stale.
+
+        NpT (``npt_pressure`` given): the state holds fractional positions and the
+        box moves every step, so the list check runs on real positions in the
+        current ``npt_box`` and the barostat pressure is bound into the step.
+        """
         fast = _fast_cell[0]
 
         @jit
         def _sim_fast(state, nl):
             def body(i, carry):
                 s, n = carry
-                n = fast.update_carry(s.position, n)
-                s_new = cast_carry_like(normalize_jaxmd_state(apply_fn_local(s, neighbor=(n, None))), s)
+                if npt_pressure is not None:
+                    box_s = simulate.npt_box(s)
+                    n = fast.update_carry(space.transform(box_s, s.position), n, box_s)
+                    s_new = apply_fn_local(s, neighbor=(n, None), pressure=npt_pressure)
+                else:
+                    n = fast.update_carry(s.position, n)
+                    s_new = apply_fn_local(s, neighbor=(n, None))
+                s_new = cast_carry_like(normalize_jaxmd_state(s_new), s)
                 return (s_new, n)
 
             return lax.fori_loop(0, steps_per_loop_call, body, (state, nl))
@@ -2144,7 +2169,7 @@ def set_up_nhc_sim_routine(
 
     # Select integrator based on ensemble
     if args.ensemble == "npt" and use_pbc:
-        if update_fn is None:
+        if update_fn is None and _fast_cell[0] is None:
             raise ValueError(
                 "NPT requires jax_md neighbor list (cell list cannot handle dynamic box). "
                 "Ensure jax_md is installed and pbc_cell is set."
@@ -2255,11 +2280,14 @@ def set_up_nhc_sim_routine(
     )
     apply_fn = jit(apply_fn)
     sim = _bind_sim(apply_fn)
-    sim_fast = _bind_sim_fast(apply_fn) if _fast_cell[0] is not None else None
+    sim_fast = (
+        _bind_sim_fast(apply_fn, npt_pressure=(pressure if is_npt else None))
+        if _fast_cell[0] is not None else None
+    )
     _dense_stride = int(getattr(args, "jaxmd_dense_stride", 0) or 0)
     sim_fast_dense = None
     if _dense_stride > 0:
-        if _fast_cell[0] is None:
+        if _fast_cell[0] is None or is_npt:
             c.print("[dense] --jaxmd-dense-stride needs the molecule-pair fast path (--jaxmd-molpair-mm, NVT/NVE); ignored")
             _dense_stride = 0
         elif steps_per_loop_call % _dense_stride != 0:
@@ -2813,12 +2841,20 @@ def set_up_nhc_sim_routine(
             # Integrator state is fractional; pass that frame so refresh matches
             # later NPT steps (state.position + positions_are_cartesian=False).
             box_nl = np.array([float(args.cell)] * 3, dtype=np.float64)
-            pair_idx, pair_mask = refresh_mm_pairs(
-                update_fn,
-                md_pos_frac,
-                box_nl,
-                positions_are_cartesian=False,
-            )
+            if fast_nl is not None:
+                # Molecule-pair fast path: device list at the (wrapped) start geometry;
+                # it refreshes itself in-graph as the box and the molecules move.
+                fast_nl = _fast_cell[0].mp.build(
+                    jax.jit(_fast_cell[0].whole)(md_pos_wrapped, box_curr), box_curr
+                )
+                pair_idx, pair_mask = fast_nl, None
+            else:
+                pair_idx, pair_mask = refresh_mm_pairs(
+                    update_fn,
+                    md_pos_frac,
+                    box_nl,
+                    positions_are_cartesian=False,
+                )
             state = init_fn(
                 key, md_pos_frac, box=box_curr,
                 neighbor=(pair_idx, pair_mask), kT=kT, mass=Si_mass
@@ -3786,7 +3822,13 @@ def set_up_nhc_sim_routine(
                         # One host read per block: did a capacity overflow?
                         while bool(fast_nl.overflow):
                             _fast_stats["overflow_regrows"] += 1
-                            fast_nl = _fast_cell[0].grow(state_prev.position, fast_nl)
+                            if is_npt:
+                                _box_prev = simulate.npt_box(state_prev)
+                                fast_nl = _fast_cell[0].grow(
+                                    space.transform(_box_prev, state_prev.position), fast_nl, _box_prev
+                                )
+                            else:
+                                fast_nl = _fast_cell[0].grow(state_prev.position, fast_nl)
                             c.print(f"[molpair] list capacity overflow: regrown caps={list(_fast_cell[0].mp.caps.mm)} "
                                     f"ml={_fast_cell[0].mp.caps.ml}; redoing block")
                             if sim_fast_dense is not None:
@@ -3797,6 +3839,8 @@ def set_up_nhc_sim_routine(
                             _dense_buf.append(jax.device_get(_dframes))
                         current_neighbors = (fast_nl, None)
                         _pbc_state["pair_idx"] = fast_nl
+                        if is_npt:
+                            npt_pair_idx, npt_pair_mask = fast_nl, None
                     else:
                         state = sim(state, neighbor=current_neighbors)
                     steps_done += steps_per_loop_call
@@ -4316,7 +4360,7 @@ def set_up_nhc_sim_routine(
                             f"{L:8.2f}\t{vol:10.1f}\t{density_g_cm3:8.3f}\t{p_tgt_atm:8.2f}\t{p_meas_atm:8.2f}"
                             f"{_fb_cols}{_wall_cols}\t{avg_speed_ns_per_day:10.4f}"
                         )
-                        if nbr_monitor:
+                        if nbr_monitor and npt_pair_mask is not None:
                             nbr_n_valid = int(np.sum(np.asarray(jax.device_get(npt_pair_mask))))
                             nbr_capacity = npt_pair_idx.shape[0]
                             nbr_fill_ratio = nbr_n_valid / nbr_capacity if nbr_capacity > 0 else 0.0
@@ -4400,7 +4444,7 @@ def set_up_nhc_sim_routine(
                         if vol_for_density > 0
                         else float("nan")
                     )
-                if nbr_monitor and is_npt and npt_pair_idx is not None:
+                if nbr_monitor and is_npt and npt_pair_mask is not None:
                     if nbr_n_valid is None:
                         nbr_n_valid = int(np.sum(np.asarray(jax.device_get(npt_pair_mask))))
                         nbr_capacity = npt_pair_idx.shape[0]
