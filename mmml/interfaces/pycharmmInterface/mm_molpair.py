@@ -195,6 +195,7 @@ class MolPairMM:
         cap_margin: float = 1.15,
         cap_pad: int = 64,
         dtype=jnp.float32,
+        ewald: Optional[dict] = None,
     ):
         if spec.get("hybrid_hamiltonian", "handoff") != "handoff":
             raise ValueError("molpair MM supports hybrid_hamiltonian=handoff only")
@@ -230,6 +231,27 @@ class MolPairMM:
         self._lam = jnp.asarray(spec["lambda_monomer"], dtype=dtype)
         self.caps: Optional[MolPairCaps] = None
         self._jit_cache: dict = {}
+        # Optional Ewald (P3M) Coulomb: replaces the cut-off MM Coulomb tail by the full periodic sum minus the bare
+        # nearest-image Coulomb of the ML-handled part of each dimer (1 - h(R_ab)), see energy_terms.
+        self.ewald = None
+        if ewald:
+            from mmml.md.p3m import P3M
+
+            if not np.allclose(np.asarray(spec["lambda_monomer"]), 1.0):
+                raise ValueError("Ewald MM Coulomb does not support per-monomer lambda (alchemy)")
+            self.ewald = dict(ewald)
+            self.p3m = P3M(float(ewald["box_L"]), int(ewald.get("mesh", 32)), int(ewald.get("order", 5)),
+                           float(ewald.get("beta", 0.40)), dtype=dtype)
+            ii, jj = [], []
+            for m in range(M):
+                at = np.asarray(topo.atom_idx[m])[np.asarray(topo.atom_mask[m])]
+                for a in range(len(at)):
+                    for b in range(a + 1, len(at)):
+                        ii.append(at[a]); jj.append(at[b])
+            self._excl_i = jnp.asarray(np.array(ii, np.int32)); self._excl_j = jnp.asarray(np.array(jj, np.int32))
+            r_need = float(ewald.get("r_real", 8.0)) + 2.0 * float(ewald.get("extent", 1.6))
+            if self.r_mm_list < r_need:
+                raise ValueError(f"MM pair list radius {self.r_mm_list:.1f} A < real-space need {r_need:.1f} A")
 
     # ------------------------------------------------------------------ lists
     def _build_impl(self, pos: Array, box: Array, caps: MolPairCaps, prev_overflow, prev_builds) -> MolPairNL:
@@ -419,7 +441,22 @@ class MolPairMM:
                 s = s * (R >= float(r_min)).astype(s.dtype)
             s = jnp.where(valid, s * lam, 0.0)
             e_vdw = e_vdw + jnp.sum(s * lj)
-            e_el = e_el + jnp.sum(s * el)
+            if self.ewald is None:
+                e_el = e_el + jnp.sum(s * el)
+            else:
+                # real-space Ewald for the whole dimer block minus the ML part: K qq [erfc(beta r) - (1 - h(R))] / r
+                if sp.get("complementary_handoff", True):
+                    h = _sharpstep(R, on - mlw, on, GAMMA_ON)
+                else:
+                    h = _sharpstep(R, on, on + w, GAMMA_ON)
+                if r_min is not None:
+                    h = h * (R >= float(r_min)).astype(h.dtype)
+                rr = jnp.where(valid[:, None, None], r, 1.0)
+                ker = jax.scipy.special.erfc(self.p3m.beta * rr) - (1.0 - h)[:, None, None]
+                blk = COULOMB_K * jnp.sum(qq * ker / rr, axis=(1, 2))
+                e_el = e_el + jnp.sum(jnp.where(valid, blk, 0.0))
+        if self.ewald is not None:   # mesh, self and intramolecular-exclusion terms (whole molecules)
+            e_el = e_el + self.p3m.recip(pos, q) + self.p3m.self_energy(q) + self.p3m.exclusion(pos, q, self._excl_i, self._excl_j)
         e_vdw = e_vdw * KCALMOL2EV
         e_el = e_el * KCALMOL2EV
         return e_vdw + e_el, e_wall, e_vdw, e_el

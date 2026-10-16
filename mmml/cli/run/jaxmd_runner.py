@@ -1437,6 +1437,23 @@ def _add_psf_angle_restraints(args, positions, energy_fn, force_fn):
     return energy_with_restraints, force_with_restraints, restraint_energy_fn
 
 
+def _ewald_opts(box):
+    """MMML_MM_EWALD=1 or 'beta=0.4,mesh=32,order=5': P3M Ewald Coulomb for the molecule-pair MM tail (cubic box)."""
+    v = os.environ.get("MMML_MM_EWALD", "").strip()
+    if not v or v == "0":
+        return None
+    L = np.asarray(box, dtype=np.float64).reshape(-1)
+    opts = {"box_L": float(L[0] if L.size in (1, 3) else np.asarray(box).reshape(3, 3)[0, 0])}
+    if v != "1":
+        for kv in v.split(","):
+            k, x = kv.split("="); opts[k.strip()] = float(x)
+    if "mesh" not in opts:   # ~0.95 A spacing, FFT-friendly
+        opts["mesh"] = int(next(n for n in (16, 20, 24, 30, 32, 36, 40, 48, 50, 60, 64, 72, 80, 96) if opts["box_L"] / n <= 0.96))
+    print(f"[ewald] P3M MM Coulomb: L={opts['box_L']:.3f} A, mesh={int(opts['mesh'])}, order={int(opts.get('order', 5))}, "
+          f"beta={opts.get('beta', 0.40)}", flush=True)
+    return opts
+
+
 def _molpair_fast_requested(args) -> bool:
     return bool(getattr(args, "molpair_mm", False))
 
@@ -1473,6 +1490,7 @@ class _MolPairFast:
             ml_active_radius_A=(calc.ml_dimer_active_radius if self.use_cand else None),
             include_wall=bool(getattr(calc, "short_range_wall", True)),
             cap_margin=float(getattr(args, "molpair_cap_margin", 1.15) or 1.15),
+            ewald=_ewald_opts(box),
         )
         self._whole = lambda p: calc.make_monomers_whole(p, box)
         Rw = jax.jit(self._whole)(jnp.asarray(R, dtype=jnp.float32))
