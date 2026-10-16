@@ -375,11 +375,12 @@ class MolPairMM:
         dmax2 = jnp.max(jnp.sum(dd * dd, axis=-1))
         thr = 0.5 * self.skin - (self.guard if guard is None else float(guard))
         need = dmax2 > thr * thr
-        return jax.lax.cond(
-            need,
-            lambda: self._build_impl(pos, box, caps, nl.overflow, nl.n_builds),
-            lambda: nl,
+        # the rebuilt list takes the dtypes of the list passed in: under NpT the pressure is evaluated in float64
+        # (fd64 virial) while the carried list is float32, and lax.cond needs both branches to match
+        rebuild = lambda: jax.tree_util.tree_map(
+            lambda a, b: jnp.asarray(a, b.dtype), self._build_impl(pos, box, caps, nl.overflow, nl.n_builds), nl
         )
+        return jax.lax.cond(need, rebuild, lambda: nl)
 
     # ----------------------------------------------------------------- energy
     def energy_terms(

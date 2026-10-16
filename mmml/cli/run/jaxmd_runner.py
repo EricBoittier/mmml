@@ -1498,6 +1498,9 @@ class _MolPairFast:
         self.box = box
         self.topo = build_topology(np.asarray(monomer_offsets), np.asarray(atomic_numbers))
         self.use_cand = bool(getattr(calc, "ml_sparse_dimers_active", False))
+        _ewald = _ewald_opts(box)
+        if _ewald is not None and getattr(args, "ensemble", "nvt") == "npt":
+            raise ValueError("MMML_MM_EWALD (P3M influence function for a fixed box) is not supported with NpT")
         self.mp = MolPairMM(
             spec,
             self.topo,
@@ -1505,7 +1508,7 @@ class _MolPairFast:
             ml_active_radius_A=(calc.ml_dimer_active_radius if self.use_cand else None),
             include_wall=bool(getattr(calc, "short_range_wall", True)),
             cap_margin=float(getattr(args, "molpair_cap_margin", 1.15) or 1.15),
-            ewald=_ewald_opts(box),
+            ewald=_ewald,
         )
         self._whole = lambda p, b: calc.make_monomers_whole(p, b)
         Rw = jax.jit(self._whole)(jnp.asarray(R, dtype=jnp.float32), box)
