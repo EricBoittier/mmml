@@ -10,6 +10,15 @@ each system's gradient is its own force).
 Batches are packed by total atom count (``max_atoms_per_batch``) so a larger
 PET (PET-MAD s/m, PET-OMAD, ...) can be run with a smaller budget on the same
 GPU. Imports torch / metatomic lazily.
+
+System-level inputs: models such as PET-OMol request ``charge`` and
+``spin_multiplicity``. They are always attached when requested (default charge 0,
+multiplicity 1 -- the values a model silently falls back to when the data is
+missing, so neutral results are unchanged). Pass per-structure values with
+``evaluate(structures, charges=..., spins=...)`` or as items 4 and 5 of a
+structure tuple ``(numbers, positions, cell_or_None, charge, spin)``. Without
+them a charged system is evaluated as neutral (e.g. K+-water -9.8 instead of
+-17.6 kcal/mol with PET-OMol-L; Cl- unbound).
 """
 
 from __future__ import annotations
@@ -88,6 +97,14 @@ class BatchedMetatomicTeacher:
         self.max_systems_per_batch = int(max_systems_per_batch)
         if "energy" not in caps.outputs:
             raise ValueError(f"{self.model_path} has no 'energy' output")
+        try:  # system-level inputs (PET-OMol: charge, spin_multiplicity)
+            self.requested_inputs = dict(self.model.requested_inputs(use_new_names=True))
+        except TypeError:
+            self.requested_inputs = dict(self.model.requested_inputs())
+        except AttributeError:
+            self.requested_inputs = {}
+        self.default_charge = 0.0
+        self.default_spin = 1.0
         from vesin.metatomic import neighbor_lists_for_model
 
         # skin=0: every structure is new, so no Verlet-list reuse across calls.
@@ -95,12 +112,41 @@ class BatchedMetatomicTeacher:
             "angstrom", self.model, skin=0.0
         )
 
-    def _systems(self, structures: Sequence[tuple[np.ndarray, np.ndarray]]):
+    def _input_tmap(self, name: str, value: float):
+        """One-block, per-system TensorMap for a requested system input (layout of metatomic_ase)."""
+        import torch
+        from metatensor.torch import Labels, TensorBlock, TensorMap
+
+        dev = self.device
+        block = TensorBlock(
+            values=torch.tensor([[float(value)]], dtype=self.dtype, device=dev),
+            samples=Labels(["system"], torch.zeros((1, 1), dtype=torch.int32, device=dev)),
+            components=[],
+            properties=Labels([name], torch.zeros((1, 1), dtype=torch.int32, device=dev)),
+        )
+        tm = TensorMap(Labels(["_"], torch.zeros((1, 1), dtype=torch.int32, device=dev)), [block])
+        unit = getattr(self.requested_inputs.get(name), "unit", "")
+        if unit:
+            tm.set_info("unit", unit)
+        return tm
+
+    def _system_inputs(self, item, charge=None, spin=None) -> dict:
+        q = item[3] if len(item) > 3 and item[3] is not None else charge
+        m = item[4] if len(item) > 4 and item[4] is not None else spin
+        out = {}
+        for name in self.requested_inputs:
+            if name in ("charge", "mtt::charge"):
+                out[name] = self.default_charge if q is None else float(q)
+            elif name in ("spin_multiplicity", "mtt::spin_multiplicity", "spin"):
+                out[name] = self.default_spin if m is None else float(m)
+        return out
+
+    def _systems(self, structures: Sequence[tuple[np.ndarray, np.ndarray]], charges=None, spins=None):
         import torch
         from metatomic.torch import System
 
         systems = []
-        for item in structures:
+        for k, item in enumerate(structures):
             numbers, positions = item[0], item[1]
             cell_np = item[2] if len(item) > 2 else None
             periodic = cell_np is not None and abs(np.linalg.det(cell_np)) > 1e-9
@@ -126,17 +172,21 @@ class BatchedMetatomicTeacher:
                     pbc=torch.full((3,), bool(periodic), dtype=torch.bool, device=self.device),
                 )
             )
+            q = None if charges is None else charges[k]
+            m = None if spins is None else spins[k]
+            for name, value in self._system_inputs(item, q, m).items():
+                systems[-1].add_data(name, self._input_tmap(name, value))
         return systems
 
     def _attach_neighbors(self, systems) -> None:
         for calculator in self._nl_calculators:
             calculator.add_neighbor_list(systems)
 
-    def _forward(self, structures: Sequence[tuple[np.ndarray, np.ndarray]]):
+    def _forward(self, structures: Sequence[tuple[np.ndarray, np.ndarray]], charges=None, spins=None):
         import torch
         from metatomic.torch import ModelEvaluationOptions, ModelOutput
 
-        systems = self._systems(structures)
+        systems = self._systems(structures, charges, spins)
         self._attach_neighbors(systems)
         options = ModelEvaluationOptions(
             length_unit="angstrom",
@@ -150,12 +200,18 @@ class BatchedMetatomicTeacher:
         return e_np, f_np
 
     def evaluate(
-        self, structures: Sequence[tuple[np.ndarray, np.ndarray]]
+        self,
+        structures: Sequence[tuple[np.ndarray, np.ndarray]],
+        charges: Sequence[float] | None = None,
+        spins: Sequence[float] | None = None,
     ) -> list[tuple[float, np.ndarray]]:
         """Return ``(E eV, F eV/Å)`` per structure, in input order.
 
         A structure is ``(numbers, positions)`` (gas phase) or
-        ``(numbers, positions, cell)`` with a (3, 3) cell in Å (fully periodic).
+        ``(numbers, positions, cell)`` with a (3, 3) cell in Å (fully periodic);
+        optional items 4 and 5 are the total charge (e) and spin multiplicity.
+        ``charges`` / ``spins`` give the same per structure (tuple items win).
+        Requested system inputs are always attached (defaults 0 and 1).
         """
         order = sorted(range(len(structures)), key=lambda i: len(structures[i][0]))
         n_atoms = [len(structures[i][0]) for i in order]
@@ -166,7 +222,11 @@ class BatchedMetatomicTeacher:
             max_systems=self.max_systems_per_batch,
         ):
             idx = [order[b] for b in batch]
-            energies, forces = self._forward([structures[i] for i in idx])
+            energies, forces = self._forward(
+                [structures[i] for i in idx],
+                None if charges is None else [charges[i] for i in idx],
+                None if spins is None else [spins[i] for i in idx],
+            )
             for k, i in enumerate(idx):
                 results[i] = (float(energies[k]), forces[k])
         return [r for r in results if r is not None]
