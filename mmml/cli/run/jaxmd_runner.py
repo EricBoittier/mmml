@@ -1451,6 +1451,9 @@ def _ewald_opts(box):
         opts["mesh"] = int(next(n for n in (16, 20, 24, 30, 32, 36, 40, 48, 50, 60, 64, 72, 80, 96) if opts["box_L"] / n <= 0.96))
     print(f"[ewald] P3M MM Coulomb: L={opts['box_L']:.3f} A, mesh={int(opts['mesh'])}, order={int(opts.get('order', 5))}, "
           f"beta={opts.get('beta', 0.40)}", flush=True)
+    print("[ewald] WARNING: with the water/methanol students the hybrid orders ferroelectrically under tin-foil Ewald "
+          "(box dipole -> ~90 % alignment within picoseconds): the ML dimers do not supply the near-neighbour Coulomb "
+          "penalty that this term removes. Diagnostic use only; monitor M = sum q r.", flush=True)
     return opts
 
 
