@@ -1988,18 +1988,22 @@ def set_up_nhc_sim_routine(
         # MMML_POL_EWALD=1: dipolar P3M (no 9-12 A taper; real space 7.5 A) with converged PCG dipoles and variational
         # (Hellmann-Feynman) forces -- 2-5x faster than the dense kernel; fixed cubic box, no alchemy
         _pol_ew = os.environ.get("MMML_POL_EWALD", "0").strip().lower() in ("1", "true", "yes")
+        # neighbour-list capacity (per-atom slots = max count at the start positions x this); the lists are fixed-size,
+        # so an overflow drops pairs silently -- it is now checked at every record (raises) and can be raised here
+        _pol_cap = float(os.environ.get("MMML_POL_CAP_MULT", "1.3"))
         if _pol_ew:
             if args.ensemble not in ("nvt", "nve") or _pa is not None:
                 raise ValueError("MMML_POL_EWALD needs a fixed box (NVT/NVE) and no alchemy")
             from mmml.md.pol_ewald import make_pol_ewald_energy_fn
             _pol_E = make_pol_ewald_energy_fn(np.asarray(atomic_numbers), float(args.cell), _pol_path,
-                                              np.asarray(atoms.get_positions()), scf=True)
+                                              np.asarray(atoms.get_positions()), scf=True, capacity_multiplier=_pol_cap)
             _pol_sparse = True   # overflow check below
         else:
             _pol_E = make_pol_energy_fn(np.asarray(atomic_numbers), float(args.cell), _pol_path,
                                         tagged=None if _pa is None else int(_pa["molecule"]),
                                         lam=1.0 if _pa is None else float(_pa["lambda_ml"]),
-                                        neighbor_R=np.asarray(atoms.get_positions()) if _pol_sparse else None)
+                                        neighbor_R=np.asarray(atoms.get_positions()) if _pol_sparse else None,
+                                        capacity_multiplier=_pol_cap)
         if _pol_sparse and hasattr(_pol_E, "overflow") and bool(_pol_E.overflow(jnp.asarray(atoms.get_positions(), jnp.float32))):
             raise RuntimeError("polarization neighbour list overflows at the start positions")
         _pol_grad = jax.grad(_pol_E)  # d/dR at fixed box; NpT adds E/F in _npt_*_of_real with the current box
@@ -4006,6 +4010,10 @@ def set_up_nhc_sim_routine(
                         e_pot += float(_pol_E(space.transform(_box_rep, state.position), _box_rep))
                     else:
                         e_pot += float(_pol_E(state.position))
+                    # fixed-capacity dipole neighbour list: an overflow silently drops pairs (energy drift), so stop
+                    if _pol_sparse and hasattr(_pol_E, "overflow") and bool(_pol_E.overflow(jnp.asarray(state.position, jnp.float32))):
+                        raise RuntimeError(f"polarization neighbour list overflow at record {i + 1} (step {steps_done}); "
+                                           f"restart with a larger MMML_POL_CAP_MULT (now {_pol_cap})")
                 # Alchemy: W = dH_hybrid/dlambda_ml from the reference-lambda calculator, soft-core MM at all states.
                 if _alch is not None:
                     _pr = state.position
