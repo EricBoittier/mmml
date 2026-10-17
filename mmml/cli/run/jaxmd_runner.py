@@ -2000,6 +2000,7 @@ def set_up_nhc_sim_routine(
     # fixed MM charges minus the ML-range pair polarisation, see mmml.md.polarization. NVT/NVE/NpT (orthorhombic).
     _pol_path = os.environ.get("MMML_POL_PARAMS")
     _pol_E = _pol_grad = None
+    _pol_sparse = False
     if _pol_path and use_pbc:
         from mmml.md.polarization import make_pol_energy_fn
         from mmml.md.alchemy import spec_from_env as _pol_alch_spec
@@ -2038,6 +2039,33 @@ def set_up_nhc_sim_routine(
         wrapped_energy_fn = jit(lambda position, **kw: _base_E(position, **kw) + _pol_E(position, kw.get("box")).astype(jnp.float32))
         wrapped_force_fn = jit(lambda position, **kw: _base_F(position, **kw) - as_jaxmd_dtype(_pol_grad(position, kw.get("box"))))
         c.print(f"\\[polarization] {'Ewald/P3M + SCF' if _pol_ew else ('neighbour-list' if _pol_sparse else 'dense')} kernel; many-body induced-dipole term ON ({_pol_path}); E_pol(start) = {float(_pol_E(jnp.asarray(atoms.get_positions()))):.4f} eV")
+
+    # Optional short-range density correction (MMML_DENS_CORR=<params.json>, MMML_DENS_CORR_SCALE=s; mmml.md.density_corr):
+    # repulsive intermolecular heavy-atom pair term fitted to the PET-vs-GGA-D3 compression bias. Composed with the
+    # polarisation energy so every path that adds _pol_E (NVT/NVE forces, NpT energy/force with the current box,
+    # reported E_pot) carries it.
+    _dc_path = os.environ.get("MMML_DENS_CORR")
+    if _dc_path and use_pbc:
+        from mmml.md.density_corr import make_density_corr_fn
+        _dcs = os.environ.get("MMML_DENS_CORR_SCALE")
+        _dc_E = make_density_corr_fn(np.asarray(atomic_numbers), monomer_offsets, _dc_path, float(args.cell),
+                                     scale=None if not _dcs else float(_dcs))
+        _dc_grad = jax.grad(_dc_E)
+        if _pol_E is None:
+            _comb_E = lambda R, box=None, lam=None: _dc_E(R, box)
+            _comb_G = lambda R, box=None: _dc_grad(R, box)
+        else:
+            _pE0, _pG0 = _pol_E, _pol_grad
+            _comb_E = lambda R, box=None, lam=None: (_pE0(R, box) if lam is None else _pE0(R, box, lam)) + _dc_E(R, box)
+            _comb_G = lambda R, box=None: _pG0(R, box) + _dc_grad(R, box)
+            if hasattr(_pE0, "overflow"):
+                _comb_E.overflow = _pE0.overflow
+        _base_E3, _base_F3 = wrapped_energy_fn, wrapped_force_fn
+        wrapped_energy_fn = jit(lambda position, **kw: _base_E3(position, **kw) + _dc_E(position, kw.get("box")).astype(jnp.float32))
+        wrapped_force_fn = jit(lambda position, **kw: _base_F3(position, **kw) - as_jaxmd_dtype(_dc_grad(position, kw.get("box"))))
+        _pol_E, _pol_grad = _comb_E, _comb_G
+        c.print(f"\\[density-corr] {_dc_path} scale={_dc_E.scale}; {_dc_E.n_heavy} heavy atoms; "
+                f"E_corr(start) = {float(_dc_E(jnp.asarray(atoms.get_positions()))):.4f} eV")
 
     # Optional alchemical decoupling of one molecule (MMML_ALCH, see mmml.md.alchemy): the hybrid already scales the
     # molecule's interaction by lambda_ml (lambda_monomer); add (1 - lambda_ml) * soft-core MM(lambda_elec, lambda_vdw).
