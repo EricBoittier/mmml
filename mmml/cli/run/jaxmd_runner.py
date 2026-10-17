@@ -902,8 +902,29 @@ def as_jaxmd_dtype(x):
     return jnp.asarray(x, dtype=_JAXMD_DTYPE)
 
 
+def npt_pos_dtype():
+    """dtype of the NpT integrator's fractional positions and momenta.
+
+    float64 whenever x64 is on (``MMML_NPT_POS_F64=0`` restores the ML dtype). With float32
+    fractional coordinates the water/methanol hybrid gained ~0.1 eV per step at 0.5 fs (30 A box,
+    NpT with barostat and thermostat frozen: +44 eV in 400 steps, and the same in plain NVE run in
+    fractional coordinates), while float64 fractional coordinates (+0.2 eV) and float32 real
+    coordinates (+0.3 eV) conserve. The calculator still runs in the ML dtype.
+    """
+    if bool(jax.config.read("jax_enable_x64")) and os.environ.get("MMML_NPT_POS_F64", "1") != "0":
+        return jnp.float64
+    return _JAXMD_DTYPE
+
+
 def normalize_jaxmd_state(state):
     """Keep JAX-MD integrator carry dtypes consistent for lax.scan/fori_loop."""
+    if hasattr(state, "box_position"):   # NpT: fractional positions/momenta in npt_pos_dtype()
+        d = npt_pos_dtype()
+        return state.set(
+            position=jnp.asarray(state.position, d),
+            momentum=jnp.asarray(state.momentum, d),
+            mass=as_jaxmd_dtype(state.mass),
+        )
     return state.set(
         position=as_jaxmd_dtype(state.position),
         momentum=as_jaxmd_dtype(state.momentum),
@@ -1063,9 +1084,14 @@ def make_npt_energy_fn(
     if apply_perturbation is None:
         apply_perturbation = apply_npt_perturbation
 
+    def _real_of(frac_pos, box_eff):
+        # form real = box @ frac in the fractional dtype (float64 under NpT), then hand the calculator its dtype
+        fd = jnp.asarray(frac_pos).dtype
+        return jnp.asarray(space.transform(jnp.asarray(box_eff, fd), jnp.asarray(frac_pos)), dtype=dtype)
+
     def raw_fn(frac_pos, box=None, neighbor=None, perturbation=None, **kwargs):
         box_eff = apply_perturbation(box, perturbation, dtype)
-        real_pos = space.transform(box_eff, jnp.asarray(frac_pos, dtype=dtype))
+        real_pos = _real_of(frac_pos, box_eff)
         return energy_of_real(real_pos, box_eff, neighbor)
 
     @jax.custom_vjp
@@ -1080,7 +1106,7 @@ def make_npt_energy_fn(
     def bwd(res, g):
         frac_pos, box, neighbor, perturbation = res
         box_eff = apply_perturbation(box, perturbation, dtype)
-        real_pos = space.transform(box_eff, jnp.asarray(frac_pos, dtype=dtype))
+        real_pos = _real_of(frac_pos, box_eff)
         F = jnp.asarray(force_of_real(real_pos, box_eff, neighbor), dtype=dtype)
         # Position cotangent: the REAL-SPACE gradient -F, not (-F) @ box.
         # jax-md's space.transform carries a custom JVP that passes dR through
@@ -2844,7 +2870,7 @@ def set_up_nhc_sim_routine(
             box_curr = box_npt
             _cell_jax = jnp.asarray(atoms.get_cell()[:], dtype=jnp.float32)
             md_pos_wrapped = _wrap_monomers(jnp.asarray(md_pos), _cell_jax)
-            md_pos_frac = as_jaxmd_dtype(md_pos_wrapped / float(args.cell))  # cubic: frac = R / L
+            md_pos_frac = jnp.asarray(np.asarray(md_pos_wrapped, np.float64) / float(args.cell), npt_pos_dtype())  # cubic: frac = R / L
             # Integrator state is fractional; pass that frame so refresh matches
             # later NPT steps (state.position + positions_are_cartesian=False).
             box_nl = np.array([float(args.cell)] * 3, dtype=np.float64)
@@ -2885,6 +2911,140 @@ def set_up_nhc_sim_routine(
             # strain, and the barostat saw P_kin + P_vir/3.
             import os as _os
 
+            # MMML_NPT_FORCECHECK=1: are the NpT forces the gradient of the NpT energy at the start state? Compares
+            # force_of_real with a 3x3 box (what the barostat path passes) against the (3,) box form and against a
+            # central difference of energy_of_real along a random direction (float32: h = 1e-3 / 3e-3 A).
+            if _os.environ.get("MMML_NPT_FORCECHECK") == "1":
+                _nb = (npt_pair_idx, npt_pair_mask)
+                _b = jnp.asarray(box_curr)
+                _real = space.transform(_b, jnp.asarray(md_pos_frac))
+                _F3 = np.asarray(_npt_force_of_real(_real, _b, _nb), np.float64)
+                _bv = jnp.diagonal(_b) if _b.ndim == 2 else _b
+                _Fv = np.asarray(_npt_force_of_real(_real, _bv, _nb), np.float64)
+                _rng = np.random.RandomState(0); _d = _rng.randn(*np.shape(_real)); _d /= np.linalg.norm(_d)
+                _rows = []
+                for _h in (1e-3, 3e-3):
+                    _ep = float(_npt_energy_of_real(_real + _h * jnp.asarray(_d, _real.dtype), _b, _nb))
+                    _em = float(_npt_energy_of_real(_real - _h * jnp.asarray(_d, _real.dtype), _b, _nb))
+                    _rows.append((_h, -(_ep - _em) / (2 * _h)))
+                _gfrac = np.asarray(jax.grad(lambda fr: npt_energy_fn(fr, box=_b, neighbor=_nb))(jnp.asarray(md_pos_frac)), np.float64)
+                # per-atom wrap of the fractional coordinates (what every NpT record does) splits molecules at the faces
+                _fs = jnp.asarray(md_pos_frac) + jnp.asarray(_rng.randint(-1, 2, size=np.shape(md_pos_frac)), jnp.asarray(md_pos_frac).dtype) * 0.0
+                _fs = _fs.at[:, 0].add(0.37); _fs = _fs - jnp.floor(_fs)            # shift + per-atom wrap: many split molecules
+                _fw = jnp.asarray(md_pos_frac).at[:, 0].add(0.37)                   # same shift, unwrapped (molecules whole)
+                _Es = float(_npt_energy_of_real(space.transform(_b, _fs), _b, _nb)); _Ew = float(_npt_energy_of_real(space.transform(_b, _fw), _b, _nb))
+                _Fs = np.asarray(_npt_force_of_real(space.transform(_b, _fs), _b, _nb), np.float64)
+                _Fw = np.asarray(_npt_force_of_real(space.transform(_b, _fw), _b, _nb), np.float64)
+                _E0 = float(_npt_energy_of_real(_real, _b, _nb))
+                # molecule-wise wrap of the shifted coordinates (whole molecules, centroids inside the cell)
+                _rw = space.transform(_b, _fw); _rmw = _wrap_monomers(_rw, _b) if "_wrap_monomers" in dir() else _rw
+                _Emw = float(_npt_energy_of_real(_rmw, _b, _nb))
+                # fresh lists at the split coordinates (fast path): stale-list effect vs geometry effect
+                _Es2 = None
+                if _fast_cell[0] is not None:
+                    _nl2 = _fast_cell[0].mp.build(jax.jit(_fast_cell[0].whole)(space.transform(_b, _fs), _b), _b)
+                    _Es2 = float(_npt_energy_of_real(space.transform(_b, _fs), _b, (_nl2, None)))
+                def _terms(_rr):
+                    _o = evaluate_energies_and_forces(atomic_numbers=atomic_numbers, positions=_rr, mm_pair_idx=_nb[0], mm_pair_mask=_nb[1], box=_b)
+                    return " ".join(f"{k}={float(np.asarray(getattr(_o, k)).reshape(-1)[0]):+.4f}" for k in
+                                    ("energy", "internal_E", "ml_2b_E", "mm_E", "flat_bottom_E", "com_restraint_E", "wall_E", "com_dist", "com_restraint_min_dist"))
+                def _fterms(_r1, _r2):
+                    _o1 = evaluate_energies_and_forces(atomic_numbers=atomic_numbers, positions=_r1, mm_pair_idx=_nb[0], mm_pair_mask=_nb[1], box=_b)
+                    _o2 = evaluate_energies_and_forces(atomic_numbers=atomic_numbers, positions=_r2, mm_pair_idx=_nb[0], mm_pair_mask=_nb[1], box=_b)
+                    _out = []
+                    for k in ("forces", "internal_F", "ml_2b_F", "mm_F"):
+                        _a, _c = np.asarray(getattr(_o1, k)), np.asarray(getattr(_o2, k))
+                        if _a.ndim == 2 and _a.shape == _c.shape:
+                            _dd = np.abs(_a - _c).max(1); _i = int(np.argmax(_dd))
+                            _out.append(f"{k}: max {_dd.max():.3e} (atom {_i}, Z {int(np.asarray(atomic_numbers)[_i])}), mean {_dd.mean():.2e}")
+                    return "; ".join(_out)
+                # pure rigid translation, molecules kept whole (no wrap at all): every term must be invariant
+                _shift = jnp.asarray([3.3, 0.0, 0.0], _real.dtype)
+                c.print(f"[npt-forcecheck] translate 3.3 A (whole): {_fterms(_real, _real + _shift)}")
+                c.print(f"[npt-forcecheck] split vs whole (same shifted config): {_fterms(space.transform(_b, _fs), space.transform(_b, _fw))}")
+                _rs = space.transform(_b, _fs)
+                if _fast_cell[0] is not None:
+                    c.print(f"[npt-forcecheck] split vs whole(split): {_fterms(_rs, jax.jit(_fast_cell[0].whole)(_rs, _b))}")
+                _gid = np.asarray(_monomer_group_id) if "_monomer_group_id" in dir() else None
+                if _gid is not None:
+                    _lat = jnp.asarray((_gid % 2 == 0)[:, None] * np.array([1.0, 0.0, 0.0]) * float(np.asarray(_bv)[0]), _real.dtype)
+                    c.print(f"[npt-forcecheck] whole molecules, every other one +L: {_fterms(_real, _real + _lat)}")
+                # integrator localisation: 400 steps each from the same state, E_tot = KE + PE at start / end
+                if _os.environ.get("MMML_NPT_FORCECHECK_DYN") == "1":
+                    _nsteps = int(_os.environ.get("MMML_NPT_FORCECHECK_STEPS", "400"))
+                    _key = jax.random.PRNGKey(5)
+                    _kin = lambda st: float(quantity.kinetic_energy(momentum=st.momentum, mass=st.mass))
+                    # (A) jax-md NpT, barostat/thermostat frozen
+                    _iA, _aA = simulate.npt_nose_hoover(npt_energy_fn, shift, dt=dt_md, pressure=pressure, kT=kT,
+                        barostat_kwargs=default_nhc_kwargs(as_jaxmd_dtype(1e9 * dt_md), nhc_kwargs),
+                        thermostat_kwargs=default_nhc_kwargs(as_jaxmd_dtype(1e9 * dt_md), nhc_kwargs))
+                    _sA = _iA(_key, jnp.asarray(md_pos_frac), box=_b, neighbor=_nb, kT=kT, mass=Si_mass)
+                    _pe = lambda fr: float(npt_energy_fn(fr, box=_b, neighbor=_nb))
+                    _eA0 = _kin(_sA) + _pe(_sA.position)
+                    _stA = jax.jit(lambda st: _aA(st, neighbor=_nb))
+                    for _k in range(_nsteps): _sA = _stA(_sA)
+                    _eA1 = _kin(_sA) + _pe(_sA.position)
+                    # (B) jax-md NVE in fractional coordinates, same NpT energy wrapper (box fixed)
+                    _eB = lambda fr, **kw: npt_energy_fn(fr, box=_b, neighbor=_nb)
+                    _iB, _aB = simulate.nve(_eB, lambda R, dR, **kw: shift(R, dR, box=_b), dt_md)
+                    _sB = _iB(_key, jnp.asarray(md_pos_frac), kT, mass=Si_mass)
+                    _eB0 = _kin(_sB) + _pe(_sB.position)
+                    _stB = jax.jit(_aB)
+                    for _k in range(_nsteps): _sB = _stB(_sB)
+                    _eB1 = _kin(_sB) + _pe(_sB.position)
+                    # (C) jax-md NVE in real coordinates, calculator forces directly
+                    _fC = lambda R, **kw: _npt_force_of_real(R, _b, _nb)
+                    _iC, _aC = simulate.nve(_fC, space.free()[1], dt_md)
+                    _sC = _iC(_key, _real, kT, mass=Si_mass)
+                    _peR = lambda R: float(_npt_energy_of_real(R, _b, _nb))
+                    _eC0 = _kin(_sC) + _peR(_sC.position)
+                    _stC = jax.jit(_aC)
+                    for _k in range(_nsteps): _sC = _stC(_sC)
+                    _eC1 = _kin(_sC) + _peR(_sC.position)
+                    # (B2) fractional NVE, explicit real-space force (no custom VJP); (B3) same, molecules made whole first
+                    _shB = lambda R, dR, **kw: shift(R, dR, box=_b)
+                    _res = {}
+                    for _tag, _wh in (("B2", False), ("B3", True)):
+                        def _fB(fr, _wh=_wh, **kw):
+                            _r = space.transform(_b, fr)
+                            if _wh:
+                                _r = spherical_cutoff_calculator.make_monomers_whole(_r, _b).astype(_r.dtype)
+                            return _npt_force_of_real(_r, _b, _nb)
+                        _i2, _a2 = simulate.nve(_fB, _shB, dt_md)
+                        _s2 = _i2(_key, jnp.asarray(md_pos_frac), kT, mass=Si_mass)
+                        _e20 = _kin(_s2) + _pe(_s2.position)
+                        _st2 = jax.jit(_a2)
+                        for _k in range(_nsteps): _s2 = _st2(_s2)
+                        _res[_tag] = _kin(_s2) + _pe(_s2.position) - _e20
+                    # (B4) fractional NVE in float64 positions; (C2) real NVE in float32 positions; dtypes printed
+                    def _run(_init_pos, _force, _shf, _pe_fn):
+                        _i, _a = simulate.nve(_force, _shf, dt_md)
+                        _st = _i(_key, _init_pos, kT, mass=Si_mass)
+                        _e0 = _kin(_st) + _pe_fn(_st.position)
+                        _stp = jax.jit(_a)
+                        for _k in range(_nsteps): _st = _stp(_st)
+                        return _kin(_st) + _pe_fn(_st.position) - _e0, str(_st.position.dtype)
+                    _f64 = jnp.asarray(md_pos_frac, jnp.float64)
+                    _b64 = jnp.asarray(_b, jnp.float64)
+                    _res["B4"] = _run(_f64, lambda fr, **kw: _npt_force_of_real(space.transform(_b64, fr), _b, _nb),
+                                      lambda R, dR, **kw: shift(R, dR, box=_b64), _pe)
+                    _res["C2"] = _run(jnp.asarray(_real, jnp.float32), lambda R, **kw: _npt_force_of_real(R, _b, _nb),
+                                      space.free()[1], _peR)
+                    c.print(f"[npt-forcecheck] dtypes frac {jnp.asarray(md_pos_frac).dtype} real {_real.dtype} box {_b.dtype}; "
+                            f"(B4) frac f64 {_res['B4'][0]:+.3f} eV [{_res['B4'][1]}]; (C2) real f32 {_res['C2'][0]:+.3f} eV [{_res['C2'][1]}]")
+                    c.print(f"[npt-forcecheck] dyn {_nsteps} steps dE_tot: (B2) frac explicit force {_res['B2']:+.3f} eV; (B3) frac whole {_res['B3']:+.3f} eV")
+                    c.print(f"[npt-forcecheck] dyn {_nsteps} steps dE_tot: (A) NpT frozen {(_eA1 - _eA0):+.3f} eV; "
+                            f"(B) NVE frac+wrapper {(_eB1 - _eB0):+.3f} eV; (C) NVE real {(_eC1 - _eC0):+.3f} eV")
+                c.print(f"[npt-forcecheck] terms E0: {_terms(_real)}")
+                c.print(f"[npt-forcecheck] terms translate 3.3: {_terms(_real + _shift)}")
+                c.print(f"[npt-forcecheck] terms shifted-whole: {_terms(space.transform(_b, _fw))}")
+                c.print(f"[npt-forcecheck] terms split: {_terms(space.transform(_b, _fs))}")
+                c.print(f"[npt-forcecheck] has _wrap_monomers: {'_wrap_monomers' in dir()}")
+                c.print(f"[npt-forcecheck] E0 {_E0:.5f}  shifted-whole {_Ew:.5f}  shifted-molwrap {_Emw:.5f}  split {_Es:.5f}  "
+                        f"split+fresh-list {_Es2}  |F split - F whole|max {np.abs(_Fs - _Fw).max():.3e} eV/A")
+                c.print(f"[npt-forcecheck] |F3x3 - F(3,)|max {np.abs(_F3 - _Fv).max():.3e} eV/A; F.d analytic {float(np.sum(_F3 * _d)):+.5f} "
+                        f"vs FD {', '.join(f'h={h:g}: {v:+.5f}' for h, v in _rows)}; |grad_frac + F|max {np.abs(_gfrac + _F3).max():.3e}; "
+                        f"|F|max {np.abs(_F3).max():.3f}")
             if _os.environ.get("MMML_NPT_VIRIAL_SELFCHECK") == "1":
                 try:
                     _nb = (npt_pair_idx, npt_pair_mask)
@@ -3858,7 +4018,7 @@ def set_up_nhc_sim_routine(
                         box_curr = simulate.npt_box(state)
                         frac_pos = state.position
                         wrapped_frac = frac_pos - jnp.floor(frac_pos)
-                        state = state.set(position=as_jaxmd_dtype(wrapped_frac))
+                        state = state.set(position=jnp.asarray(wrapped_frac, npt_pos_dtype()))
                         pos_for_overlap = space.transform(box_curr, state.position)
                         pos_for_overlap = _wrap_monomers(pos_for_overlap, box_curr)
                         rescued = _check_overlap(pos_for_overlap, box_curr, f"JAX-MD dynamics record {i + 1}")
