@@ -12,7 +12,8 @@ the knob tuned to the experimental density: at scale 1 the term moves the hybrid
 and the GGAs are themselves 7-11 % too light.
 
 Dense minimum-image sum over heavy atoms (O(n_heavy^2), ~3 M pairs at 38 A); orthorhombic box, r_off < L/2.
-params json: {"lam_A": 0.6, "r_on_A": 5.0, "r_off_A": 6.0, "c_kcal_mol": {"OO": .., "OC": .., "CC": ..},
+params json: {"lam_A": 0.6, "r_on_A": 5.0, "r_off_A": 6.0, "c_kcal_mol": {"OO": .., "OC": .., "CC": ..} (v1) or
+              {"OwOw", "OwOm", "OmOm", "OwC", "OmC", "CC"} (v2: water O = O of a 3-atom molecule),
               "scale": 1.0, "scale_types": {"OO": 1.0, ...} (optional)}
 """
 from __future__ import annotations
@@ -28,7 +29,8 @@ _SYM = {6: "C", 8: "O"}
 
 
 def _pair_key(a, b):
-    return "".join(sorted((a, b), key=lambda s: "OC".index(s)))   # "OO", "OC", "CC"
+    order = {"Ow": 0, "Om": 1, "O": 1, "C": 2}
+    return "".join(sorted((a, b), key=order.get))   # v1: "OO", "OC", "CC"; v2: "OwOw", "OwOm", "OmOm", "OwC", "OmC", "CC"
 
 
 def make_density_corr_fn(atomic_numbers, monomer_offsets, params_json, box_L, scale=None, dtype=jnp.float32):
@@ -43,12 +45,20 @@ def make_density_corr_fn(atomic_numbers, monomer_offsets, params_json, box_L, sc
     for m in range(len(offs) - 1):
         mol[offs[m]:offs[m + 1]] = m
     heavy = np.where(Z > 1)[0]
-    sym = [_SYM[int(z)] for z in Z[heavy]]
+    v2 = any(k.startswith(("Ow", "Om")) for k in par["c_kcal_mol"])   # water / methanol oxygens as separate types
+    size = np.bincount(mol)
+    if v2:
+        sym = ["C" if int(Z[i]) == 6 else ("Ow" if size[mol[i]] == 3 else "Om") for i in heavy]
+    else:
+        sym = [_SYM[int(z)] for z in Z[heavy]]
+        sym = ["O" if t == "O" else t for t in sym]
+    keys = np.array([_pair_key(p, q) for p in sym for q in sym]).reshape(len(heavy), len(heavy))
+    if not v2:
+        keys = np.char.replace(np.char.replace(keys, "OO", "OO"), "CO", "OC")
     cmat = np.zeros((len(heavy), len(heavy)), np.float64)
-    for key in ("OO", "OC", "CC"):
-        c = float(par["c_kcal_mol"][key]) * KCAL_TO_EV * s_glob * float(s_t.get(key, 1.0))
-        a = np.array([_pair_key(p, q) == key for p in sym for q in sym]).reshape(len(heavy), len(heavy))
-        cmat[a] = c
+    for key, cval in par["c_kcal_mol"].items():
+        c = float(cval) * KCAL_TO_EV * s_glob * float(s_t.get(key, 1.0))
+        cmat[keys == key] = c
     same = mol[heavy][:, None] == mol[heavy][None, :]
     iu = np.triu(np.ones_like(same), 1).astype(bool) & ~same
     cmat = np.where(iu, cmat, 0.0)
