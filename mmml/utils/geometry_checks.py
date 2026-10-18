@@ -197,7 +197,45 @@ def find_worst_intermonomer_overlap(
     best_i = best_j = -1
     rows_per_chunk = max(1, int(2_000_000 // max(1, n_atoms)))
 
-    for start in range(0, n_atoms, rows_per_chunk):
+    # Large orthorhombic boxes: the n_atoms^2 pass is 326M MIC distances for an
+    # 18k-atom octanol box and took tens of minutes per MD record. A periodic
+    # KD-tree finds the same minimum from pairs within a radius grown until an
+    # inter-monomer pair appears. Small boxes keep the dense pass (bit-identical).
+    if (
+        n_atoms > 6000
+        and (cell_mat is None or np.allclose(cell_mat, np.diag(np.diag(cell_mat))))
+    ):
+        from scipy.spatial import cKDTree
+
+        if cell_mat is not None:
+            box = np.diag(cell_mat).astype(float)
+            tree = cKDTree(np.mod(pos, box), boxsize=box)
+            r_max = 0.5 * float(box.min())
+        else:
+            tree = cKDTree(pos)
+            r_max = float(np.ptp(pos, axis=0).max()) + 1.0
+        r = min(3.0, r_max)
+        while True:
+            pairs = tree.query_pairs(r, output_type="ndarray")
+            if len(pairs):
+                pairs = pairs[atom_monomer[pairs[:, 0]] != atom_monomer[pairs[:, 1]]]
+            if len(pairs) or r >= r_max:
+                break
+            r = min(2.0 * r, r_max)
+        if len(pairs):
+            disp = pos[pairs[:, 1]] - pos[pairs[:, 0]]
+            if cell_mat is not None:
+                disp = _mic(disp, cell_mat, inv_cell)
+            d2 = np.einsum("ij,ij->i", disp, disp)
+            k = int(np.argmin(d2))
+            best_d2 = float(d2[k])
+            best_i, best_j = int(pairs[k, 0]), int(pairs[k, 1])
+        rows_per_chunk = n_atoms  # skip the dense loop below
+        n_dense = 0
+    else:
+        n_dense = n_atoms
+
+    for start in range(0, n_dense, rows_per_chunk):
         stop = min(start + rows_per_chunk, n_atoms)
         disp = pos[start:stop, None, :] - pos[None, :, :]
         if cell_mat is not None:

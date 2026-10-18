@@ -1726,11 +1726,20 @@ def setup_calculator(
     # Precompute batch structure for full batch (used when not sparse)
     n_dimers_total = len(dimer_perms)
     full_batch_size = n_monomers + n_dimers_total
-    _cached_batch_structure = None
-    try:
-        _cached_batch_structure = prepare_batch_structure(full_batch_size, max_atoms)
-    except Exception:
-        pass
+    # Built on first use (dense all-dimer batches only). Building it at setup cost
+    # O(n_dimers * max_atoms^2) device memory even when sparse dimers never use it:
+    # 912 molecules (415k dimers x 54 atoms) -> ~17 GB that the JAX pool then kept.
+    _cached_batch_structure_cell = []
+
+    def _full_batch_structure():
+        if not _cached_batch_structure_cell:
+            try:
+                # First use is inside a jit trace: evaluate eagerly so no tracer is cached.
+                with jax.ensure_compile_time_eval():
+                    _cached_batch_structure_cell.append(prepare_batch_structure(full_batch_size, max_atoms))
+            except Exception:
+                _cached_batch_structure_cell.append(None)
+        return _cached_batch_structure_cell[0]
 
     from mmml.interfaces.pycharmmInterface.mlpot.mlpot_sparse_dimer_policy import (
         SparseDimerCapOverflow,
@@ -1893,6 +1902,26 @@ def setup_calculator(
         elif _ml_kernel != "e3x" and dense_supported(MODEL):
             _dense_physnet = make_dense_apply(MODEL, params)
     setup_rows.append(("ml_kernel", (os.environ.get("MMML_ML_KERNEL") or "dense") if _dense_physnet is not None else "e3x"))
+
+    # Dense dimer rows in chunks. MMML_ML_DENSE_CHUNK: "auto" (default) chunks
+    # only when one (B, n, n, F) pair tensor would exceed 2.5 GiB (30-38 A water and
+    # methanol boxes, 1-2 GiB, keep the single call), at --ml-batch-size or a 0.25 GiB tensor;
+    # an int forces that chunk size; 0 never chunks.
+    _dense_chunk_env = (os.environ.get("MMML_ML_DENSE_CHUNK") or "auto").strip().lower()
+    # Channels per pair entry: features x (max_degree + 1)^2 (max_degree 1 -> 4x).
+    _dense_feat = int(getattr(MODEL, "features", 128) or 128) * (int(getattr(MODEL, "max_degree", 0) or 0) + 1) ** 2
+
+    def _dense_dimer_chunk(n_rows: int) -> int:
+        if _dense_physnet is None or n_rows <= 0 or _dense_chunk_env in ("0", "off", "no", "false"):
+            return 0
+        if _dense_chunk_env not in ("auto", ""):
+            c = int(_dense_chunk_env)
+            return c if n_rows > c else 0
+        per_row = max_atoms * max_atoms * _dense_feat * 4
+        if n_rows * per_row <= 2.5 * 2**30:
+            return 0
+        c = int(ml_batch_size) if ml_batch_size else max(64, int(2**28 // per_row))
+        return c if n_rows > c else 0
     _ml_chunk_layout = _resolve_ml_chunk_layout(
         ml_sparse_dimers, _max_active_dimers, n_dimers_total, ml_batch_size,
         n_monomers, _jax_mm_spoof_mode, _kernnn_mode, _metatomic_mode, ml_gpu_count,
@@ -2982,7 +3011,7 @@ def setup_calculator(
             batch_data["N"] = jnp.concatenate([monomer_N_arr, dimer_N])
             batch_data["N_a"] = jnp.concatenate([monomer_N_arr, dimer_n_a])
             _effective_batch_size = n_monomers + n_dimers
-            cached = _cached_batch_structure if (_cached_batch_structure is not None and _effective_batch_size == full_batch_size) else None
+            cached = _full_batch_structure() if _effective_batch_size == full_batch_size else None
             batches = prepare_batches_md(batch_data, batch_size=_effective_batch_size, num_atoms=max_atoms, cached_structure=cached)[0]
 
         _chunk_size = ml_batch_size
@@ -3065,7 +3094,33 @@ def setup_calculator(
                 e_m, f_m = _dense_physnet(R3[:nm, :max_monomer_atoms], Z2[:nm, :max_monomer_atoms])
                 f_m = jnp.pad(f_m, ((0, 0), (0, max_atoms - max_monomer_atoms), (0, 0)))
                 parts_e.append(e_m); parts_f.append(f_m)
-            if _effective_batch_size > nm:
+            n_d = _effective_batch_size - nm
+            dc = _dense_dimer_chunk(n_d)
+            if n_d > 0 and dc:
+                # Dense pair tensors are (B, n, n, F) and the vjp keeps several
+                # per iteration: one call over every dimer slot does not fit for
+                # large molecules (octanol: 14.5k slots x 54^2 x 128 -> 21 GiB).
+                # Each chunk runs its own vjp, so only one chunk's residuals live.
+                n_ch = -(-n_d // dc)
+                pad_d = n_ch * dc - n_d
+                R_d = jnp.concatenate([R3[nm:], ml_zeros((pad_d, max_atoms, 3), dtype=ml_jnp_dtype)])
+                Z_d = jnp.concatenate([Z2[nm:], jnp.zeros((pad_d, max_atoms), dtype=Z2.dtype)])
+                N_d = jnp.ones((n_ch * dc,), dtype=jnp.int32)
+                e_d, f_d = run_chunked_model_apply(
+                    R_chunks=R_d.reshape(n_ch, dc, max_atoms, 3),
+                    Z_chunks=Z_d.reshape(n_ch, dc, max_atoms),
+                    N_chunks=N_d.reshape(n_ch, dc),
+                    n_chunks=n_ch,
+                    effective_batch_size=n_d,
+                    chunk_size=dc,
+                    max_atoms=max_atoms,
+                    n_gpus=1,
+                    apply_one_chunk=lambda R_c, Z_c, N_c: (lambda E_, F_: (E_, F_.reshape(-1, 3)))(*_dense_physnet(R_c, Z_c)),
+                    has_aux=False,
+                    n_valid=(_n_valid_systems - nm) if (_skip_padding_chunks and _n_valid_systems is not None) else None,
+                )
+                parts_e.append(e_d); parts_f.append(f_d.reshape(n_d, max_atoms, 3))
+            elif n_d > 0:
                 e_d, f_d = _dense_physnet(R3[nm:], Z2[nm:])
                 parts_e.append(e_d); parts_f.append(f_d)
             e = jnp.concatenate(parts_e)

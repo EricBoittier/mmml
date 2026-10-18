@@ -188,7 +188,14 @@ class HDF5Reporter:
             for k, v in attrs.items():
                 h5_v = _coerce_h5_attr(v)
                 if h5_v is not _SKIP_H5_ATTR:
-                    self._h5.attrs[k] = h5_v
+                    try:
+                        self._h5.attrs[k] = h5_v
+                    except OSError:
+                        # Compact attribute storage caps one attribute at 64 KB
+                        # (per-atom arrays of an 18k-atom box exceed it). Store it
+                        # as a root dataset under the same name and flag that.
+                        self._h5.create_dataset(f"attr_{k}", data=h5_v)
+                        self._h5.attrs[f"{k}__dataset"] = f"attr_{k}"
 
         # Per-dataset in-memory buffers (plain numpy).
         self._buffers: Dict[str, np.ndarray] = {}

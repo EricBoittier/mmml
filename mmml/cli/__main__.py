@@ -73,6 +73,13 @@ def cli() -> None:
     installs a Fortran atexit that otherwise resets the process status to 0,
     which made failed ``umbrella-sample`` look successful to Snakemake.
     """
+    _dump_every = os.environ.get("MMML_STACK_DUMP_EVERY")
+    if _dump_every:
+        # Debug: all-thread Python stacks every N s from faulthandler's watchdog
+        # thread (works while the main thread sits in native code).
+        import faulthandler
+
+        faulthandler.dump_traceback_later(float(_dump_every), repeat=True, file=sys.stderr)
     try:
         code = main()
     except SystemExit as exc:
