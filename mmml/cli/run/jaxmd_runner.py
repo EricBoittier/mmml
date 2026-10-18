@@ -2081,8 +2081,23 @@ def set_up_nhc_sim_routine(
         if _alch_ref_fast[0] is None:
             raise ValueError("MMML_ALCH needs the fast molecule-pair path (--jaxmd-molpair-mm)")
         from mmml.md.alchemy import make_alch_mm
+        # Soft-core decoupling switch (COM-based) of the tagged molecule: 9/12 A by default. With per-pair-type
+        # switching (MMML_SWITCH_BY_SIZE) the hybrid's MM tail of long molecules reaches further, so the soft-core
+        # term follows it: r_off = the largest MM cutoff (mm_switch_on + mm_switch_width) of the table and the
+        # global switch, r_on = r_off - 3 A. MMML_ALCH_R_ON / MMML_ALCH_R_OFF override both.
+        _a_on, _a_off = 9.0, 12.0
+        _sbs = os.environ.get("MMML_SWITCH_BY_SIZE", "").strip()
+        if _sbs:
+            _sp = spherical_cutoff_calculator.get_mm_molpair_spec()
+            _offs = [float(_sp["mm_switch_on"]) + float(_sp["mm_switch_width"])] + [float(v[0]) + float(v[2]) for v in json.loads(_sbs).values()]
+            _a_off = max(_a_off, max(_offs)); _a_on = _a_off - 3.0
+        _a_on = float(os.environ.get("MMML_ALCH_R_ON", _a_on)); _a_off = float(os.environ.get("MMML_ALCH_R_OFF", _a_off))
+        if not 0.0 < _a_on < _a_off:
+            raise ValueError(f"alchemy soft-core switch needs 0 < r_on < r_off, got {_a_on}, {_a_off}")
         _alch_E, _alch_states = make_alch_mm(spherical_cutoff_calculator.get_mm_molpair_spec(), float(args.cell),
-                                             molecule=int(_alch["molecule"]), alpha=float(_alch["alpha"]))
+                                             molecule=int(_alch["molecule"]), alpha=float(_alch["alpha"]),
+                                             r_on=_a_on, r_off=_a_off)
+        c.print(f"\\[alchemy] soft-core switch {_a_on:.1f}-{_a_off:.1f} A (molecule {int(_alch['molecule'])})")
         _ak = 1.0 - float(_alch["lambda_ml"]); _ae, _av = float(_alch["lambda_elec"]), float(_alch["lambda_vdw"])
         _alch_G = jax.grad(lambda R: _alch_E(R, _ae, _av))
         _alch_dl = jit(jax.grad(lambda ev, R: _alch_E(R, ev[0], ev[1])))
