@@ -206,7 +206,26 @@ class MolPairMM:
         self.dtype = dtype
         self.skin = float(skin_A)
         self.guard = float(min(guard_A, 0.25 * self.skin))
-        self.r_off = float(spec["mm_switch_on"]) + float(spec["mm_switch_width"])
+        # switching per class-pair bucket: global values, or MMML_SWITCH_BY_SIZE ({molecule size: [mm_switch_on,
+        # ml_switch_width, mm_switch_width]}; a pair takes the entry with the larger mm_switch_on), the same table the
+        # hybrid calculator applies to the ML dimer taper, so the complementary handoff stays exact per pair type
+        import json as _json, os as _os
+        g = (float(spec["mm_switch_on"]), float(spec["ml_switch_width"]), float(spec["mm_switch_width"]))
+        raw = _os.environ.get("MMML_SWITCH_BY_SIZE", "").strip()
+        tab = {int(k): tuple(float(x) for x in v) for k, v in _json.loads(raw).items()} if raw else {}
+        self._bucket_sw = []
+        for ca, cb in topo.buckets:
+            pa = tab.get(int(topo.class_n_atoms[ca]), g); pb = tab.get(int(topo.class_n_atoms[cb]), g)
+            on, mlw, w = pa if pa[0] >= pb[0] else pb
+            if spec.get("mm_r_min") is None:
+                rmin = None
+            elif (on, mlw, w) == g:
+                rmin = float(spec["mm_r_min"])
+            else:   # same rule as the calculator's mm_r_min (10 % below the pure-ML edge)
+                rmin = (on - mlw) * 0.9 if spec.get("complementary_handoff", True) else on * 0.9
+            self._bucket_sw.append((on, w, mlw, rmin))
+        self.per_pair_switch = any(b[:3] != (g[0], g[2], g[1]) for b in self._bucket_sw)
+        self.r_off = max([float(spec["mm_switch_on"]) + float(spec["mm_switch_width"])] + [b[0] + b[1] for b in self._bucket_sw])
         self.r_mm_list = self.r_off + self.skin
         self.ml_active_radius = None if ml_active_radius_A is None else float(ml_active_radius_A)
         self.r_ml_list = (
@@ -395,8 +414,7 @@ class MolPairMM:
         inv = cell_inverse(cell)
         com = centroids(pos, self._atom_idx, self._atom_mask)
         q = self._q if charges is None else jnp.asarray(charges, pos.dtype)
-        on, w, mlw = float(sp["mm_switch_on"]), float(sp["mm_switch_width"]), float(sp["ml_switch_width"])
-        r_min = sp.get("mm_r_min")
+        r_min_glob = sp.get("mm_r_min")
         e_vdw = jnp.zeros((), pos.dtype)
         e_el = jnp.zeros((), pos.dtype)
         e_wall = jnp.zeros((), pos.dtype)
@@ -405,6 +423,7 @@ class MolPairMM:
             pr = nl.pairs[b]
             if pr.shape[0] == 0:
                 continue
+            on, w, mlw, r_min = self._bucket_sw[b]
             na, nb = self.topo.class_n_atoms[ca], self.topo.class_n_atoms[cb]
             valid = pr[:, 0] < M
             ma = jnp.where(valid, pr[:, 0], 0)
@@ -570,11 +589,13 @@ def ml_dimer_buckets(
     return out, overflow
 
 
-def count_dimers_within(positions, monomer_offsets, box_L: float, radius_A: float) -> int:
+def count_dimers_within(positions, monomer_offsets, box_L: float, radius_A: float, radius_by_size=None) -> int:
     """Host count of dimers with centroid MIC distance < ``radius_A`` (cubic box).
 
     Molecules are made whole around their first atom first (as the calculator
-    does), so the centroids match the in-graph ones.
+    does), so the centroids match the in-graph ones. ``radius_by_size``
+    ({molecule size: radius}) gives per-pair radii (the larger of the two
+    molecules' entries; sizes not listed use ``radius_A``), as with MMML_SWITCH_BY_SIZE.
     """
     pos = np.asarray(positions, dtype=np.float64)
     off = np.asarray(monomer_offsets, dtype=np.int64)
@@ -589,6 +610,11 @@ def count_dimers_within(positions, monomer_offsets, box_L: float, radius_A: floa
     d -= L * np.round(d / L)
     r2 = np.sum(d * d, axis=-1)
     iu = np.triu_indices(len(com), k=1)
+    if radius_by_size:
+        sizes = np.diff(off)
+        rad = np.array([float(radius_by_size.get(int(n), radius_A)) for n in sizes])
+        rp = np.maximum(rad[:, None], rad[None, :])
+        return int(np.sum(r2[iu] < rp[iu] ** 2))
     return int(np.sum(r2[iu] < radius_A**2))
 
 

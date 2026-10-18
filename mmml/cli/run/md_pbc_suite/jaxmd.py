@@ -1278,7 +1278,13 @@ def main(argv: list[str] | None = None) -> int:
         _r_act = sparse_dimer_active_radius(
             mm_on, ml_w, margin=float(os.environ.get("MMML_ML_DIMER_ACTIVE_MARGIN") or 0.0)
         )
-        _n_act = count_dimers_within(atoms.get_positions(), monomer_offsets, float(L), _r_act)
+        _sbs = os.environ.get("MMML_SWITCH_BY_SIZE", "").strip()
+        _rbs = None
+        if _sbs:
+            import json as _json
+            _marg = float(os.environ.get("MMML_ML_DIMER_ACTIVE_MARGIN") or 0.0)
+            _rbs = {int(k): float(v[0]) + _marg for k, v in _json.loads(_sbs).items()}
+        _n_act = count_dimers_within(atoms.get_positions(), monomer_offsets, float(L), _r_act, radius_by_size=_rbs)
         _n_tot = n_molecules * (n_molecules - 1) // 2
         _cap = auto_ml_dimer_cap(_n_act, _cap_auto, _n_tot)
         print(

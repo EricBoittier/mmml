@@ -1800,6 +1800,30 @@ def setup_calculator(
         cutoff_params.ml_switch_width,
         margin=ml_dimer_active_margin,
     )
+    # Per-pair-type switching (MMML_SWITCH_BY_SIZE, JSON {molecule size: [mm_switch_on, ml_switch_width,
+    # mm_switch_width]}, e.g. '{"27": [13.5, 1.5, 5.0]}' for 1-octanol). A dimer takes the entry with the larger
+    # mm_switch_on of its two molecules; sizes not listed keep the global values, so a table without the sizes
+    # present in the box changes nothing. Applied to the ML taper and its forces, the sparse active set, and (molpair
+    # fast path) the complementary MM handoff of each class-pair bucket.
+    _sbs_raw = os.environ.get("MMML_SWITCH_BY_SIZE", "").strip()
+    import json as _json
+    _switch_by_size = ({int(k): tuple(float(x) for x in v) for k, v in _json.loads(_sbs_raw).items()} if _sbs_raw else None)
+    _sw_default = (float(cutoff_params.mm_switch_on), float(cutoff_params.ml_switch_width), float(cutoff_params.mm_switch_width))
+
+    def _pair_switch(na, nb):
+        pa = _switch_by_size.get(int(na), _sw_default) if _switch_by_size else _sw_default
+        pb = _switch_by_size.get(int(nb), _sw_default) if _switch_by_size else _sw_default
+        return pa if pa[0] >= pb[0] else pb
+
+    dimer_on_jnp = dimer_mlw_jnp = dimer_active_r_jnp = None
+    if _switch_by_size and any(int(n) in _switch_by_size for n in set(atoms_per_monomer_list)):
+        _ps = np.array([_pair_switch(atoms_per_monomer_list[a], atoms_per_monomer_list[b]) for a, b in dimer_perms], dtype=np.float64)
+        dimer_on_jnp = jnp.asarray(_ps[:, 0], dtype=jnp.float32)
+        dimer_mlw_jnp = jnp.asarray(_ps[:, 1], dtype=jnp.float32)
+        dimer_active_r_jnp = jnp.asarray(_ps[:, 0] + float(ml_dimer_active_margin), dtype=jnp.float32)
+        _dimer_active_radius = float(_ps[:, 0].max() + float(ml_dimer_active_margin))
+        print(f"[switch-by-size] {_switch_by_size}; dimer switch radii {sorted(set(np.round(_ps[:, 0], 3)))} A; "
+              f"active radius (max) {_dimer_active_radius:.2f} A", flush=True)
     _box_volume = float(jnp.linalg.det(pbc_cell)) if pbc_cell is not None else None
     _max_active_dimers = (
         resolve_max_active_dimers(
@@ -2894,11 +2918,11 @@ def setup_calculator(
                 cand_safe = jnp.where(cand_valid, cand, 0)
                 c_pos, _, _, c_na, c_nb = _dimer_arrays(cand_safe)
                 com_dists = jax.vmap(_dimer_com_dist, in_axes=(0, 0, 0))(c_pos, c_na, c_nb)
-                active_mask = cand_valid & (com_dists < active_radius)
+                active_mask = cand_valid & (com_dists < (active_radius if dimer_active_r_jnp is None else dimer_active_r_jnp[cand_safe]))
             else:
                 com_dists = jax.vmap(_dimer_com_dist, in_axes=(0, 0, 0))(
                     dimer_positions, dimer_n_a, dimer_n_b)
-                active_mask = com_dists < active_radius
+                active_mask = com_dists < (active_radius if dimer_active_r_jnp is None else dimer_active_r_jnp)
             _n_active_true = jnp.sum(active_mask)
             # jnp.nonzero(..., size=cap) still truncates (static shape). Fail
             # closed instead of returning those forces: the CHARMM host path
@@ -4503,9 +4527,16 @@ def setup_calculator(
             force_segments = dimer_idx_arr_jnp[safe].reshape(-1)
             na_arr = dimer_n_atoms_a_jnp[safe]
             nb_arr = dimer_n_atoms_b_jnp[safe]
+            if dimer_on_jnp is not None:
+                on_arr, mlw_arr = dimer_on_jnp[safe], dimer_mlw_jnp[safe]
         else:
             na_arr = dimer_n_atoms_a_jnp
             nb_arr = dimer_n_atoms_b_jnp
+            if dimer_on_jnp is not None:
+                on_arr, mlw_arr = dimer_on_jnp, dimer_mlw_jnp
+        _sw_axis = 0
+        if dimer_on_jnp is None:   # global switch: the same scalars as before (bit-identical)
+            on_arr, mlw_arr, _sw_axis = cutoff_params.mm_switch_on, cutoff_params.ml_switch_width, None
         mic_fn = (
             mic_displacement_smooth if use_smooth_mic else mic_displacement
         ) if cell_for_mic is not None else None
@@ -4541,24 +4572,16 @@ def setup_calculator(
                 return jnp.linalg.norm(mic_fn(com_a, com_b, cell_for_mic))
             return jnp.linalg.norm(com_b - com_a)
 
-        def _ml_switch_scale(pos_di, na, nb):
+        def _ml_switch_scale(pos_di, na, nb, on, mlw):
             r = _dimer_com_sep(pos_di, na, nb)
-            return ml_switch_scale(
-                r,
-                mm_switch_on=cutoff_params.mm_switch_on,
-                ml_switch_width=cutoff_params.ml_switch_width,
-            )
+            return ml_switch_scale(r, mm_switch_on=on, ml_switch_width=mlw)
 
         _ml_switch_scale_grad = jax.grad(_ml_switch_scale)
 
         com_seps = jax.vmap(_dimer_com_sep, in_axes=(0, 0, 0))(
             dimer_pos_padded, na_arr, nb_arr
         )
-        switching_scales = ml_switch_scale(
-            com_seps,
-            mm_switch_on=cutoff_params.mm_switch_on,
-            ml_switch_width=cutoff_params.ml_switch_width,
-        )
+        switching_scales = ml_switch_scale(com_seps, mm_switch_on=on_arr, ml_switch_width=mlw_arr)
         switched_energy = dimer_energies_all * switching_scales
         e_for_switch_grad = dimer_energies_all
         if in_range is not None:
@@ -4569,9 +4592,9 @@ def setup_calculator(
             switched_energy = jnp.where(live, switched_energy, 0.0)
             e_for_switch_grad = jnp.where(live, dimer_energies_all, 0.0)
         switched_grad = jax.vmap(
-            lambda x, e, na, nb: _ml_switch_scale_grad(x, na, nb) * e,
-            in_axes=(0, 0, 0, 0),
-        )(dimer_pos_padded, e_for_switch_grad, na_arr, nb_arr)
+            lambda x, e, na, nb, on, mlw: _ml_switch_scale_grad(x, na, nb, on, mlw) * e,
+            in_axes=(0, 0, 0, 0, _sw_axis, _sw_axis),
+        )(dimer_pos_padded, e_for_switch_grad, na_arr, nb_arr, on_arr, mlw_arr)
 
         dimer_switching_grads_flat = (
             switched_grad * atom_mask_all[:, :, None]
