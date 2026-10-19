@@ -756,6 +756,47 @@ extra_args:
   - "500000"
 ```
 
+#### JAX-MD time units and Nose-Hoover coupling
+
+Campaign YAML and `karml md-system` flags stay in physical units. Do **not**
+pre-scale user inputs into jax-md's internal metal-unit time:
+
+| Setting | User-facing unit | Runtime behavior |
+|---------|------------------|------------------|
+| `dt_fs` / `--dt-fs` | femtoseconds | The JAX-MD suite receives this value, stores `dt = dt_fs * 0.001` ps for bookkeeping, then passes `dt * units.metal_unit_system()["time"]` to `simulate.nve`, `simulate.nvt_nose_hoover`, `simulate.npt_nose_hoover`, rigid-water wrapping, and first-step diagnostics. |
+| `ps` / `--ps` | picoseconds | Step count is `round(ps * 1000 / dt_fs)`; leave run length in physical ps. |
+| `nhc_tau` / `--nhc-tau` | multiplier of the MD step | Physical thermostat coupling is `nhc_tau * dt_fs / 1000` ps. Default `100` gives `0.025 ps` when `dt_fs: 0.25`. |
+| `nhc_barostat_tau` / `--nhc-barostat-tau` | multiplier of the MD step | Physical NPT piston coupling is `nhc_barostat_tau * dt_fs / 1000` ps. Default `10000` gives `2.5 ps` when `dt_fs: 0.25`. Larger values soften the piston. |
+| JAX-MD FIRE `dt_start` / `dt_max` | internal choice in ps | `jaxmd_runner` chooses a physical ps step from the starting `max|F|` and converts it to jax-md metal time before calling `fire_descent`. Tune FIRE with `jaxmd_minimize_steps`, `jaxmd_pbc_minimize_steps`, and `jaxmd_fire_skip_max_f_eVA`, not by rescaling `dt_fs`. |
+
+Example NPT leg with explicit coupling:
+
+```yaml
+runs:
+  jaxmd_npt_polish:
+    backend: jaxmd
+    setup: pbc_npt
+    depends_on: pycharmm_equil
+    dt_fs: 0.25
+    ps: 5
+    temperature: 300.0
+    pressure: 1.0
+    nhc_tau: 100          # thermostat tau = 0.025 ps
+    nhc_barostat_tau: 10000  # barostat tau = 2.5 ps
+```
+
+Troubleshooting cues:
+
+- If a branch needs about 100x more FIRE steps or `ps` to see the expected
+  motion, suspect a missing `units.metal_unit_system()["time"]` conversion
+  rather than bad input units. The metal-unit time conversion is locked by
+  `tests/unit/test_jaxmd_time_units.py`.
+- The NVT/NPT console panels print physical coupling times in ps. Adjust
+  `nhc_tau` or `nhc_barostat_tau` as multipliers of the requested `dt_fs`.
+- NVE drift rescue halves the physical timestep (`nve_etot_drift_rescue_dt_scale`)
+  and floors it with `nve_etot_drift_rescue_min_dt_fs`; keep those YAML values
+  in femtoseconds.
+
 #### Large dense box (burst-style, overlap rescue heavy)
 
 Aligned with `workflows/pbc_solvent_burst` cleanup defaults:
