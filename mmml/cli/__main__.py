@@ -8,6 +8,13 @@ Provides a unified interface for all MMML command-line tools.
 import os
 import sys
 
+# float32 matmuls in full precision unless the user chose otherwise. JAX's
+# DEFAULT is TF32 on RTX 30/40/50 cards (10-bit mantissa): ML/MM NVE E_tot
+# fluctuated ~8x more than on a 2080 Ti (30 A water/methanol, sd 0.07 vs 0.01
+# eV) and 50 A boxes heated ~27 K in 10 ps. Wrapping only the ML calculator was
+# not enough. Cost measured on a 3090 Ti: 1.49 vs 1.50 ns/day.
+os.environ.setdefault("JAX_DEFAULT_MATMUL_PRECISION", "highest")
+
 # Must run before any ``import mmml.*`` / ``import jax`` (umbrella → jax_md).
 # Do not import mmml here: package init pulls PhysNet and can init JAX too early.
 # Stale JAX_PLATFORMS=rocm on NVIDIA nodes aborts backend init.

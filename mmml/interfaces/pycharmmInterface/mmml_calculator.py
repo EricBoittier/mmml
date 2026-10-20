@@ -2784,7 +2784,11 @@ def setup_calculator(
             # (MMML_ML_MATMUL_PRECISION=default|tensorfloat32|bfloat16_3x|highest).
             with jax.enable_x64(False), jax.default_matmul_precision(_ml_matmul_precision):
                 return _spherical_cutoff_calculator_impl(*args, **kwargs)
-        return _spherical_cutoff_calculator_impl(*args, **kwargs)
+        # Same precision on every other path (float64 box, x64 off): falling
+        # through to DEFAULT left TF32 on, and on RTX 30/40/50 cards NVE E_tot
+        # fluctuated ~10x more than on a 2080 Ti (heating in 50 A boxes).
+        with jax.default_matmul_precision(_ml_matmul_precision):
+            return _spherical_cutoff_calculator_impl(*args, **kwargs)
 
     spherical_cutoff_calculator.__doc__ = _spherical_cutoff_calculator_impl.__doc__
 
