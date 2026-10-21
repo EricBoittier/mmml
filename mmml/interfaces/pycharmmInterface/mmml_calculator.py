@@ -751,17 +751,35 @@ def make_monomers_whole(positions, cell, anchor_idx):
     return positions - cart_coords(n, cell_m)
 
 
-def _contact_softmin(pos_di, na, nb, heavy, beta):
+def _contact_softmin(pos_di, na, nb, heavy, beta, kmax=None):
     """Soft-min of the A-B heavy-atom distances of one padded dimer (rows A = [0, na), B = [na, na + nb)):
     ``-log(sum exp(-beta r_ij)) / beta`` over heavy i in A, heavy j in B. Smooth, <= the true minimum (by at most
-    ``log(n_pairs) / beta``). ``pos_di`` must already hold B at its minimum image around A."""
+    ``log(n_pairs) / beta``). ``pos_di`` must already hold B at its minimum image around A.
+
+    ``kmax`` (static): evaluate on the first ``kmax`` heavy slots only (stable argsort puts heavy atoms first, in
+    order), a kmax x kmax block instead of max_atoms x max_atoms. Exact when a dimer has <= kmax heavy atoms; the
+    caller checks that."""
     i = jnp.arange(pos_di.shape[0], dtype=jnp.int32)
+    if kmax is not None and kmax < pos_di.shape[0]:
+        i = jnp.argsort(jnp.logical_not(heavy), stable=True)[:kmax].astype(jnp.int32)
+        pos_di, heavy = pos_di[i], heavy[i]
     pa = (i < na) & heavy
     pb = (i >= na) & (i < na + nb) & heavy
     d = pos_di[:, None, :] - pos_di[None, :, :]
     r = jnp.sqrt(jnp.sum(d * d, axis=-1) + 1e-12)
     z = jnp.where(pa[:, None] & pb[None, :], -beta * r, -jnp.inf)
     return -jax.nn.logsumexp(z) / beta
+
+
+def _raise_contact_kmax(n):
+    raise ValueError(f"MMML_CONTACT_KMAX too small: a dimer has {int(np.asarray(n))} heavy atoms")
+
+
+def _check_contact_kmax_factory(kmax):
+    def check(n_heavy_max):
+        jax.lax.cond(n_heavy_max > kmax, lambda n: jax.debug.callback(_raise_contact_kmax, n) or n, lambda n: n,
+                     n_heavy_max)
+    return check
 
 
 def _dimer_lattice_shift(com_a, com_b, cell):
@@ -1859,6 +1877,12 @@ def setup_calculator(
     _cs_raw = os.environ.get("MMML_CONTACT_SWITCH", "").strip()
     _contact_sw = ({int(k): tuple(float(x) for x in v) for k, v in _json.loads(_cs_raw).items()} if _cs_raw else None)
     _contact_beta = float(os.environ.get("MMML_CONTACT_BETA", "10.0"))
+    # MMML_CONTACT_KMAX: heavy atoms per dimer the contact soft-min looks at (e.g. 18 for octanol-octanol); a
+    # kmax x kmax block per candidate instead of max_atoms^2 (54^2 for octanol: ~4 GB more for ~50k candidates).
+    # Unset = all slots. A dimer with more heavy atoms than kmax stops the run.
+    _kx = (os.environ.get("MMML_CONTACT_KMAX") or "").strip()
+    _contact_kmax = int(_kx) if _kx else None
+    _check_contact_kmax = _check_contact_kmax_factory(_contact_kmax) if _contact_kmax is not None else None
     dimer_ct_jnp = dimer_con_jnp = dimer_cw_jnp = None
     if _contact_sw and any(int(n) in _contact_sw for n in set(atoms_per_monomer_list)):
         def _pair_contact(na, nb):
@@ -1881,6 +1905,7 @@ def setup_calculator(
         dimer_cw_jnp = jnp.asarray([p[1] if p else 1.0 for p in _pc], dtype=jnp.float32)
         dimer_active_r_jnp = jnp.asarray(_ar, dtype=jnp.float32)
         _dimer_active_radius = float(_ar.max())
+        print(f"[contact-switch] kmax {_contact_kmax}", flush=True) if _contact_kmax is not None else None
         print(f"[contact-switch] {_contact_sw} beta {_contact_beta}/A; {int(_is_c.sum())} of {len(_is_c)} dimers "
               f"contact-switched; COM prefilter (max active radius) {_dimer_active_radius:.2f} A", flush=True)
     _box_volume = float(jnp.linalg.det(pbc_cell)) if pbc_cell is not None else None
@@ -3003,16 +3028,21 @@ def setup_calculator(
                 com_dists = jax.vmap(_dimer_com_dist, in_axes=(0, 0, 0))(c_pos, c_na, c_nb)
                 active_mask = cand_valid & (com_dists < (active_radius if dimer_active_r_jnp is None else dimer_active_r_jnp[cand_safe]))
                 if dimer_ct_jnp is not None:   # contact-switched dimers: ML weight is zero for rho >= contact_on
-                    rho = jax.vmap(_contact_softmin, in_axes=(0, 0, 0, 0, None))(c_pos, c_na, c_nb, c_z > 1, _contact_beta)
+                    rho = jax.vmap(_contact_softmin, in_axes=(0, 0, 0, 0, None, None))(
+                        c_pos, c_na, c_nb, c_z > 1, _contact_beta, _contact_kmax)
                     active_mask = active_mask & jnp.where(dimer_ct_jnp[cand_safe], rho < dimer_con_jnp[cand_safe], True)
+                    if _contact_kmax is not None:
+                        _check_contact_kmax(jnp.max(jnp.sum(c_z > 1, axis=1)))
             else:
                 com_dists = jax.vmap(_dimer_com_dist, in_axes=(0, 0, 0))(
                     dimer_positions, dimer_n_a, dimer_n_b)
                 active_mask = com_dists < (active_radius if dimer_active_r_jnp is None else dimer_active_r_jnp)
                 if dimer_ct_jnp is not None:
-                    rho = jax.vmap(_contact_softmin, in_axes=(0, 0, 0, 0, None))(
-                        dimer_positions, dimer_n_a, dimer_n_b, dimer_atomic > 1, _contact_beta)
+                    rho = jax.vmap(_contact_softmin, in_axes=(0, 0, 0, 0, None, None))(
+                        dimer_positions, dimer_n_a, dimer_n_b, dimer_atomic > 1, _contact_beta, _contact_kmax)
                     active_mask = active_mask & jnp.where(dimer_ct_jnp, rho < dimer_con_jnp, True)
+                    if _contact_kmax is not None:
+                        _check_contact_kmax(jnp.max(jnp.sum(dimer_atomic > 1, axis=1)))
             _n_active_true = jnp.sum(active_mask)
             # jnp.nonzero(..., size=cap) still truncates (static shape). Fail
             # closed instead of returning those forces: the CHARMM host path
@@ -4714,7 +4744,7 @@ def setup_calculator(
             # contact-switched slots: weight 1 - h(rho) on the heavy-atom soft-min contact (dimer_pos_padded holds B
             # at its minimum image around A), the same h the molpair MM applies, so the handoff is complementary
             def _ml_contact_scale(pos_di, na, nb, con, cw, hv):
-                rho = _contact_softmin(pos_di, na, nb, hv, _contact_beta)
+                rho = _contact_softmin(pos_di, na, nb, hv, _contact_beta, _contact_kmax)
                 return 1.0 - _sharpstep(rho, con - cw, con)
 
             _sc = jax.vmap(_ml_contact_scale, in_axes=(0, 0, 0, 0, 0, 0))(dimer_pos_padded, na_arr, nb_arr, con_arr, cw_arr, hv_arr)
