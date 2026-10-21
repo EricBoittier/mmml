@@ -331,6 +331,13 @@ def build_mm_pairs_with_backend(
         order = ["cell_list"]
     else:
         order = ["vesin", "cell_list"] if have_vesin() else ["cell_list"]
+    n_at = int(total_atoms if total_atoms is not None else np.asarray(positions).shape[0])
+    if (not have_vesin() and backend_name != "cell_list" and n_at > 8000
+            and (os.environ.get("MMML_ALLOW_PY_CELL_LIST") or "0").strip().lower() not in ("1", "true", "yes", "on")):
+        # The cell-list fallback is a pure-Python loop: ~30 min per build for an 18k-atom box, which looks like a
+        # hang (seen here and on sciCORE). Fail with the fix instead.
+        raise RuntimeError(f"vesin is not installed and the pure-Python cell list is far too slow for {n_at} atoms: "
+                           "pip install vesin (or set MMML_ALLOW_PY_CELL_LIST=1 to wait anyway)")
 
     last_err: Exception | None = None
     for name in order:
