@@ -2186,12 +2186,26 @@ def build_mm_energy_forces_fn(
     _mm_setup_refits = 0
     # Ewald returns before any pair list is used (full-box Coulomb, all-pairs LJ).
     if pbc_cell is not None and pick_lr_solver(lr_solver) != "ewald":
-        _setup_fit = fit_mm_pair_list_at_setup(
-            list_radius_A=_mm_list_cutoff, assumed_extent_A=_mm_assumed_extent,
-            measured_extent_A=_mm_measured_extent, extent_margin_A=mm_extent_margin_A,
-            mm_switch_on=mm_switch_on, mm_switch_width=mm_switch_width,
-            skin_A=jax_md_skin_distance, cell=pbc_cell,
-        )
+        try:
+            _setup_fit = fit_mm_pair_list_at_setup(
+                list_radius_A=_mm_list_cutoff, assumed_extent_A=_mm_assumed_extent,
+                measured_extent_A=_mm_measured_extent, extent_margin_A=mm_extent_margin_A,
+                mm_switch_on=mm_switch_on, mm_switch_width=mm_switch_width,
+                skin_A=jax_md_skin_distance, cell=pbc_cell,
+            )
+        except ValueError as exc:
+            # MMML_MM_EXTENT_CHECK=molpair (molecule-pair MM fast path only, enforced by the jax-md runner): the
+            # molpair kernel takes each pair's atom vectors through the partner's centroid image, so it needs only
+            # L/2 > its centroid list radius (checked there). This atom-pair list is then not used for the MM
+            # energy; keep it legal (clamped below L/2) instead of refusing the box.
+            if (os.environ.get("MMML_MM_EXTENT_CHECK") or "").strip().lower() != "molpair":
+                raise
+            _half = 0.5 * float(np.min(np.diag(_cell_matrix_np(np.asarray(pbc_cell)))))
+            print(f"[mm] MMML_MM_EXTENT_CHECK=molpair: atom-pair list clamped to {_half - 0.05:.2f} A "
+                  f"(molecule-pair MM in use); setup check said: {exc}", flush=True)
+            _mm_list_cutoff = _half - 0.05
+            _mm_assumed_extent = 0.0
+            _setup_fit = None
         if _setup_fit is not None:
             _mm_assumed_extent, _mm_list_cutoff, _mm_skin_A = (
                 _setup_fit["assumed_extent_A"], _setup_fit["list_radius_A"], _setup_fit["skin_A"])

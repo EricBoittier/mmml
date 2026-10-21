@@ -249,6 +249,7 @@ class MolPairMM:
         self.per_pair_switch = any(b[:3] != (g[0], g[2], g[1]) for b in self._bucket_sw)
         self.r_off = max([float(spec["mm_switch_on"]) + float(spec["mm_switch_width"])] + [b[0] + b[1] for b in self._bucket_sw])
         self.r_mm_list = self.r_off + self.skin
+        self.box_half_needed = None   # set in size_caps: centroid lists must stay below L/2
         self.ml_active_radius = None if ml_active_radius_A is None else float(ml_active_radius_A)
         self.r_ml_list = (
             None if self.ml_active_radius is None else self.ml_active_radius + self.skin + 1e-3
@@ -380,6 +381,12 @@ class MolPairMM:
 
     def size_caps(self, pos, box, *, margin: Optional[float] = None, floor: Optional[MolPairCaps] = None) -> MolPairCaps:
         """Capacities = measured counts * margin + pad (never below ``floor``)."""
+        half = 0.5 * float(np.min(np.diag(np.asarray(jax.device_get(_cell3(jnp.asarray(box, self.dtype)))))))
+        need = max(self.r_mm_list, self.r_ml_list or 0.0)
+        if need >= half:
+            raise ValueError(f"molecule-pair lists need L/2 > {need:.2f} A (MM {self.r_mm_list:.2f} A, ML candidates "
+                             f"{self.r_ml_list or 0.0:.2f} A) but L/2 = {half:.2f} A: use a larger box")
+        self.box_half_needed = need
         mg = self.cap_margin if margin is None else float(margin)
         n_mm, n_ml = jax.device_get(jax.jit(self._count_impl)(jnp.asarray(pos, self.dtype), jnp.asarray(box, self.dtype)))
         mm = [int(np.ceil(int(n) * mg)) + self.cap_pad for n in np.asarray(n_mm)]
@@ -454,8 +461,12 @@ class MolPairMM:
             ib = self._atom_idx[mb, :nb]
             xa = pos[ia]
             xb = pos[ib]
-            d = xb[:, None, :, :] - xa[:, :, None, :]  # (P, na, nb, 3)  r_j - r_i
-            d = _mic(d, cell, inv)
+            # atom vectors through B's centroid image around A (whole molecules): the same as per-atom MIC while
+            # every atom pair is within L/2, and still right beyond (small boxes, long molecules), as in the ML
+            # dimers and the alchemy MM. The image count is piecewise constant (no gradient through it).
+            dcom = com[mb] - com[ma]
+            shift = jax.lax.stop_gradient(_mic(dcom, cell, inv) - dcom)  # (P, 3) lattice vector for B
+            d = (xb + shift[:, None, :])[:, None, :, :] - xa[:, :, None, :]  # (P, na, nb, 3)  r_j - r_i
             r = jnp.sqrt(jnp.maximum(jnp.sum(d * d, axis=-1), 1e-22))
             lam = self._lam[ma] * self._lam[mb]  # (P,)
             if self.include_wall:
