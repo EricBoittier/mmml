@@ -3,6 +3,7 @@ from typing import Dict, Iterable, List, Optional
 import e3x.ops
 import jax
 import jax.numpy as jnp
+import os
 import numpy as np
 from ase.units import Bohr, Hartree
 from mmml.utils.rotations import rotate_batched_vectors, sample_random_rotations
@@ -645,19 +646,24 @@ def prepare_batches_fast(
 
     atom_mask = (stacked["Z"] > 0).astype(np.int32)
 
+    # MMML_BATCH_HOST=1 keeps the epoch's batches as host (NumPy) arrays; each jitted step then copies only its
+    # own batch to the device. The default puts every batch on the device at once: the pair mask alone is
+    # batch_size * n * (n - 1) int32 per step (0.7 MB at 64 x 54 atoms), ~8.6 GB per epoch for 748k rows, which
+    # fits an H200 but not a 24 GB card.
+    _put = np.asarray if (os.environ.get("MMML_BATCH_HOST") or "0").strip().lower() in ("1", "true", "yes", "on") else jnp.asarray
     output: List[Dict[str, jnp.ndarray]] = []
     for step in range(steps_per_epoch):
         batch: Dict[str, jnp.ndarray] = {}
         for k in data_keys:
             if k in stacked:
-                batch[k] = jnp.asarray(stacked[k][step])
+                batch[k] = _put(stacked[k][step])
         if include_id and "id" in host and "id" in data_keys:
-            batch["id"] = jnp.asarray(host["id"][perms[step]])
+            batch["id"] = _put(host["id"][perms[step]])
         batch["dst_idx"] = dst_flat
         batch["src_idx"] = src_flat
-        batch["batch_mask"] = jnp.asarray(good_indices[step])
+        batch["batch_mask"] = _put(good_indices[step])
         batch["batch_segments"] = batch_segments
-        batch["atom_mask"] = jnp.asarray(atom_mask[step].reshape(-1))
+        batch["atom_mask"] = _put(atom_mask[step].reshape(-1))
         if debug_mode:
             assert batch["R"].shape == (batch_size * num_atoms, 3)
         output.append(batch)
