@@ -432,9 +432,12 @@ class MolPairMM:
 
     # ----------------------------------------------------------------- energy
     def energy_terms(
-        self, pos: Array, box: Array, nl: MolPairNL, charges: Optional[Array] = None
+        self, pos: Array, box: Array, nl: MolPairNL, charges: Optional[Array] = None, full_mm: bool = False
     ) -> Tuple[Array, Array, Array, Array]:
-        """(E_mm_eV, E_wall_eV, E_vdw_eV, E_elec_eV); positions must be whole molecules."""
+        """(E_mm_eV, E_wall_eV, E_vdw_eV, E_elec_eV); positions must be whole molecules.
+
+        ``full_mm``: plain MM for every listed pair (weight = the COM tail only, no ML handoff, no r_min cut; with
+        Ewald the whole Coulomb), i.e. the MM end of the global ML/MM <-> MM switch (MMML_GLOBAL_LAMBDA)."""
         sp = self.spec
         cell = _cell3(box).astype(pos.dtype)
         from mmml.interfaces.pycharmmInterface.pbc_utils_jax import cell_inverse
@@ -487,7 +490,12 @@ class MolPairMM:
             # padded slots have ma == mb (R = 0): keep the norm's gradient finite
             R = jnp.sqrt(jnp.maximum(jnp.sum(dc * dc, axis=-1), 1e-22))
             cpar = self._bucket_contact[b]
-            if cpar is not None:
+            if full_mm:   # the same COM tail as the hybrid's MM weight, without its ML-side factor
+                if cpar is None and not sp.get("complementary_handoff", True):
+                    s = 1.0 - _sharpstep(R, on + w, on + 2.0 * w, GAMMA_OFF)
+                else:
+                    s = 1.0 - _sharpstep(R, on, on + w, GAMMA_OFF)
+            elif cpar is not None:
                 c_on, c_w, pm = cpar
                 z = jnp.where(jnp.asarray(pm)[None, :, :], -self.contact_beta * r, -jnp.inf)
                 rho = -jax.nn.logsumexp(z, axis=(1, 2)) / self.contact_beta
@@ -497,7 +505,7 @@ class MolPairMM:
                 s = _sharpstep(R, on - mlw, on, GAMMA_ON) * (1.0 - _sharpstep(R, on, on + w, GAMMA_OFF))
             else:
                 s = _sharpstep(R, on, on + w, GAMMA_ON) * (1.0 - _sharpstep(R, on + w, on + 2.0 * w, GAMMA_OFF))
-            if r_min is not None:
+            if r_min is not None and not full_mm:
                 s = s * (R >= float(r_min)).astype(s.dtype)
             s = jnp.where(valid, s * lam, 0.0)
             e_vdw = e_vdw + jnp.sum(s * lj)
@@ -505,13 +513,15 @@ class MolPairMM:
                 e_el = e_el + jnp.sum(s * el)
             else:
                 # real-space Ewald for the whole dimer block minus the ML part: K qq [erfc(beta r) - (1 - h(R))] / r
-                if cpar is not None:
+                if full_mm:
+                    h = jnp.ones_like(R)
+                elif cpar is not None:
                     h = h_c
                 elif sp.get("complementary_handoff", True):
                     h = _sharpstep(R, on - mlw, on, GAMMA_ON)
                 else:
                     h = _sharpstep(R, on, on + w, GAMMA_ON)
-                if r_min is not None:
+                if r_min is not None and not full_mm:
                     h = h * (R >= float(r_min)).astype(h.dtype)
                 rr = jnp.where(valid[:, None, None], r, 1.0)
                 if self.ewald.get("coulomb", "handoff") == "full":

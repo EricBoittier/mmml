@@ -1536,6 +1536,11 @@ class _MolPairFast:
             cap_margin=float(getattr(args, "molpair_cap_margin", 1.15) or 1.15),
             ewald=_ewald,
         )
+        # Global ML/MM <-> MM switch: E = lam E_MLMM + (1 - lam) E_MM, with E_MM = ML monomers + plain MM for every
+        # intermolecular pair (no ML dimers, no handoff). lam = 1 is the plain hybrid; lam = 0 skips the ML dimers.
+        self.glam = float(os.environ.get("MMML_GLOBAL_LAMBDA", "1") or 1.0)
+        if not 0.0 <= self.glam <= 1.0:
+            raise ValueError(f"MMML_GLOBAL_LAMBDA must be in [0, 1], got {self.glam}")
         self._whole = lambda p, b: calc.make_monomers_whole(p, b)
         Rw = jax.jit(self._whole)(jnp.asarray(R, dtype=jnp.float32), box)
         self.mp.size_caps(Rw, box)
@@ -1562,6 +1567,8 @@ class _MolPairFast:
         return self.mp._build_impl(pw, box, caps, jnp.asarray(False), jnp.asarray(0, jnp.int32))
 
     def evaluate(self, atomic_numbers, positions, nl, n_monomers, cutoff_params, debug, box=None):
+        if self.glam != 1.0:
+            return self._evaluate_glam(atomic_numbers, positions, nl, n_monomers, cutoff_params, debug, box)
         box = self._box(box)
         nl = self.nl_for(positions, nl, box)
         out = self.calc(
@@ -1596,6 +1603,64 @@ class _MolPairFast:
             mm_elec_E=e_el,
             wall_E=e_wall,
         )
+
+    def _evaluate_glam(self, atomic_numbers, positions, nl, n_monomers, cutoff_params, debug, box=None):
+        """MMML_GLOBAL_LAMBDA < 1: lam * (hybrid + handoff MM) + (1 - lam) * (ML monomers + full MM) + wall."""
+        box = self._box(box)
+        nl = self.nl_for(positions, nl, box)
+        lam = self.glam
+        kw = dict(atomic_numbers=atomic_numbers, positions=positions, n_monomers=n_monomers,
+                  cutoff_params=cutoff_params, doML=True, doMM=False, debug=debug, box=box, include_wall=False)
+        out0 = self.calc(doML_dimer=False, ml_dimer_candidates=None, **kw)
+        out1 = (self.calc(doML_dimer=True, ml_dimer_candidates=(nl.ml_cand if self.use_cand else None), **kw)
+                if lam > 0.0 else None)
+        mp = self.mp
+
+        def _e(p):
+            pw = self.whole(p, box)
+            m0, e_wall, v0, c0 = mp.energy_terms(pw, box, nl, full_mm=True)
+            if out1 is None:
+                m1 = v1 = c1 = jnp.zeros_like(m0)
+            else:
+                m1, _, v1, c1 = mp.energy_terms(pw, box, nl)
+            mix = lambda a, b: lam * a + (1.0 - lam) * b
+            return mix(m1, m0) + e_wall, (mix(m1, m0), e_wall, mix(v1, v0), mix(c1, c0))
+
+        (e_tot, (e_mm, e_wall, e_vdw, e_el)), g = jax.value_and_grad(_e, has_aux=True)(positions)
+        f = (-g).astype(out0.forces.dtype)
+        dt = jnp.asarray(out0.energy).dtype
+        if out1 is None:
+            e_ml, f_ml, h_ml = out0.energy, out0.forces, out0.hybrid_energy
+        else:
+            e_ml = lam * out1.energy + (1.0 - lam) * out0.energy
+            f_ml = lam * out1.forces + (1.0 - lam) * out0.forces
+            h_ml = lam * out1.hybrid_energy + (1.0 - lam) * out0.hybrid_energy
+        e_add = e_tot.astype(dt)
+        base = out0 if out1 is None else out1
+        return base._replace(
+            energy=e_ml + e_add,
+            forces=f_ml + f,
+            hybrid_energy=h_ml + e_add,
+            mm_E=e_mm,
+            mm_F=-g,
+            mm_vdw_E=e_vdw,
+            mm_elec_E=e_el,
+            wall_E=e_wall,
+        )
+
+    def glam_ends(self, atomic_numbers, positions, n_monomers, cutoff_params, box=None):
+        """(E_MLMM, E_MM) at ``positions`` (both ends of MMML_GLOBAL_LAMBDA, wall included in both): the TI
+        integrand dU/dlambda = E_MLMM - E_MM. Energies only, for the record steps."""
+        box = self._box(box)
+        nl = self.nl_for(positions, None, box)
+        kw = dict(atomic_numbers=atomic_numbers, positions=positions, n_monomers=n_monomers,
+                  cutoff_params=cutoff_params, doML=True, doMM=False, debug=False, box=box, include_wall=False)
+        e0 = self.calc(doML_dimer=False, ml_dimer_candidates=None, **kw).energy
+        e1 = self.calc(doML_dimer=True, ml_dimer_candidates=(nl.ml_cand if self.use_cand else None), **kw).energy
+        pw = self.whole(positions, box)
+        m0, w, _, _ = self.mp.energy_terms(pw, box, nl, full_mm=True)
+        m1, _, _, _ = self.mp.energy_terms(pw, box, nl)
+        return e1 + m1 + w, e0 + m0 + w
 
     def update_carry(self, pos, nl, box=None):
         box = self._box(box)
@@ -2115,6 +2180,23 @@ def set_up_nhc_sim_routine(
         _alch_rows = {"t_ps": [], "E_dyn": [], "E_ref": [], "W": [], "U_states": [], "dU_dle": [], "dU_dlv": [], "U_cur": []}
         c.print(f"\\[alchemy] molecule {_alch['molecule']} lambda_ml={_alch['lambda_ml']} lambda_elec={_ae} lambda_vdw={_av} "
                 f"alpha={_alch['alpha']}; U_sc(start) = {float(_alch_E(jnp.asarray(atoms.get_positions()), _ae, _av)):.4f} eV")
+
+    # Optional global ML/MM <-> MM switch (MMML_GLOBAL_LAMBDA, _MolPairFast): record dU/dlambda = E_MLMM - E_MM
+    _glam = float(os.environ.get("MMML_GLOBAL_LAMBDA", "1") or 1.0)
+    _glam_ends = _glam_rows = None
+    if _glam != 1.0:
+        if _fast_cell[0] is None:
+            raise ValueError("MMML_GLOBAL_LAMBDA needs the fast molecule-pair path (--jaxmd-molpair-mm, PBC)")
+        if _alch is not None:
+            raise ValueError("MMML_GLOBAL_LAMBDA and MMML_ALCH cannot be combined")
+        if args.ensemble == "npt":
+            raise ValueError("MMML_GLOBAL_LAMBDA supports NVT/NVE only")
+        _glam_ends = jit(lambda pos: _fast_cell[0].glam_ends(
+            jnp.asarray(atomic_numbers), pos, n_monomers, CUTOFF_PARAMS))
+        _glam_rows = {"t_ps": [], "E_mlmm": [], "E_mm": [], "dU_dl": [], "E_dyn": []}
+        _ge1, _ge0 = (float(x) for x in _glam_ends(jnp.asarray(atoms.get_positions(), jnp.float32)))
+        c.print(f"\\[global-lambda] lambda={_glam}: E = lambda E_MLMM + (1 - lambda) E_MM (ML monomers + full MM); "
+                f"start E_MLMM={_ge1:.4f} E_MM={_ge0:.4f} dU/dlambda={_ge1 - _ge0:.4f} eV")
 
     # Shift and displacement for minimization and simulation
     # Minimization: energy/force use Cartesian (MIC). Use space.periodic when PBC so positions
@@ -4244,6 +4326,13 @@ def set_up_nhc_sim_routine(
                     np.savez(f"{args.output_prefix}_alch.npz", **{k: np.asarray(v) for k, v in _alch_rows.items()},
                              states=np.asarray(_ASTATES), spec=json.dumps(_alch), lambda_ref=float(args._alch_calc_ref[1]),
                              temperature=float(args.temperature))
+                if _glam_ends is not None:
+                    _ge1, _ge0 = (float(x) for x in _glam_ends(state.position))
+                    for _k, _v in (("t_ps", time_ps), ("E_mlmm", _ge1), ("E_mm", _ge0), ("dU_dl", _ge1 - _ge0),
+                                   ("E_dyn", float(out_dyn.energy))):
+                        _glam_rows[_k].append(_v)
+                    np.savez(f"{args.output_prefix}_glam.npz", **{k: np.asarray(v) for k, v in _glam_rows.items()},
+                             lam=_glam, temperature=float(args.temperature))
                 e_wall_report = float(getattr(out_dyn, "wall_E", float("nan")))
                 if use_flat_bottom:
                     com_dist_report = float(out_dyn.com_dist)
