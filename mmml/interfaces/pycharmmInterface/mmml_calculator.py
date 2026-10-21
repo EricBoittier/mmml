@@ -50,6 +50,7 @@ from mmml.interfaces.pycharmmInterface.calculator_utils import (
     indices_of_monomer,
     indices_of_pairs,
     ml_switch_scale,
+    _sharpstep,
 )
 from mmml.interfaces.pycharmmInterface.ml_batching import prepare_batches_md, prepare_batch_structure
 from mmml.interfaces.pycharmmInterface.ml_dtypes import (
@@ -748,6 +749,19 @@ def make_monomers_whole(positions, cell, anchor_idx):
     d = positions - positions[anchor_idx]
     n = jax.lax.stop_gradient(jnp.round(frac_coords(d, cell_m)))
     return positions - cart_coords(n, cell_m)
+
+
+def _contact_softmin(pos_di, na, nb, heavy, beta):
+    """Soft-min of the A-B heavy-atom distances of one padded dimer (rows A = [0, na), B = [na, na + nb)):
+    ``-log(sum exp(-beta r_ij)) / beta`` over heavy i in A, heavy j in B. Smooth, <= the true minimum (by at most
+    ``log(n_pairs) / beta``). ``pos_di`` must already hold B at its minimum image around A."""
+    i = jnp.arange(pos_di.shape[0], dtype=jnp.int32)
+    pa = (i < na) & heavy
+    pb = (i >= na) & (i < na + nb) & heavy
+    d = pos_di[:, None, :] - pos_di[None, :, :]
+    r = jnp.sqrt(jnp.sum(d * d, axis=-1) + 1e-12)
+    z = jnp.where(pa[:, None] & pb[None, :], -beta * r, -jnp.inf)
+    return -jax.nn.logsumexp(z) / beta
 
 
 def _dimer_lattice_shift(com_a, com_b, cell):
@@ -1833,6 +1847,42 @@ def setup_calculator(
         _dimer_active_radius = float(_ps[:, 0].max() + float(ml_dimer_active_margin))
         print(f"[switch-by-size] {_switch_by_size}; dimer switch radii {sorted(set(np.round(_ps[:, 0], 3)))} A; "
               f"active radius (max) {_dimer_active_radius:.2f} A", flush=True)
+    # Contact-based ML/MM handoff (MMML_CONTACT_SWITCH, JSON {molecule size: [contact_on, contact_width,
+    # com_prefilter]}, e.g. '{"27": [6.0, 1.5, 17.5]}' for 1-octanol). For a dimer involving a listed size the ML
+    # weight is 1 - h(rho), rho = soft-min (log-sum-exp, beta = MMML_CONTACT_BETA, default 10 / A) of the
+    # intermolecular heavy-atom distances and h = _sharpstep(rho, contact_on - contact_width, contact_on); the
+    # molpair MM weights the pair by h(rho) times its COM tail, so the handoff stays complementary. ML is then
+    # evaluated only for contacting pairs (inside the training domain) instead of every pair within a COM radius.
+    # The sparse active set is COM < com_prefilter AND rho < contact_on; com_prefilter must exceed the largest COM
+    # distance at which rho < contact_on (all-trans octanol pairs: ~17 A), or pairs would enter the ML set with a
+    # nonzero weight. Requires the molpair fast path (complementary handoff).
+    _cs_raw = os.environ.get("MMML_CONTACT_SWITCH", "").strip()
+    _contact_sw = ({int(k): tuple(float(x) for x in v) for k, v in _json.loads(_cs_raw).items()} if _cs_raw else None)
+    _contact_beta = float(os.environ.get("MMML_CONTACT_BETA", "10.0"))
+    dimer_ct_jnp = dimer_con_jnp = dimer_cw_jnp = None
+    if _contact_sw and any(int(n) in _contact_sw for n in set(atoms_per_monomer_list)):
+        def _pair_contact(na, nb):
+            pa, pb = _contact_sw.get(int(na)), _contact_sw.get(int(nb))
+            if pa is None or pb is None:
+                return pa if pb is None else pb
+            return pa if pa[0] >= pb[0] else pb
+
+        _pc = [_pair_contact(atoms_per_monomer_list[a], atoms_per_monomer_list[b]) for a, b in dimer_perms]
+        _is_c = np.array([p is not None for p in _pc], dtype=bool)
+        if dimer_on_jnp is None:   # per-dimer arrays at the global values
+            _nd = len(dimer_perms)
+            dimer_on_jnp = jnp.full((_nd,), float(cutoff_params.mm_switch_on), jnp.float32)
+            dimer_mlw_jnp = jnp.full((_nd,), float(cutoff_params.ml_switch_width), jnp.float32)
+            dimer_active_r_jnp = jnp.full((_nd,), float(_dimer_active_radius), jnp.float32)
+        _ar = np.where(_is_c, np.array([p[2] if p else 0.0 for p in _pc]) + float(ml_dimer_active_margin),
+                       np.asarray(dimer_active_r_jnp))
+        dimer_ct_jnp = jnp.asarray(_is_c)
+        dimer_con_jnp = jnp.asarray([p[0] if p else 1.0 for p in _pc], dtype=jnp.float32)
+        dimer_cw_jnp = jnp.asarray([p[1] if p else 1.0 for p in _pc], dtype=jnp.float32)
+        dimer_active_r_jnp = jnp.asarray(_ar, dtype=jnp.float32)
+        _dimer_active_radius = float(_ar.max())
+        print(f"[contact-switch] {_contact_sw} beta {_contact_beta}/A; {int(_is_c.sum())} of {len(_is_c)} dimers "
+              f"contact-switched; COM prefilter (max active radius) {_dimer_active_radius:.2f} A", flush=True)
     _box_volume = float(jnp.linalg.det(pbc_cell)) if pbc_cell is not None else None
     _max_active_dimers = (
         resolve_max_active_dimers(
@@ -2949,13 +2999,20 @@ def setup_calculator(
                 n_cand = int(cand.shape[0])
                 cand_valid = cand < n_dimers
                 cand_safe = jnp.where(cand_valid, cand, 0)
-                c_pos, _, _, c_na, c_nb = _dimer_arrays(cand_safe)
+                c_pos, c_z, _, c_na, c_nb = _dimer_arrays(cand_safe)
                 com_dists = jax.vmap(_dimer_com_dist, in_axes=(0, 0, 0))(c_pos, c_na, c_nb)
                 active_mask = cand_valid & (com_dists < (active_radius if dimer_active_r_jnp is None else dimer_active_r_jnp[cand_safe]))
+                if dimer_ct_jnp is not None:   # contact-switched dimers: ML weight is zero for rho >= contact_on
+                    rho = jax.vmap(_contact_softmin, in_axes=(0, 0, 0, 0, None))(c_pos, c_na, c_nb, c_z > 1, _contact_beta)
+                    active_mask = active_mask & jnp.where(dimer_ct_jnp[cand_safe], rho < dimer_con_jnp[cand_safe], True)
             else:
                 com_dists = jax.vmap(_dimer_com_dist, in_axes=(0, 0, 0))(
                     dimer_positions, dimer_n_a, dimer_n_b)
                 active_mask = com_dists < (active_radius if dimer_active_r_jnp is None else dimer_active_r_jnp)
+                if dimer_ct_jnp is not None:
+                    rho = jax.vmap(_contact_softmin, in_axes=(0, 0, 0, 0, None))(
+                        dimer_positions, dimer_n_a, dimer_n_b, dimer_atomic > 1, _contact_beta)
+                    active_mask = active_mask & jnp.where(dimer_ct_jnp, rho < dimer_con_jnp, True)
             _n_active_true = jnp.sum(active_mask)
             # jnp.nonzero(..., size=cap) still truncates (static shape). Fail
             # closed instead of returning those forces: the CHARMM host path
@@ -3515,6 +3572,7 @@ def setup_calculator(
             mic_pbc_cell=mic_pbc_cell,
             active_dimer_indices=sparse_active,
             damping=_dimer_damping,
+            heavy_atoms=(jnp.asarray(atomic_numbers).reshape(-1) > 1) if dimer_ct_jnp is not None else None,
         )
 
         debug_print(debug, f"DEBUG dimer_contribs: {dimer_contribs}")
@@ -4384,6 +4442,7 @@ def setup_calculator(
         mic_pbc_cell: Optional[Array] = None,
         active_dimer_indices: Optional[Array] = None,
         damping: Optional[Tuple[Array, Array, Array]] = None,
+        heavy_atoms: Optional[Array] = None,
     ) -> Dict[str, Array]:
         """Calculate energy and force contributions from dimers (heterogeneous-safe).
 
@@ -4486,6 +4545,7 @@ def setup_calculator(
             debug,
             mic_pbc_cell=mic_pbc_cell,
             active_dimer_indices=active_dimer_indices,
+            heavy_atoms=heavy_atoms,
         )
 
         debug_print(debug, "Dimer Contributions:",
@@ -4555,6 +4615,7 @@ def setup_calculator(
         debug: bool,
         mic_pbc_cell: Optional[Array] = None,
         active_dimer_indices: Optional[Array] = None,
+        heavy_atoms: Optional[Array] = None,
     ) -> Dict[str, Array]:
         """Apply switching functions to dimer energies and forces (heterogeneous-safe).
 
@@ -4588,11 +4649,19 @@ def setup_calculator(
             nb_arr = dimer_n_atoms_b_jnp[safe]
             if dimer_on_jnp is not None:
                 on_arr, mlw_arr = dimer_on_jnp[safe], dimer_mlw_jnp[safe]
+            if dimer_ct_jnp is not None:
+                ct_arr, con_arr, cw_arr = dimer_ct_jnp[safe], dimer_con_jnp[safe], dimer_cw_jnp[safe]
+                hv_arr = heavy_atoms[padded_dimer_idx_arr_jnp[safe]]
         else:
             na_arr = dimer_n_atoms_a_jnp
             nb_arr = dimer_n_atoms_b_jnp
             if dimer_on_jnp is not None:
                 on_arr, mlw_arr = dimer_on_jnp, dimer_mlw_jnp
+            if dimer_ct_jnp is not None:
+                ct_arr, con_arr, cw_arr = dimer_ct_jnp, dimer_con_jnp, dimer_cw_jnp
+                hv_arr = heavy_atoms[padded_dimer_idx_arr_jnp]
+        if dimer_ct_jnp is not None and heavy_atoms is None:
+            raise ValueError("MMML_CONTACT_SWITCH needs heavy-atom flags (atomic numbers) in apply_dimer_switching")
         _sw_axis = 0
         if dimer_on_jnp is None:   # global switch: the same scalars as before (bit-identical)
             on_arr, mlw_arr, _sw_axis = cutoff_params.mm_switch_on, cutoff_params.ml_switch_width, None
@@ -4641,6 +4710,16 @@ def setup_calculator(
             dimer_pos_padded, na_arr, nb_arr
         )
         switching_scales = ml_switch_scale(com_seps, mm_switch_on=on_arr, ml_switch_width=mlw_arr)
+        if dimer_ct_jnp is not None:
+            # contact-switched slots: weight 1 - h(rho) on the heavy-atom soft-min contact (dimer_pos_padded holds B
+            # at its minimum image around A), the same h the molpair MM applies, so the handoff is complementary
+            def _ml_contact_scale(pos_di, na, nb, con, cw, hv):
+                rho = _contact_softmin(pos_di, na, nb, hv, _contact_beta)
+                return 1.0 - _sharpstep(rho, con - cw, con)
+
+            _sc = jax.vmap(_ml_contact_scale, in_axes=(0, 0, 0, 0, 0, 0))(dimer_pos_padded, na_arr, nb_arr, con_arr, cw_arr, hv_arr)
+            switching_scales = jnp.where(ct_arr, _sc, switching_scales)
+            _ml_contact_grad = jax.grad(_ml_contact_scale)
         switched_energy = dimer_energies_all * switching_scales
         e_for_switch_grad = dimer_energies_all
         if in_range is not None:
@@ -4654,6 +4733,12 @@ def setup_calculator(
             lambda x, e, na, nb, on, mlw: _ml_switch_scale_grad(x, na, nb, on, mlw) * e,
             in_axes=(0, 0, 0, 0, _sw_axis, _sw_axis),
         )(dimer_pos_padded, e_for_switch_grad, na_arr, nb_arr, on_arr, mlw_arr)
+        if dimer_ct_jnp is not None:
+            _gc = jax.vmap(
+                lambda x, e, na, nb, con, cw, hv: _ml_contact_grad(x, na, nb, con, cw, hv) * e,
+                in_axes=(0, 0, 0, 0, 0, 0, 0),
+            )(dimer_pos_padded, e_for_switch_grad, na_arr, nb_arr, con_arr, cw_arr, hv_arr)
+            switched_grad = jnp.where(ct_arr[:, None, None], _gc, switched_grad)
 
         dimer_switching_grads_flat = (
             switched_grad * atom_mask_all[:, :, None]

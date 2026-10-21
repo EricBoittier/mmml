@@ -224,6 +224,28 @@ class MolPairMM:
             else:   # same rule as the calculator's mm_r_min (10 % below the pure-ML edge)
                 rmin = (on - mlw) * 0.9 if spec.get("complementary_handoff", True) else on * 0.9
             self._bucket_sw.append((on, w, mlw, rmin))
+        # contact-based handoff (MMML_CONTACT_SWITCH {size: [contact_on, contact_width, com_prefilter]}, see the hybrid
+        # calculator): for a bucket involving a listed size the MM weight is h(rho) * (1 - tail(R_com)), rho the
+        # log-sum-exp soft-min of the heavy-atom distances, h the same _sharpstep the calculator uses for 1 - w_ML
+        raw_c = _os.environ.get("MMML_CONTACT_SWITCH", "").strip()
+        ctab = {int(k): tuple(float(x) for x in v) for k, v in _json.loads(raw_c).items()} if raw_c else {}
+        self.contact_beta = float(_os.environ.get("MMML_CONTACT_BETA", "10.0"))
+        self._bucket_contact = []
+        for b, (ca, cb) in enumerate(topo.buckets):
+            pa = ctab.get(int(topo.class_n_atoms[ca])); pb = ctab.get(int(topo.class_n_atoms[cb]))
+            ent = pa if pb is None else (pb if pa is None else (pa if pa[0] >= pb[0] else pb))
+            if ent is None:
+                self._bucket_contact.append(None)
+                continue
+            if not spec.get("complementary_handoff", True):
+                raise ValueError("MMML_CONTACT_SWITCH needs the complementary handoff")
+            if not topo.class_signature[ca] or not topo.class_signature[cb]:
+                raise ValueError("MMML_CONTACT_SWITCH needs atomic numbers in the molpair topology")
+            ha = np.asarray(topo.class_signature[ca]) > 1
+            hb = np.asarray(topo.class_signature[cb]) > 1
+            self._bucket_contact.append((float(ent[0]), float(ent[1]), ha[:, None] & hb[None, :]))
+            on, w, mlw, _ = self._bucket_sw[b]
+            self._bucket_sw[b] = (on, w, mlw, None)   # no COM r_min cut: h(rho) already zeroes MM inside the ML region
         self.per_pair_switch = any(b[:3] != (g[0], g[2], g[1]) for b in self._bucket_sw)
         self.r_off = max([float(spec["mm_switch_on"]) + float(spec["mm_switch_width"])] + [b[0] + b[1] for b in self._bucket_sw])
         self.r_mm_list = self.r_off + self.skin
@@ -453,7 +475,14 @@ class MolPairMM:
             dc = _mic(com[mb] - com[ma], cell, inv)
             # padded slots have ma == mb (R = 0): keep the norm's gradient finite
             R = jnp.sqrt(jnp.maximum(jnp.sum(dc * dc, axis=-1), 1e-22))
-            if sp.get("complementary_handoff", True):
+            cpar = self._bucket_contact[b]
+            if cpar is not None:
+                c_on, c_w, pm = cpar
+                z = jnp.where(jnp.asarray(pm)[None, :, :], -self.contact_beta * r, -jnp.inf)
+                rho = -jax.nn.logsumexp(z, axis=(1, 2)) / self.contact_beta
+                h_c = _sharpstep(rho, c_on - c_w, c_on, GAMMA_ON)
+                s = h_c * (1.0 - _sharpstep(R, on, on + w, GAMMA_OFF))
+            elif sp.get("complementary_handoff", True):
                 s = _sharpstep(R, on - mlw, on, GAMMA_ON) * (1.0 - _sharpstep(R, on, on + w, GAMMA_OFF))
             else:
                 s = _sharpstep(R, on, on + w, GAMMA_ON) * (1.0 - _sharpstep(R, on + w, on + 2.0 * w, GAMMA_OFF))
@@ -465,7 +494,9 @@ class MolPairMM:
                 e_el = e_el + jnp.sum(s * el)
             else:
                 # real-space Ewald for the whole dimer block minus the ML part: K qq [erfc(beta r) - (1 - h(R))] / r
-                if sp.get("complementary_handoff", True):
+                if cpar is not None:
+                    h = h_c
+                elif sp.get("complementary_handoff", True):
                     h = _sharpstep(R, on - mlw, on, GAMMA_ON)
                 else:
                     h = _sharpstep(R, on, on + w, GAMMA_ON)
@@ -589,13 +620,16 @@ def ml_dimer_buckets(
     return out, overflow
 
 
-def count_dimers_within(positions, monomer_offsets, box_L: float, radius_A: float, radius_by_size=None) -> int:
+def count_dimers_within(positions, monomer_offsets, box_L: float, radius_A: float, radius_by_size=None,
+                        exclude_sizes=None) -> int:
     """Host count of dimers with centroid MIC distance < ``radius_A`` (cubic box).
 
     Molecules are made whole around their first atom first (as the calculator
     does), so the centroids match the in-graph ones. ``radius_by_size``
     ({molecule size: radius}) gives per-pair radii (the larger of the two
     molecules' entries; sizes not listed use ``radius_A``), as with MMML_SWITCH_BY_SIZE.
+    ``exclude_sizes``: pairs involving a molecule of one of these sizes are not counted (MMML_CONTACT_SWITCH pairs,
+    counted by contact instead).
     """
     pos = np.asarray(positions, dtype=np.float64)
     off = np.asarray(monomer_offsets, dtype=np.int64)
@@ -610,12 +644,16 @@ def count_dimers_within(positions, monomer_offsets, box_L: float, radius_A: floa
     d -= L * np.round(d / L)
     r2 = np.sum(d * d, axis=-1)
     iu = np.triu_indices(len(com), k=1)
+    sizes = np.diff(off)
+    keep = np.ones(len(iu[0]), dtype=bool)
+    if exclude_sizes:
+        ex = np.isin(sizes, list(exclude_sizes))
+        keep = ~(ex[iu[0]] | ex[iu[1]])
     if radius_by_size:
-        sizes = np.diff(off)
         rad = np.array([float(radius_by_size.get(int(n), radius_A)) for n in sizes])
         rp = np.maximum(rad[:, None], rad[None, :])
-        return int(np.sum(r2[iu] < rp[iu] ** 2))
-    return int(np.sum(r2[iu] < radius_A**2))
+        return int(np.sum((r2[iu] < rp[iu] ** 2) & keep))
+    return int(np.sum((r2[iu] < radius_A**2) & keep))
 
 
 def auto_ml_dimer_cap(n_active: int, margin: float, n_dimers: int, pad: int = 64) -> int:

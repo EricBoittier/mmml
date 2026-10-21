@@ -1724,6 +1724,9 @@ def set_up_nhc_sim_routine(
     box_nl = np.array([L_cell, L_cell, L_cell], dtype=np.float64) if L_cell else None
     pbc_box_nl = box_nl  # Capture for run_sim PBC minimization (avoids UnboundLocalError from later box_nl assignments)
 
+    if os.environ.get("MMML_CONTACT_SWITCH", "").strip() and not (update_fn is not None and use_pbc and _molpair_fast_requested(args)):
+        raise ValueError("MMML_CONTACT_SWITCH (contact-based handoff) needs the molecule-pair MM fast path "
+                         "(--jaxmd-molpair-mm, periodic): the atom-pair MM tail uses one global COM handoff")
     if os.environ.get("MMML_SWITCH_BY_SIZE", "").strip() and not (update_fn is not None and use_pbc and _molpair_fast_requested(args)):
         raise ValueError("MMML_SWITCH_BY_SIZE (per-pair-type switching) needs the molecule-pair MM fast path "
                          "(--jaxmd-molpair-mm, periodic): the atom-pair MM tail uses one global handoff")

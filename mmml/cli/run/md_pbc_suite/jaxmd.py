@@ -1284,7 +1284,37 @@ def main(argv: list[str] | None = None) -> int:
             import json as _json
             _marg = float(os.environ.get("MMML_ML_DIMER_ACTIVE_MARGIN") or 0.0)
             _rbs = {int(k): float(v[0]) + _marg for k, v in _json.loads(_sbs).items()}
-        _n_act = count_dimers_within(atoms.get_positions(), monomer_offsets, float(L), _r_act, radius_by_size=_rbs)
+        _cs = os.environ.get("MMML_CONTACT_SWITCH", "").strip()
+        if _cs:
+            # contact-switched pairs are ML-active when their heavy-atom contact < contact_on (not by COM radius):
+            # count those directly (KD-tree on heavy atoms), and the remaining pairs by the COM rule
+            import json as _json
+            from scipy.spatial import cKDTree as _KD
+
+            _ct = {int(k): float(v[0]) for k, v in _json.loads(_cs).items()}
+            _off = np.asarray(monomer_offsets, dtype=int)
+            _apm = np.diff(_off)
+            _mol = np.repeat(np.arange(len(_apm)), _apm)
+            _Z = np.asarray(atoms.get_atomic_numbers())
+            _X = np.mod(np.asarray(atoms.get_positions(), float), float(L))
+            _hv = _Z > 1
+            _hidx = np.nonzero(_hv)[0]
+            _pairs = _KD(_X[_hv], boxsize=float(L)).query_pairs(max(_ct.values()), output_type="ndarray")
+            _ma, _mb = _mol[_hidx[_pairs[:, 0]]], _mol[_hidx[_pairs[:, 1]]]
+            _d = _X[_hidx[_pairs[:, 1]]] - _X[_hidx[_pairs[:, 0]]]
+            _d -= float(L) * np.round(_d / float(L))
+            _r = np.sqrt(np.sum(_d * _d, axis=1))
+            _lim = np.maximum([_ct.get(int(_apm[a]), 0.0) for a in _ma], [_ct.get(int(_apm[b]), 0.0) for b in _mb])
+            _keep = (_ma != _mb) & (_r < _lim)
+            _key = np.unique(np.minimum(_ma[_keep], _mb[_keep]) * len(_apm) + np.maximum(_ma[_keep], _mb[_keep]))
+            _n_contact = int(len(_key))
+            _sizes_c = set(_ct)
+            _n_com = count_dimers_within(atoms.get_positions(), monomer_offsets, float(L), _r_act, radius_by_size=_rbs,
+                                         exclude_sizes=_sizes_c)
+            _n_act = _n_contact + _n_com
+            print(f"[ml-cap] contact-switched pairs (heavy contact < contact_on): {_n_contact}; COM-switched: {_n_com}", flush=True)
+        else:
+            _n_act = count_dimers_within(atoms.get_positions(), monomer_offsets, float(L), _r_act, radius_by_size=_rbs)
         _n_tot = n_molecules * (n_molecules - 1) // 2
         _cap = auto_ml_dimer_cap(_n_act, _cap_auto, _n_tot)
         print(
