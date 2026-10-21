@@ -349,6 +349,7 @@ PBC_BURST_ML_ATOMS_PER_MONOMER: dict[str, int] = {
     "TIP3": 3,
     "MEOH": 6,
     "METH": 5,
+    "OCOH": 27,   # 1-octanol (CGenFF OCOH); needed e.g. to continue mixed water/methanol/octanol boxes from a handoff
 }
 
 
