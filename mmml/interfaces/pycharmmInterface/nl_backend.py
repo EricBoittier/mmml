@@ -15,6 +15,7 @@ future rebuilds. Pair order is not guaranteed.
 from __future__ import annotations
 
 import os
+import warnings
 from typing import Literal, Protocol, Sequence
 
 import numpy as np
@@ -309,6 +310,10 @@ def get_neighbor_list_backend(name: MmNlBackendName) -> NeighborListBackend:
     raise ValueError(f"unknown backend {name!r}")
 
 
+#: System size above which the pure-Python cell-list fallback (no vesin) gets a warning.
+_SLOW_FALLBACK_ATOMS = 5000
+
+
 def build_mm_pairs_with_backend(
     backend_name: MmNlBackendName,
     positions: np.ndarray,
@@ -331,6 +336,12 @@ def build_mm_pairs_with_backend(
         order = ["cell_list"]
     else:
         order = ["vesin", "cell_list"] if have_vesin() else ["cell_list"]
+    n_atoms = int(total_atoms if total_atoms is not None else len(positions))
+    if order == ["cell_list"] and backend_name != "cell_list" and n_atoms >= _SLOW_FALLBACK_ATOMS:
+        warnings.warn(
+            f"vesin is not installed: building MM pairs for {n_atoms} atoms with the pure-Python cell list, which can "
+            "take tens of minutes (18k atoms: >30 min). Install it with `pip install vesin` (or `uv pip install vesin`).",
+            RuntimeWarning, stacklevel=2)
 
     last_err: Exception | None = None
     for name in order:

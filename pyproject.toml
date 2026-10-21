@@ -54,6 +54,9 @@ dependencies = [
     "h5py>=3.8.0",
     "apsw>=3.45.0",
     "e3x>=1.0.2",
+    # Fast MM / dimer neighbour lists. Without it nl_backend falls back to the pure-Python cell list, which takes
+    # >30 min to set up an 18k-atom octanol box (13.5 Å octanol switch). Small wheels, so it is a core dependency.
+    "vesin>=0.6.1",
     "tblite",
     "plotnine>=0.15.1",
     "patchworklib>=0.6.6",
