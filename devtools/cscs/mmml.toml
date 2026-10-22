@@ -1,0 +1,3 @@
+image = "/iopsstor/scratch/cscs/boittier/containers/mmml.sqsh"
+mounts = ["/capstor", "/iopsstor", "/users/boittier"]
+workdir = "/users/boittier/mmml"
