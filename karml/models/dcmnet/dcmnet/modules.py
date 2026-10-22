@@ -35,6 +35,9 @@ class DCMNetCharges(nn.Module):
         Number of distributed charge sites per atom, by default 4
     include_pseudotensors : bool
         Whether to include pseudotensors, by default False
+    max_displacement : float
+        Bound (Angstrom) on each Cartesian component of a charge site's offset
+        from its atom (``hard_tanh(x) * max_displacement``), by default 0.075
     """
     features: int = 32
     max_degree: int = 2
@@ -44,6 +47,7 @@ class DCMNetCharges(nn.Module):
     max_atomic_number: int = 17
     n_dcm: int = 4
     include_pseudotensors: bool = False
+    max_displacement: float = 0.075
     
     def setup(self):
         """Setup method to validate and fix Ellipsis values."""
@@ -155,7 +159,7 @@ class DCMNetCharges(nn.Module):
         atomic_mono = atomic_mono.squeeze(axis=1)
         atomic_mono += element_bias[atomic_numbers][:, None]
 
-        x = e3x.nn.hard_tanh(x) * 0.075
+        x = e3x.nn.hard_tanh(x) * self.max_displacement
         
         # Extract dipole components: shape (n_atoms, 3, n_dcm)
         # Then transpose to (n_atoms, n_dcm, 3) for consistency
