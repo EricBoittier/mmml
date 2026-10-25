@@ -466,9 +466,11 @@ class MolPairMM:
             xb = pos[ib]
             # atom vectors through B's centroid image around A (whole molecules): the same as per-atom MIC while
             # every atom pair is within L/2, and still right beyond (small boxes, long molecules), as in the ML
-            # dimers and the alchemy MM. The image count is piecewise constant (no gradient through it).
+            # dimers and the alchemy MM. The image count n is piecewise constant (no gradient through it), but the
+            # shift -n @ cell must stay differentiable in the cell: the NpT analytic virial needs dE/dbox at fixed
+            # real positions (stop_gradient on the whole shift dropped the image-pair virial; water at 1 bar blew up).
             dcom = com[mb] - com[ma]
-            shift = jax.lax.stop_gradient(_mic(dcom, cell, inv) - dcom)  # (P, 3) lattice vector for B
+            shift = -jax.lax.stop_gradient(jnp.round(dcom @ inv)) @ cell  # (P, 3) lattice vector for B
             d = (xb + shift[:, None, :])[:, None, :, :] - xa[:, :, None, :]  # (P, na, nb, 3)  r_j - r_i
             r = jnp.sqrt(jnp.maximum(jnp.sum(d * d, axis=-1), 1e-22))
             lam = self._lam[ma] * self._lam[mb]  # (P,)
