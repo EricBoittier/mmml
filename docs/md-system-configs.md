@@ -143,6 +143,49 @@ sequenceDiagram
   JAX->>Summary: status, artifacts, diagnostics
 ```
 
+## PyCHARMM outputs, DCDs, and VMD quick-look scripts
+
+For PyCHARMM staged runs, treat `output_dir` as the job-local artifact root.
+KARML intentionally uses short filenames there so CHARMM's Fortran path limits
+are not hit. The common staged names are:
+
+| Artifact | When it appears | Purpose |
+|----------|-----------------|---------|
+| `model.psf` / `model.pdb` | Fresh builds and loaded artifact runs unless `no_save_vmd_topology: true` or `skip_cluster_build`; `skip_cluster_build` with `from_psf` uses the input PSF instead | Bond-preserving pre-MLpot topology for VMD and manual inspection |
+| `mini.crd`, `mini.psf`, `mini.pdb`, `mini.dcd` | Mini stage with artifact saving enabled | Minimized coordinates and optional mini trajectory mirror |
+| `heat.res`, `nve.res`, `equi.res`, `prod.res` | Completed dynamics stages | CHARMM restart files for continuing or auditing a stage |
+| `heat.dcd`, `nve.dcd`, `equi.dcd`, `prod.dcd` | DCD saving enabled for that stage | Stage trajectories |
+| `pretreat/*.res` / `pretreat/*.dcd` | CHARMM-MM pretreat, mini-box equilibration, or related prep steps | Pre-MLpot / prep-stage restart and trajectory evidence |
+| `snapshots.json`, `baseline.res`, `cleanup/`, `prep_ladder/` | Geometry gates, overlap recovery, or density-prep ladders | Recovery breadcrumbs and diagnostics |
+
+DCD cadence is controlled by the PyCHARMM options:
+
+- `dcd_nsavc`: write every N integration/minimization steps; `0` disables DCD output.
+- `dcd_interval_ps`: physical save interval in ps; when set, it overrides `dcd_nsavc`.
+- `dcd_max_frames`: cap the stage to roughly this many frames when `dcd_interval_ps` is unset; set `0` for no cap.
+
+Overlap-rescue chunks can split a stage trajectory into numbered siblings such
+as `heat.0000.dcd`, `heat.0001.dcd`, paired with matching restart chunks. The
+VMD helper discovers existing, non-empty stage and chunk DCDs before writing a
+loader script.
+
+When a non-empty trajectory exists, KARML writes `view.vmd.tcl` in the job
+directory and prints:
+
+```bash
+cd results/pycharmm_equil
+vmd -e view.vmd.tcl
+```
+
+Run the script from inside `output_dir`. It uses `model.psf` by basename and
+trajectory paths relative to that directory (for example `pretreat/01_mm.dcd`),
+which keeps the script portable across compute nodes, login nodes, and sshfs
+mounts. The shared VMD style recalculates secondary structure, maps CHARMM
+masses back onto elements for Jmol colors, shows proteins as DSSP cartoons,
+uses ball-and-stick/dynamic bonds for local chemistry and coordination sites,
+and shows nearby solvent as lines. Prefer the saved pre-MLpot topology for
+viewing because the in-memory MLpot PSF may be bondless after registration.
+
 ## Builders for condensed phase
 
 `composition` uses `RES:N` entries such as `DCM:60` or `DCM:40,ACO:20`. A bare `RES` means one molecule. Residue names are validated against the bundled CGenFF RTF (aliases: `water`→`TIP3`, `octanol`→`OCOH`). The builder determines the initial coordinates before minimization.
