@@ -85,6 +85,7 @@ class PhysNetFamilyMixin:
         batch_mask: Optional[jnp.ndarray] = None,
         cell: Optional[jnp.ndarray] = None,
         edge_mask: Optional[jnp.ndarray] = None,
+        displacements: Optional[jnp.ndarray] = None,
     ):
         return encode_geometry_and_basis(
             positions,
@@ -97,6 +98,7 @@ class PhysNetFamilyMixin:
             edge_mask=edge_mask,
             cell=cell,
             use_pbc=bool(getattr(self, "use_pbc", False)),
+            displacements=displacements,
         )
 
     def _calc_switches(self, displacements: jnp.ndarray, batch_mask: jnp.ndarray):
