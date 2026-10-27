@@ -134,15 +134,22 @@ def encode_geometry_and_basis(
     edge_mask: Optional[Array] = None,
     cell: Optional[Array] = None,
     use_pbc: bool = False,
+    displacements: Optional[Array] = None,
 ) -> Tuple[Array, Array]:
     """Shared non-parametric encode step: displacements + radial/spherical basis.
 
     Parametric ``Embed`` / ``MessagePass`` remain in each model head so Flax
     parameter names stay checkpoint-compatible.
+
+    ``displacements`` (``positions[src] - positions[dst]`` for each pair, with any
+    periodic image shift already applied) are used as given when provided, e.g.
+    the pair vectors of an MD engine's neighbour list; ``cell`` and ``use_pbc`` are
+    then ignored.
     """
-    displacements = pair_displacements(
-        positions, dst_idx, src_idx, cell=cell, use_pbc=use_pbc
-    )
+    if displacements is None:
+        displacements = pair_displacements(
+            positions, dst_idx, src_idx, cell=cell, use_pbc=use_pbc
+        )
     return radial_spherical_basis(
         displacements,
         num_basis_functions=num_basis_functions,

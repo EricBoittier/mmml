@@ -182,6 +182,7 @@ class PhysNet(PhysNetFamilyMixin, nn.Module):
         batch_mask: jnp.ndarray,
         atom_mask: jnp.ndarray,
         cell: Optional[jnp.ndarray] = None,
+        displacements: Optional[jnp.ndarray] = None,
     ) -> tuple[Array, tuple[Array, Array, Array, Array]]:
         """
         Calculate molecular energy and related properties.
@@ -207,6 +208,14 @@ class PhysNet(PhysNetFamilyMixin, nn.Module):
             Mask for valid batch elements
         atom_mask : jnp.ndarray
             Mask for valid atoms
+        cell : Optional[jnp.ndarray]
+            Cell for the minimum-image convention (with ``use_pbc``)
+        displacements : Optional[jnp.ndarray]
+            Pair vectors ``positions[src] - positions[dst]``, including periodic
+            image shifts, used instead of recomputing them from ``positions``
+            (e.g. from an MD engine's neighbour list). The energy then depends on
+            the positions only through them: differentiate with respect to the
+            displacements to get forces and virials.
 
         Returns
         -------
@@ -215,9 +224,20 @@ class PhysNet(PhysNetFamilyMixin, nn.Module):
             - Total energy (negative sum)
             - Tuple of (energy, charges, electrostatics, repulsion, features)
         """
+        if displacements is not None and self.efa:
+            raise ValueError(
+                "Euclidean fast attention uses the positions directly: it can not "
+                "be combined with given displacements"
+            )
+
         # Calculate basic geometric features
         basis, displacements = self._calculate_geometric_features(
-            positions, dst_idx, src_idx, batch_mask=batch_mask, cell=cell
+            positions,
+            dst_idx,
+            src_idx,
+            batch_mask=batch_mask,
+            cell=cell,
+            displacements=displacements,
         )
 
         graph_mask = jnp.ones(batch_size)
@@ -722,6 +742,7 @@ class PhysNet(PhysNetFamilyMixin, nn.Module):
         atom_mask: Optional[jnp.ndarray] = None,
         cell: Optional[jnp.ndarray] = None,
         compute_forces: bool = True,
+        displacements: Optional[jnp.ndarray] = None,
     ) -> Dict[str, Optional[jnp.ndarray]]:
         """
         Forward pass of the model.
@@ -747,6 +768,14 @@ class PhysNet(PhysNetFamilyMixin, nn.Module):
             Optional batch mask, by default None
         atom_mask : Optional[jnp.ndarray], optional
             Optional atom mask, by default None
+        cell : Optional[jnp.ndarray], optional
+            Cell for the minimum-image convention (with ``use_pbc``)
+        compute_forces : bool, optional
+            Compute forces with ``jax.value_and_grad`` over the positions
+        displacements : Optional[jnp.ndarray], optional
+            Pair vectors ``positions[src] - positions[dst]`` including periodic
+            image shifts (see :meth:`energy`). Requires ``compute_forces=False``:
+            the forces come from differentiating with respect to the displacements.
 
         Returns
         -------
@@ -780,6 +809,13 @@ class PhysNet(PhysNetFamilyMixin, nn.Module):
         # jax.debug.print("batch_mask {x}", x=batch_mask[::])
         # jax.debug.print("atom_mask {x}", x=atom_mask[::])
 
+        if displacements is not None and compute_forces:
+            raise ValueError(
+                "forces with respect to the positions are not defined when the "
+                "displacements are given: use compute_forces=False and "
+                "differentiate with respect to the displacements"
+            )
+
         if not compute_forces:
             # Bypass value_and_grad
             _, (energy, charges, electrostatics, repulsion, state) = self.energy(
@@ -792,6 +828,7 @@ class PhysNet(PhysNetFamilyMixin, nn.Module):
                 batch_mask,
                 atom_mask,
                 cell,
+                displacements,
             )
             forces = None
         else:

@@ -10,6 +10,16 @@ and versioning process.
 
 ## [Unreleased]
 
+### Added
+
+- **PhysNet takes pair vectors from the caller.** `PhysNet.__call__` / `energy`
+  (and `encode_geometry_and_basis`) accept `displacements`
+  (`positions[src] - positions[dst]`, periodic image shifts included), used instead
+  of recomputing them from positions. This lets an MD engine's neighbour list
+  (e.g. through metatomic) drive the model for periodic systems; forces and virials
+  come from differentiating with respect to the displacements
+  (`compute_forces=False`). Not available with Euclidean fast attention.
+
 ### Changed
 
 - **Vendored CHARMM is c52a1** (15 August 2026), up from c49b1. ML/MM C API
