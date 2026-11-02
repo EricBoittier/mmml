@@ -2650,6 +2650,15 @@ def train(args: argparse.Namespace, cache_path: Path) -> None:
 
     # 1-GPU probe overestimates what fits once many pad/B executables coexist
     # under 2-GPU pmap (seen: pad=84 B=6 compile OOM → rendezvous hang).
+    scale = float(getattr(args, "auto_batch_scale", 1.0) or 1.0)
+    if scale < 1.0:
+        # the probe finds the largest B that fits one executable on a clean device; training also holds the optimizer
+        # state, prefetched batches and every bucket's executables (2 Nov: OMol25 pilot OOM at its first log step on a
+        # 24 GB card with probed sizes; a fixed -1 margin is negligible at B = 20-250)
+        before = dict(train_batch_sizes)
+        train_batch_sizes = {int(p): max(1, int(b * scale)) for p, b in train_batch_sizes.items()}
+        print(f"Applied --auto-batch-scale {scale}: "
+              + ", ".join(f"{p}:{before[p]}->{train_batch_sizes[p]}" for p in sorted(before)), flush=True)
     margin = int(args.auto_batch_margin)
     if margin > 0:
         before = dict(train_batch_sizes)
@@ -2985,6 +2994,12 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--auto-batch-scale",
+        type=float,
+        default=1.0,
+        help="Multiply each probed B/device by this factor before training (e.g. 0.75 for headroom; default 1.0).",
+    )
+    parser.add_argument(
         "--auto-batch-margin",
         type=int,
         default=1,
@@ -3265,7 +3280,7 @@ def build_parser() -> argparse.ArgumentParser:
             "learned global/per-element epsilon scaling AND the network-predicted per-atom "
             "vdW scale. By default the model may rescale the LJ prior freely, and it does — "
             "a trained checkpoint reached global_vdw_scale=0.14 with element scales of 0.10 "
-            "(C) and 0.24 (H), i.e. carbon-carbon epsilon at ~1.4% of its physical value, "
+            "(C) and 0.24 (H), i.e. carbon-carbon epsilon at ~1.4%% of its physical value, "
             "effectively erasing the force-field prior. With this flag the LJ term becomes "
             "a fixed physical baseline the network can only correct, never scale away."
         ),
