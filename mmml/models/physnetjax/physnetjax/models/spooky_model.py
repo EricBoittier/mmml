@@ -24,6 +24,11 @@ from jax import Array
 
 from mmml.models.physnetjax.physnetjax.models.euclidean_fast_attention import fast_attention as efa
 from mmml.models.physnetjax.physnetjax.models.physnet_family import PhysNetFamilyMixin
+from mmml.models.physnetjax.physnetjax.models.multitask_heads import (
+    masked_com_dipole,
+    masked_mean_pool,
+    uniform_sum_constraint,
+)
 from mmml.models.physnetjax.physnetjax.models.zbl import (
     ZBLRepulsion,
     geometric_pair_distances,
@@ -192,6 +197,12 @@ class SpookyPhysNet(PhysNetFamilyMixin, nn.Module):
             "interaction_trust_map": self.interaction_trust_map,
             "feature_rmsnorm": self.feature_rmsnorm,
             "trust_map_elements": self.trust_map_elements,
+            "multitask_charges": self.multitask_charges,
+            "multitask_spins": self.multitask_spins,
+            "multitask_orbitals": self.multitask_orbitals,
+            "multitask_orbital_hidden": self.multitask_orbital_hidden,
+            "multitask_homo_offset": self.multitask_homo_offset,
+            "multitask_gap_offset": self.multitask_gap_offset,
         }
 
     def energy(
@@ -529,6 +540,77 @@ class SpookyPhysNet(PhysNetFamilyMixin, nn.Module):
     # fingerprint. Off by default (no parameter, no behavioural change).
     interaction_trust_map: bool = False
     trust_map_elements: tuple = (1, 6, 7, 8, 16, 17)  # H, C, N, O, S, Cl
+
+    # Multitask output heads (see multitask_heads.py / SPOOKY_MULTITASK.md). All
+    # read the final scalar atomic features ``state``; they never feed the energy,
+    # so E/F are unchanged when enabled. Off by default: no parameters are created
+    # and the output dict is bit-identical to a model without these fields.
+    #   multitask_charges : q_i with sum_i q_i = Q exactly, + dipole mu = sum q_i (r_i - r_COM)
+    #   multitask_spins   : s_i with sum_i s_i = mult - 1 exactly
+    #   multitask_orbitals: molecular HOMO energy and HOMO-LUMO gap (eV), mean-pooled
+    multitask_charges: bool = False
+    multitask_spins: bool = False
+    multitask_orbitals: bool = False
+    multitask_orbital_hidden: int = 0  # width of the orbital MLP hidden layer; 0 -> features
+    # Fixed (non-trainable) offsets added to the pooled readout, set by the trainer
+    # to the training-set means so the zero-initialised output layer starts unbiased.
+    multitask_homo_offset: float = 0.0
+    multitask_gap_offset: float = 0.0
+
+    def _multitask_heads(
+        self,
+        state: jnp.ndarray,
+        atomic_numbers: jnp.ndarray,
+        charges: jnp.ndarray,
+        spins: jnp.ndarray,
+        positions: jnp.ndarray,
+        batch_segments: jnp.ndarray,
+        batch_size: int,
+        atom_mask: jnp.ndarray,
+    ) -> Dict[str, jnp.ndarray]:
+        """Multitask readouts from the final atomic features. All names explicit."""
+        n_atoms = atomic_numbers.shape[0]
+        x = state.reshape(n_atoms, -1)  # (N, F): degree-0 scalar channel
+        mask = atom_mask.reshape(-1).astype(DTYPE)
+        n_z = self.max_atomic_number + 1
+        out: Dict[str, jnp.ndarray] = {}
+        if self.multitask_charges:
+            q_raw = nn.Dense(
+                1, use_bias=False, dtype=DTYPE, name="mt_charge_dense",
+                kernel_init=jax.nn.initializers.normal(stddev=0.01),
+            )(x).reshape(-1)
+            q_zb = self.param("mt_charge_zbias", jax.nn.initializers.zeros, (n_z,), DTYPE)
+            q_raw = q_raw + jnp.take(q_zb, atomic_numbers)
+            q_tot = jnp.asarray(charges, dtype=DTYPE).reshape(n_atoms, -1)[:, 0]
+            q = uniform_sum_constraint(q_raw, q_tot, mask, batch_segments, batch_size)
+            out["mt_charges"] = q
+            out["mt_dipole"] = masked_com_dipole(
+                positions, atomic_numbers, q, mask, batch_segments, batch_size
+            )
+        if self.multitask_spins:
+            s_raw = nn.Dense(
+                1, use_bias=False, dtype=DTYPE, name="mt_spin_dense",
+                kernel_init=jax.nn.initializers.normal(stddev=0.01),
+            )(x).reshape(-1)
+            s_zb = self.param("mt_spin_zbias", jax.nn.initializers.zeros, (n_z,), DTYPE)
+            s_raw = s_raw + jnp.take(s_zb, atomic_numbers)
+            # spins input is the multiplicity 2S+1 broadcast per atom -> target 2S
+            s_tot = jnp.asarray(spins, dtype=DTYPE).reshape(n_atoms, -1)[:, 0] - 1.0
+            out["mt_spins"] = uniform_sum_constraint(
+                s_raw, s_tot, mask, batch_segments, batch_size
+            )
+        if self.multitask_orbitals:
+            hidden = self.multitask_orbital_hidden or self.features
+            h = nn.Dense(hidden, dtype=DTYPE, name="mt_orb_hidden")(x)
+            h = nn.silu(h)
+            o = nn.Dense(
+                2, dtype=DTYPE, name="mt_orb_out",
+                kernel_init=jax.nn.initializers.zeros,
+            )(h)
+            pooled = masked_mean_pool(o, mask, batch_segments, batch_size)  # (B, 2)
+            out["mt_homo"] = pooled[:, 0] + self.multitask_homo_offset
+            out["mt_gap"] = pooled[:, 1] + self.multitask_gap_offset
+        return out
 
     def _calculate_atomic_vdw_scales(
         self, x: jnp.ndarray, atomic_numbers: jnp.ndarray, atom_mask: jnp.ndarray
@@ -956,6 +1038,7 @@ class SpookyPhysNet(PhysNetFamilyMixin, nn.Module):
         # jax.debug.print("batch_mask {x}", x=batch_mask[::])
         # jax.debug.print("atom_mask {x}", x=atom_mask[::])
 
+        input_charges = charges  # molecular Q broadcast per atom (rebound below)
         if not compute_forces:
             _, (energy, charges, electrostatics, cgenff_vdw, repulsion, state) = self.energy(
                 atomic_numbers,
@@ -1048,6 +1131,19 @@ class SpookyPhysNet(PhysNetFamilyMixin, nn.Module):
             "neural_interaction_log_lambda": neural_interaction_log_lambda,
             "state": state,
         }
+        if self.multitask_charges or self.multitask_spins or self.multitask_orbitals:
+            output.update(
+                self._multitask_heads(
+                    state,
+                    atomic_numbers,
+                    input_charges,
+                    spins,
+                    positions,
+                    batch_segments,
+                    batch_size,
+                    atom_mask,
+                )
+            )
 
         return output
 

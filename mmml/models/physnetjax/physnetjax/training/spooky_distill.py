@@ -111,6 +111,13 @@ _SPOOKY_DEFAULTS: dict[str, Any] = {
     "learn_cgenff_vdw_scale": True,
     "predict_atomic_vdw_scale": True,
     "interaction_trust_map": False,
+    "feature_rmsnorm": False,
+    "multitask_charges": False,
+    "multitask_spins": False,
+    "multitask_orbitals": False,
+    "multitask_orbital_hidden": 0,
+    "multitask_homo_offset": 0.0,
+    "multitask_gap_offset": 0.0,
 }
 
 # How to read each architecture field out of a run's argparse ``config`` blob,
@@ -121,6 +128,13 @@ _CONFIG_ALIASES: dict[str, tuple[str, Any]] = {
     "zbl": ("no_zbl", lambda v: not bool(v)),
     "learn_cgenff_vdw_scale": ("fixed_cgenff_vdw", lambda v: not bool(v)),
     "predict_atomic_vdw_scale": ("fixed_cgenff_vdw", lambda v: not bool(v)),
+    "feature_rmsnorm": ("feature_rmsnorm", lambda v: bool(v)),
+    "multitask_charges": ("mt_charges", lambda v: bool(v)),
+    "multitask_spins": ("mt_spins", lambda v: bool(v)),
+    "multitask_orbitals": ("mt_orbitals", lambda v: bool(v)),
+    "multitask_orbital_hidden": ("mt_orbital_hidden", lambda v: int(v)),
+    "multitask_homo_offset": ("mt_homo_offset", lambda v: float(v or 0.0)),
+    "multitask_gap_offset": ("mt_gap_offset", lambda v: float(v or 0.0)),
 }
 
 

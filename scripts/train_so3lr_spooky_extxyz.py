@@ -61,6 +61,12 @@ from mmml.models.physnetjax.physnetjax.training.spooky_distill import (
 from mmml.models.physnetjax.physnetjax.training.spooky_training import (
     build_spooky_batch_from_flat_data,
 )
+from mmml.models.physnetjax.physnetjax.models.multitask_heads import (
+    MT_MOL_KEYS,
+    multitask_loss_terms,
+    orbital_offsets_from_data,
+    prepare_multitask_cache_keys,
+)
 from mmml.utils.model_checkpoint import json_to_params
 from mmml.models.mbd.calculator import (
     HARTREE_PER_BOHR_TO_EV_PER_ANGSTROM,
@@ -532,6 +538,9 @@ def stack_device_batches(
         batch["D"] = jnp.asarray(data["D"][indices], dtype=jnp.float32)
         batch["Q_total"] = jnp.asarray(data["Q"][indices], dtype=jnp.float32)
         batch["S_total"] = jnp.asarray(data["S"][indices], dtype=jnp.float32)
+        for key in MT_MOL_KEYS:  # optional multitask molecular labels / masks
+            if key in data:
+                batch[key] = jnp.asarray(data[key][indices], dtype=jnp.float32)
         if has_mm:
             # Master tables are constant — same for every batch, just replicated per device
             batch["cgenff_master_sigmas"]   = jnp.asarray(data["cgenff_master_sigmas"],   dtype=jnp.float32)
@@ -846,6 +855,11 @@ def auto_batch_cache_fingerprint(
         "n_res": int(args.n_res),
         "no_zbl": bool(args.no_zbl),
         "efa": bool(args.efa),
+        **(
+            {"multitask": [bool(getattr(args, k, False)) for k in ("mt_charges", "mt_spins", "mt_orbitals")]}
+            if _multitask_enabled(args)
+            else {}
+        ),
         "device_kind": str(device_kind),
         "device_bytes_limit": bytes_limit,
         "pad_widths": sorted(int(p) for p in pad_widths),
@@ -950,7 +964,17 @@ def create_model(args: argparse.Namespace, max_atoms: int) -> SpookyPhysNet:
         predict_atomic_vdw_scale=not getattr(args, "fixed_cgenff_vdw", False),
         interaction_trust_map=getattr(args, "interaction_trust_map", False),
         feature_rmsnorm=getattr(args, "feature_rmsnorm", False),
+        multitask_charges=getattr(args, "mt_charges", False),
+        multitask_spins=getattr(args, "mt_spins", False),
+        multitask_orbitals=getattr(args, "mt_orbitals", False),
+        multitask_orbital_hidden=getattr(args, "mt_orbital_hidden", 0),
+        multitask_homo_offset=float(getattr(args, "mt_homo_offset", None) or 0.0),
+        multitask_gap_offset=float(getattr(args, "mt_gap_offset", None) or 0.0),
     )
+
+
+def _multitask_enabled(args: argparse.Namespace) -> bool:
+    return any(getattr(args, k, False) for k in ("mt_charges", "mt_spins", "mt_orbitals"))
 
 
 def make_steps(
@@ -978,6 +1002,7 @@ def make_steps(
     neural_interaction_l2 = args.neural_interaction_l2
     far_field_charge_weight = args.far_field_charge_weight
     far_field_max_k = args.far_field_max_k
+    use_multitask = _multitask_enabled(args)
     if (mbd_model is None) != (mbd_params is None):
         raise ValueError("mbd_model and mbd_params must be provided together")
     if mbd_params is not None:
@@ -1292,7 +1317,25 @@ def make_steps(
             else:
                 loss += neural_interaction_l2 * neural_int_mse
 
+        mt_metrics = {}
+        if use_multitask:
+            mt_loss, mt_metrics = multitask_loss_terms(
+                out,
+                batch,
+                batch_size=per_device_batch_size,
+                charges=args.mt_charges,
+                spins=args.mt_spins,
+                orbitals=args.mt_orbitals,
+                charge_weight=args.mt_charge_weight,
+                spin_weight=args.mt_spin_weight,
+                dipole_weight=args.mt_dipole_weight,
+                homo_weight=args.mt_homo_weight,
+                gap_weight=args.mt_gap_weight,
+            )
+            loss += mt_loss
+
         metrics = {
+            **mt_metrics,
             "loss": loss,
             "energy_mae": energy_mae,
             "forces_mae": force_mae,
@@ -1922,6 +1965,13 @@ _ARCH_KWARG_TO_ARG: dict[str, tuple[str, bool]] = {
     "efa": ("efa", False),
     "use_energy_bias": ("use_energy_bias", False),
     "electrostatics_damping_sigma": ("electrostatics_damping_sigma", False),
+    "feature_rmsnorm": ("feature_rmsnorm", False),
+    "multitask_charges": ("mt_charges", False),
+    "multitask_spins": ("mt_spins", False),
+    "multitask_orbitals": ("mt_orbitals", False),
+    "multitask_orbital_hidden": ("mt_orbital_hidden", False),
+    "multitask_homo_offset": ("mt_homo_offset", False),
+    "multitask_gap_offset": ("mt_gap_offset", False),
 }
 
 
@@ -2149,6 +2199,12 @@ def train(args: argparse.Namespace, cache_path: Path) -> None:
     else:
         print("No CGenFF LJ data in cache — training a plain ML potential", flush=True)
 
+    if _multitask_enabled(args) and args.far_field_augment_fraction > 0.0:
+        raise ValueError(
+            "--far-field-augment-fraction does not carry multitask labels "
+            "(q_atom/s_atom/homo/gap); disable one of them"
+        )
+
     if args.far_field_augment_fraction > 0.0:
         from mmml.models.physnetjax.physnetjax.training.far_field_augment import (
             append_far_field_composites_to_data,
@@ -2282,6 +2338,13 @@ def train(args: argparse.Namespace, cache_path: Path) -> None:
                 "efa",
                 "use_energy_bias",
                 "electrostatics_damping_sigma",
+                "feature_rmsnorm",
+                "mt_charges",
+                "mt_spins",
+                "mt_orbitals",
+                "mt_orbital_hidden",
+                "mt_homo_offset",
+                "mt_gap_offset",
             ]
             for param in arch_params:
                 if param not in saved_config or param in overrides:
@@ -2387,6 +2450,34 @@ def train(args: argparse.Namespace, cache_path: Path) -> None:
         flush=True,
     )
 
+    # After the restart/warm-start overrides above, so a restart that re-enables
+    # the heads from the checkpoint's architecture also prepares their labels.
+    # Masks are derived per structure, so doing this after the split is fine.
+    if _multitask_enabled(args):
+        if args.far_field_augment_fraction > 0.0:
+            raise ValueError(
+                "--far-field-augment-fraction does not carry multitask labels "
+                "(q_atom/s_atom/homo/gap); disable one of them"
+            )
+        prepare_multitask_cache_keys(
+            data, charges=args.mt_charges, spins=args.mt_spins, orbitals=args.mt_orbitals
+        )
+        for key, flag in (("has_q", args.mt_charges), ("has_spin", args.mt_spins), ("has_orb", args.mt_orbitals)):
+            if flag:
+                frac = float(np.mean(np.asarray(data[key]) > 0))
+                print(f"Multitask labels: {key} on {100.0 * frac:.1f}% of structures", flush=True)
+    if _multitask_enabled(args) and args.mt_orbitals:
+        if args.mt_homo_offset is None or args.mt_gap_offset is None:
+            homo0, gap0 = orbital_offsets_from_data(data, train_idx)
+            if args.mt_homo_offset is None:
+                args.mt_homo_offset = homo0
+            if args.mt_gap_offset is None:
+                args.mt_gap_offset = gap0
+        print(
+            f"Multitask orbital offsets: HOMO {args.mt_homo_offset:.4f} eV, "
+            f"gap {args.mt_gap_offset:.4f} eV",
+            flush=True,
+        )
     max_pad_atoms = pad_atoms_for_count(max_atoms, args.atom_bucket_width)
     model = create_model(args, max_atoms=max_pad_atoms)
     mbd_model = None
@@ -2890,6 +2981,15 @@ def train(args: argparse.Namespace, cache_path: Path) -> None:
             f"MBD_|E|={valid_mean.get('mbd_energy_abs_mean', 0.0):.6g} "
             f"MBD_|F|={valid_mean.get('mbd_force_abs_mean', 0.0):.6g}"
         )
+        mt_keys = sorted(k for k in valid_mean if k.startswith("mt_") and k.endswith("_mae"))
+        if mt_keys:
+            mt_line = " ".join(f"{k[3:]}={valid_mean[k]:.4g}" for k in mt_keys)
+            if valid_mean.get("mt_spin_labelled_atoms", 0.0) > 0.0:
+                mt_line += (
+                    " spin_mae_labelled="
+                    f"{valid_mean['mt_spin_abs_sum'] / valid_mean['mt_spin_labelled_atoms']:.4g}"
+                )
+            print("  multitask valid " + mt_line)
         print(
             f"  valid coverage: {valid_count} batches, pads {valid_pad_hist}",
             flush=True,
@@ -3161,6 +3261,34 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--forces-weight", type=float, default=52.91)
     parser.add_argument("--dipole-weight", type=float, default=1.0)
     parser.add_argument("--charges-weight", type=float, default=1.0)
+    mt = parser.add_argument_group(
+        "multitask heads",
+        "Extra readouts from the final atomic features (never feed the energy). "
+        "Cache keys: q_atom, s_atom (per atom), has_q, has_spin, has_orb, homo, gap "
+        "(per structure); see multitask_heads.py.",
+    )
+    mt.add_argument("--mt-charges", action="store_true",
+                    help="Per-atom charges with sum q = Q exactly (+ derived COM dipole).")
+    mt.add_argument("--mt-spins", action="store_true",
+                    help="Per-atom spin populations with sum s = multiplicity - 1 exactly.")
+    mt.add_argument("--mt-orbitals", action="store_true",
+                    help="Molecular HOMO energy and HOMO-LUMO gap (eV), mean-pooled readout.")
+    mt.add_argument("--mt-orbital-hidden", type=int, default=0,
+                    help="Hidden width of the orbital MLP (0 = --features).")
+    mt.add_argument("--mt-homo-offset", type=float, default=None,
+                    help="Fixed HOMO offset in eV (default: training-set mean).")
+    mt.add_argument("--mt-gap-offset", type=float, default=None,
+                    help="Fixed gap offset in eV (default: training-set mean).")
+    mt.add_argument("--mt-charge-weight", type=float, default=50.0,
+                    help="Weight of per-atom charge MSE (e^2) (default: 50).")
+    mt.add_argument("--mt-spin-weight", type=float, default=20.0,
+                    help="Weight of per-atom spin MSE over labelled (open-shell) atoms (default: 20).")
+    mt.add_argument("--mt-dipole-weight", type=float, default=0.0,
+                    help="Weight of MSE between mu(q_pred) and mu(q_label) in (e*A)^2 (default: 0).")
+    mt.add_argument("--mt-homo-weight", type=float, default=1.0,
+                    help="Weight of HOMO MSE in eV^2 (default: 1).")
+    mt.add_argument("--mt-gap-weight", type=float, default=1.0,
+                    help="Weight of gap MSE in eV^2 (default: 1).")
     parser.add_argument(
         "--far-field-augment-fraction",
         type=float,
