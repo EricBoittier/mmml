@@ -949,6 +949,7 @@ def create_model(args: argparse.Namespace, max_atoms: int) -> SpookyPhysNet:
         learn_cgenff_vdw_scale=not getattr(args, "fixed_cgenff_vdw", False),
         predict_atomic_vdw_scale=not getattr(args, "fixed_cgenff_vdw", False),
         interaction_trust_map=getattr(args, "interaction_trust_map", False),
+        feature_rmsnorm=getattr(args, "feature_rmsnorm", False),
     )
 
 
@@ -1072,7 +1073,16 @@ def make_steps(
         def _masked_force_mean(values):
             return jnp.sum(values * force_mask) / (jnp.sum(force_mask) * 3.0 + 1e-8)
 
-        energy_mse = jnp.mean((energy_pred - energy_ref) ** 2)
+        if getattr(args, "energy_loss_per_atom", False):
+            # MSE of the energy per atom (MACE / NequIP convention): the total-energy MSE grows ~N^2, so the largest
+            # molecules dominate and a 6 eV per-structure spread is learnt slowly (2 Nov OMol25 pilot: E MAE stayed
+            # near the mean-predictor baseline while forces improved). Reported MAEs stay per structure.
+            n_atoms = jax.ops.segment_sum(
+                batch["atom_mask"], batch["batch_segments"], num_segments=per_device_batch_size
+            ).reshape(-1, 1)
+            energy_mse = jnp.mean(((energy_pred - energy_ref) / jnp.maximum(n_atoms, 1.0)) ** 2)
+        else:
+            energy_mse = jnp.mean((energy_pred - energy_ref) ** 2)
         force_mse = _masked_force_mean((forces_pred - forces_ref) ** 2)
         energy_mae = jnp.mean(jnp.abs(energy_pred - energy_ref))
         force_mae = _masked_force_mean(jnp.abs(forces_pred - forces_ref))
@@ -3143,6 +3153,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--weight-decay", type=float, default=0.0)
     parser.add_argument("--clip-global-norm", type=float, default=10.0)
     parser.add_argument("--energy-weight", type=float, default=1.0)
+    parser.add_argument(
+        "--energy-loss-per-atom",
+        action="store_true",
+        help="Energy loss on (E_pred - E)/N_atoms instead of the total energy (pair with a larger --energy-weight).",
+    )
     parser.add_argument("--forces-weight", type=float, default=52.91)
     parser.add_argument("--dipole-weight", type=float, default=1.0)
     parser.add_argument("--charges-weight", type=float, default=1.0)
@@ -3430,6 +3445,8 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument("--efa", action="store_true")
+    parser.add_argument("--feature-rmsnorm", action="store_true",
+                        help="RMS-normalise atomic features after each refinement stage (needed for force training).")
     parser.add_argument("--use-energy-bias", action="store_true")
     parser.add_argument(
         "--electrostatics-damping-sigma",

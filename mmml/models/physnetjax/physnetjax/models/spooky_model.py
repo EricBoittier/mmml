@@ -53,6 +53,11 @@ class SpookyPhysNet(PhysNetFamilyMixin, nn.Module):
     max_padded_atoms: int = 35
     total_charge: float = 0
     n_refinement_blocks: int = 2
+    # RMS-normalise atomic features (one rotation-invariant norm per atom) after every refinement
+    # stage. Without it the unnormalised residual stack grows features ~800x (rms 0.13 -> ~100 at the
+    # head), so the zero-init 1x1 output scalar carries the whole energy scale (optimum ~2e-3, same
+    # size as an Adam step at lr 1e-3) and force training oscillates. Off by default: old checkpoints.
+    feature_rmsnorm: bool = False
     zbl: bool = True
     trainable_zbl: bool = False
     zbl_cuton: float | None = 0.1
@@ -185,6 +190,7 @@ class SpookyPhysNet(PhysNetFamilyMixin, nn.Module):
             "learn_cgenff_vdw_scale": self.learn_cgenff_vdw_scale,
             "predict_atomic_vdw_scale": self.predict_atomic_vdw_scale,
             "interaction_trust_map": self.interaction_trust_map,
+            "feature_rmsnorm": self.feature_rmsnorm,
             "trust_map_elements": self.trust_map_elements,
         }
 
@@ -508,6 +514,8 @@ class SpookyPhysNet(PhysNetFamilyMixin, nn.Module):
             self.features,
         )(y)
         y = e3x.nn.silu(y)
+        if self.feature_rmsnorm:
+            y = y * jax.lax.rsqrt(jnp.mean(y * y, axis=(-3, -2, -1), keepdims=True) + 1e-6)
 
         return y
 
