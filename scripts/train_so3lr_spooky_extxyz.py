@@ -2732,13 +2732,17 @@ def train(args: argparse.Namespace, cache_path: Path) -> None:
             )
         return step_functions[batch_size]
 
+    compiled_shapes: set = set()
+
     def _activate_shape(pad_atoms: int, batch_size: int) -> None:
         """Keep only one pad/B executable resident to avoid multi-GPU OOM hangs."""
         nonlocal active_shape
         shape = (pad_atoms, batch_size)
         if shape == active_shape:
             return
-        if active_shape is not None:
+        # Multi-GPU: keep one executable resident (pmap OOM / rendezvous hangs). One device: keep them all -- clearing
+        # recompiled on every bucket switch (2 Nov: 197 compiles in the first 600 steps of the OMol25 pilot, GPU idle).
+        if active_shape is not None and (args.num_devices > 1 or args.single_resident_executable):
             step_functions.clear()
             _clear_jax_caches()
         # A bucket's structure count and its step count are only proportional
@@ -2749,6 +2753,10 @@ def train(args: argparse.Namespace, cache_path: Path) -> None:
         # mistake for that bucket dominating training when it's really a
         # throughput artifact. Print both counts so this is visible directly
         # instead of inferred from how long the loss stays elevated.
+        active_shape = shape
+        if shape in compiled_shapes and not (args.num_devices > 1 or args.single_resident_executable):
+            return   # still resident: no recompilation
+        compiled_shapes.add(shape)
         n_structures = len(train_buckets.get(pad_atoms, ()))
         global_batch = batch_size * args.num_devices
         expected_steps = n_structures // global_batch if global_batch else 0
@@ -2759,7 +2767,6 @@ def train(args: argparse.Namespace, cache_path: Path) -> None:
             f"at global batch {global_batch})",
             flush=True,
         )
-        active_shape = shape
 
     for epoch in range(start_epoch, args.epochs + 1):
         t0 = time.time()
@@ -2992,6 +2999,11 @@ def build_parser() -> argparse.ArgumentParser:
             "Ignore workdir/auto_batch_sizes.json and re-probe all pad widths. "
             "Use after changing GPUs, model size, or --batch-size-per-device cap."
         ),
+    )
+    parser.add_argument(
+        "--single-resident-executable",
+        action="store_true",
+        help="Clear compiled steps on every pad/batch switch even on one device (always done for >1 device).",
     )
     parser.add_argument(
         "--auto-batch-scale",
