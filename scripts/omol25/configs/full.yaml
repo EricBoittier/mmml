@@ -1,0 +1,54 @@
+# OMol25 universal SpookyPhysNet -- FULL run on the whole filtered train_4M (sciCORE H200, later).
+# Same SMALL architecture as the pilot; paths are for this cluster -- rewrite the
+# /mmhome prefixes to the sciCORE project dir when copying the cache over.
+# Launch:  python -I scripts/launch_train.py configs/full.yaml [--exec]
+name: spooky_omol_train4M_f64_l1_i3
+python: /mmhome/boittier/home/mmml-latest/.venv-cu12/bin/python
+pythonpath: /mmhome/boittier/home/mmml-perf
+trainer: /mmhome/boittier/home/mmml-perf/scripts/train_so3lr_spooky_extxyz.py
+env:
+  XLA_PYTHON_CLIENT_PREALLOCATE: "false"
+  NVIDIA_TF32_OVERRIDE: "0"
+
+data:
+  # npz_to_spooky_cache.py --shards npz/train_4M --linear-ref fit  (all filtered structures)
+  cache: /mmhome/boittier/home/metatomic-runs/training/omol_universal/caches/omol_train4M_filtered
+  host_ram_note: "flat float64 cache ~52 B/atom (R,F,Z) -> see caches/*/metadata.json est_host_ram_GB"
+
+trainer_args:
+  mode: train
+  cache-path: /mmhome/boittier/home/metatomic-runs/training/omol_universal/caches/omol_train4M_filtered
+  workdir: /mmhome/boittier/home/metatomic-runs/training/omol_universal/runs/spooky_omol_train4M_f64_l1_i3
+  num-devices: 4               # set to GPUs per H200 node (pmap data parallel)
+  features: 64
+  max-degree: 1
+  num-iterations: 3
+  num-basis-functions: 32
+  cutoff: 6.0
+  n-res: 2
+  use-energy-bias: true
+  atom-bucket-width: 8
+  batch-size-per-device: 1024  # cap; auto-batch probes per pad width (141 GB HBM)
+  auto-batch: true
+  auto-batch-margin: 2
+  prefetch-batches: 8
+  shuffle-pad-buckets: true
+  max-batches-per-bucket-visit: 4
+  epochs: 40
+  optimizer: adamw
+  learning-rate: 5.0e-4
+  lr-schedule: warmup_cosine
+  lr-warmup-steps: 5000
+  lr-end-fraction: 0.02
+  clip-global-norm: 10.0
+  energy-weight: 1.0
+  forces-weight: 52.91
+  valid-fraction: 0.01
+  valid-steps: 500
+  save-every: 1
+  save-every-steps: 20000
+  seed: 0
+  auto-resume: true
+  log-every-steps: 500
+  # optional (ML/MM separability, neutral singlet fragments only):
+  # far-field-augment-fraction: 0.05

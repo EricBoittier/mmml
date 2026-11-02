@@ -1,0 +1,57 @@
+# OMol25 universal SpookyPhysNet -- PILOT (one 24-32 GB GPU).
+# Launch:  python -I scripts/launch_train.py configs/pilot.yaml [--exec]
+# Trainer: /mmhome/boittier/home/mmml-perf/scripts/train_so3lr_spooky_extxyz.py (--mode train --cache-path)
+name: spooky_omol_pilot200k_f64_l1_i3
+python: /mmhome/boittier/home/mmml-latest/.venv-cu12/bin/python
+pythonpath: /mmhome/boittier/home/mmml-perf
+trainer: /mmhome/boittier/home/mmml-perf/scripts/train_so3lr_spooky_extxyz.py
+env:
+  XLA_PYTHON_CLIENT_PREALLOCATE: "false"
+  # Ampere+ GPUs: keep matmuls full fp32 (see TF32 fix fca1ecce8 in the water/MeOH project)
+  NVIDIA_TF32_OVERRIDE: "0"
+
+data:
+  # built by: omol_to_npz.py (filter + iso-atom ref) -> npz_to_spooky_cache.py --n-structures 200000 --linear-ref fit
+  cache: /mmhome/boittier/home/metatomic-runs/training/omol_universal/caches/omol_train4M_pilot200k
+  filter: {elements: "H,C,N,O,F,P,S,Cl,Br,I,Li,Na,K,Mg,Ca,Zn", max_atoms: 120, max_abs_charge: 2,
+           max_multiplicity: 3, min_atoms: 2}
+  energy: "E_DFT - sum_i E_iso(Z_i, q=0) - (sum_Z n_Z b_Z + b_Q Q)  [eV]; forces eV/A; Q total charge; S multiplicity"
+
+trainer_args:
+  mode: train
+  cache-path: /mmhome/boittier/home/metatomic-runs/training/omol_universal/caches/omol_train4M_pilot200k
+  workdir: /mmhome/boittier/home/metatomic-runs/training/omol_universal/runs/spooky_omol_pilot200k_f64_l1_i3
+  num-devices: 1
+  # model (SMALL): ~ see analysis/timing_cpu.json for n_params
+  features: 64
+  max-degree: 1
+  num-iterations: 3
+  num-basis-functions: 32
+  cutoff: 6.0
+  n-res: 2
+  use-energy-bias: true        # learnable per-element offset on top of the fitted linear ref
+  # zbl on (default), predict-charges OFF (OMol25 LMDB dipoles not used; D stored as zeros unless present)
+  # batching: all-pairs graphs, cost ~ B*n^2; auto-batch probes the max B per pad width on the GPU
+  atom-bucket-width: 8
+  batch-size-per-device: 256   # cap; auto-batch lowers it per pad width
+  auto-batch: true
+  auto-batch-margin: 2
+  prefetch-batches: 4
+  shuffle-pad-buckets: true
+  max-batches-per-bucket-visit: 4
+  # optimisation
+  epochs: 60
+  optimizer: adamw
+  learning-rate: 5.0e-4
+  lr-schedule: warmup_cosine
+  lr-warmup-steps: 2000
+  lr-end-fraction: 0.02
+  clip-global-norm: 10.0
+  energy-weight: 1.0
+  forces-weight: 52.91
+  valid-fraction: 0.02
+  valid-steps: 200
+  save-every: 1
+  seed: 0
+  auto-resume: true
+  log-every-steps: 200

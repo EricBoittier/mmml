@@ -28,6 +28,8 @@ We map this to the spooky model inputs:
 
 from __future__ import annotations
 
+import functools
+
 from pathlib import Path
 from typing import Any, Dict, Iterator, Tuple, Union
 
@@ -36,6 +38,21 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 from mmml.utils.rotations import rotate_batched_vectors, sample_random_rotations
+
+
+@functools.lru_cache(maxsize=512)
+def _np_pairwise_indices(n: int) -> Tuple[np.ndarray, np.ndarray]:
+    """Host-side cache of e3x.ops.sparse_pairwise_indices(n) (same order), as int32 numpy.
+
+    The trainer calls this once per molecule per batch; the uncached e3x call
+    dominates host batch-building time for large datasets.
+    """
+    ld, ls = e3x.ops.sparse_pairwise_indices(n)
+    ld = np.asarray(ld, dtype=np.int32)
+    ls = np.asarray(ls, dtype=np.int32)
+    ld.setflags(write=False)
+    ls.setflags(write=False)
+    return ld, ls
 
 
 def restart_params_only(
@@ -368,9 +385,7 @@ def build_spooky_batch_from_flat_data(
         if pad_atoms is None:
             n_use = n
             atom_mask_mol = np.ones((n,), dtype=np.float32)
-            ld, ls = e3x.ops.sparse_pairwise_indices(n)
-            ld = np.asarray(ld, dtype=np.int32)
-            ls = np.asarray(ls, dtype=np.int32)
+            ld, ls = _np_pairwise_indices(int(n))
             pair_mask = np.ones((ld.shape[0],), dtype=np.float32)
             q_mol = np.full((n, 1), q_np[mi], dtype=np.float32)
             s_mol = np.full((n, 1), s_np[mi], dtype=np.float32)
@@ -388,9 +403,7 @@ def build_spooky_batch_from_flat_data(
             r_mol, z_mol, f_mol = r_pad, z_pad, f_pad
             atom_mask_mol = np.zeros((n_use,), dtype=np.float32)
             atom_mask_mol[:n] = 1.0
-            ld, ls = e3x.ops.sparse_pairwise_indices(n_use)
-            ld = np.asarray(ld, dtype=np.int32)
-            ls = np.asarray(ls, dtype=np.int32)
+            ld, ls = _np_pairwise_indices(int(n_use))
             pair_mask = (
                 (atom_mask_mol[ld] > 0) & (atom_mask_mol[ls] > 0)
             ).astype(np.float32)
