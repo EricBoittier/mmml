@@ -165,7 +165,7 @@ Phase A always uses Packmol at a looser start density when `bulk_density_fractio
 
 ---
 
-## Cache
+## Generated artifacts and cache
 
 Packmol cluster builds are cached under `<output-dir>/.packmol_cache/` (or `KARML_PACKMOL_CACHE` / `--packmol-cache-dir`). The cache key hashes composition, placement geometry, tolerance, and monomer PDB content.
 
@@ -184,6 +184,21 @@ Artifacts in a cache hit:
 - `manifest.json`
 
 Both the cache write and the cache hit are gated on monomer geometry: coordinates whose covalent skeleton no longer matches the placed template are never written, and an existing entry that holds distorted monomers fails loudly rather than feeding the box. See [Packmol cluster geometry gate](packmol-monomer-geometry-gate.md).
+
+Treat these files as build products, not source:
+
+- `packmol_cluster/` is job-local scratch for the initial placement and
+  CHARMM-only relax.
+- `.packmol_cache/` is safe to delete when a host, CHARMM build, residue
+  template, tolerance, or placement setting changes.
+- `karml/generate/packmol/packmol` and `karml/generate/packmol/bin/packmol`
+  are platform-specific binaries produced by `scripts/rebuild_packmol.sh`;
+  keep them untracked and rebuild them locally instead of committing a Linux or
+  macOS executable.
+
+If a reused cache is suspect, prefer `--rebuild-packmol` first. If the failure is
+host or CHARMM-specific, remove the cache directory as well so the next run does
+not inherit a cluster minimized by the old environment.
 
 ---
 
@@ -215,12 +230,53 @@ For dense liquids that stall in minimization, prefer `--liquid-prep` / `liquid_p
 
 ---
 
-## Binary
+## Packmol executable and rebuilds
 
-Packmol is bundled for Linux (`karml/generate/packmol/`) or resolved from `PATH`. Check availability:
+`packmol_executable()` in `karml/interfaces/pycharmmInterface/packmol_placement.py`
+resolves the executable in this order:
+
+1. `KARML_PACKMOL`, when set.
+2. Package-local candidates such as `karml/generate/packmol/packmol` and
+   `karml/generate/packmol/bin/packmol`.
+3. A rebuild cache under `PACKMOL_BUILD_DIR`, defaulting to
+   `~/.cache/karml-packmol-build/<os>-<arch>/`.
+4. A checkout-local `karml/generate/packmol/packmol` found by walking upward
+   from the current working directory.
+5. `packmol` on `PATH`.
+
+Each candidate is checked with `file` when possible, so a macOS checkout will not
+try to run a Linux ELF and a Linux checkout will not try to run a Mach-O binary.
+A fresh `uv tool` install may not contain the gitignored executable; use a source
+checkout, a `PATH` install, or `KARML_PACKMOL` in that case.
+
+Check what KARML will use:
 
 ```bash
 karml health-check --live packmol
+python -c "from karml.interfaces.pycharmmInterface.packmol_placement import packmol_executable; print(packmol_executable())"
 ```
 
-Rebuild: `bash scripts/rebuild_packmol.sh`
+Rebuild for the current platform:
+
+```bash
+bash scripts/rebuild_packmol.sh
+```
+
+The script configures CMake from `karml/generate/packmol`, installs into the
+build cache, and copies the executable to `karml/generate/packmol/packmol`.
+Useful overrides:
+
+| Variable | Purpose |
+|----------|---------|
+| `PACKMOL_BUILD_DIR` | Put the CMake build and installed executable somewhere other than `~/.cache/karml-packmol-build/<os>-<arch>/`. |
+| `PACKMOL_SRC` | Build from a different Packmol source tree. |
+| `PACKMOL_OUT` | Copy the built executable somewhere other than `karml/generate/packmol/packmol`. |
+| `FC` / `PACKMOL_FC` | Select the Fortran compiler when `gfortran` is not the right compiler. |
+
+Common fixes:
+
+| Symptom | Fix |
+|---------|-----|
+| `packmol not found for this platform` | Run `bash scripts/rebuild_packmol.sh`, install `packmol` on `PATH`, or set `KARML_PACKMOL=/path/to/packmol`. |
+| `rebuild_packmol: gfortran not found` | Install `gcc`/`gfortran`, or set `FC`/`PACKMOL_FC` to an available Fortran compiler. |
+| A checkout keeps switching between working and non-working Packmol binaries after pulls or merges | Do not commit the generated executable; rebuild it locally for each platform and keep only source/configuration changes in git. |
