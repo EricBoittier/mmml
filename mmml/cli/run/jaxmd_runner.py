@@ -1541,10 +1541,56 @@ class _MolPairFast:
         self.glam = float(os.environ.get("MMML_GLOBAL_LAMBDA", "1") or 1.0)
         if not 0.0 <= self.glam <= 1.0:
             raise ValueError(f"MMML_GLOBAL_LAMBDA must be in [0, 1], got {self.glam}")
+        if self.mp.ml_solute is not None and not self.use_cand:
+            raise ValueError("MMML_ML_SOLUTE needs the sparse ML dimer path (candidates from the molecule-pair list); "
+                             "set --ml-dimer-cap-auto or --ml-max-active-dimers")
         self._whole = lambda p, b: calc.make_monomers_whole(p, b)
+        self._init_solvent_classical(args, monomer_offsets)
         Rw = jax.jit(self._whole)(jnp.asarray(R, dtype=jnp.float32), box)
         self.mp.size_caps(Rw, box)
         self.nl0 = self.mp.build(Rw, box)
+
+    def _init_solvent_classical(self, args, monomer_offsets):
+        """MMML_ML_SOLUTE: solvent molecules fully classical. The ML monomer (intramolecular) energy is kept for the
+        solute only (calculator ``ml_monomer_weight``); every other molecule gets its CHARMM intramolecular energy
+        (bonds, angles + Urey-Bradley, dihedrals, impropers, 1-4 / 1-5+ LJ + Coulomb; flexible TIP3P for water) from
+        ``--from-psf`` + the CGenFF prm (``MMML_ML_SOLUTE_PRM`` overrides), see mmml.interfaces.pycharmmInterface.
+        solvent_classical. ``MMML_ML_SOLUTE_INTRA=ml`` keeps the ML monomers for the solvent (previous behaviour)."""
+        self.ml_mono_w = None
+        self.solv_intra = None
+        if self.mp.ml_solute is None:
+            return
+        if os.environ.get("MMML_ML_SOLUTE_INTRA", "classical").strip().lower() == "ml":
+            print("[ml-solute] MMML_ML_SOLUTE_INTRA=ml: solvent keeps its ML monomer terms", flush=True)
+            return
+        from mmml.interfaces.pycharmmInterface.mm_molpair import COULOMB_K, KCALMOL2EV
+        from mmml.interfaces.pycharmmInterface.solvent_classical import (
+            build_solvent_intra_from_psf, make_intra_energy_fn)
+
+        psf = getattr(args, "from_psf", None)
+        if psf is None:
+            raise ValueError("MMML_ML_SOLUTE (classical solvent intramolecular terms) needs --from-psf; "
+                             "set MMML_ML_SOLUTE_INTRA=ml to keep ML solvent monomers")
+        if getattr(args, "rigid_water", False) or getattr(args, "psf_angle_restraints", False):
+            raise ValueError("MMML_ML_SOLUTE classical solvent: --rigid-water / --psf-angle-restraints would act on "
+                             "the classical solvent too (double counting / wrong constraints)")
+        sol = np.asarray(self.mp.ml_solute)
+        terms = build_solvent_intra_from_psf(psf, monomer_offsets, sol)
+        self.ml_mono_w = jnp.asarray(sol.astype(np.float32))
+        self.solv_intra = make_intra_energy_fn(terms, coulomb_k=COULOMB_K, energy_scale=KCALMOL2EV)
+        print(f"[ml-solute] ML monomers for {int(sol.sum())} solute molecule(s); classical CHARMM intramolecular "
+              f"terms for the solvent: {terms.summary()} (flexible TIP3P water)", flush=True)
+
+    def _calc(self, **kw):
+        if self.ml_mono_w is not None:
+            kw["ml_monomer_weight"] = self.ml_mono_w
+        return self.calc(**kw)
+
+    def _intra(self, pw):
+        """Classical solvent intramolecular energy (eV) on whole molecules; 0 when MMML_ML_SOLUTE is unset."""
+        if self.solv_intra is None:
+            return None
+        return self.solv_intra(pw)
 
     def _box(self, box):
         return self.box if box is None else box
@@ -1571,7 +1617,7 @@ class _MolPairFast:
             return self._evaluate_glam(atomic_numbers, positions, nl, n_monomers, cutoff_params, debug, box)
         box = self._box(box)
         nl = self.nl_for(positions, nl, box)
-        out = self.calc(
+        out = self._calc(
             atomic_numbers=atomic_numbers,
             positions=positions,
             n_monomers=n_monomers,
@@ -1587,12 +1633,15 @@ class _MolPairFast:
         mp = self.mp
 
         def _e(p):
-            e_mm, e_wall, e_vdw, e_el = mp.energy_terms(self.whole(p, box), box, nl)
+            pw = self.whole(p, box)
+            e_mm, e_wall, e_vdw, e_el = mp.energy_terms(pw, box, nl)
             return e_mm + e_wall, (e_mm, e_wall, e_vdw, e_el)
 
         (e_tot, (e_mm, e_wall, e_vdw, e_el)), g = jax.value_and_grad(_e, has_aux=True)(positions)
         f = (-g).astype(out.forces.dtype)
         e_add = e_tot.astype(jnp.asarray(out.energy).dtype)
+        if self.solv_intra is not None:
+            out = self._add_intra(out, positions, box)
         return out._replace(
             energy=out.energy + e_add,
             forces=out.forces + f,
@@ -1604,6 +1653,16 @@ class _MolPairFast:
             wall_E=e_wall,
         )
 
+    def _add_intra(self, out, positions, box):
+        """Classical solvent intramolecular energy/forces into energy, hybrid_energy and internal_E/F."""
+        e_in, g_in = jax.value_and_grad(lambda p: self._intra(self.whole(p, box)))(positions)
+        dt = jnp.asarray(out.energy).dtype
+        e_in = e_in.astype(dt)
+        f_in = (-g_in).astype(out.forces.dtype)
+        return out._replace(energy=out.energy + e_in, forces=out.forces + f_in,
+                            hybrid_energy=out.hybrid_energy + e_in,
+                            internal_E=out.internal_E + e_in, internal_F=out.internal_F + f_in)
+
     def _evaluate_glam(self, atomic_numbers, positions, nl, n_monomers, cutoff_params, debug, box=None):
         """MMML_GLOBAL_LAMBDA < 1: lam * (hybrid + handoff MM) + (1 - lam) * (ML monomers + full MM) + wall."""
         box = self._box(box)
@@ -1611,9 +1670,12 @@ class _MolPairFast:
         lam = self.glam
         kw = dict(atomic_numbers=atomic_numbers, positions=positions, n_monomers=n_monomers,
                   cutoff_params=cutoff_params, doML=True, doMM=False, debug=debug, box=box, include_wall=False)
-        out0 = self.calc(doML_dimer=False, ml_dimer_candidates=None, **kw)
-        out1 = (self.calc(doML_dimer=True, ml_dimer_candidates=(nl.ml_cand if self.use_cand else None), **kw)
+        out0 = self._calc(doML_dimer=False, ml_dimer_candidates=None, **kw)
+        out1 = (self._calc(doML_dimer=True, ml_dimer_candidates=(nl.ml_cand if self.use_cand else None), **kw)
                 if lam > 0.0 else None)
+        if self.solv_intra is not None:   # same classical solvent at both ends of lambda
+            out0 = self._add_intra(out0, positions, box)
+            out1 = None if out1 is None else self._add_intra(out1, positions, box)
         mp = self.mp
 
         def _e(p):
@@ -1655,9 +1717,12 @@ class _MolPairFast:
         nl = self.nl_for(positions, None, box)
         kw = dict(atomic_numbers=atomic_numbers, positions=positions, n_monomers=n_monomers,
                   cutoff_params=cutoff_params, doML=True, doMM=False, debug=False, box=box, include_wall=False)
-        e0 = self.calc(doML_dimer=False, ml_dimer_candidates=None, **kw).energy
-        e1 = self.calc(doML_dimer=True, ml_dimer_candidates=(nl.ml_cand if self.use_cand else None), **kw).energy
+        e0 = self._calc(doML_dimer=False, ml_dimer_candidates=None, **kw).energy
+        e1 = self._calc(doML_dimer=True, ml_dimer_candidates=(nl.ml_cand if self.use_cand else None), **kw).energy
         pw = self.whole(positions, box)
+        if self.solv_intra is not None:
+            e_in = self._intra(pw).astype(jnp.asarray(e0).dtype)
+            e0, e1 = e0 + e_in, e1 + e_in
         m0, w, _, _ = self.mp.energy_terms(pw, box, nl, full_mm=True)
         m1, _, _, _ = self.mp.energy_terms(pw, box, nl)
         return e1 + m1 + w, e0 + m0 + w

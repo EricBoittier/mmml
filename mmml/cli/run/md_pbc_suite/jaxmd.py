@@ -1316,6 +1316,24 @@ def main(argv: list[str] | None = None) -> int:
         else:
             _n_act = count_dimers_within(atoms.get_positions(), monomer_offsets, float(L), _r_act, radius_by_size=_rbs)
         _n_tot = n_molecules * (n_molecules - 1) // 2
+        _sol = os.environ.get("MMML_ML_SOLUTE", "").strip()
+        if _sol:
+            # ML dimers only for pairs with a solute molecule (mm_molpair): bound the active count by every molecule
+            # whose centroid is within the largest ML radius (COM switch, per-size table, contact prefilter) of a solute
+            import json as _json
+            _ids = sorted({int(x) for x in _sol.replace(" ", "").split(",") if x})
+            _off = np.asarray(monomer_offsets, dtype=int)
+            _Xa = np.asarray(atoms.get_positions(), float)
+            _com = np.stack([_Xa[_off[i]:_off[i + 1]].mean(0) for i in range(len(_off) - 1)])
+            _rmax = max([float(_r_act)] + list((_rbs or {}).values())
+                        + [float(v[2]) for v in (_json.loads(_cs).values() if _cs else [])])
+            _near = set()
+            for _i in _ids:
+                _d = _com - _com[_i]
+                _d -= float(L) * np.round(_d / float(L))
+                _near |= {(min(_i, j), max(_i, j)) for j in np.nonzero(np.sum(_d * _d, 1) < _rmax**2)[0] if j != _i}
+            print(f"[ml-cap] MMML_ML_SOLUTE: {len(_near)} solute pairs within {_rmax:.1f} A (was {_n_act} for all pairs)", flush=True)
+            _n_act = len(_near)
         _cap = auto_ml_dimer_cap(_n_act, _cap_auto, _n_tot)
         print(
             f"[ml-cap] auto sparse ML dimer cap: {_n_act} active (< {_r_act:.2f} A) x {_cap_auto:g} + 64 "

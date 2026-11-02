@@ -433,6 +433,15 @@ def bonded_intra_per_monomer(
     return jax.vmap(eval_fn)(positions[mono_idx])
 
 
+def ml_monomer_weighted_total(weight, monomer_energy, f, n_monomers, max_atoms, scatter_monomer_forces):
+    """``MMML_ML_SOLUTE``: the ML monomer (intramolecular) energy and forces in the TOTAL, weighted per monomer
+    (1 = solute, 0 = classical solvent whose intramolecular energy the caller adds). Same substitution point as
+    bonded-intra: the dimer interactions ``E_AB - E_A - E_B`` keep the unweighted ML monomer terms."""
+    w = jnp.asarray(weight).astype(monomer_energy.dtype).reshape(-1)
+    fm = f[: max_atoms * n_monomers].reshape(n_monomers, max_atoms, 3) * w[:, None, None].astype(f.dtype)
+    return jnp.sum(w * monomer_energy), scatter_monomer_forces(fm.reshape(-1, 3))
+
+
 def bonded_intra_contribution(
     eval_fn: Callable[[Array], Tuple[Array, Array]],
     positions: Array,
@@ -2463,6 +2472,7 @@ def setup_calculator(
         ml_eval_chunks: Optional[int] = None,
         ml_dimer_candidates: Optional[Array] = None,
         include_wall: bool = True,
+        ml_monomer_weight: Optional[Array] = None,
     ) -> ModelOutput:
         """Calculates energy and forces using combined ML/MM potential.
         
@@ -2488,6 +2498,11 @@ def setup_calculator(
                 sorted global dimer ids padded with ``n_dimers``). The exact
                 ``com_dist < active_radius`` selection then runs on these pairs
                 only; results equal the all-pairs path while the list is valid.
+            ml_monomer_weight: Optional per-monomer weight ``(n_monomers,)`` on the
+                ML MONOMER (intramolecular) energy/forces in the TOTAL only
+                (``MMML_ML_SOLUTE``: 1 for solute, 0 for classical solvent). The
+                dimer interactions ``E_AB - E_A - E_B`` keep the unweighted ML
+                monomer terms. ``None`` (default) leaves the path unchanged.
             
         Returns:
             ModelOutput containing total energy and forces
@@ -2542,6 +2557,7 @@ def setup_calculator(
                 spatial_dimer_indices=spatial_dimer_indices,
                 ml_eval_chunks=ml_eval_chunks,
                 ml_dimer_candidates=ml_dimer_candidates,
+                ml_monomer_weight=ml_monomer_weight,
             )
             outputs["ml_n_active_dimers"] = ml_out.get("ml_n_active_dimers", -1)
             # Get ML forces from calculate_ml_contributions
@@ -3439,6 +3455,7 @@ def setup_calculator(
         spatial_dimer_indices: Optional[Array] = None,
         ml_eval_chunks: Optional[int] = None,
         ml_dimer_candidates: Optional[Array] = None,
+        ml_monomer_weight: Optional[Array] = None,
     ) -> Dict[str, Array]:
         """Calculate ML energy and force contributions (heterogeneous-safe)."""
         # Get model predictions
@@ -3572,6 +3589,12 @@ def setup_calculator(
                 damp_onset_kcal=_bonded_damp_onset,
                 damp_cutoff_kcal=_bonded_damp_cutoff,
             )
+        if ml_monomer_weight is not None:   # MMML_ML_SOLUTE, see ml_monomer_weighted_total
+            if _bonded_intra_eval is not None:
+                raise ValueError("ml_monomer_weight (MMML_ML_SOLUTE) cannot be combined with bonded-intra")
+            _bonded_E_total, _bonded_F_global = ml_monomer_weighted_total(
+                ml_monomer_weight, monomer_contribs["monomer_energy"], f, n_monomers, max_atoms,
+                lambda x: process_monomer_forces(x, monomer_idx_arr_jnp.reshape(-1), max_atoms))
 
 
         # No dimer pairs exist for a single monomer (n_monomers < 2); skip ML 2-body

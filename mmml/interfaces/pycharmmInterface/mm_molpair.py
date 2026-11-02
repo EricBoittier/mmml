@@ -35,6 +35,7 @@ batch (see README in perf/overheads for the interface).
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
 from typing import Any, NamedTuple, Optional, Sequence, Tuple
 
@@ -267,6 +268,17 @@ class MolPairMM:
         self._atom_idx = jnp.asarray(topo.atom_idx)
         self._atom_mask = jnp.asarray(topo.atom_mask)
         self._cls = jnp.asarray(topo.mol_class)
+        # MMML_ML_SOLUTE="i,j,...": ML dimers only for pairs with at least one listed molecule; every other pair is
+        # plain MM (the full_mm weight). Solvent-solvent interactions are then classical (correct solvent density),
+        # the ML/MM description is the solute's. Molecules keep their ML monomer terms.
+        _sol = os.environ.get("MMML_ML_SOLUTE", "").strip()
+        self.ml_solute = None
+        if _sol:
+            ids = sorted({int(x) for x in _sol.replace(" ", "").split(",") if x})
+            if not ids or min(ids) < 0 or max(ids) >= M:
+                raise ValueError(f"MMML_ML_SOLUTE molecule ids must lie in [0, {M}), got {_sol!r}")
+            m = np.zeros(M, bool); m[ids] = True
+            self.ml_solute = jnp.asarray(m)
         self._q = jnp.asarray(spec["q"], dtype=dtype)
         self._rm = jnp.asarray(spec["rmin_half"], dtype=dtype)
         self._ep = jnp.asarray(spec["eps"], dtype=dtype)  # signed (<= 0)
@@ -332,6 +344,8 @@ class MolPairMM:
             counts.append(n)
         if self.r_ml_list is not None:
             sel_ml = upper & (r2 < self.r_ml_list**2)
+            if self.ml_solute is not None:
+                sel_ml = sel_ml & (self.ml_solute[:, None] | self.ml_solute[None, :])
             flat = jnp.nonzero(sel_ml.reshape(-1), size=caps.ml, fill_value=M * M)[0]
             valid = flat < M * M
             i = flat // M
@@ -374,9 +388,13 @@ class MolPairMM:
             else:
                 sel = within & (((ci == ca) & (cj == cb)) | ((ci == cb) & (cj == ca)))
             out.append(jnp.sum(sel))
-        n_ml = (
-            jnp.sum(upper & (r2 < self.r_ml_list**2)) if self.r_ml_list is not None else jnp.asarray(0)
-        )
+        if self.r_ml_list is None:
+            n_ml = jnp.asarray(0)
+        else:
+            sel_ml = upper & (r2 < self.r_ml_list**2)
+            if self.ml_solute is not None:   # the build keeps only pairs with a solute molecule
+                sel_ml = sel_ml & (self.ml_solute[:, None] | self.ml_solute[None, :])
+            n_ml = jnp.sum(sel_ml)
         return jnp.stack(out), n_ml
 
     def size_caps(self, pos, box, *, margin: Optional[float] = None, floor: Optional[MolPairCaps] = None) -> MolPairCaps:
@@ -492,11 +510,15 @@ class MolPairMM:
             # padded slots have ma == mb (R = 0): keep the norm's gradient finite
             R = jnp.sqrt(jnp.maximum(jnp.sum(dc * dc, axis=-1), 1e-22))
             cpar = self._bucket_contact[b]
-            if full_mm:   # the same COM tail as the hybrid's MM weight, without its ML-side factor
-                if cpar is None and not sp.get("complementary_handoff", True):
-                    s = 1.0 - _sharpstep(R, on + w, on + 2.0 * w, GAMMA_OFF)
-                else:
-                    s = 1.0 - _sharpstep(R, on, on + w, GAMMA_OFF)
+            # plain-MM weight (full_mm, or no MMML_ML_SOLUTE molecule in the pair): the COM tail of the hybrid's MM
+            # weight, without its ML-side factor
+            if cpar is None and not sp.get("complementary_handoff", True):
+                s_full = 1.0 - _sharpstep(R, on + w, on + 2.0 * w, GAMMA_OFF)
+            else:
+                s_full = 1.0 - _sharpstep(R, on, on + w, GAMMA_OFF)
+            solv = None if (full_mm or self.ml_solute is None) else ~(self.ml_solute[ma] | self.ml_solute[mb])
+            if full_mm:
+                s = s_full
             elif cpar is not None:
                 c_on, c_w, pm = cpar
                 z = jnp.where(jnp.asarray(pm)[None, :, :], -self.contact_beta * r, -jnp.inf)
@@ -509,6 +531,8 @@ class MolPairMM:
                 s = _sharpstep(R, on, on + w, GAMMA_ON) * (1.0 - _sharpstep(R, on + w, on + 2.0 * w, GAMMA_OFF))
             if r_min is not None and not full_mm:
                 s = s * (R >= float(r_min)).astype(s.dtype)
+            if solv is not None:
+                s = jnp.where(solv, s_full, s)
             s = jnp.where(valid, s * lam, 0.0)
             e_vdw = e_vdw + jnp.sum(s * lj)
             if self.ewald is None:
@@ -525,6 +549,8 @@ class MolPairMM:
                     h = _sharpstep(R, on, on + w, GAMMA_ON)
                 if r_min is not None and not full_mm:
                     h = h * (R >= float(r_min)).astype(h.dtype)
+                if solv is not None:
+                    h = jnp.where(solv, jnp.ones_like(h), h)
                 rr = jnp.where(valid[:, None, None], r, 1.0)
                 if self.ewald.get("coulomb", "handoff") == "full":
                     # long-range-consistent students (trained on PET minus bare Coulomb): every intermolecular pair
