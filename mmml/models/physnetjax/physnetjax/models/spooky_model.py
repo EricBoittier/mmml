@@ -63,6 +63,10 @@ class SpookyPhysNet(PhysNetFamilyMixin, nn.Module):
     # head), so the zero-init 1x1 output scalar carries the whole energy scale (optimum ~2e-3, same
     # size as an Adam step at lr 1e-3) and force training oscillates. Off by default: old checkpoints.
     feature_rmsnorm: bool = False
+    # Feed charge and spin as per-atom densities: Q/N and (M-1)/N for each molecule of N real atoms, so per-atom
+    # terms linear in them sum to Q and 2S instead of growing as N*Q (3 Nov OMol25 evals: with the broadcast total
+    # charge the network learnt no charge response; IP+EA = 2 b_Q for every molecule). Off by default.
+    charge_spin_per_atom: bool = False
     zbl: bool = True
     trainable_zbl: bool = False
     zbl_cuton: float | None = 0.1
@@ -196,6 +200,7 @@ class SpookyPhysNet(PhysNetFamilyMixin, nn.Module):
             "predict_atomic_vdw_scale": self.predict_atomic_vdw_scale,
             "interaction_trust_map": self.interaction_trust_map,
             "feature_rmsnorm": self.feature_rmsnorm,
+            "charge_spin_per_atom": self.charge_spin_per_atom,
             "trust_map_elements": self.trust_map_elements,
             "multitask_charges": self.multitask_charges,
             "multitask_spins": self.multitask_spins,
@@ -328,6 +333,12 @@ class SpookyPhysNet(PhysNetFamilyMixin, nn.Module):
         n_atoms = atomic_numbers.shape[0]
         charge_inputs = jnp.asarray(charges, dtype=DTYPE).reshape(n_atoms, -1)
         spin_inputs = jnp.asarray(spins, dtype=DTYPE).reshape(n_atoms, -1)
+        if self.charge_spin_per_atom:
+            mask = jnp.asarray(atom_mask, dtype=DTYPE).reshape(n_atoms)
+            counts = jax.ops.segment_sum(mask, batch_segments, num_segments=n_atoms)
+            per_atom_n = jnp.maximum(counts[batch_segments], 1.0)[:, None]
+            charge_inputs = charge_inputs / per_atom_n * mask[:, None]
+            spin_inputs = (spin_inputs - 1.0) / per_atom_n * mask[:, None]
 
         charge_proj = nn.Dense(
             self.features,

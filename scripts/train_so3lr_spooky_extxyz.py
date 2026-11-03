@@ -964,6 +964,7 @@ def create_model(args: argparse.Namespace, max_atoms: int) -> SpookyPhysNet:
         predict_atomic_vdw_scale=not getattr(args, "fixed_cgenff_vdw", False),
         interaction_trust_map=getattr(args, "interaction_trust_map", False),
         feature_rmsnorm=getattr(args, "feature_rmsnorm", False),
+        charge_spin_per_atom=getattr(args, "charge_spin_per_atom", False),
         multitask_charges=getattr(args, "mt_charges", False),
         multitask_spins=getattr(args, "mt_spins", False),
         multitask_orbitals=getattr(args, "mt_orbitals", False),
@@ -1966,6 +1967,7 @@ _ARCH_KWARG_TO_ARG: dict[str, tuple[str, bool]] = {
     "use_energy_bias": ("use_energy_bias", False),
     "electrostatics_damping_sigma": ("electrostatics_damping_sigma", False),
     "feature_rmsnorm": ("feature_rmsnorm", False),
+    "charge_spin_per_atom": ("charge_spin_per_atom", False),
     "multitask_charges": ("mt_charges", False),
     "multitask_spins": ("mt_spins", False),
     "multitask_orbitals": ("mt_orbitals", False),
@@ -2173,6 +2175,11 @@ def save_step_checkpoint(
 
 def train(args: argparse.Namespace, cache_path: Path) -> None:
     data = restore_cached_data(cache_path)
+    b_q = float(getattr(args, "energy_add_charge_ref", 0.0) or 0.0)
+    if b_q:
+        # remove a linear b_Q*Q term from the cached reference: E_target = E_cache + b_Q*Q
+        data["E"] = (np.asarray(data["E"], dtype=np.float64).reshape(-1) + b_q * np.asarray(data["Q"], dtype=np.float64).reshape(-1)).reshape(np.shape(data["E"]))
+        print(f"--energy-add-charge-ref {b_q}: E += b_Q*Q; new E std {np.std(data['E']):.3f} eV")
     has_mol_id = "mol_id" in data
     has_cgenff_data = (
         "cgenff_master_sigmas" in data
@@ -2339,6 +2346,7 @@ def train(args: argparse.Namespace, cache_path: Path) -> None:
                 "use_energy_bias",
                 "electrostatics_damping_sigma",
                 "feature_rmsnorm",
+                "charge_spin_per_atom",
                 "mt_charges",
                 "mt_spins",
                 "mt_orbitals",
@@ -3573,6 +3581,11 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument("--efa", action="store_true")
+    parser.add_argument("--charge-spin-per-atom", action="store_true",
+                        help="Feed Q/N and (M-1)/N per atom instead of the broadcast total charge / multiplicity.")
+    parser.add_argument("--energy-add-charge-ref", type=float, default=0.0,
+                        help="Add this x Q (eV per e) to the cached energies at load, i.e. remove a linear b_Q*Q term "
+                             "from the reference so the network learns the charge dependence (OMol25 pilot ref: 5.6614).")
     parser.add_argument("--feature-rmsnorm", action="store_true",
                         help="RMS-normalise atomic features after each refinement stage (needed for force training).")
     parser.add_argument("--use-energy-bias", action="store_true")
