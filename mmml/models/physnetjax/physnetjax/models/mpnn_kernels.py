@@ -183,6 +183,12 @@ def calc_electrostatics_switches(
     squared_distances = jnp.sum(displacements**2, axis=1)
     distances = jnp.sqrt(jnp.maximum(squared_distances, min_dist**2))
 
+    # e3x smooth_switch uses lax.sub: thresholds must share the distances' dtype (with jax_enable_x64 the
+    # calculator can hand float64 thresholds to a float32 model -- 4 Nov SpookyPhysNet ML/MM patch test)
+    _dt = distances.dtype
+    _c = lambda v: v.astype(_dt) if hasattr(v, "dtype") and v.dtype != _dt else v   # arrays only; floats stay python
+    switch_start, switch_end = _c(switch_start), _c(switch_end)
+    electrostatics_off_start, electrostatics_off_end = _c(electrostatics_off_start), _c(electrostatics_off_end)
     switch_dist = e3x.nn.smooth_switch(distances, switch_start, switch_end)
     off_dist = 1.0 - e3x.nn.smooth_switch(
         distances, electrostatics_off_start, electrostatics_off_end

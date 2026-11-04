@@ -33,6 +33,7 @@ def run_chunked_model_apply(
     has_aux: bool = False,
     n_valid: Array | int | None = None,
     n_eval_chunks: int | None = None,
+    extra_chunks: Array | None = None,
 ) -> tuple:
     """Evaluate PhysNet chunks; use ``jax.pmap`` when ``n_gpus > 1``.
 
@@ -50,6 +51,10 @@ def run_chunked_model_apply(
     compile-time trip count, and the rest return zeros. The caller must ensure
     every used slot lies in those chunks (see ``mlpot.ml_chunk_budget``).
     ``n_eval_chunks`` takes precedence over ``n_valid``.
+
+    ``extra_chunks`` (optional, shape ``(n_chunks, chunk_size, k)``): per-system
+    side inputs (e.g. SpookyPhysNet total charge / multiplicity). When given,
+    ``apply_one_chunk`` is called as ``apply_one_chunk(R_c, Z_c, N_c, X_c)``.
     """
     from mmml.interfaces.pycharmmInterface.mlpot.ml_profile import (
         get_mlpot_profile_stats,
@@ -61,8 +66,12 @@ def run_chunked_model_apply(
 
     if n_gpus <= 1:
 
+        def _chunk_args(i):
+            a = (R_chunks[i], Z_chunks[i], N_chunks[i])
+            return a if extra_chunks is None else a + (extra_chunks[i],)
+
         def one_chunk(i):
-            return apply_one_chunk(R_chunks[i], Z_chunks[i], N_chunks[i])
+            return apply_one_chunk(*_chunk_args(i))
 
         if n_eval_chunks is not None:
             # Static trip count: no per-chunk predicate, no host round trip.
@@ -76,7 +85,7 @@ def run_chunked_model_apply(
                     mapped,
                 )
         elif n_valid is not None:
-            out_struct = jax.eval_shape(apply_one_chunk, R_chunks[0], Z_chunks[0], N_chunks[0])
+            out_struct = jax.eval_shape(apply_one_chunk, *_chunk_args(0))
 
             def _zeros_like_out():
                 return jax.tree_util.tree_map(
@@ -126,16 +135,26 @@ def run_chunked_model_apply(
             N_chunks = jnp.concatenate(
                 [N_chunks, jnp.ones((pad_c, chunk_size), dtype=N_chunks.dtype)]
             )
+            if extra_chunks is not None:
+                extra_chunks = jnp.concatenate(
+                    [extra_chunks, jnp.zeros((pad_c,) + extra_chunks.shape[1:], dtype=extra_chunks.dtype)]
+                )
 
         n_waves = n_padded // n_gpus
         R_w = R_chunks.reshape(n_waves, n_gpus, chunk_size, max_atoms, 3)
         Z_w = Z_chunks.reshape(n_waves, n_gpus, chunk_size, max_atoms)
         N_w = N_chunks.reshape(n_waves, n_gpus, chunk_size)
 
-        pmap_apply = jax.pmap(apply_one_chunk, in_axes=(0, 0, 0))
+        if extra_chunks is None:
+            pmap_apply = jax.pmap(apply_one_chunk, in_axes=(0, 0, 0))
+        else:
+            X_w = extra_chunks.reshape((n_waves, n_gpus) + extra_chunks.shape[1:])
+            pmap_apply = jax.pmap(apply_one_chunk, in_axes=(0, 0, 0, 0))
 
         def process_wave(w: Array) -> Tuple[Array, Array]:
             wi = w.astype(jnp.int32)
+            if extra_chunks is not None:
+                return pmap_apply(R_w[wi], Z_w[wi], N_w[wi], X_w[wi])
             return pmap_apply(R_w[wi], Z_w[wi], N_w[wi])
 
         mapped = jax.lax.map(process_wave, jnp.arange(n_waves))

@@ -925,8 +925,19 @@ def setup_calculator(
     mm_charge_mode: str | None = None,
     mm_latent_charge_template: str | Path | None = None,
     ml_use_ema: bool = True,
+    ml_monomer_charges: Sequence[float] | None = None,
+    ml_monomer_spins: Sequence[float] | None = None,
+    ml_dimer_spin_rule: str = "low",
 ):
     """Create hybrid ML/MM calculator with outputs in eV/eV-A.
+
+    SpookyPhysNet (charge/spin-conditioned) checkpoints: ``ml_monomer_charges``
+    (total charge per monomer, length N_MONOMERS, default all 0) and
+    ``ml_monomer_spins`` (spin multiplicity 2S+1 per monomer, default all 1) are
+    fed to the ML model per system. A dimer (a, b) gets Q = q_a + q_b and
+    multiplicity |m_a - m_b| + 1 (``ml_dimer_spin_rule="low"``, antiferromagnetic
+    coupling) or m_a + m_b - 1 (``"high"``). Ignored (must be neutral singlets)
+    for plain PhysNet.
 
     ML energies/forces are assumed to be in eV already. MM energies/forces
     (kcal/mol, kcal/mol/Å) are converted to eV/eV-Å internally before summing.
@@ -1763,6 +1774,54 @@ def setup_calculator(
             detail,
         )
     is_spooky_model = "spooky_model" in type(MODEL).__module__
+
+    # Per-system (monomers, then dimers in dimer_perms order) total charge and
+    # spin multiplicity for SpookyPhysNet conditioning.
+    _ml_q_mono = np.zeros(n_monomers) if ml_monomer_charges is None else np.asarray(ml_monomer_charges, dtype=np.float64)
+    _ml_s_mono = np.ones(n_monomers) if ml_monomer_spins is None else np.asarray(ml_monomer_spins, dtype=np.float64)
+    if _ml_q_mono.shape != (n_monomers,) or _ml_s_mono.shape != (n_monomers,):
+        raise ValueError(
+            f"ml_monomer_charges/ml_monomer_spins must have length N_MONOMERS={n_monomers}"
+        )
+    if np.any(_ml_s_mono < 1):
+        raise ValueError("ml_monomer_spins are multiplicities (2S+1 >= 1)")
+    _ml_qs_nontrivial = bool(np.any(_ml_q_mono != 0) or np.any(_ml_s_mono != 1))
+    if _ml_qs_nontrivial and not is_spooky_model:
+        raise ValueError(
+            "ml_monomer_charges/ml_monomer_spins need a SpookyPhysNet (charge/spin-conditioned) checkpoint"
+        )
+    _pairs = np.asarray(dimer_perms, dtype=np.int64).reshape(-1, 2)
+    _ml_q_dimer = _ml_q_mono[_pairs[:, 0]] + _ml_q_mono[_pairs[:, 1]]
+    _ma, _mb = _ml_s_mono[_pairs[:, 0]], _ml_s_mono[_pairs[:, 1]]
+    if ml_dimer_spin_rule == "low":
+        _ml_s_dimer = np.abs(_ma - _mb) + 1.0
+    elif ml_dimer_spin_rule == "high":
+        _ml_s_dimer = _ma + _mb - 1.0
+    else:
+        raise ValueError(f"ml_dimer_spin_rule must be 'low' or 'high', got {ml_dimer_spin_rule!r}")
+    _ml_q_mono_j = jnp.asarray(_ml_q_mono, dtype=ml_jnp_dtype)
+    _ml_s_mono_j = jnp.asarray(_ml_s_mono, dtype=ml_jnp_dtype)
+    _ml_q_dimer_j = jnp.asarray(_ml_q_dimer, dtype=ml_jnp_dtype)
+    _ml_s_dimer_j = jnp.asarray(_ml_s_dimer, dtype=ml_jnp_dtype)
+    if is_spooky_model:
+        setup_rows.append(("ml_charge_spin", f"sum Q={_ml_q_mono.sum():g}, mult={sorted(set(_ml_s_mono.tolist()))}, dimer rule={ml_dimer_spin_rule}"))
+
+    def _spooky_system_qs(batches: Dict[str, Array], n_systems: int) -> Tuple[Array, Array]:
+        """(Q, S) per batch slot: monomer slots first, then (sparse/spatial) dimer slots."""
+        mono_ids = batches.get("_spatial_monomer_indices")
+        if mono_ids is None:
+            q_m, s_m = _ml_q_mono_j, _ml_s_mono_j
+        else:
+            q_m, s_m = _ml_q_mono_j[mono_ids], _ml_s_mono_j[mono_ids]
+        dimer_ids = batches.get("_sparse_active_indices")
+        if dimer_ids is None:
+            q_d, s_d = _ml_q_dimer_j, _ml_s_dimer_j
+        else:
+            safe = jnp.where(dimer_ids < _ml_q_dimer_j.shape[0], dimer_ids, 0)
+            q_d, s_d = _ml_q_dimer_j[safe], _ml_s_dimer_j[safe]
+        q = jnp.concatenate([q_m, q_d])[:n_systems]
+        s = jnp.concatenate([s_m, s_d])[:n_systems]
+        return q, s
 
     # Precompute batch structure for full batch (used when not sparse)
     n_dimers_total = len(dimer_perms)
@@ -3277,20 +3336,29 @@ def setup_calculator(
                 R_chunks = R_pad.reshape(_n_chunks, _chunk_size, max_atoms, 3)
                 Z_chunks = Z_pad.reshape(_n_chunks, _chunk_size, max_atoms)
                 N_chunks = N_pad.reshape(_n_chunks, _chunk_size)
+                QS_chunks = None
+                if is_spooky_model:
+                    _q_sys, _s_sys = _spooky_system_qs(batches, _effective_batch_size)
+                    _qs = jnp.stack([_q_sys, _s_sys], axis=-1)
+                    _qs = jnp.concatenate(
+                        [_qs, jnp.tile(jnp.asarray([[0.0, 1.0]], dtype=ml_jnp_dtype), (pad_to - _effective_batch_size, 1))]
+                    )
+                    QS_chunks = _qs.reshape(_n_chunks, _chunk_size, 2)
 
-                def apply_one_chunk(R_c, Z_c, N_c):
+                def apply_one_chunk(R_c, Z_c, N_c, QS_c=None):
                     chunk_data = {"R": R_c, "Z": Z_c, "N": N_c}
                     chunk_batches = prepare_batches_md(
                         chunk_data, batch_size=_chunk_size, num_atoms=max_atoms
                     )[0]
                     if is_spooky_model:
                         am = chunk_batches["atom_mask"].astype(ml_jnp_dtype)
+                        seg = chunk_batches["batch_segments"]
                         out = MODEL.apply(
                             params,
                             atomic_numbers=chunk_batches["Z"],
                             positions=chunk_batches["R"],
-                            charges=jnp.zeros((am.shape[0], 1), dtype=ml_jnp_dtype),
-                            spins=am.reshape(-1, 1),
+                            charges=(QS_c[seg, 0] * am).reshape(-1, 1),
+                            spins=(QS_c[seg, 1] * am).reshape(-1, 1),
                             dst_idx=chunk_batches["dst_idx"],
                             src_idx=chunk_batches["src_idx"],
                             batch_segments=chunk_batches["batch_segments"],
@@ -3329,6 +3397,7 @@ def setup_calculator(
                     has_aux=_needs_ml_mm_charges,
                     n_valid=_n_valid_systems if _skip_padding_chunks else None,
                     n_eval_chunks=ml_eval_chunks if use_sparse else None,
+                    extra_chunks=QS_chunks,
                 )
                 if _needs_ml_mm_charges:
                     e_out, f_out, q_out = chunked_out
@@ -3338,19 +3407,23 @@ def setup_calculator(
 
             if is_spooky_model:
                 atom_mask = batches["atom_mask"].astype(ml_jnp_dtype)
-                q_atoms = jnp.zeros((atom_mask.shape[0], 1), dtype=ml_jnp_dtype)
-                s_atoms = atom_mask.reshape(-1, 1)  # neutral singlet: multiplicity 1 on real atoms
+                _q_sys, _s_sys = _spooky_system_qs(batches, _effective_batch_size)
+                _seg = batches["batch_segments"]
+                q_atoms = (_q_sys[_seg] * atom_mask).reshape(-1, 1)  # total charge of the system, per atom
+                s_atoms = (_s_sys[_seg] * atom_mask).reshape(-1, 1)  # multiplicity of the system, per atom
                 return MODEL.apply(
                     params,
                     atomic_numbers=atomic_numbers,
                     charges=q_atoms,
                     spins=s_atoms,
-                    positions=positions,
+                    # cast to the model dtype: with jax_enable_x64 the positions arrive as float64 and the
+                    # float32 SpookyPhysNet params/switch constants then fail in lax.sub (4 Nov patch test)
+                    positions=jnp.asarray(positions, dtype=ml_jnp_dtype),
                     dst_idx=batches["dst_idx"],
                     src_idx=batches["src_idx"],
                     batch_segments=batches["batch_segments"],
                     batch_size=_effective_batch_size,
-                    batch_mask=batches["batch_mask"],
+                    batch_mask=jnp.asarray(batches["batch_mask"], dtype=ml_jnp_dtype),
                     atom_mask=atom_mask,
                     cell=pbc_cell,
                 )
