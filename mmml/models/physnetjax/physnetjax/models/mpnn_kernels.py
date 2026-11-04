@@ -161,6 +161,24 @@ def encode_geometry_and_basis(
     )
 
 
+_SMOOTH_SWITCH_SLOPE = 3 ** 0.5 / 2
+
+
+def smooth_switch_stable(x: Array, x0, x1) -> Array:
+    """Same values as ``e3x.nn.smooth_switch`` (0 below x0, 1 above x1, 1/(1+exp(z)) between, z = sqrt(3)/2 (1/t - 1/(1-t)),
+    t = (x-x0)/(x1-x0)) but written as sigmoid(-z), so derivatives of every order stay finite. e3x's custom JVP overflows
+    exp(z) just inside the switch (t < ~0.01, e.g. 1.01-1.09 A for x0=1, x1=10), which made second derivatives of the
+    switched Coulomb kernel NaN for C-H bonds (4 Nov 2026: Hessians of ML/MM model B for methanol / octanol)."""
+    t = (x - x0) / (x1 - x0)
+    eps = jnp.finfo(t.dtype).epsneg
+    small = t < eps
+    large = t > 1 - eps
+    safe_t = jnp.where(jnp.logical_or(small, large), 0.5, t)
+    z = _SMOOTH_SWITCH_SLOPE * (1 / safe_t - 1 / (1 - safe_t))
+    return jnp.where(small, 0.0, jnp.where(large, 1.0, jax.nn.sigmoid(-z))).astype(t.dtype)
+
+
+
 def calc_electrostatics_switches(
     displacements: Array,
     batch_mask: Array,
@@ -189,8 +207,8 @@ def calc_electrostatics_switches(
     _c = lambda v: v.astype(_dt) if hasattr(v, "dtype") and v.dtype != _dt else v   # arrays only; floats stay python
     switch_start, switch_end = _c(switch_start), _c(switch_end)
     electrostatics_off_start, electrostatics_off_end = _c(electrostatics_off_start), _c(electrostatics_off_end)
-    switch_dist = e3x.nn.smooth_switch(distances, switch_start, switch_end)
-    off_dist = 1.0 - e3x.nn.smooth_switch(
+    switch_dist = smooth_switch_stable(distances, switch_start, switch_end)
+    off_dist = 1.0 - smooth_switch_stable(
         distances, electrostatics_off_start, electrostatics_off_end
     )
     switch_dist = jnp.clip(switch_dist, 0.0, 1.0)
