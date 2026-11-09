@@ -5,7 +5,7 @@
 Run tests:
 
 ```bash
-pytest
+uv run pytest
 ```
 
 Run the same static check that CI enforces:
@@ -27,15 +27,23 @@ explicit override is treated as stale and silently replaced by the discovered
 `setup/charmm` tree, so live-CHARMM tests keep running locally and the local
 result stops matching CI.
 
-CI splits the CPU suite:
+The reusable CI install action lives at
+`.github/actions/setup-karml/action.yml`. It installs uv, CPython 3.13 by
+default, and then runs `uv sync` with either its default
+`--extra dev --extra all-cpu` or the job-specific `sync-args` override.
+Use the same extras locally when reproducing a job failure; otherwise pytest can
+look green because backend-specific files skipped at import time.
+
+CI splits the suite by dependency boundary:
 
 | Job | What it runs |
 |-----|----------------|
-| Lint | `make lint` + `make lint-dupes` + import sanity |
-| Unit tests | `pytest tests/unit` + coverage floor |
-| Functionality tests | `pytest tests/functionality tests/misc tests/integration` (no live PyCHARMM) |
-| CHARMM MPI units | `pytest tests/charmm_mpi -m "charmm_mpi and not pycharmm"` |
-| PyCHARMM smoke | compiled `libcharmm` + live smoke tests |
+| Lint | `make lint`, `make lint-dupes`, and import sanity |
+| Unit tests | `uv run pytest tests/unit` with coverage and `jax-pme-solver` installed |
+| Functionality tests | `uv run pytest tests/functionality tests/misc tests/integration -m "not pycharmm"` |
+| Data loading | Synthetic NPZ/HDF5 contract tests only; no remote datasets |
+| CHARMM MPI units | `uv run pytest tests/charmm_mpi -m "charmm_mpi and not pycharmm"` |
+| PyCHARMM smoke | Builds or restores `libcharmm`, builds Packmol, imports PyCHARMM, then runs live smoke tests |
 
 The Docs workflow has a **Generated content** job that rewrites CLI pages,
 package-architecture counts, and crystal-literature tables, then fails if git
@@ -46,6 +54,15 @@ PDF export run only after that job is green.
 make docs-check      # same checks as Generated content, no rewrite
 make docs-refresh    # rewrite generated pages
 ```
+
+`make docs-check` and `make docs-refresh` both route through
+`scripts/ci/refresh_generated_docs.py`. In addition to write-mode generators
+(`generate_cli_docs.py`, `generate_package_architecture.py`,
+`generate_crystal_lit_compare.py`), that entry point validates generated
+figures, the scientific evidence registry, and hard-coded recommendation
+annotations. If a documentation PR changes command registration, package
+layout, crystal data, figures, or evidence metadata, run `make docs-refresh`
+and commit the intentional generated drift.
 
 ## Why CI checks the *shape* of a test run
 
@@ -59,10 +76,15 @@ no-op that reports success.
 CI therefore asserts what a run should *look* like, not just its exit code:
 
 - `scripts/ci/check_test_report.py` reads the JUnit XML each pytest step emits
-  and fails when too few tests actually passed or too many skipped.
+  and fails when too few tests actually passed, too many skipped, reports are
+  missing, or the XML contains failures/errors.
 - `scripts/ci/assert_pycharmm_live.py` imports PyCHARMM for real before the
   live-CHARMM job runs, so a present-but-unusable library fails there instead of
   turning 45 minutes of tests into skips.
+- `scripts/ci/check_coverage_floor.py` checks both line percentage and absolute
+  covered-line floors. The floor catches coverage slides; it is not a target for
+  scientific code that can only run with CHARMM, plotting, PySCF, Torch, or GPU
+  dependencies.
 
 Locally:
 
@@ -73,6 +95,20 @@ make test-shape
 When you add tests, the `--min-passed` thresholds in
 `.github/workflows/ci.yml` are floors, not targets — raise them as the suite
 grows so the gate keeps its teeth.
+
+Common CI triage shortcuts:
+
+- **Generated docs failed:** download or inspect `generated-docs.patch`, run
+  `make docs-refresh`, review the `docs/` and `mkdocs.yml` diff, and commit only
+  generated changes caused by your source change.
+- **A shape gate failed with many skips:** compare the job's `sync-args` with
+  your local extras. The unit/functionality jobs install `jax-pme-solver`
+  because many long-range solver tests skip without it.
+- **PyCHARMM smoke skipped or vanished:** first inspect the `PyCHARMM loads`
+  step. A bad `libcharmm.so` cache, missing runtime library, or failed Packmol
+  build should fail before pytest; JUnit reports decide the final test verdict.
+- **Coverage floor failed:** check whether a large module stopped importing or a
+  fixture tree disappeared before adding tests just to chase the percentage.
 
 ## Repository boundaries
 
