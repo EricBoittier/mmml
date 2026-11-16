@@ -49,6 +49,44 @@ Auto-detect: a `.pt` / `.pth` file, or a directory containing `model.pt` /
 `exported.pt` / `metatomic.pt` / `atomistic-model.pt`, selects this path even
 when `--ml-potential-mode` is unset.
 
+## Custom ML/MM cuts
+
+Use `--ml-cut path/to/cut.yaml` when the PET region is not expressible as whole
+residue names. The cut file is resolved from the run directory and replaces
+`--mm-region`; setting both is an error. It must declare the electronic state
+seen by metatomic, the PSF atom selectors that form the ML region, and optional
+ghost-hydrogen links across cut bonds.
+
+```yaml
+# examples/pet_omol_heme/yaml/his93.yaml
+charge: -2
+spin_multiplicity: 1
+ml_atoms:
+  - resname: HEME
+  - resname: CO
+  - segid: MB
+    resid: 93
+    names: [CG, ND1, HD1, CD2, HD2, CE1, HE1, NE2, HE2]
+links:
+  - qm: {segid: MB, resid: 93, name: CG}
+    mm: {segid: MB, resid: 93, name: CB}
+```
+
+Selectors match CHARMM PSF columns after the cluster/protein build: `resname`,
+`segid`, `resid`, plus either `name` or `names`. Every `ml_atoms` selector must
+match at least one atom. Each link has one QM atom in `ml_atoms` and one MM atom
+outside it; the ghost is added to the metatomic evaluation and its force is
+split back onto the two real atoms. The Fe--NE2 bond in MbCO is not a link
+because both atoms are in the ML region.
+
+Partial-ML registration keeps two atom-number views aligned. The model/context
+may carry full-system `Z` (needed when link atoms reference MM-side atoms), while
+`pycharmm.MLpot` stores the selected atoms only. KARML gathers full-system `Z`
+onto the CHARMM selection before registering MLpot, then checks before dynamics
+that PSF masses, `MlpotContext.ml_Z`, `mlpot.ml_Z`, calculator atomic numbers,
+and model atomic numbers agree on the ML atoms. A mismatch fails before MD
+instead of silently evaluating PET on a reordered or wrong-element selection.
+
 ## CLI
 
 ```bash
@@ -104,6 +142,8 @@ uv run pytest \
   tests/unit/test_dimer_scan_cli.py \
   tests/unit/test_interaction_pes.py \
   tests/unit/test_md_system_pycharmm_cmd.py \
+  tests/unit/test_ml_cut.py \
+  tests/unit/test_mlpot_atom_consistency.py \
   -q
 ```
 
@@ -114,6 +154,9 @@ uv run pytest \
   dummy `calculate_charmm` returns kcal/mol and subtracts forces into `dx/dy/dz`.
 - `--ml-potential-mode metatomic` and `--metatomic-eval-mode` parse and forward
   through `build_pycharmm_command`.
+- `--ml-cut` YAML reproduces the His93 preset and refuses ambiguous region
+  combinations; partial-ML atom identity checks compare PSF and calculator
+  elements on the selected atoms.
 
 ## Hub models (PET-MAD / UPET)
 
