@@ -155,7 +155,9 @@ def make_dcm_atom_charge_fn(spec: str, Z, *, dtype="float32", chunk: int | None 
     mass = jnp.asarray([MASS[int(z)] for z in Z], jnp.float64)
     Zp = jnp.zeros((NATOMS,), jnp.int32).at[:A].set(jnp.asarray(Z))
 
-    def one(Rp):
+    params0 = params
+
+    def one(params, Rp):
         if padded:
             mono, dipo = model.apply(params, atomic_numbers=Zp, positions=Rp, dst_idx=dst, src_idx=src)
             nat = NATOMS
@@ -169,19 +171,20 @@ def make_dcm_atom_charge_fn(spec: str, Z, *, dtype="float32", chunk: int | None 
         m = (m * valid - (m * valid).sum() / NDC) * valid      # net charge 0 (training-time post-processing)
         return m[:NDC], d[:NDC]
 
-    batched = jax.vmap(one)
+    batched = jax.vmap(one, in_axes=(None, 0))
 
-    def net(Rp):                       # (M, 60, 3) -> (M, A*nd), (M, A*nd, 3)
+    def net(params, Rp):                       # (M, 60, 3) -> (M, A*nd), (M, A*nd, 3)
         M = Rp.shape[0]
         ck = M if chunk is None else min(int(chunk), M)
         nb = -(-M // ck); pad = nb * ck - M
         if pad:
             Rp = jnp.concatenate([Rp, jnp.broadcast_to(Rp[:1], (pad,) + Rp.shape[1:])], 0)
         fn = batched if nb == 1 else jax.checkpoint(batched)
-        q, p = jax.lax.map(fn, Rp.reshape((nb, ck) + Rp.shape[1:]))
+        q, p = jax.lax.map(lambda r: fn(params, r), Rp.reshape((nb, ck) + Rp.shape[1:]))
         return q.reshape(nb * ck, -1)[:M], p.reshape(nb * ck, -1, 3)[:M]
 
-    def fn(X):
+    def fn(X, params=None):
+        params = params0 if params is None else params
         out_dt = X.dtype
         c = jnp.sum(X * mass[None, :, None].astype(X.dtype), axis=1) / jnp.sum(mass).astype(X.dtype)
         Rc = (X - c[:, None, :]).astype(dt)
@@ -189,12 +192,13 @@ def make_dcm_atom_charge_fn(spec: str, Z, *, dtype="float32", chunk: int | None 
         Rp = jnp.zeros((M, NATOMS if padded else A + 1, 3), dt).at[:, :A].set(Rc)
         if dt == jnp.float32:
             with jax.enable_x64(False):     # network constants stay f32 even if the host process runs x64
-                q, p = net(Rp)
+                q, p = net(params, Rp)
         else:
-            q, p = net(Rp)
+            q, p = net(params, Rp)
         q = q.astype(out_dt); p = p.astype(out_dt) + c[:, None, :]
         qa = project_sites_to_atoms(q, p, X, nd)
         return (qa, q, p) if return_sites else qa
 
     fn.n_dcm = nd
+    fn.params0 = params0
     return fn

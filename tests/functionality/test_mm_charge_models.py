@@ -69,7 +69,7 @@ def _providers():
     try:
         import e3x  # noqa: F401
         import flax  # noqa: F401
-        out["dcm"] = mcm.parse_spec("dcm:dcmnet_acetone_n3_cgenff;dtype=float64")
+        out["dcm"] = mcm.parse_spec("dcm:" + __import__("os").environ.get("DCM_TEST_SPEC", "dcmnet_acetone_n3_cgenff") + ";dtype=float64")
     except Exception:
         pass
     return out
@@ -109,7 +109,7 @@ def test_dcm_projection_dipole_and_invariance():
     if "dcm" not in _providers():
         pytest.skip("e3x/flax not available")
     from mmml.interfaces.pycharmmInterface.mm_charge_dcmnet import make_dcm_atom_charge_fn
-    fn = make_dcm_atom_charge_fn("dcmnet_acetone_n3_cgenff", mcm.ACETONE_Z, dtype="float64", return_sites=True)
+    fn = make_dcm_atom_charge_fn(__import__("os").environ.get("DCM_TEST_SPEC", "dcmnet_acetone_n3_cgenff"), mcm.ACETONE_Z, dtype="float64", return_sites=True)
     rng = np.random.default_rng(5)
     X = jnp.asarray(np.stack([ACE0 + rng.normal(scale=0.04, size=ACE0.shape) for _ in range(6)]))
     qa, qs, ps = fn(X)

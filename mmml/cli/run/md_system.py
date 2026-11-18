@@ -2441,6 +2441,14 @@ def build_run_manifest(
     }
     if argv is not None:
         manifest["backend_argv"] = list(argv)
+    try:
+        from mmml.interfaces.pycharmmInterface import mm_charge_models as _mcm_m
+
+        _d = _mcm_m.describe()
+        if _d:
+            manifest["mm_charges"] = _d
+    except Exception as _exc:   # never fail a run over the manifest
+        manifest["mm_charges"] = {"error": f"{type(_exc).__name__}: {_exc}"}
     policy_path = getattr(args, "interaction_policy", None)
     if policy_path is not None:
         manifest["interaction_policy"] = {

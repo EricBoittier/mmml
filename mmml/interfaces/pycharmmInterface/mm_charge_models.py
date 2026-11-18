@@ -164,3 +164,24 @@ def make_charge_fn(spec, atomic_numbers, monomer_offsets, *, dtype_net=None):
 
     charge_fn.spec = spec
     return charge_fn
+
+
+def describe(spec=None) -> dict:
+    """Tag, scale and content hash of the active charge model (h5 attributes, run_manifest.json); {} for CGenFF."""
+    import hashlib
+    sp = spec_from_env() if spec is None else spec
+    if sp is None:
+        return {}
+    h = hashlib.sha256()
+    if sp["kind"] == "static":
+        h.update(np.asarray(static_charges({**sp, "scale": 1.0}), np.float64).tobytes())
+    elif sp["kind"] == "lincd":
+        h.update(Path(sp["arg"] or (DATA_DIR / "lincd_acetone_v1.npz")).read_bytes())
+    else:
+        d = Path(sp["arg"] or DEFAULT_DCM)
+        d = d if d.exists() else DATA_DIR / d
+        for f in sorted(d.glob("*")):
+            if f.suffix in (".msgpack", ".json"):
+                h.update(f.read_bytes())
+    return dict(mm_charges_spec=os.environ.get(ENV, ""), mm_charges_kind=sp["kind"], mm_charges_model=sp["arg"] or ("refit_equiv" if sp["kind"] == "static" else DEFAULT_DCM if sp["kind"] == "dcm" else "lincd_acetone_v1"),
+                mm_charges_scale=float(sp["scale"]), mm_charges_sha256=h.hexdigest(), mm_charges_conformation_dependent=bool(is_conformation_dependent(sp)))

@@ -4024,6 +4024,30 @@ def set_up_nhc_sim_routine(
         if use_flat_bottom:
             scalar_quantities.extend(["com_dist_A", "flat_bottom_E_eV"])
         _mm_charge_mode_attr = getattr(args, "mm_charge_mode", None)
+        # MMML_MM_CHARGES: record the charges actually used by the MM tail (q(x) or the static set) and the molecular dipoles
+        _qx_rec = None
+        _qx_attrs = {}
+        _qx_extra = None
+        if _fast_cell[0] is not None:
+            from mmml.interfaces.pycharmmInterface import mm_charge_models as _mcm_r
+
+            if _mcm_r.spec_from_env() is not None:
+                _mpq = _fast_cell[0].mp
+                _qx_attrs = _mcm_r.describe()
+                _idxq = jnp.asarray(_mpq.topo.atom_idx)
+
+                @jax.jit
+                def _qx_rec(pos, bx):
+                    pw = _fast_cell[0].whole(pos, bx)
+                    q = _mpq.charge_fn(pw) if _mpq.charge_fn is not None else jnp.asarray(_mpq._q, pw.dtype)
+                    mu = jnp.einsum("ma,mac->mc", q[_idxq], pw[_idxq]) * 4.80320471   # D (molecules are neutral)
+                    return q, mu
+
+                from mmml.utils.hdf5_reporter import DatasetSpec as _DS
+                _qx_extra = {
+                    "charges_qx": _DS(shape=(len(atoms),), dtype=np.float32),
+                    "dipole_qx_D": _DS(shape=(int(_mpq.topo.n_mol), 3), dtype=np.float32),
+                }
         hdf5_reporter = make_jaxmd_reporter(
             str(hdf5_path),
             n_atoms=len(atoms),
@@ -4034,8 +4058,10 @@ def set_up_nhc_sim_routine(
             include_velocities=True,
             # Per-frame MM Coulomb charges (Q⁰ / latent / PSF) from ModelOutput.
             include_charges=True,
+            extra_datasets=_qx_extra,
             scalar_quantities=scalar_quantities,
             attrs={
+                **_qx_attrs,
                 "ensemble": args.ensemble,
                 "temperature_target": float(T),
                 "dt_ps": float(dt),
@@ -4827,6 +4853,9 @@ def set_up_nhc_sim_routine(
                     velocities=state.momentum / state.mass,
                     charges=out_dyn.mm_charges,
                 )
+                if _qx_rec is not None:
+                    _bxq = simulate.npt_box(state) if is_npt else _cell_jax
+                    report_kw["charges_qx"], report_kw["dipole_qx_D"] = _qx_rec(pos_for_h5, _bxq)
                 if is_npt:
                     box_for_density = simulate.npt_box(state)
                     vol_for_density = float(quantity.volume(3, box_for_density))
