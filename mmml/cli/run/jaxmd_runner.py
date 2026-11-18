@@ -1527,6 +1527,15 @@ class _MolPairFast:
         _ewald = _ewald_opts(box)
         if _ewald is not None and getattr(args, "ensemble", "nvt") == "npt":
             raise ValueError("MMML_MM_EWALD (P3M influence function for a fixed box) is not supported with NpT")
+        # MMML_MM_CHARGES=lincd|dcm: conformation-dependent MM charges q(x), evaluated in the differentiated
+        # energy (forces and the atomic strain virial include dq/dx); static sets are applied to spec['q'] upstream
+        from mmml.interfaces.pycharmmInterface import mm_charge_models as _mcm
+
+        _cspec = _mcm.spec_from_env()
+        _qfn = _mcm.make_charge_fn(_cspec, atomic_numbers, monomer_offsets)
+        if _cspec is not None:
+            print(f"[mm-charges] MMML_MM_CHARGES={os.environ.get(_mcm.ENV)} -> "
+                  f"{'conformation-dependent q(x) in MolPairMM' if _qfn is not None else 'static set in spec[q]'}", flush=True)
         self.mp = MolPairMM(
             spec,
             self.topo,
@@ -1535,6 +1544,7 @@ class _MolPairFast:
             include_wall=bool(getattr(calc, "short_range_wall", True)),
             cap_margin=float(getattr(args, "molpair_cap_margin", 1.15) or 1.15),
             ewald=_ewald,
+            charge_fn=_qfn,
         )
         # Global ML/MM <-> MM switch: E = lam E_MLMM + (1 - lam) E_MM, with E_MM = ML monomers + plain MM for every
         # intermolecular pair (no ML dimers, no handoff). lam = 1 is the plain hybrid; lam = 0 skips the ML dimers.
@@ -1770,6 +1780,10 @@ def set_up_nhc_sim_routine(
     Si_mass = as_jaxmd_dtype(Si_mass)
 
     _fast_cell = [None]  # _MolPairFast once the MM fn exists (built below)
+    from mmml.interfaces.pycharmmInterface import mm_charge_models as _mcm_guard
+
+    _mcm_guard.assert_engine_supports(
+        _mcm_guard.spec_from_env(), "jaxmd_molpair" if _molpair_fast_requested(args) else "jaxmd_atompair")
     _alch_ref_fast = [None]  # alchemy: reference-lambda hybrid (mmml.md.alchemy), fast path only
 
     @jax.jit

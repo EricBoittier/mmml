@@ -2363,6 +2363,9 @@ def build_mm_energy_forces_fn(
     # charge_scale**2. Applied once here so switched MIC, Ewald and the
     # per-system (Mode A) paths all see the same charges.
     charges = apply_mm_charge_scale(charges, charge_scale)
+    # MMML_MM_CHARGES=static:<set>: refitted constant charges for the acetone liquid (see mm_charge_models); no-op if unset
+    from mmml.interfaces.pycharmmInterface import mm_charge_models as _mcm
+    charges = _mcm.apply_static_charge_set(charges, atomic_numbers, monomer_offsets)
     if at_codes_override is not None:
         at_codes_override_arr = np.array(at_codes_override)
         if at_codes_override_arr.shape[0] != at_codes.shape[0]:

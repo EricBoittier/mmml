@@ -1705,6 +1705,9 @@ def build_decomposed_mlpot_model(
     defer_jax_until_after_sd: bool = False,
 ) -> DecomposedMlpotModel | MetatomicMlpotModel:
     """CHARMM MLpot factory: metatomic ASE adapter or JAX PhysNet/KerNN hybrid."""
+    from mmml.interfaces.pycharmmInterface import mm_charge_models as _mcm
+
+    _mcm.assert_engine_supports(_mcm.spec_from_env(), "mlpot")   # static sets only; q(x) models are JAX-MD molpair
     from mmml.interfaces.pycharmmInterface.mlpot.metatomic_mlpot import (
         maybe_build_metatomic_mlpot_model,
     )

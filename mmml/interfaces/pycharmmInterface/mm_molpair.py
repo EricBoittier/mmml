@@ -197,6 +197,7 @@ class MolPairMM:
         cap_pad: int = 64,
         dtype=jnp.float32,
         ewald: Optional[dict] = None,
+        charge_fn=None,
     ):
         if spec.get("hybrid_hamiltonian", "handoff") != "handoff":
             raise ValueError("molpair MM supports hybrid_hamiltonian=handoff only")
@@ -205,6 +206,9 @@ class MolPairMM:
         self.spec = spec
         self.topo = topo
         self.dtype = dtype
+        # conformation-dependent MM charges: ``charge_fn(pos_whole (N, 3)) -> q (N,)``, evaluated inside the
+        # differentiated energy, so forces and the atomic strain virial include dq/dx (mm_charge_models). None = fixed q.
+        self.charge_fn = charge_fn
         self.skin = float(skin_A)
         self.guard = float(min(guard_A, 0.25 * self.skin))
         # switching per class-pair bucket: global values, or MMML_SWITCH_BY_SIZE ({molecule size: [mm_switch_on,
@@ -463,7 +467,12 @@ class MolPairMM:
 
         inv = cell_inverse(cell)
         com = centroids(pos, self._atom_idx, self._atom_mask)
-        q = self._q if charges is None else jnp.asarray(charges, pos.dtype)
+        if charges is not None:
+            q = jnp.asarray(charges, pos.dtype)
+        elif self.charge_fn is not None:
+            q = jnp.asarray(self.charge_fn(pos), pos.dtype)
+        else:
+            q = self._q
         r_min_glob = sp.get("mm_r_min")
         e_vdw = jnp.zeros((), pos.dtype)
         e_el = jnp.zeros((), pos.dtype)

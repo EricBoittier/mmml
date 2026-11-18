@@ -1,0 +1,54 @@
+{
+ "architecture": {
+  "features": 16,
+  "max_degree": 2,
+  "num_iterations": 2,
+  "num_basis_functions": 16,
+  "cutoff": 4.0,
+  "max_atomic_number": 17,
+  "n_dcm": 3,
+  "include_pseudotensors": true,
+  "dc_scale": 0.3
+ },
+ "args": {
+  "ndcm": 3,
+  "ref": "cgenff",
+  "release": "/scicore/home/meuwly/boitti0000/dcmnet_esp/ft/release/qm9_esp_dipole",
+  "data": "/scicore/home/meuwly/boitti0000/dcmnet_esp/ft/ft_dataset.npz",
+  "test": "/scicore/home/meuwly/boitti0000/dcmnet_esp/ft/test_dataset.npz",
+  "out": "runs/n3_cgenff",
+  "lr": 0.0001,
+  "bs": 16,
+  "epochs": 400,
+  "patience": 30,
+  "esp_w": 10000.0,
+  "dip_w": 10.0,
+  "mono_w": 1.0,
+  "ntrain": 0,
+  "max_hours": 1.2,
+  "seed": 0
+ },
+ "best_epoch": 191,
+ "val": {
+  "rmse": 1.1033583879470825,
+  "rmse_masked": 0.5468446612358093,
+  "dip_err_D": 0.030608974397182465
+ },
+ "test": {
+  "rmse": 1.1121180057525635,
+  "rmse_masked": 0.5388487577438354,
+  "dip_err_D": 0.02934514731168747
+ },
+ "released": {
+  "val": {
+   "rmse": 3.606292247772217,
+   "rmse_masked": 3.085416555404663,
+   "dip_err_D": 0.9015029072761536
+  },
+  "test": {
+   "rmse": 3.680145263671875,
+   "rmse_masked": 3.146322727203369,
+   "dip_err_D": 0.9278544187545776
+  }
+ }
+}
