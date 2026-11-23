@@ -27,15 +27,15 @@ charge is zero. `V`, `E` come from Gaussian-smeared point charges (`source_field
 (Z=0, at the origin) *do* influence real atoms, so they cannot simply be dropped. `merged_graph(n)` builds an exact
 (n + 1)-node graph in which all identical dummy atoms are one node with weighted edges (messages are linear in the edge
 basis). `merged_charges(model, params, Z, R, field_V, field_E)` uses it and equals the padded model to about 1e-6
-(tested with random weights); it works inside `jit` and `grad`. A pass is about five times cheaper for acetone.
+(tested with random weights); it works inside `jit` and `grad`. A pass is about five times cheaper for acetone. Plain pruning of the 50 identical dummy atoms is **not** equivalent for the trained weights (the monomer ESP RMSE roughly doubles), whereas the merged-node graph is exact.
 The model is float32: if JAX x64 is enabled, wrap calls in `jax.enable_x64(False)`.
 
-### Important history: the E-field was inactive before 24 Nov
+### Important history: the E-field was inactive before 23 Nov
 
-In all runs before 24 Nov the vector field `E` was silently dropped: after iteration 0 the features have a parity axis
+In all runs before 23 Nov the vector field `E` was silently dropped: after iteration 0 the features have a parity axis
 of size 1, and the update indexed parity 1 (out of range; JAX ignores such scatters). It is fixed in `field_model.py`
 (parity index 0 when the axis has size 1) and covered by an E-only test (`test_field_changes_output_and_e_only_changes_output`,
-and E-only equivariance). **Results obtained before the fix are potential-only (V) models.**
+and E-only equivariance). **Results obtained before the fix are potential-only (V) models.** The fix was made on 23 Nov 2026 (about 19:33 CET): the 31 runs trained earlier (`field_F1*` and the first-batch `phaseA_*`) have E inactive; later runs have E active.
 
 ## Data formats
 
@@ -74,6 +74,9 @@ PYTHONPATH=. python examples/polarizable_dcmnet/train_field.py --start RUN_DIR -
 ... --scratch --features 64 --max_degree 2 --mono_ref 1.10 ...
 ```
 
+The joint multi-molecule mode (acetone + DCM with one weight set, `finetune_field_joint.py`) is not ported; train one
+molecule per run with `train_field.py`.
+
 Switches: `--field_terms V|E|VE`, `--inject first|both`, `--scf K`, `--huber DELTA`, `--far_w` (embedded-monomer term),
 `--mass` (element masses, e.g. for DCM with Cl), `--target gas|emb`. The number of atoms per molecule is `len(Z)//2`.
 Without `--env_file` the environment charges are empty and "env" metrics equal the gas metrics. The script prints a
@@ -92,15 +95,46 @@ trainer on synthetic data (`tests/unit/test_polarizable_train_smoke.py`, deselec
 | acetone, wide scratch model (64 features, l=2), gas / environment | 0.187 / 0.215 | |
 | DCM | 0.200 | 0.380 |
 
-These come from the author's runs and are not reproduced by the tests. Timings (ns/day) are not part of this commit:
-the cluster/box timing scripts (`bench_cluster.py`, `bench_box.py`) have not been ported yet.
+These come from the author's runs and are not reproduced by the tests.
+
+### Timings (electrostatics layer only)
+
+Measured with `examples/polarizable_dcmnet/bench_box.py` and `bench_cluster.py` (JAX, 16-feature l=2 acetone model,
+exact merged graph, CGenFF-charge field source). They time the electrostatics layer only: a minimum-image
+K-nearest-molecule shell, no Ewald, no induction/repulsion/dispersion. Time is ms per energy+force step; ns/day at 0.5 fs.
+
+Periodic boxes (ms, ns/day at K = 24 / 48 neighbours):
+
+| system | H200 | RTX 4090 |
+|---|---|---|
+| DCM 308 mol (1540 atoms) | 0.79 / 0.86 ms = 55 / 50 | 1.06 / 1.15 ms = 41 / 38 |
+| DCM 439 (2195 atoms) | 0.94 / 1.04 ms = 46 / 41 | 1.34 / 1.46 ms = 32 / 30 |
+| acetone 266 (2660 atoms) | 1.39 / 1.62 ms = 31 / 27 | 2.26 / 2.55 ms = 19 / 17 |
+| acetone 379 (3790 atoms) | 1.81 / 2.13 ms = 24 / 20 | 2.98 / 3.34 ms = 14 / 13 |
+
+On a Titan X (Pascal): DCM 308 about 9 ms, acetone 266 about 24 ms.
+
+Clusters (all pairs, ms per step / ns/day):
+
+| N | 16 | 32 | 64 | 128 | 256 |
+|---|---|---|---|---|---|
+| H200 | 0.54 / 80 | 0.68 / 64 | 0.92 / 47 | 1.66 / 26 | 2.35 / 18 |
+| RTX 4090 | 0.66 / 65 | 0.85 / 51 | 1.06 / 41 | 1.90 / 23 | |
+
+For reference, the existing CHARMM ML/MM step is about 29 ms for DCM 308 and about 82 ms for acetone 266 on an
+RTX 5090, so the layer adds a few per cent.
+
+Creating `boxes.npz` for `bench_box.py`: take one frame of a liquid trajectory with whole molecules and save, for each
+system key (e.g. `aco266`), `<key>_R` (N, n, 3) coordinates in A, `<key>_L` (cubic box edge in A), `<key>_Z` (n,) and
+`<key>_q` (n,) CGenFF charges, with `np.savez`. `bench_cluster.py` takes a monomer set (`--mono_data`) for Z, `q_cgenff`
+and a reference geometry.
 
 ## Caveats
 
 - Exploratory; ESP-level results only. No induction, repulsion or dispersion energy, and no forces beyond autodiff of
   an electrostatic energy.
 - One-shot response: the field comes from fixed (CGenFF) or zero-field model charges, not self-consistently.
-- Results before the 24 Nov E-field fix are potential-only (see above).
+- Results before the 23 Nov E-field fix are potential-only (see above).
 - Weights fine-tuned from the released QM9 DCMnet; the dummy-atom dependence of that checkpoint is why the merged graph
   is used.
 

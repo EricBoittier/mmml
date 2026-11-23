@@ -8,7 +8,7 @@ iteration 0 (when the features already carry l <= max_degree):
                                                                                                            the same slot the model reads its dipoles from)
 Invariants: (1) field = 0 (or field=None) reproduces the base model exactly, for any trained field_s/field_v (no biases on the field path);
             (2) mono is invariant and the dipole displacement is equivariant under rotations and reflections (tested in tests/unit/test_polarizable_dcmnet.py).
-History: before 24 Nov the vector field E was silently dropped (the parity index was 1 on a parity axis of size 1, an out-of-range
+History: before 23 Nov the vector field E was silently dropped (the parity index was 1 on a parity axis of size 1, an out-of-range
 scatter that JAX ignores); fixed below by indexing parity 0 when the axis has size 1.  Models trained earlier are potential-only.
 Units: V in Hartree/e, E in Hartree/(e Bohr) times the module constants VSCALE/ESCALE (inputs are rescaled to O(1)).
 """
