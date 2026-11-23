@@ -1392,6 +1392,51 @@ python scripts/validate_mlpot_sparse_dimers.py \
 
 Exit code `0` means the sparse dimer cap covers the near dimers. Exit code `1` means the cap is saturated; raise `ml_max_active_dimers`, enlarge the box, or reduce the system.
 
+### Pre-dynamics safety gates (PyCHARMM MLpot)
+
+Before a PyCHARMM MLpot run enters `heat`, `nve`, `equi`, or `prod`, the staged
+workflow checks that the current coordinates are safe for dynamics. This gate is
+separate from the minimizer convergence target: it protects cold-start Packmol /
+handoff geometries from entering CHARMM dynamics with hidden ML forces that a
+global RMS can miss.
+
+The gate is intentionally ordered from cheap/global to targeted repairs:
+
+1. Resolve monomer-aware GRMS thresholds and print a line such as
+   `GRMS thresholds: intervention=..., max_before_dyn=..., max_fmax_before_dyn=...`.
+   The default `max_grms_before_dyn: 50.0` kcal/mol/Å is size-aware unless
+   `no_scale_max_grms: true` is set.
+2. If GRMS is above the early intervention threshold, run the density-prep ladder.
+3. If GRMS is still above `max_grms_before_dyn`, run MLpot SD recovery, then the
+   bonded-MM jiggle recovery, then the density-prep ladder.
+4. If CHARMM and hybrid GRMS disagree in a way classified as geometry stress,
+   run calculator FIRE/BFGS (`calculator_pre_minimize: true`, the default).
+5. Independently enforce max single-atom force. The default ceiling is
+   `2.0 eV/Å` (`--max-fmax-before-dyn-ev-A` overrides it). This catches cases
+   where total GRMS is acceptable but a few atoms still carry multi-eV/Å forces.
+
+When the single-atom force gate fails, the workflow prints the hottest atom
+labels when available (`Pre-dynamics force gate: hottest atoms ...`) and tries
+one more targeted repair:
+
+- one monomer: whole-system hybrid calculator relaxation to the force ceiling;
+  metatomic models fall back to CHARMM ABNR on USER forces;
+- multiple monomers: per-monomer calculator repair for the stressed monomers,
+  then optional isolated PhysNet repair (`monomer_physnet_mini: true` by default)
+  if the calculator repair still leaves those monomers above the gate.
+
+Do not treat the force gate as a production tuning knob. Raise
+`max_fmax_before_dyn_ev_A` or set `allow_high_grms: true` only for controlled
+stress smokes where the purpose is to exercise downstream failure handling. For
+normal runs, a `Pre-dynamics force gate failed` error means the input geometry or
+the stressed monomer needs repair before dynamics.
+
+The cold-start force gate is skipped for post-dynamics resumes (`equi`, `nve`,
+or `prod`) when coordinates came from a finished dynamics restart or in-memory
+handoff. Finite-temperature liquids often exceed the cold-start `2 eV/Å`
+ceiling locally; re-FIRE-minimizing a completed heat/equilibration structure
+would change the state being resumed.
+
 ### Pre-dynamics CHARMM lingo (PyCHARMM only)
 
 For umbrella sampling, extra `CONS`/`UMBR`/`ADUMB` blocks, or other free-form CHARMM setup that must run after minimize/constraints and immediately before scheduled dynamics, set:
