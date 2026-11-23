@@ -178,6 +178,7 @@ nav:
       - Interaction-prior constraints & trust map: interaction-prior-constraints.md
       - MLpot settings: mlpot-settings.md
       - DCMNet calculators: dcmnet_calculators.md
+      - Polarisable DCMnet: polarisable-dcmnet.md
       - Long-range solver tutorial: long-range-solver-tutorial.md
       - Long-range electrostatics (ScaFaCoS): mlpot-long-range-electrostatics.md
   - Training & sampling:
