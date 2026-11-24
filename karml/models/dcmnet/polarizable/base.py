@@ -75,7 +75,7 @@ class MessagePassingModel(nn.Module):
         x = e3x.nn.hard_tanh(x) * self.dc_scale
         # NB: original code indexes x[:, 1, ...] on a parity axis of size 1; JAX clamps
         # out-of-bounds gather indices, so this is x[:, 0, 1:4, :] (the l=1 block).
-        atomic_dipo = x[:, 1, 1:4, :]
+        atomic_dipo = x[:, 0, 1:4, :]
         atomic_dipo += positions[:, :, None]
         return atomic_mono, atomic_dipo
 
