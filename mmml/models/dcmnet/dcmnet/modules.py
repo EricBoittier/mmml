@@ -160,7 +160,7 @@ class DCMNetCharges(nn.Module):
         # Extract dipole components: shape (n_atoms, 3, n_dcm)
         # Then transpose to (n_atoms, n_dcm, 3) for consistency
         x.shape[0]
-        atomic_dipo = x[:, 1, 1:4, :].transpose(0, 2, 1)
+        atomic_dipo = x[:, 0, 1:4, :].transpose(0, 2, 1)
         
         # Add positions: positions shape is (n_atoms, 3)
         # Expand to (n_atoms, 1, 3) to broadcast with (n_atoms, n_dcm, 3)
@@ -370,7 +370,7 @@ class MessagePassingModelDEBUG(nn.Module):
         jax.debug.print("x {x}",x=x[non_zero])
         x = e3x.nn.hard_tanh(x)  * 10.0
         jax.debug.print("xx {x}",x=x.shape)
-        atomic_dipo = x[:, 1, 1:4, :]
+        atomic_dipo = x[:, 0, 1:4, :]
         jax.debug.print("atomic_dipo {x}",x=atomic_dipo[non_zero])
         atomic_dipo += positions[:, :, None]
 

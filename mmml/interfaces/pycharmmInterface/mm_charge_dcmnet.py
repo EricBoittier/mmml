@@ -83,7 +83,7 @@ def _build_model_class():
             atomic_mono = atomic_mono.squeeze(axis=1)
             atomic_mono += element_bias[atomic_numbers][:, None]
             x = e3x.nn.hard_tanh(x) * self.dc_scale
-            atomic_dipo = x[:, 1, 1:4, :]
+            atomic_dipo = x[:, 0, 1:4, :]
             atomic_dipo += positions[:, :, None]
             return atomic_mono, atomic_dipo
 
